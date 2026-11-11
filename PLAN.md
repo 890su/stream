@@ -13,8 +13,7 @@ updated: 2026-11-11
   см. `golden/README.md`. Нужен к шагу 3
 
 ## Решить
-- [ ] Владелец применяет комплект systemd на srv-150 и добавляет маршрут `stream.sekond.pl` в существующий
-  Cloudflare Tunnel по `deploy/DEPLOY.md`. Проверка на рабочем сервере остаётся открытой.
+- [ ] Слить ветку `step1-journal-capture` в `main` после проверки на телефоне; затем `install.sh` без аргумента
 
 ## Next
 - [ ] Шаг 2 «Нормализация»: голос → текст, фото → текст, сущности
@@ -35,6 +34,9 @@ updated: 2026-11-11
 - [ ] Резервные коннекторы задач: Todoist, затем TickTick
 
 ## Done
+- [x] Развёртывание на srv-150 (192.168.0.149): контейнер `stream` в `/srv/stream`, https://stream.sekond.pl,
+  ночная копия — 2026-11-11. Сервер освобождён: зеркало Drive, MCP Projects и кеш Docker удалены
+  - Result: `deploy/install.sh`, `deploy/docker-compose.yml`, `deploy/DEPLOY.md`
 - [x] Шаг 1 «Журнал и быстрый ввод» — код и комплект развёртывания готовы, 2026-11-11.
   - Result: `src/`, `web/`, `test/`, `registry/capture.json`, `package.json`, `tsconfig.json`, `.env.example`, `deploy/`.
   - Проверки: `pnpm test` (23 теста) и `pnpm typecheck`. Ручная проверка на localhost (мобильный вид):

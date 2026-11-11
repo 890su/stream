@@ -33,12 +33,12 @@ echo "Code: $(git -C "$APP" log -1 --format='%h %s')"
 
 # Secrets: generated once on the server, never in git.
 if [ ! -f "$ENV_FILE" ]; then
-  umask 077
-  {
-    echo "STREAM_OWNER_TOKEN=$(openssl rand -hex 32)"
-    echo "STREAM_UID=$UID_S"
-    echo "STREAM_GID=$GID_S"
-  } > "$ENV_FILE"
+  ( umask 077
+    {
+      echo "STREAM_OWNER_TOKEN=$(openssl rand -hex 32)"
+      echo "STREAM_UID=$UID_S"
+      echo "STREAM_GID=$GID_S"
+    } > "$ENV_FILE" )
   echo "Created $ENV_FILE with a new owner token (read it with: sudo grep TOKEN $ENV_FILE)"
 fi
 chmod 600 "$ENV_FILE"
@@ -71,7 +71,7 @@ if [ -f "$CFG" ] && ! grep -q "hostname: $HOSTNAME_PUBLIC" "$CFG"; then
     /^[[:space:]]*- service: http_status:404/ && !done { print "  - hostname: " h; print "    service: http://127.0.0.1:" p; print ""; done=1 }
     { print }' "$CFG" > "$CFG.new"
   cloudflared tunnel ingress validate --config "$CFG.new" >/dev/null
-  mv "$CFG.new" "$CFG"
+  cat "$CFG.new" > "$CFG" && rm "$CFG.new"   # keep owner and mode of the original file
   TUNNEL_ID=$(awk '/^tunnel:/ {print $2}' "$CFG")
   cloudflared tunnel --origincert /etc/cloudflared/cert.pem route dns "$TUNNEL_ID" "$HOSTNAME_PUBLIC" \
     || echo "DNS record for $HOSTNAME_PUBLIC not created (may already exist) - check in Cloudflare"

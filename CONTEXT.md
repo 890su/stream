@@ -63,12 +63,13 @@ Node 24 запускает TypeScript без сборки; база — `node:sq
 
 ## Deployment
 
-server: srv-150
-server_path: ~/services/stream (git clone, вне зеркала Google Drive)
-domain: stream.sekond.pl (Cloudflare Tunnel)
+server: srv-150 (192.168.0.149, WireGuard 10.0.0.1)
+server_path: /srv/stream (app, data, backups, .env); пользователь `stream`; compose-проект `stream`
+domain: https://stream.sekond.pl (локальный конфиг Cloudflare Tunnel на srv-150)
 port: 127.0.0.1:3790
+deploy: `sudo bash /srv/stream/app/deploy/install.sh [ref]` — см. `deploy/DEPLOY.md`
 health_check: https://stream.sekond.pl/healthz
-secrets_ref: `.env` на сервере — `STREAM_OWNER_TOKEN`
+secrets_ref: `/srv/stream/.env` — `STREAM_OWNER_TOKEN`
 repo: https://github.com/890su/stream
 
 ## Development rules
