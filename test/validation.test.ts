@@ -22,3 +22,10 @@ test('schema rejects invalid fields, formats and nested payloads', () => {
     { ...event(), payload: { ref: { type: 'wrong', id: '123' } } }, null, [],
   ]) assert.throws(() => validateEvent(invalid), /400/);
 });
+
+test('owner tags are optional, validated per item and accept Cyrillic', () => {
+  validateEvent(event({ payload: { text: 'x', tags: ['#расход', '#naserwis', '#a_b-1'] } }));
+  for (const tags of [['расход'], ['#'], ['#два слова'], '#расход', [1]] as unknown as string[][]) {
+    assert.throws(() => validateEvent(event({ payload: { text: 'x', tags } })), /400/);
+  }
+});

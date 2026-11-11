@@ -17,7 +17,7 @@ export interface JournalEvent {
   received_at?: string;
   kind: string;
   payload: {
-    text?: string; url?: string; media?: MediaRef[];
+    text?: string; url?: string; media?: MediaRef[]; tags?: string[];
     ref?: { type: string; id: string }; data?: Record<string, unknown>;
   };
   reply_to?: string | null;
@@ -59,7 +59,7 @@ function check(value: unknown, rule: Schema, path: string): void {
   if (rule.enum && !rule.enum.includes(value)) fail('имеет недопустимое значение');
   if (typeof value === 'number' && (!Number.isFinite(value) || (rule.minimum !== undefined && value < rule.minimum))) fail('вне допустимого диапазона');
   if (typeof value === 'string') {
-    if (rule.pattern && !new RegExp(rule.pattern).test(value)) fail('имеет неверный формат');
+    if (rule.pattern && !new RegExp(rule.pattern, 'u').test(value)) fail('имеет неверный формат');
     if (rule.format === 'uuid' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) fail('должен быть UUID');
     if (rule.format === 'date-time' && !isDateTime(value)) fail('должен быть датой ISO 8601');
   }

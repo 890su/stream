@@ -34,6 +34,10 @@ updated: 2026-11-11
 - [ ] Резервные коннекторы задач: Todoist, затем TickTick
 
 ## Done
+- [x] Экран-чат вместо вкладок: лента пузырей, строка ввода, метки (`payload.tags`), скрепка, голос/«Отправить»
+  — 2026-11-11. Проверено на localhost (светлая и тёмная тема, 375 px): метки, текст, фото с подписью,
+  загрузка фото с сервера. Голос во встроенном браузере не проверить (микрофон заблокирован) — на телефоне
+  - Result: `web/index.html`, `web/styles.css`, `web/composer.js`, `web/voice.js`, `web/bubble.js`, `web/feed.js`
 - [x] Развёртывание на srv-150 (192.168.0.149): контейнер `stream` в `/srv/stream`, https://stream.sekond.pl,
   ночная копия — 2026-11-11. Сервер освобождён: зеркало Drive, MCP Projects и кеш Docker удалены
   - Result: `deploy/install.sh`, `deploy/docker-compose.yml`, `deploy/DEPLOY.md`

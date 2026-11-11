@@ -1,109 +1,132 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
+import { createBubble, bubbleSignature } from './bubble.js';
 
-const labels = { text: 'Текст', voice: 'Голос', photo: 'Фото', file: 'Файл', link: 'Ссылка' };
-const formatter = new Intl.DateTimeFormat('ru', { dateStyle: 'short', timeStyle: 'short' });
+const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
+const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
+const NEAR_BOTTOM = 120;
+const NEAR_TOP = 160;
 
-export function setupFeed(notify) {
-  const feed = document.querySelector('#feed-list');
-  const more = document.querySelector('#more');
-  const urls = new Set();
+function dayKey(date) { return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`; }
+function dayLabel(date) {
+  const today = new Date();
+  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+  if (dayKey(date) === dayKey(today)) return 'Сегодня';
+  if (dayKey(date) === dayKey(yesterday)) return 'Вчера';
+  return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
+}
+
+// Like a chat: by the moment the message was written on the phone; server order breaks ties.
+function chronological(a, b) {
+  const byTime = Date.parse(a.ts) - Date.parse(b.ts);
+  if (byTime) return byTime;
+  return (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
+}
+
+export function setupFeed({ notify, onQueue }) {
+  const scroller = document.querySelector('#messages');
+  const list = document.querySelector('#feed-list');
+  const historyState = document.querySelector('#history-state');
+  const nodes = new Map(); // event id -> { node, signature }
+  const mediaUrls = new Map(); // media id -> object URL, kept for the page lifetime
   let before;
-  let rendering;
-  let renderedSignature;
+  let loadingOlder = false;
+  let refreshing;
+  let rendered = false;
 
-  function blobUrl(blob) {
+  async function load(reference, queued) {
+    if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
+    let blob = queued?.files.find((file) => file.id === reference.media_id)?.blob;
+    if (!blob) {
+      const response = await fetch(`/api/media/${reference.media_id}`, { headers: { Authorization: `Bearer ${await getSetting('ownerToken')}` } });
+      if (!response.ok) throw new Error('Файл пока недоступен. Проверьте сеть и токен');
+      blob = await response.blob();
+    }
     const url = URL.createObjectURL(blob);
-    urls.add(url);
+    mediaUrls.set(reference.media_id, url);
     return url;
   }
 
-  function card(event, queued) {
-    const article = document.createElement('article');
-    const heading = document.createElement('div');
-    heading.className = 'event-heading';
-    const kind = document.createElement('strong');
-    kind.textContent = labels[event.kind] ?? 'Событие';
-    const time = document.createElement('time');
-    time.dateTime = event.ts;
-    time.textContent = formatter.format(new Date(event.ts));
-    heading.append(kind, time);
-    const status = document.createElement('p');
-    status.className = queued?.error ? 'state error' : 'state';
-    status.textContent = queued ? queued.error || 'В очереди' : 'Принято';
-    article.append(heading, status);
-    if (event.payload.text) {
-      const body = document.createElement('p'); body.className = 'event-text'; body.textContent = event.payload.text; article.append(body);
-    }
-    if (event.payload.url) {
-      try {
-        const parsed = new URL(event.payload.url);
-        if (['http:', 'https:'].includes(parsed.protocol)) {
-          const link = document.createElement('a'); link.href = parsed.href; link.textContent = event.payload.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; article.append(link);
-        }
-      } catch { /* Malformed source URLs remain in the original journal payload. */ }
-    }
-    for (const reference of event.payload.media ?? []) {
-      const button = document.createElement('button');
-      button.className = 'secondary media-button';
-      button.textContent = reference.mime.startsWith('audio/') ? 'Слушать запись' : reference.mime.startsWith('image/') ? 'Открыть фото' : 'Открыть файл';
-      button.onclick = async () => {
-        button.disabled = true;
-        try {
-          let blob = queued?.files.find((file) => file.id === reference.media_id)?.blob;
-          if (!blob) {
-            const response = await fetch(`/api/media/${reference.media_id}`, { headers: { Authorization: `Bearer ${await getSetting('ownerToken')}` } });
-            if (!response.ok) throw new Error('Файл пока недоступен. Проверьте сеть и токен');
-            blob = await response.blob();
-          }
-          const url = blobUrl(blob);
-          if (reference.mime.startsWith('audio/')) {
-            const audio = document.createElement('audio'); audio.controls = true; audio.src = url; button.replaceWith(audio); audio.play().catch(() => {});
-          } else if (reference.mime.startsWith('image/')) {
-            const image = document.createElement('img'); image.src = url; image.alt = 'Фото из события'; button.replaceWith(image);
-          } else {
-            const link = document.createElement('a'); link.href = url; link.download = reference.media_id; link.textContent = 'Скачать файл'; button.replaceWith(link); link.click();
-          }
-        } catch (error) { notify(error.message); button.disabled = false; }
-      };
-      article.append(button);
-    }
-    return article;
-  }
-
-  async function render() {
+  async function render({ bottom = false } = {}) {
     const queued = await listEntries();
     const pending = new Map(queued.map((entry) => [entry.event.id, entry]));
     const events = new Map((await cachedEvents()).map((event) => [event.id, event]));
     for (const entry of queued) events.set(entry.event.id, entry.event);
-    const sorted = [...events.values()].sort((a, b) => (b.received_at ?? b.ts).localeCompare(a.received_at ?? a.ts));
-    const signature = JSON.stringify([sorted, queued.map((entry) => [entry.event.id, entry.error])]);
-    if (signature === renderedSignature) return;
-    renderedSignature = signature;
-    for (const url of urls) URL.revokeObjectURL(url);
-    urls.clear();
-    feed.replaceChildren(...sorted.map((event) => card(event, pending.get(event.id))));
-    if (!sorted.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'Здесь появятся ваши записи'; feed.append(empty); }
-    document.querySelector('#queue-count').textContent = queued.length ? `В очереди ${queued.length}` : 'Очередь пуста';
+    const sorted = [...events.values()].sort(chronological);
+    onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
+
+    const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
+    const children = [];
+    let lastDay;
+    for (const event of sorted) {
+      const date = new Date(event.ts);
+      if (dayKey(date) !== lastDay) {
+        lastDay = dayKey(date);
+        const pill = document.createElement('div');
+        pill.className = 'date-pill';
+        pill.textContent = dayLabel(date);
+        children.push(pill);
+      }
+      const queuedEntry = pending.get(event.id);
+      const signature = bubbleSignature(event, queuedEntry);
+      let cached = nodes.get(event.id);
+      if (!cached || cached.signature !== signature) {
+        cached = { signature, node: createBubble(event, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify }) };
+        nodes.set(event.id, cached);
+      }
+      children.push(cached.node);
+    }
+    if (!sorted.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Здесь появятся ваши записи. Напишите, наговорите голосом или приложите фото.';
+      children.push(empty);
+    }
+    list.replaceChildren(...children);
+    if (bottom || nearBottom || !rendered) scroller.scrollTop = scroller.scrollHeight;
+    rendered = true;
   }
 
-  async function refresh(loadMore = false) {
-    if (rendering) return rendering;
-    rendering = (async () => {
-      try {
-        const token = await getSetting('ownerToken');
-        if (token && navigator.onLine) {
-          const response = await fetch(`/api/events${loadMore && before ? `?before=${encodeURIComponent(before)}` : ''}`, { headers: { Authorization: `Bearer ${token}` } });
-          if (!response.ok) throw new Error(response.status === 401 ? 'Обновите токен в настройках' : 'Лента временно недоступна');
-          const page = await response.json();
-          await cacheEvents(page.events);
-          before = page.next_before;
-          more.hidden = !before;
-        }
-      } catch (error) { notify(error.message); }
-      await render();
-    })().finally(() => { rendering = undefined; });
-    return rendering;
+  async function fetchPage(older) {
+    const token = await getSetting('ownerToken');
+    if (!token || !navigator.onLine) return false;
+    const query = older && before ? `?before=${encodeURIComponent(before)}` : '';
+    const response = await fetch(`/api/events${query}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(response.status === 401 ? 'Токен не принят. Откройте ⋮ → Доступ' : 'Лента временно недоступна');
+    const page = await response.json();
+    await cacheEvents(page.events);
+    if (older || before === undefined) before = page.next_before;
+    return true;
   }
-  more.onclick = () => refresh(true);
-  return { refresh, render };
+
+  function refresh() {
+    refreshing ??= (async () => {
+      try { await fetchPage(false); } catch (error) { notify(error.message); }
+      await render();
+      // A short feed cannot be scrolled to the top, so fetch older history right away.
+      if (before && scroller.scrollHeight <= scroller.clientHeight) await loadOlder();
+    })().finally(() => { refreshing = undefined; });
+    return refreshing;
+  }
+
+  async function loadOlder() {
+    if (loadingOlder || !before) return;
+    loadingOlder = true;
+    historyState.hidden = false;
+    historyState.textContent = 'Загружаем раньше…';
+    const anchor = scroller.scrollHeight - scroller.scrollTop;
+    try {
+      await fetchPage(true);
+      await render();
+      scroller.scrollTop = scroller.scrollHeight - anchor; // keep the reading position
+    } catch (error) { notify(error.message); }
+    finally { loadingOlder = false; historyState.hidden = true; }
+  }
+
+  let stick = true; // the reader is at the bottom: keep them there when photos finish loading
+  scroller.addEventListener('scroll', () => {
+    stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
+    if (scroller.scrollTop < NEAR_TOP) loadOlder();
+  }, { passive: true });
+  list.addEventListener('load', () => { if (stick) scroller.scrollTop = scroller.scrollHeight; }, true);
+  return { refresh, render, scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
 }

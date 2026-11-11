@@ -81,3 +81,15 @@ test('a stalled request times out and preserves its queue entry', async () => {
   assert.equal(aborted, true);
   assert.ok(entry.error);
 });
+
+test('composer entries carry owner tags; registry quick tags satisfy the contract', async () => {
+  const tagged = await makeEntry({ text: 'купить кабель', tags: ['#задача', '#закупка'] });
+  validateEvent(tagged.event);
+  assert.deepEqual(tagged.event.payload.tags, ['#задача', '#закупка']);
+  const plain = await makeEntry({ text: 'без меток' });
+  assert.equal('tags' in plain.event.payload, false);
+  const { readFileSync } = await import('node:fs');
+  const config = JSON.parse(readFileSync(new URL('../registry/capture.json', import.meta.url), 'utf8'));
+  assert.ok(config.quick_tags.length > 0);
+  validateEvent((await makeEntry({ text: 'x', tags: config.quick_tags })).event);
+});

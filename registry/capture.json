@@ -9,5 +9,6 @@
   "request_timeout_ms": 45000,
   "feed_refresh_ms": 30000,
   "min_owner_token_length": 32,
-  "mime_types": ["image/*", "audio/*", "application/pdf"]
+  "mime_types": ["image/*", "audio/*", "application/pdf"],
+  "quick_tags": ["#задача", "#расход", "#заявка", "#идея", "#заметка", "#naserwis", "#перезвонить", "#закупка", "#оферта"]
 }

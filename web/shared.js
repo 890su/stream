@@ -1,4 +1,4 @@
-export async function makeEntry({ kind = 'text', text = '', url, files = [], source = 'app', duration }) {
+export async function makeEntry({ kind = 'text', text = '', url, files = [], source = 'app', duration, tags = [] }) {
   const media = [];
   const storedFiles = [];
   for (const blob of files) {
@@ -10,7 +10,7 @@ export async function makeEntry({ kind = 'text', text = '', url, files = [], sou
   return {
     event: {
       id: crypto.randomUUID(), schema_version: 1, source, author: 'me', ts: new Date().toISOString(), kind,
-      payload: { ...(text ? { text } : {}), ...(url ? { url } : {}), ...(media.length ? { media } : {}) },
+      payload: { ...(text ? { text } : {}), ...(url ? { url } : {}), ...(media.length ? { media } : {}), ...(tags.length ? { tags } : {}) },
     },
     files: storedFiles,
   };

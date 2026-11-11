@@ -79,6 +79,11 @@
           "required": ["type", "id"],
           "additionalProperties": false
         },
+        "tags": {
+          "type": "array",
+          "description": "Tags chosen by the owner at capture time; a hint for interpretation. Optional, added in v1 without breaking readers.",
+          "items": { "type": "string", "pattern": "^#[\\p{L}0-9_-]+$" }
+        },
         "data": {
           "type": "object",
           "description": "Kind-specific structured data, e.g. task_change {status, due} or correction {fields}."

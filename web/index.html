@@ -2,8 +2,9 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#173f35">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#17212b" media="(prefers-color-scheme: dark)">
   <title>Stream — личная лента</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon-192.png">
@@ -11,42 +12,80 @@
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <main>
-    <header><h1>Stream</h1><span id="network" role="status">Подключение</span></header>
-    <nav aria-label="Разделы">
-      <button type="button" data-view="capture" aria-pressed="true">Записать</button>
-      <button type="button" data-view="feed" aria-pressed="false">Лента</button>
-    </nav>
-    <p id="notice" role="status" aria-live="polite"></p>
-    <section id="capture-view" aria-label="Быстрый ввод">
-      <div class="voice">
-        <p id="record-state" aria-live="polite">Готово к записи</p>
-        <button id="record" type="button">Записать голос</button>
-      </div>
-      <form id="text-form">
-        <label for="message">Мысль, событие или ссылка</label>
-        <textarea id="message" rows="5" placeholder="Что хотите сохранить?" required></textarea>
-        <button type="submit">Сохранить текст</button>
-      </form>
-      <label class="photo-label" for="photo">Сделать фото</label>
-      <input id="photo" type="file" accept="image/*" capture="environment">
-    </section>
-    <section id="feed-view" hidden aria-label="Лента событий">
-      <div class="feed-tools"><h2>Последние записи</h2><button id="sync-now" type="button" class="secondary">Обновить</button></div>
-      <div id="feed-list"></div>
-      <button id="more" type="button" class="secondary" hidden>Загрузить ещё</button>
-    </section>
-    <footer><p id="queue-count" role="status">Проверяем очередь</p>
-      <details id="settings"><summary>Настройки доступа</summary>
-        <form id="token-form">
-          <label for="owner-token">Токен владельца</label>
-          <input id="owner-token" type="password" autocomplete="off" spellcheck="false" required>
-          <button type="submit" class="secondary">Сохранить токен</button>
-        </form>
-        <p class="hint">Токен хранится в этом браузере. Очередь отправляется, пока Stream открыт. Сохранённые на устройстве записи ждут сети.</p>
-      </details>
-    </footer>
-    <noscript>Для записи и офлайн-очереди включите JavaScript.</noscript>
+  <header class="topbar">
+    <div class="title">
+      <h1>Stream</h1>
+      <p id="network" role="status">подключение…</p>
+    </div>
+    <button id="menu-button" type="button" class="icon-button" aria-label="Настройки" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+    </button>
+  </header>
+
+  <main id="messages" aria-label="Лента сообщений" tabindex="-1">
+    <div id="history-state" class="service-pill" hidden></div>
+    <div id="feed-list" role="log" aria-live="polite"></div>
   </main>
+
+  <p id="notice" class="toast" role="status" aria-live="polite" hidden></p>
+
+  <footer class="composer-area">
+    <div id="tag-panel" class="panel" hidden aria-label="Метки">
+      <p class="panel-title">Метки для сообщения</p>
+      <div id="tag-options" class="chips"></div>
+    </div>
+    <div id="attach-menu" class="panel attach-menu" hidden aria-label="Прикрепить">
+      <button type="button" data-attach="camera"><span class="round">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5 7.6 6.5H5A2.5 2.5 0 0 0 2.5 9v8.5A2.5 2.5 0 0 0 5 20h14a2.5 2.5 0 0 0 2.5-2.5V9A2.5 2.5 0 0 0 19 6.5h-2.6L15 4.5H9Z"/><circle cx="12" cy="13" r="3.6"/></svg>
+      </span>Камера</button>
+      <button type="button" data-attach="gallery"><span class="round">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="9.5" r="1.8"/><path d="m4 17.5 5-5 3.5 3.5 2.5-2.5 5 5"/></svg>
+      </span>Галерея</button>
+      <button type="button" data-attach="file"><span class="round">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></svg>
+      </span>Файл</button>
+    </div>
+    <div id="draft" class="draft" hidden>
+      <div id="draft-tags" class="chips"></div>
+      <div id="draft-files" class="draft-files"></div>
+    </div>
+    <form id="composer" class="composer" autocomplete="off">
+      <button id="tag-button" type="button" class="icon-button" aria-label="Метки" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3.5 7.5 20.5M16.5 3.5l-2 17M4 8.5h16.5M3.5 15.5H20"/></svg>
+      </button>
+      <div id="recording-bar" class="recording-bar" hidden>
+        <span class="rec-dot" aria-hidden="true"></span>
+        <span id="rec-time" class="rec-time">0:00</span>
+        <button id="rec-cancel" type="button" class="link-button">Отмена</button>
+      </div>
+      <label class="visually-hidden" for="message">Сообщение</label>
+      <textarea id="message" rows="1" placeholder="Сообщение" enterkeyhint="enter"></textarea>
+      <button id="attach-button" type="button" class="icon-button" aria-label="Прикрепить фото или файл" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.5 11.5-8.2 8.2a5.3 5.3 0 0 1-7.5-7.5l8.6-8.6a3.5 3.5 0 0 1 5 5l-8.6 8.6a1.8 1.8 0 0 1-2.5-2.5l7.9-7.9"/></svg>
+      </button>
+      <button id="action-button" type="button" class="action-button" aria-label="Голосовое сообщение" data-mode="voice">
+        <svg class="icon-mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg>
+        <svg class="icon-send" viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M3.4 20.4 21 12 3.4 3.6l-.1 6.5L15 12l-11.7 1.9.1 6.5Z"/></svg>
+      </button>
+    </form>
+    <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
+    <input id="gallery-input" type="file" accept="image/*" multiple hidden>
+    <input id="file-input" type="file" multiple hidden>
+  </footer>
+
+  <dialog id="settings" aria-labelledby="settings-title">
+    <form id="token-form" method="dialog">
+      <h2 id="settings-title">Доступ</h2>
+      <label for="owner-token">Токен владельца</label>
+      <input id="owner-token" type="password" autocomplete="off" spellcheck="false">
+      <p class="hint">Токен хранится только в этом браузере. Без сети записи ждут на устройстве и уходят сами.</p>
+      <p id="queue-count" class="hint" role="status"></p>
+      <div class="dialog-actions">
+        <button id="settings-close" type="button" class="link-button">Закрыть</button>
+        <button type="submit" class="primary">Сохранить</button>
+      </div>
+    </form>
+  </dialog>
+  <noscript>Для записи и офлайн-очереди включите JavaScript.</noscript>
 </body>
 </html>

@@ -12,7 +12,7 @@ import { share } from './share.ts';
 const publicFiles: Record<string, string> = {
   '/': 'text/html; charset=utf-8', '/index.html': 'text/html; charset=utf-8',
   '/styles.css': 'text/css; charset=utf-8', '/manifest.json': 'application/manifest+json',
-  '/app.js': 'text/javascript', '/capture.js': 'text/javascript', '/outbox.js': 'text/javascript',
+  '/app.js': 'text/javascript', '/composer.js': 'text/javascript', '/voice.js': 'text/javascript', '/bubble.js': 'text/javascript', '/outbox.js': 'text/javascript',
   '/feed.js': 'text/javascript', '/db.js': 'text/javascript', '/sync.js': 'text/javascript', '/shared.js': 'text/javascript', '/sw.js': 'text/javascript',
   '/icon-192.png': 'image/png', '/icon-512.png': 'image/png',
   '/fonts/inter-latin-wght-normal.woff2': 'font/woff2', '/fonts/inter-cyrillic-wght-normal.woff2': 'font/woff2',

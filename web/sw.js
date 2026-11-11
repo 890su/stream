@@ -2,8 +2,8 @@ import { saveEntry } from './db.js';
 import { entryFromShare } from './shared.js';
 
 // Bump this version when shell files or capture configuration change.
-const CACHE = 'stream-shell-v1';
-const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/capture.js', '/outbox.js', '/feed.js', '/db.js', '/sync.js', '/shared.js', '/manifest.json', '/capture-config.json', '/icon-192.png', '/icon-512.png', '/fonts/inter-latin-wght-normal.woff2', '/fonts/inter-cyrillic-wght-normal.woff2'];
+const CACHE = 'stream-shell-v2';
+const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/composer.js', '/voice.js', '/bubble.js', '/outbox.js', '/feed.js', '/db.js', '/sync.js', '/shared.js', '/manifest.json', '/capture-config.json', '/icon-192.png', '/icon-512.png', '/fonts/inter-latin-wght-normal.woff2', '/fonts/inter-cyrillic-wght-normal.woff2'];
 
 self.addEventListener('install', (event) => { event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL))); });
 self.addEventListener('activate', (event) => {
