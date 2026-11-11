@@ -1,11 +1,13 @@
 [Unit]
-Description=Stream consistent journal and media backup
+Description=Stream nightly backup (consistent database snapshot + referenced media)
+After=docker.service
+Requires=docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=%h/services/stream
-EnvironmentFile=%h/services/stream/.env
-ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning %h/services/stream/src/backup.ts %h/backups/stream
-UMask=0077
-NoNewPrivileges=true
-PrivateTmp=true
+WorkingDirectory=/srv/stream/app/deploy
+EnvironmentFile=/srv/stream/.env
+# VACUUM INTO reads a consistent snapshot while the server keeps running.
+ExecStart=/usr/bin/docker compose run --rm --no-deps stream node --disable-warning=ExperimentalWarning src/backup.ts /backups
+# Keep 30 days of dated snapshots.
+ExecStartPost=/usr/bin/find /srv/stream/backups -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +

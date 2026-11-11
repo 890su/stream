@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+data
+attachments
+node_modules
+test
+golden
+docs
+*.md

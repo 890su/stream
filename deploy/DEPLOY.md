@@ -1,104 +1,93 @@
 ---
 server: srv-150
-server_path: ~/services/stream
-connect: ssh -i ~/.ssh/id_ed25519 admin890brain@192.168.0.150
-docker_service: ""
-compose_file: ""
+server_path: /srv/stream
+connect: ssh -i ~/.ssh/id_ed25519 admin890brain@192.168.0.149   # LAN (IP changed from .150) or WireGuard 10.0.0.1
+docker_service: stream (compose project "stream", separate from ~/n8n)
+compose_file: /srv/stream/app/deploy/docker-compose.yml
 health_check: https://stream.sekond.pl/healthz
 git_tracked: true
-git_scope: [src/, web/, contracts/, registry/, deploy/, test/, package.json, pnpm-lock.yaml, tsconfig.json]
+git_scope: [src/, web/, contracts/, registry/, deploy/, package.json, tsconfig.json]
 ---
 
 # Развёртывание Stream
 
-Комплект подготовлен для пользовательского systemd на srv-150. Рабочий каталог —
-`~/services/stream`, домен — `stream.sekond.pl`, HTTP слушает `127.0.0.1:3790`.
-Команды ниже предназначены для ручной выкладки владельцем после публикации нужного коммита в GitHub.
+Stream живёт на srv-150 отдельно от остальных проектов:
 
-## Подготовка и запуск
+| Что | Где |
+|---|---|
+| Пользователь | системный `stream`, без входа и без домашнего каталога |
+| Код | `/srv/stream/app` — checkout из GitHub, владелец root |
+| База и медиа | `/srv/stream/data` (права 700, владелец `stream`) |
+| Копии | `/srv/stream/backups`, ночью в 03:15, хранятся 30 дней |
+| Секреты | `/srv/stream/.env` (600): `STREAM_OWNER_TOKEN`, `STREAM_UID`, `STREAM_GID` |
+| Контейнер | свой compose-проект `stream` и своя сеть; без прав (`cap_drop: ALL`), файловая система только для чтения, 256 МБ, 0,5 CPU |
+| Порт | `127.0.0.1:3790` на хосте; наружу — только через Cloudflare Tunnel |
 
-На srv-150 нужны Node 24 по пути `/usr/bin/node`, Git и пользовательский systemd.
-Проверить `node --version` и `command -v node`. Если Node установлен по другому пути,
-исправить `ExecStart` в обеих копиях service-файлов на сервере.
+С n8n, Twenty CRM и MCP Stream не делит ни каталоги, ни базу, ни сеть Docker, ни compose-файл.
+Общие с ними только Docker и `cloudflared`.
+
+## Установка и обновление
 
 ```bash
-ssh -i ~/.ssh/id_ed25519 admin890brain@192.168.0.150
-mkdir -p ~/services
-git clone --branch step1-journal-capture https://github.com/890su/stream ~/services/stream
-cd ~/services/stream
-git rev-parse HEAD
-cp .env.example .env
-chmod 600 .env
+ssh -i ~/.ssh/id_ed25519 admin890brain@192.168.0.149
+curl -fsSL https://raw.githubusercontent.com/890su/stream/main/deploy/install.sh -o /tmp/stream-install.sh
+sudo bash /tmp/stream-install.sh            # или: sudo bash /srv/stream/app/deploy/install.sh <ref>
 ```
 
-В `.env` задать `STREAM_OWNER_TOKEN`, `PORT=3790`, `DATA_DIR=/home/admin890brain/services/stream/data`.
-Токен создать локально на сервере через `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`,
-перенести в `.env` и сохранить в менеджере паролей владельца. В шаблоне значения оставлены пустыми.
-При запуске сервер требует минимум 32 символа. Рабочие зависимости устанавливать не требуется.
+Скрипт повторяем: при повторном запуске он обновляет код до `main` (или до указанного коммита или ветки),
+пересобирает образ и перезапускает контейнер. Токен создаётся один раз; посмотреть:
+`sudo grep TOKEN /srv/stream/.env`. Сохранить его в менеджере паролей.
+
+Проверка:
 
 ```bash
-mkdir -p ~/.config/systemd/user
-cp deploy/stream.service deploy/stream-backup.service deploy/stream-backup.timer ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now stream.service stream-backup.timer
-sudo loginctl enable-linger "$USER"
-curl --fail http://127.0.0.1:3790/healthz
-systemctl --user status stream.service
-journalctl --user -u stream.service -n 50
+curl -fsS http://127.0.0.1:3790/healthz
+cd /srv/stream/app/deploy && sudo docker compose ps && sudo docker compose logs --tail 50
+systemctl list-timers stream-backup.timer
 ```
 
 ## HTTPS через существующий Cloudflare Tunnel
 
-Владелец добавляет маршрут `stream.sekond.pl` → `http://127.0.0.1:3790` в существующий
-туннель srv-150. При управлении конфигурационным файлом это ingress с `hostname` и `service`,
-размещённый перед завершающим правилом. При управлении через панель — published application route.
-Для туннеля внутри контейнера проверить, что origin `127.0.0.1:3790` относится к сети хоста srv-150.
+`install.sh` сам добавляет в локальный конфиг туннеля srv-150 (`/etc/cloudflared/config.yml`) правило
+`stream.sekond.pl` → `http://127.0.0.1:3790` перед завершающим `http_status:404`: делает копию конфига,
+проверяет его `cloudflared tunnel ingress validate`, создаёт DNS-запись и перезапускает `cloudflared`.
+Перезапуск на несколько секунд прерывает другие адреса этого туннеля. Повторный запуск правило не дублирует.
 
-После применения маршрута проверить HTTPS и PWA.
-
-```bash
-curl --fail https://stream.sekond.pl/healthz
-curl --fail -H "Authorization: Bearer $STREAM_OWNER_TOKEN" https://stream.sekond.pl/api/events
-```
-
-Для второй команды предварительно задать переменную в текущем shell из менеджера паролей.
-Приложение принимает Bearer-токен. Настройка домена должна обеспечивать передачу запросов API
-и `POST /share-target` напрямую приложению согласно существующему решению в `decisions.md`.
-
-На Android открыть HTTPS-адрес в Chrome, ввести токен в «Настройки доступа», дождаться загрузки оболочки,
-установить PWA. После первого открытия сервис-воркер принимает «Поделиться» и сохраняет исходные файлы
-в IndexedDB. Серверный резервный обработчик `/share-target` требует Bearer-заголовок. Для обычного Android
-Share используется установленный PWA с активированным сервис-воркером.
-
-## Резервная копия и восстановление
-
-Таймер запускает копирование ежедневно в 03:15 по времени сервера. `VACUUM INTO` создаёт согласованный
-снимок базы, затем копируются все файлы из таблицы медиа этого снимка. Каждый запуск создаёт отдельную
-датированную папку в `~/backups/stream`. Права новых файлов ограничены владельцем.
+Cloudflare Access на этот адрес не ставить (решение в `decisions.md`): доступ — по токену владельца.
 
 ```bash
-systemctl --user start stream-backup.service
-systemctl --user list-timers stream-backup.timer
-journalctl --user -u stream-backup.service -n 20
+curl -fsS https://stream.sekond.pl/healthz
 ```
 
-Копии следует переносить на отдельный носитель. Очистка старых копий остаётся ручной операцией владельца.
-При восстановлении остановить `stream.service`, сохранить текущий каталог `DATA_DIR` отдельно,
-скопировать содержимое выбранного снимка в новый `DATA_DIR`, проверить владельца файлов и запустить сервис.
-Снимок включает `stream.db` и `media/`. Файлы WAL от прежней базы должны оставаться в прежнем каталоге.
-Тест восстановления выполняется в `test/store.test.ts`.
+## Копии и восстановление
 
-## Обновление и откат
+Ручной запуск копии: `sudo systemctl start stream-backup.service`, журнал —
+`journalctl -u stream-backup.service -n 20`. `VACUUM INTO` даёт согласованный снимок базы при работающем
+сервере, рядом копируются все медиа из этого снимка. Копии лучше периодически уносить с сервера.
 
-Перед обновлением сделать резервную копию и записать текущий `git rev-parse HEAD`.
-При изменении оболочки или `registry/capture.json` разработчик повышает версию `CACHE` в `web/sw.js`.
-Выполнить `git fetch`, затем `git checkout <проверенный-коммит>` в серверном checkout,
-обновить изменившиеся unit-файлы, выполнить `systemctl --user daemon-reload` и
-`systemctl --user restart stream.service`. Проверить `/healthz`, авторизованный список событий и новую запись.
+Восстановление:
 
-Для отката выбрать записанный коммит, восстановить его unit-файлы и перезапустить сервис.
-Если будущая версия меняет формат базы, использовать её отдельный план миграции и восстановления.
-В этой версии схема создаётся при первом запуске.
+```bash
+cd /srv/stream/app/deploy && sudo docker compose stop
+sudo mv /srv/stream/data /srv/stream/data.before-restore
+sudo cp -a /srv/stream/backups/<снимок> /srv/stream/data
+sudo chown -R stream:stream /srv/stream/data && sudo chmod 700 /srv/stream/data
+sudo docker compose start
+```
+
+## Откат
+
+`sudo bash /srv/stream/app/deploy/install.sh <прежний-коммит>`. Если версия меняет формат базы — сначала
+восстановить копию, сделанную до обновления.
+
+## Удаление
+
+```bash
+cd /srv/stream/app/deploy && sudo docker compose down --rmi local
+sudo systemctl disable --now stream-backup.timer
+sudo rm /etc/systemd/system/stream-backup.{service,timer}
+# /srv/stream (данные и копии) удалять только вручную и осознанно
+```
 
 ## Проверка владельцем на телефоне
 
@@ -109,10 +98,7 @@ journalctl --user -u stream-backup.service -n 20
 - [ ] Проигрывание голоса и открытие фото из ленты.
 - [ ] Неделя ежедневной работы без потерь.
 
-Синхронизация идёт при открытом приложении, возврате в него и восстановлении сети.
-Браузер может запросить повторный доступ к микрофону. Токен и очередь хранятся в IndexedDB этого браузера.
-Запрос постоянного хранения отправляется браузеру при запуске. Перед очисткой данных браузера нужно
-дождаться пустой очереди. Ограничения объёма и интервалы повторов находятся в `registry/capture.json`.
+На Android открыть адрес в Chrome, ввести токен в «Настройки доступа», установить PWA. Перед очисткой данных
+браузера дождаться пустой очереди. Лимиты и интервалы повторов — в `registry/capture.json`.
 
-Для временной проверки разработки на телефоне можно запустить на ПК
-`cloudflared tunnel --url http://127.0.0.1:3790` и открыть выданный HTTPS-адрес.
+Для проверки с телефона до выкладки: на ПК `cloudflared tunnel --url http://127.0.0.1:3790`.
