@@ -2,12 +2,13 @@ import { makeEntry, makeCorrection } from './shared.js';
 import { snippet } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
+import { createTagRow } from './tagrow.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent }) {
+export function setupComposer(config, { notify, onSent, getViews }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
@@ -21,7 +22,10 @@ export function setupComposer(config, { notify, onSent }) {
   inputs.file.accept = config.mime_types.join(',');
 
   const recorder = createRecorder(config);
-  const tags = new Set();
+  const tagRow = createTagRow({
+    dictionary: config.tagging, getViews,
+    onChange: (on) => tagButton.classList.toggle('active', on.length > 0),
+  });
   let files = [];
   let pendingVoice; // a finished recording that could not be queued yet
   let pressedAt = 0;
@@ -52,14 +56,6 @@ export function setupComposer(config, { notify, onSent }) {
   }
 
   function renderDraft() {
-    const tagRow = $('#draft-tags');
-    tagRow.replaceChildren(...[...tags].map((tag) => {
-      const chip = document.createElement('button');
-      chip.type = 'button'; chip.className = 'chip removable'; chip.textContent = tag;
-      chip.setAttribute('aria-label', `Убрать метку ${tag}`);
-      chip.onclick = () => { tags.delete(tag); renderTags(); };
-      return chip;
-    }));
     const fileRow = $('#draft-files');
     for (const image of fileRow.querySelectorAll('img')) URL.revokeObjectURL(image.src);
     fileRow.replaceChildren(...files.map((file, index) => {
@@ -74,21 +70,12 @@ export function setupComposer(config, { notify, onSent }) {
       item.append(remove);
       return item;
     }));
-    draft.hidden = !tags.size && !files.length;
-    tagButton.classList.toggle('active', tags.size > 0);
+    draft.hidden = !files.length;
     updateAction();
   }
 
-  function renderTags() {
-    $('#tag-options').replaceChildren(...config.quick_tags.map((tag) => {
-      const chip = document.createElement('button');
-      chip.type = 'button'; chip.className = 'chip'; chip.textContent = tag;
-      chip.setAttribute('aria-pressed', String(tags.has(tag)));
-      chip.onclick = () => { tags.has(tag) ? tags.delete(tag) : tags.add(tag); renderTags(); };
-      return chip;
-    }));
-    renderDraft();
-  }
+  // A fresh draft: tags start from suggestions again (edit mode starts from the message's own tags).
+  function resetTags(initial = []) { tagRow.reset(initial); tagRow.update(text.value); }
 
   function accept(list) {
     for (const file of list) {
@@ -121,19 +108,20 @@ export function setupComposer(config, { notify, onSent }) {
     }
     if (mode?.type === 'edit') {
       text.value = mode.view.text; files = [];
-      tags.clear(); for (const tag of mode.view.tags) tags.add(tag);
-    } else if (leavingEdit) { text.value = ''; tags.clear(); }
-    autosize(); renderTags();
+      resetTags(mode.view.tags);
+    } else if (leavingEdit) { text.value = ''; resetTags(); }
+    autosize(); renderDraft();
     if (mode) text.focus();
   }
 
   async function sendEdit() {
     const { view } = mode;
     const message = text.value.trim();
-    const sameTags = [...tags].join(' ') === view.tags.join(' ');
+    const tags = tagRow.active();
+    const sameTags = [...tags].sort().join(' ') === [...view.tags].sort().join(' ');
     if (message === view.text.trim() && sameTags) { setMode(null); return; }
     if (!message && view.event.kind === 'text') { notify('Текст не может быть пустым. Чтобы убрать сообщение, удалите его'); return; }
-    await queue(makeCorrection(view.id, 'edit', { text: message, tags: [...tags] }));
+    await queue(makeCorrection(view.id, 'edit', { text: message, tags }));
     setMode(null);
   }
 
@@ -151,10 +139,11 @@ export function setupComposer(config, { notify, onSent }) {
     const attached = files;
     const kind = !attached.length ? 'text' : attached.every((file) => file.type.startsWith('image/')) ? 'photo' : 'file';
     try {
-      await queue(await makeEntry({ kind, text: message, files: attached, tags: [...tags], replyTo: mode?.type === 'reply' ? mode.view.id : undefined }));
-      text.value = ''; files = []; tags.clear();
+      await queue(await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(),
+        replyTo: mode?.type === 'reply' ? mode.view.id : undefined }));
+      text.value = ''; files = [];
       if (mode) setMode(null);
-      autosize(); renderTags(); togglePanel(tagPanel, tagButton, false);
+      autosize(); resetTags(); renderDraft(); togglePanel(tagPanel, tagButton, false);
     } catch (error) { notify(`Сообщение не сохранено. ${error.message}`); }
     finally { busy = false; updateAction(); }
   }
@@ -163,8 +152,8 @@ export function setupComposer(config, { notify, onSent }) {
     pendingVoice = recording;
     try {
       const replyTo = mode?.type === 'reply' ? mode.view.id : undefined;
-      await queue(await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: [...tags], replyTo }));
-      pendingVoice = undefined; tags.clear(); renderTags();
+      await queue(await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: tagRow.active(), tagging: tagRow.tagging(), replyTo }));
+      pendingVoice = undefined; resetTags();
       if (mode?.type === 'reply') setMode(null);
     } catch (error) { notify(`Голосовое ждёт сохранения, нажмите «Отправить» ещё раз. ${error.message}`); }
     updateAction();
@@ -224,7 +213,13 @@ export function setupComposer(config, { notify, onSent }) {
   $('#context-cancel').onclick = () => setMode(null);
   text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) setMode(null); });
 
-  text.addEventListener('input', () => { autosize(); updateAction(); });
+  text.addEventListener('input', () => { autosize(); updateAction(); tagRow.update(text.value); });
+  $('#new-tag-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const input = $('#new-tag');
+    if (tagRow.addNew(input.value)) input.value = '';
+    else notify('Метка — одно слово: буквы, цифры, «-» или «_»');
+  });
   text.addEventListener('focus', () => togglePanel(tagPanel, tagButton, false)); // the keyboard replaces open panels
   form.addEventListener('submit', (event) => { event.preventDefault(); sendDraft(); });
   tagButton.onclick = () => togglePanel(tagPanel, tagButton);
@@ -239,8 +234,9 @@ export function setupComposer(config, { notify, onSent }) {
     if (recorder.active() || pendingVoice || hasDraft()) { event.preventDefault(); event.returnValue = ''; }
   });
 
-  renderTags();
+  resetTags();
   return {
+    refreshTags: () => tagRow.update(text.value),
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
     reply: (view) => setMode({ type: 'reply', view }),
     edit: (view) => setMode({ type: 'edit', view }),

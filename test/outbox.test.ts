@@ -89,9 +89,9 @@ test('composer entries carry owner tags; registry quick tags satisfy the contrac
   const plain = await makeEntry({ text: 'без меток' });
   assert.equal('tags' in plain.event.payload, false);
   const { readFileSync } = await import('node:fs');
-  const config = JSON.parse(readFileSync(new URL('../registry/capture.json', import.meta.url), 'utf8'));
-  assert.ok(config.quick_tags.length > 0);
-  validateEvent((await makeEntry({ text: 'x', tags: config.quick_tags })).event);
+  const dictionary = JSON.parse(readFileSync(new URL('../registry/tags.json', import.meta.url), 'utf8'));
+  assert.ok(dictionary.tags.length > 0);
+  validateEvent((await makeEntry({ text: 'x', tags: dictionary.tags.map((entry: { tag: string }) => entry.tag) })).event);
 });
 
 test('the queue sends oldest first, so a correction never precedes its message; entries are valid', async () => {

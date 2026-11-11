@@ -28,6 +28,7 @@ export function setupFeed({ notify, onQueue }) {
   let rendered = false;
   let showArchive = false;
   let views = new Map(); // message id -> current view, for the action panel
+  let viewList = []; // all current views, a new array per render (tag statistics key on it)
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -49,6 +50,7 @@ export function setupFeed({ notify, onQueue }) {
     for (const entry of queued) events.set(entry.event.id, entry.event);
     const projected = project([...events.values()], new Set(pending.keys()));
     views = new Map(projected.map((view) => [view.id, view]));
+    viewList = projected;
     const visible = projected.filter((view) => !view.deleted && (showArchive || !view.archived));
     onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
 
@@ -144,5 +146,5 @@ export function setupFeed({ notify, onQueue }) {
 
   function setShowArchive(value) { showArchive = value; return render(); }
 
-  return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
+  return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), views: () => viewList, scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
 }

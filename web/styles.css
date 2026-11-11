@@ -201,3 +201,19 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 
 @keyframes flash { 0%, 30% { box-shadow: 0 0 0 3px var(--accent), var(--shadow); } 100% { box-shadow: var(--shadow); } }
 @keyframes panel-in { from { opacity: 0; scale: .92; } to { opacity: 1; scale: 1; } }
+
+/* Tag row above the composer (tagrow.js) */
+.tag-row {
+  display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  padding: 6px 10px 2px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+.tag-row::-webkit-scrollbar { display: none; }
+.tag-row .chip, #tag-options .chip { flex: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.chip.suggest { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.chip.on { background: var(--accent-strong); color: #fff; }
+.chip.auto { background: var(--chip); color: var(--chip-text); box-shadow: inset 0 0 0 1.5px var(--accent-strong); }
+.chip .spark { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+.new-tag { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.new-tag input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 8px 2px; outline: none; }
+.new-tag input:focus { border-bottom-color: var(--accent); }

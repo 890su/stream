@@ -126,18 +126,19 @@ async function main() {
   const config = await response.json();
   const onQueue = setupStatus();
   const feed = setupFeed({ notify, onQueue });
-  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }) });
+  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views() });
   setupMessageActions(feed, composer);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({
     getToken: () => getSetting('ownerToken'),
-    onEvent: (event) => feed.receive(event).catch((error) => notify(error.message)),
+    onEvent: (event) => feed.receive(event).then(() => composer.refreshTags()).catch((error) => notify(error.message)),
     onConnect: () => feed.refresh(),
   });
   await setupSettings(config, feed, () => live.reconnect());
   await registerWorker(feed, composer);
   startSync(config, notify);
   await feed.refresh();
+  composer.refreshTags(); // frequent tags are known once the feed is loaded
   // Fallback only: while the live stream is up, new messages arrive without polling.
   setInterval(() => { if (!document.hidden && !live.connected()) feed.refresh(); }, config.feed_refresh_ms);
 

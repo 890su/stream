@@ -86,6 +86,21 @@
         },
         "data": {
           "type": "object",
+          "properties": {
+            "tagging": {
+              "type": "object",
+              "description": "Owner feedback on tag suggestions at capture (CONCEPT.md 2.2): training data for interpretation. auto and owner_on are subsets of payload.tags; owner_off is disjoint from it.",
+              "required": ["engine", "suggested", "auto", "owner_on", "owner_off"],
+              "additionalProperties": false,
+              "properties": {
+                "engine": { "type": "string", "description": "Suggester name and version, e.g. local-v1." },
+                "suggested": { "type": "array", "description": "Shown and left inactive.", "items": { "type": "string", "pattern": "^#[\\p{L}0-9_-]+$" } },
+                "auto": { "type": "array", "description": "Switched on by the suggester and kept.", "items": { "type": "string", "pattern": "^#[\\p{L}0-9_-]+$" } },
+                "owner_on": { "type": "array", "description": "Switched on by the owner.", "items": { "type": "string", "pattern": "^#[\\p{L}0-9_-]+$" } },
+                "owner_off": { "type": "array", "description": "Switched on by the suggester, switched off by the owner.", "items": { "type": "string", "pattern": "^#[\\p{L}0-9_-]+$" } }
+              }
+            }
+          },
           "description": "Kind-specific structured data, e.g. task_change {status, due} or correction {fields}."
         }
       },

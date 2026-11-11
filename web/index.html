@@ -46,8 +46,13 @@
 
   <footer class="composer-area">
     <div id="tag-panel" class="panel" hidden aria-label="Метки">
-      <p class="panel-title">Метки для сообщения</p>
+      <p class="panel-title">Все метки</p>
       <div id="tag-options" class="chips"></div>
+      <form id="new-tag-form" class="new-tag" autocomplete="off">
+        <label class="visually-hidden" for="new-tag">Новая метка</label>
+        <input id="new-tag" type="text" placeholder="#новая-метка" maxlength="40" enterkeyhint="done">
+        <button type="submit" class="link-button">Добавить</button>
+      </form>
     </div>
     <div id="attach-menu" class="panel attach-menu" hidden aria-label="Прикрепить">
       <button type="button" data-attach="camera"><span class="round">
@@ -69,9 +74,9 @@
       </button>
     </div>
     <div id="draft" class="draft" hidden>
-      <div id="draft-tags" class="chips"></div>
       <div id="draft-files" class="draft-files"></div>
     </div>
+    <div id="tag-row" class="tag-row" role="group" aria-label="Метки сообщения: касание включает или выключает" hidden></div>
     <form id="composer" class="composer" autocomplete="off">
       <button id="tag-button" type="button" class="icon-button" aria-label="Метки" aria-expanded="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3.5 7.5 20.5M16.5 3.5l-2 17M4 8.5h16.5M3.5 15.5H20"/></svg>

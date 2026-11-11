@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import type { JournalStore } from '../store/store.ts';
-import { captureConfig } from '../config.ts';
+import { captureConfig, tagConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json } from './body.ts';
 import { events } from './events.ts';
@@ -31,7 +31,7 @@ export function createApp({ store, ownerToken }: { store: JournalStore; ownerTok
       }
       if (request.method !== 'GET') throw new HttpError(405, 'Метод не поддерживается');
       if (url.pathname === '/healthz') { json(response, 200, { ok: true }); return; }
-      if (url.pathname === '/capture-config.json') { json(response, 200, captureConfig); return; }
+      if (url.pathname === '/capture-config.json') { json(response, 200, { ...captureConfig, tagging: tagConfig }); return; }
       const file = await staticFile(url.pathname);
       if (!file) throw new HttpError(404, 'Страница не найдена');
       response.writeHead(200, file.headers); response.end(file.body);

@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync,
 import { join } from 'node:path';
 import { validateEvent } from '../contracts/validate.ts';
 import { checkCorrectionShape, checkCorrectionTarget } from '../contracts/correction.ts';
+import { checkTagging } from '../contracts/tagging.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
@@ -55,6 +56,7 @@ export class JournalStore {
   appendEvent(input: JournalEvent): { created: boolean; event: JournalEvent } {
     validateEvent(input);
     checkCorrectionShape(input);
+    checkTagging(input);
     // Server time is excluded, and omitted nullable fields have one canonical form.
     const { received_at, ...body } = input;
     const normalized = { ...body, reply_to: input.reply_to ?? null, topic_hint: input.topic_hint ?? null };

@@ -202,3 +202,13 @@ delete | restore`; для `edit` — новые `text` и `tags`. Лента —
 **Boundary:** `topic_id` уже есть в Interpretation и Task — контракт ложится. События темы (архив, возврат)
 потребуют `kind` или расширения `task_change` — решается в плане пакета П3.
 **Affected:** `CONCEPT.md` §2, §2.3, §5; `contracts/`
+
+## 2026-11-11 — Обратная связь по меткам в событии: `payload.data.tagging`
+**What:** Event v1 получил необязательное `payload.data.tagging = { engine, suggested, auto, owner_on, owner_off }`.
+Сервер проверяет: `auto` и `owner_on` входят в `payload.tags`, `suggested` и `owner_off` — нет, метка только в
+одном списке. Словарь меток с признаками и порогом — `registry/tags.json` (заменил `quick_tags`).
+**Why:** Метки владельца и его реакции на подсказки — размеченные примеры для шага 3; хранить их рядом с
+исходником проще и надёжнее, чем отдельным журналом.
+**Boundary:** Поле необязательное — контракт остаётся v1. Подсказчик локальный (`local-v1`), без ИИ; версия
+подсказчика пишется в каждое событие, чтобы позже сравнивать версии.
+**Affected:** `contracts/event.schema.json`, `src/contracts/tagging.ts`, `registry/tags.json`, `web/suggest.js`, `web/tagrow.js`
