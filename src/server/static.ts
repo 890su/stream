@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 // App shell files are served under /v/<build>/ so that no cache in between (browser, Cloudflare,
 // service worker) can mix files from different versions. The build id is a hash of their content.
-export const VERSIONED = ['app.js', 'composer.js', 'voice.js', 'bubble.js', 'feed.js', 'outbox.js', 'sync.js', 'db.js', 'shared.js', 'styles.css'];
+export const VERSIONED = ['app.js', 'composer.js', 'voice.js', 'bubble.js', 'feed.js', 'outbox.js', 'sync.js', 'db.js', 'shared.js', 'live.js', 'styles.css'];
 const ROOT_FILES = ['/manifest.json', '/icon-192.png', '/icon-512.png', '/fonts/inter-latin-wght-normal.woff2', '/fonts/inter-cyrillic-wght-normal.woff2', '/fonts/LICENSE'];
 const TEMPLATES = ['index.html', 'sw.js'];
 const PLACEHOLDER = /__BUILD__/g;

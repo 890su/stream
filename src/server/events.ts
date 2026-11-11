@@ -4,14 +4,16 @@ import { validateEvent, isDateTime } from '../contracts/validate.ts';
 import { captureConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json, readBody } from './body.ts';
+import type { LiveFeed } from './live.ts';
 
-export async function events(request: IncomingMessage, response: ServerResponse, url: URL, store: JournalStore): Promise<void> {
+export async function events(request: IncomingMessage, response: ServerResponse, url: URL, store: JournalStore, live: LiveFeed): Promise<void> {
   if (request.method === 'POST') {
     let input: unknown;
     try { input = JSON.parse((await readBody(request, captureConfig.max_event_bytes)).toString('utf8')); }
     catch (error) { if (error instanceof HttpError) throw error; throw new HttpError(400, 'Некорректный JSON'); }
     validateEvent(input);
     const result = store.appendEvent(input);
+    if (result.created) live.publish(result.event);
     json(response, result.created ? 201 : 200, result.event);
     return;
   }

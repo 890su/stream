@@ -77,6 +77,7 @@ CREATE TABLE media (
 | `POST` | `/api/events` | Событие по `contracts/event.schema.json`. Новый id → 201. Тот же id и тот же `body_hash` → 200 (повтор). Тот же id, другое тело → 409 |
 | `GET` | `/api/events?before=<received_at>&limit=50` | Хронология, новые сверху |
 | `POST` | `/share-target` | Приём из «Поделиться» (multipart), если сервис-воркер не перехватил: медиа + событие `source=share`, редирект на `/` |
+| `GET` | `/api/live` | Поток Server-Sent Events: каждое новое событие сразу уходит всем открытым клиентам (`event: append`). Повтор не шлётся. Пинг каждые 25 с |
 | `GET` | `/healthz` | Проверка живости |
 
 Правила:

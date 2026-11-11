@@ -128,5 +128,11 @@ export function setupFeed({ notify, onQueue }) {
     if (scroller.scrollTop < NEAR_TOP) loadOlder();
   }, { passive: true });
   list.addEventListener('load', () => { if (stick) scroller.scrollTop = scroller.scrollHeight; }, true);
-  return { refresh, render, scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
+  // A live event from any device: cache it like a fetched page and redraw.
+  async function receive(event) {
+    await cacheEvents([event]);
+    await render();
+  }
+
+  return { refresh, render, receive, scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
 }

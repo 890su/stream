@@ -2,6 +2,7 @@ import { getSetting, setSetting } from './db.js';
 import { setupComposer } from './composer.js';
 import { setupFeed } from './feed.js';
 import { startSync, synchronize } from './outbox.js';
+import { startLive } from './live.js';
 
 const $ = (selector) => document.querySelector(selector);
 const notice = $('#notice');
@@ -38,7 +39,7 @@ function setupStatus() {
   return (next) => { queue = next; update(); };
 }
 
-async function setupSettings(config, feed) {
+async function setupSettings(config, feed, onToken) {
   const dialog = $('#settings');
   const input = $('#owner-token');
   input.minLength = config.min_owner_token_length;
@@ -53,6 +54,7 @@ async function setupSettings(config, feed) {
       input.value = '';
       dialog.close();
       notify('Токен сохранён на этом телефоне');
+      onToken();
       await synchronize();
       await feed.refresh();
     } catch (error) { notify(error.message); }
@@ -90,11 +92,17 @@ async function main() {
   const feed = setupFeed({ notify, onQueue });
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }) });
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
-  await setupSettings(config, feed);
+  const live = startLive({
+    getToken: () => getSetting('ownerToken'),
+    onEvent: (event) => feed.receive(event).catch((error) => notify(error.message)),
+    onConnect: () => feed.refresh(),
+  });
+  await setupSettings(config, feed, () => live.reconnect());
   await registerWorker(feed, composer);
   startSync(config, notify);
   await feed.refresh();
-  setInterval(() => { if (!document.hidden) feed.refresh(); }, config.feed_refresh_ms);
+  // Fallback only: while the live stream is up, new messages arrive without polling.
+  setInterval(() => { if (!document.hidden && !live.connected()) feed.refresh(); }, config.feed_refresh_ms);
 
   const mode = new URL(location.href).searchParams.get('mode');
   if (new URL(location.href).searchParams.has('shared')) feed.scrollToBottom();

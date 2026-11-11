@@ -5,8 +5,9 @@ import type { MediaRef } from '../contracts/validate.ts';
 import { captureConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { readBody } from './body.ts';
+import type { LiveFeed } from './live.ts';
 
-export async function share(request: IncomingMessage, response: ServerResponse, store: JournalStore): Promise<void> {
+export async function share(request: IncomingMessage, response: ServerResponse, store: JournalStore, live: LiveFeed): Promise<void> {
   const bytes = await readBody(request, captureConfig.max_share_bytes);
   let form: FormData;
   try {
@@ -23,7 +24,8 @@ export async function share(request: IncomingMessage, response: ServerResponse, 
   const text = ['title', 'text'].map((key) => form.get(key)).filter((value): value is string => typeof value === 'string').join('\n');
   const url = form.get('url');
   if (!text && typeof url !== 'string' && !media.length) throw new HttpError(400, 'Нет данных для сохранения');
-  store.appendEvent({ id: randomUUID(), schema_version: 1, source: 'share', author: 'me', ts: new Date().toISOString(),
+  const result = store.appendEvent({ id: randomUUID(), schema_version: 1, source: 'share', author: 'me', ts: new Date().toISOString(),
     kind: media.length ? 'file' : url ? 'link' : 'text', payload: { text, ...(typeof url === 'string' ? { url } : {}), ...(media.length ? { media } : {}) } });
+  if (result.created) live.publish(result.event);
   response.writeHead(303, { Location: '/', 'Cache-Control': 'no-store' }); response.end();
 }

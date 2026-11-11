@@ -8,10 +8,12 @@ import { events } from './events.ts';
 import { media } from './media.ts';
 import { share } from './share.ts';
 import { staticFile } from './static.ts';
+import { LiveFeed } from './live.ts';
 
 export function createApp({ store, ownerToken }: { store: JournalStore; ownerToken: string }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   const expected = createHash('sha256').update(`Bearer ${ownerToken}`).digest();
+  const live = new LiveFeed();
   return createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
@@ -21,9 +23,10 @@ export function createApp({ store, ownerToken }: { store: JournalStore; ownerTok
       if (url.pathname.startsWith('/api/') || (url.pathname === '/share-target' && request.method === 'POST')) {
         const actual = createHash('sha256').update(request.headers.authorization ?? '').digest();
         if (!timingSafeEqual(expected, actual)) { response.setHeader('WWW-Authenticate', 'Bearer'); throw new HttpError(401, 'Введите токен владельца в настройках'); }
-        if (url.pathname === '/api/events') return await events(request, response, url, store);
+        if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
+        if (url.pathname === '/api/events') return await events(request, response, url, store, live);
         if (url.pathname.startsWith('/api/media/')) return await media(request, response, url.pathname.slice('/api/media/'.length), store);
-        if (url.pathname === '/share-target') return await share(request, response, store);
+        if (url.pathname === '/share-target') return await share(request, response, store, live);
         throw new HttpError(404, 'Маршрут не найден');
       }
       if (request.method !== 'GET') throw new HttpError(405, 'Метод не поддерживается');
