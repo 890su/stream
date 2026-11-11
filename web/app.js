@@ -60,15 +60,23 @@ async function setupSettings(config, feed) {
   if (!(await getSetting('ownerToken'))) dialog.showModal();
 }
 
-async function registerWorker(feed) {
+async function registerWorker(feed, composer) {
   if (!('serviceWorker' in navigator)) return;
+  // A new version takes over at once (skipWaiting); reload into it unless the owner is in the middle of something.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    if (composer.busy()) notify('Stream обновлён. Новая версия откроется после отправки');
+    else location.reload();
+  });
   navigator.serviceWorker.addEventListener('message', () => {
     synchronize().catch((error) => notify(error.message)).finally(() => feed.render({ bottom: true }));
   });
   // A failed registration must not stop the outbox: queued entries still sync while the page is open.
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js', { type: 'module' });
-    if (registration.waiting) notify('Доступно обновление. Закройте Stream и откройте снова');
+    // updateViaCache 'none': update checks never trust an HTTP or CDN cache.
+    const registration = await navigator.serviceWorker.register('/sw.js', { type: 'module', updateViaCache: 'none' });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) registration.update().catch(() => {}); });
   } catch (error) {
     notify(`Офлайн-режим и «Поделиться» недоступны: ${error.message}. Записи отправляются, пока Stream открыт`);
   }
@@ -83,7 +91,7 @@ async function main() {
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }) });
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   await setupSettings(config, feed);
-  await registerWorker(feed);
+  await registerWorker(feed, composer);
   startSync(config, notify);
   await feed.refresh();
   setInterval(() => { if (!document.hidden) feed.refresh(); }, config.feed_refresh_ms);

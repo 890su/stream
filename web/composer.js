@@ -196,6 +196,7 @@ export function setupComposer(config, { notify, onSent }) {
 
   renderTags();
   return {
+    busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft(),
     record: () => { locked = true; return startRecording(); },
     focus: () => text.focus(),
     openAttach: () => togglePanel(attachMenu, attachButton, true),
