@@ -1,0 +1,72 @@
+# Field dictionary. Intents may use only fields declared here.
+# New field = proposal (by owner or analyst) -> owner accepts -> added here with a decisions.md note if it changes meaning.
+
+version: 1
+
+fields:
+  title:
+    type: string
+    title: Название
+    description: Короткая формулировка дела или заметки, в повелительном наклонении для задач.
+
+  amount:
+    type: number
+    title: Сумма
+    minimum: 0
+
+  currency:
+    type: string
+    title: Валюта
+    enum: [PLN, EUR, USD, BYN]
+    default: PLN
+
+  category:
+    type: string
+    title: Категория расхода
+    enum: [materials, tools, transport, fuel, software, phone_internet, office, food, family, other]
+
+  client:
+    type: string
+    title: Клиент
+    description: Имя человека или фирмы, как владелец его называет.
+
+  contact:
+    type: string
+    title: Контакт
+    description: Телефон, email или ник в мессенджере.
+
+  address:
+    type: string
+    title: Адрес или район
+
+  service:
+    type: string
+    title: Услуга
+    description: Что нужно сделать клиенту (Wi-Fi, кабель, камеры, настройка ПК...).
+
+  project:
+    type: string
+    title: Проект
+    description: Имя проекта из 04_projects или темы владельца.
+
+  due:
+    type: string
+    format: date-or-datetime
+    title: Срок
+
+  priority:
+    type: integer
+    title: Приоритет
+    minimum: 1
+    maximum: 4
+    default: 3
+
+  paid_with:
+    type: string
+    title: Чем оплачено
+    enum: [card_business, card_personal, cash, transfer, unknown]
+    default: unknown
+
+  note:
+    type: string
+    title: Текст заметки

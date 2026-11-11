@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stream/contracts/intent/v1",
+  "title": "Intent",
+  "description": "Registry entry describing one kind of owner intention. Lives in registry/intents/<name>.yaml. Data, not code.",
+  "type": "object",
+  "required": ["name", "version", "title", "risk_class", "schema", "instruction", "examples", "thresholds", "default_action"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "title": { "type": "string", "description": "Human name in Russian." },
+    "risk_class": { "enum": ["A", "B", "C"] },
+    "schema": {
+      "type": "object",
+      "description": "JSON Schema for Interpretation.fields of this intent. Field names come from registry/fields.yaml."
+    },
+    "instruction": { "type": "string", "description": "Prompt fragment for the model: when this intent applies and how to fill fields." },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["input", "fields"],
+        "properties": {
+          "input": { "type": "string" },
+          "fields": { "type": "object" },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "required": ["auto", "suggest"],
+      "properties": {
+        "auto": { "type": "number", "minimum": 0, "maximum": 1 },
+        "suggest": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "default_action": {
+      "type": ["object", "null"],
+      "properties": {
+        "connector": { "type": "string" },
+        "operation": { "type": "string" }
+      },
+      "required": ["connector", "operation"],
+      "additionalProperties": false
+    }
+  }
+}

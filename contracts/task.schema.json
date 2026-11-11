@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stream/contracts/task/v1",
+  "title": "Task",
+  "description": "Projection of the feed: current state = fold of task-related events (creation + task_change events). Not edited directly.",
+  "type": "object",
+  "required": ["id", "topic_id", "title", "status", "priority", "source_event_id", "external_refs", "created_at", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "topic_id": { "type": "string" },
+    "title": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["inbox", "todo", "doing", "waiting", "done", "cancelled"] },
+    "due": { "type": ["string", "null"], "description": "ISO date or date-time." },
+    "priority": { "type": "integer", "minimum": 1, "maximum": 4, "description": "1 = highest." },
+    "remind_at": { "type": ["string", "null"], "format": "date-time" },
+    "today": { "type": "boolean", "description": "Picked as one of the morning three." },
+    "source_event_id": { "type": "string", "format": "uuid", "description": "The event the task was born from." },
+    "external_refs": {
+      "type": "array",
+      "description": "Mirrors in external managers via connectors (todoist, ticktick, planfix, icrm).",
+      "items": {
+        "type": "object",
+        "required": ["connector", "external_id"],
+        "properties": {
+          "connector": { "type": "string" },
+          "external_id": { "type": "string" },
+          "url": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

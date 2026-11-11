@@ -1,0 +1,25 @@
+name: unknown
+version: 1
+title: Не определено
+risk_class: A
+
+schema:
+  type: object
+  additionalProperties: false
+  properties: {}
+
+instruction: |
+  Use when no other intent fits with reasonable confidence, or the message is ambiguous between
+  several intents and no single clarifying question would resolve it. This is a valid, honest result:
+  the event stays in the feed as is. Never force a guess into another intent.
+
+examples:
+  - input: "ну и денёк"
+    fields: {}
+    tags: []
+
+thresholds:
+  auto: 0.0
+  suggest: 0.0
+
+default_action: null

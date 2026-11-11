@@ -1,0 +1,38 @@
+name: task
+version: 1
+title: Задача
+risk_class: A
+
+schema:
+  type: object
+  required: [title]
+  additionalProperties: false
+  properties:
+    title: { $ref: "fields#title" }
+    due: { $ref: "fields#due" }
+    priority: { $ref: "fields#priority" }
+    client: { $ref: "fields#client" }
+    project: { $ref: "fields#project" }
+
+instruction: |
+  Use when the owner states something he or someone else must do: "надо", "нужно", "не забыть",
+  "позвонить", "купить", "отправить", "сделать к пятнице". Title is a short imperative phrase in the
+  owner's language. Resolve relative dates ("завтра", "в пятницу") against the event timestamp in
+  Europe/Warsaw. Do not invent a due date. If the message also records money spent, prefer "expense"
+  and mention the follow-up task in tags only.
+
+examples:
+  - input: "надо до пятницы отправить Анне оферту на камеры"
+    fields: { title: "Отправить Анне оферту на камеры", due: "<friday>", client: "Анна" }
+    tags: ["#оферта"]
+  - input: "не забыть купить коннекторы RJ45"
+    fields: { title: "Купить коннекторы RJ45" }
+    tags: ["#закупка"]
+
+thresholds:
+  auto: 0.85
+  suggest: 0.6
+
+default_action:
+  connector: internal_tasks
+  operation: create_task

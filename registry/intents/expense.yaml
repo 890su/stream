@@ -1,0 +1,39 @@
+name: expense
+version: 1
+title: Расход
+risk_class: A
+
+schema:
+  type: object
+  required: [amount, currency]
+  additionalProperties: false
+  properties:
+    amount: { $ref: "fields#amount" }
+    currency: { $ref: "fields#currency" }
+    category: { $ref: "fields#category" }
+    client: { $ref: "fields#client" }
+    project: { $ref: "fields#project" }
+    paid_with: { $ref: "fields#paid_with" }
+    note: { $ref: "fields#note" }
+
+instruction: |
+  Use when the owner says he paid or bought something: "заплатил", "купил", "потратил", a receipt photo.
+  Amount must come from the message or OCR text; never estimate. Default currency PLN unless stated
+  ("злотых", "zł" = PLN; "евро" = EUR). If the expense is for a client job, set client. If amount is
+  missing, ask one question for amount.
+
+examples:
+  - input: "заплатил 120 злотых за кабель для Анны"
+    fields: { amount: 120, currency: PLN, category: materials, client: "Анна" }
+    tags: ["#расход"]
+  - input: "заправился на 250"
+    fields: { amount: 250, currency: PLN, category: fuel }
+    tags: ["#расход"]
+
+thresholds:
+  auto: 0.85
+  suggest: 0.6
+
+default_action:
+  connector: internal_ledger
+  operation: record_expense

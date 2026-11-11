@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stream/contracts/normalized/v1",
+  "title": "Normalized",
+  "description": "Derived, recomputable text and entities for one event. A new processor version writes a new record.",
+  "type": "object",
+  "required": ["event_id", "version", "processor", "text", "entities", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "version": { "type": "integer", "minimum": 1 },
+    "processor": { "$ref": "#/$defs/processor" },
+    "text": { "type": "string", "description": "Transcript / OCR / original text, whichever applies." },
+    "language": { "type": ["string", "null"], "description": "ISO 639-1, e.g. ru, pl, en." },
+    "entities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "amounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value", "currency"],
+            "properties": {
+              "value": { "type": "number" },
+              "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+              "span": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "dates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["value"],
+            "properties": {
+              "value": { "type": "string", "description": "ISO date or date-time." },
+              "span": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "people": { "type": "array", "items": { "type": "string" } },
+        "phones": { "type": "array", "items": { "type": "string" } },
+        "emails": { "type": "array", "items": { "type": "string" } },
+        "urls": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "processor": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "model": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

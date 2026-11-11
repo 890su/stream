@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stream/contracts/action/v1",
+  "title": "Action",
+  "description": "Something to do outside the journal, executed by a connector. Only status/result change over time; each change is also recorded as an action_result event.",
+  "type": "object",
+  "required": ["id", "connector", "operation", "params", "risk_class", "status", "idempotency_key", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "interpretation_id": { "type": ["string", "null"] },
+    "automation": { "type": ["string", "null"], "description": "Name of the automation that created it, if any." },
+    "connector": { "type": "string", "description": "Name from registry/connectors.yaml, e.g. internal_tasks, todoist, icrm, email." },
+    "operation": { "type": "string", "description": "Connector-specific verb, e.g. create_task, send_message." },
+    "params": { "type": "object" },
+    "risk_class": {
+      "enum": ["A", "B", "C"],
+      "description": "A = internal, reversible; B = draft for outside, needs owner's yes; C = irreversible outside, needs confirmation."
+    },
+    "status": { "enum": ["proposed", "approved", "running", "done", "failed", "rejected"] },
+    "idempotency_key": { "type": "string", "description": "Retrying with the same key must not repeat the side effect." },
+    "external_ref": {
+      "type": ["object", "null"],
+      "properties": {
+        "external_id": { "type": "string" },
+        "url": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "result": { "type": ["object", "null"], "description": "Connector response or error details." },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

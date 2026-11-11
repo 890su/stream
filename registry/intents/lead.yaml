@@ -1,0 +1,38 @@
+name: lead
+version: 1
+title: Заявка клиента
+risk_class: A
+
+schema:
+  type: object
+  required: [service]
+  additionalProperties: false
+  properties:
+    client: { $ref: "fields#client" }
+    contact: { $ref: "fields#contact" }
+    address: { $ref: "fields#address" }
+    service: { $ref: "fields#service" }
+    due: { $ref: "fields#due" }
+    note: { $ref: "fields#note" }
+
+instruction: |
+  Use when a (potential) client asks for a service or the owner records such a request: "звонил клиент",
+  "просят настроить wifi", a forwarded message from a client, a screenshot of a request. Service is what
+  must be done in plain words. Do not invent contact data. A lead always opens or continues the client's
+  topic. A lead may also imply a task ("перезвонить"); keep the lead as the intent and add tag "#перезвонить".
+
+examples:
+  - input: "звонил Марек с Урсынова, не работает wifi после смены провайдера, просит в четверг"
+    fields: { client: "Марек", address: "Ursynów", service: "Настройка Wi-Fi после смены провайдера", due: "<thursday>" }
+    tags: ["#заявка", "#naserwis"]
+  - input: "переслано: Dzień dobry, potrzebuję podłączyć kamery w biurze, tel. 600 000 000"
+    fields: { contact: "600 000 000", service: "Подключение камер в офисе" }
+    tags: ["#заявка", "#naserwis"]
+
+thresholds:
+  auto: 0.85
+  suggest: 0.6
+
+default_action:
+  connector: internal_tasks
+  operation: create_task

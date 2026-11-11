@@ -1,0 +1,32 @@
+name: note
+version: 1
+title: Заметка
+risk_class: A
+
+schema:
+  type: object
+  required: [title]
+  additionalProperties: false
+  properties:
+    title: { $ref: "fields#title" }
+    project: { $ref: "fields#project" }
+    client: { $ref: "fields#client" }
+
+instruction: |
+  Use for thoughts, ideas, observations and information to keep that require no action and record
+  no money: "мысль", "идея", "заметка", facts about a client or project. Title is a short summary.
+  If the text contains a clear action, it is a task, not a note.
+
+examples:
+  - input: "идея: в оферте всегда давать два варианта — эконом и нормальный"
+    fields: { title: "Два варианта в оферте: эконом и нормальный" }
+    tags: ["#идея", "#оферта"]
+  - input: "у Марека роутер TP-Link Archer, пароль от админки на наклейке"
+    fields: { title: "Оборудование Марека: TP-Link Archer", client: "Марек" }
+    tags: ["#клиент"]
+
+thresholds:
+  auto: 0.8
+  suggest: 0.5
+
+default_action: null

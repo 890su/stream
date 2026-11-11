@@ -1,0 +1,26 @@
+# runtime data: database and media
+data/
+
+# dependencies and builds
+node_modules/
+dist/
+build/
+coverage/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# local
+.library/
+.tmp/
+.cache/
+*.log
+
+# personal source notes: kept locally, repository is public
+attachments/

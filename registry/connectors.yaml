@@ -1,0 +1,58 @@
+# Connectors: where actions go. A connector receives an Action (contracts/action.schema.json),
+# returns a result, never reads the feed and never calls AI.
+
+version: 1
+
+connectors:
+  internal_tasks:
+    status: mvp
+    title: Встроенный менеджер задач
+    operations: [create_task, change_task]
+    notes: Пишет события task_change в журнал; задача — проекция.
+
+  internal_ledger:
+    status: mvp
+    title: Лог расходов и доходов
+    operations: [record_expense, record_income]
+    notes: Запись в ленте с полями; отчёт — фильтр. Выгрузка за месяц — после MVP.
+
+  todoist:
+    status: reserve
+    title: Todoist (зеркало задач)
+    operations: [create_task, update_task, close_task]
+    notes: API v1, personal token в .env (TODOIST_TOKEN). Включать только по решению владельца.
+
+  ticktick:
+    status: reserve
+    title: TickTick (зеркало задач)
+    operations: [create_task, update_task, complete_task]
+    notes: Официальный Open API маленький (без тегов и поиска). Второй резерв после Todoist.
+
+  icrm:
+    status: later
+    title: iCRM (заявки, оплаты, клиенты)
+    operations: []
+    notes: Отдельный коннектор после MVP; до этого лента и iCRM не связаны (decisions.md, 2026-11-11).
+
+  planfix:
+    status: later
+    title: Планфикс
+    operations: []
+    notes: REST API только на платном тарифе; писать с silent=true.
+
+  email:
+    status: later
+    title: Почта
+    operations: []
+
+  telegram_business:
+    status: later
+    title: Telegram через бизнес-подключение
+    operations: []
+    notes: Ответ только в чатах, активных за последние 24 часа.
+
+  google_reviews:
+    status: later
+    title: Отзывы Google Business Profile
+    operations: []
+    notes: Нужен одобренный доступ к API; профиль подтверждён и активен ≥60 дней.

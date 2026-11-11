@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stream/contracts/interpretation/v1",
+  "title": "Interpretation",
+  "description": "What the owner meant. Output of interpret(event, context) or of an owner correction. Versioned; corrections supersede, never overwrite.",
+  "type": "object",
+  "required": ["id", "event_id", "version", "author", "processor", "topic_id", "intent", "fields", "tags", "confidence", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "event_id": { "type": "string", "format": "uuid" },
+    "version": { "type": "integer", "minimum": 1 },
+    "supersedes": { "type": ["string", "null"], "description": "Id of the interpretation this one replaces." },
+    "author": { "enum": ["ai", "owner", "rule"] },
+    "processor": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "model": { "type": ["string", "null"] },
+        "intent_version": { "type": ["integer", "null"], "description": "Version of the registry intent used." }
+      },
+      "additionalProperties": false
+    },
+    "topic_id": { "type": "string" },
+    "new_topic_title": { "type": ["string", "null"], "description": "Set when the pipeline opens a new topic." },
+    "intent": {
+      "type": "string",
+      "description": "Name of an intent from registry/intents/. 'unknown' is a valid result.",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "fields": {
+      "type": "object",
+      "description": "Validated against the intent's field schema in registry/intents/<intent>.yaml."
+    },
+    "tags": { "type": "array", "items": { "type": "string", "pattern": "^#[\\p{L}0-9_-]+$" } },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Model's own estimate. Calibrated trust is computed from history, not stored here." },
+    "questions": {
+      "type": "array",
+      "description": "Clarifying questions. At most one is shown at a time.",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "field"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string", "description": "In Russian, short." },
+          "field": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" }, "maxItems": 4 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}
