@@ -1,4 +1,4 @@
-export async function makeEntry({ kind = 'text', text = '', url, files = [], source = 'app', duration, tags = [] }) {
+export async function makeEntry({ kind = 'text', text = '', url, files = [], source = 'app', duration, tags = [], replyTo }) {
   const media = [];
   const storedFiles = [];
   for (const blob of files) {
@@ -10,6 +10,7 @@ export async function makeEntry({ kind = 'text', text = '', url, files = [], sou
   return {
     event: {
       id: crypto.randomUUID(), schema_version: 1, source, author: 'me', ts: new Date().toISOString(), kind,
+      ...(replyTo ? { reply_to: replyTo } : {}),
       payload: { ...(text ? { text } : {}), ...(url ? { url } : {}), ...(media.length ? { media } : {}), ...(tags.length ? { tags } : {}) },
     },
     files: storedFiles,
@@ -22,4 +23,15 @@ export async function entryFromShare(form) {
   const url = typeof form.get('url') === 'string' ? form.get('url') : undefined;
   if (!text && !url && !files.length) throw new Error('Нет данных для сохранения');
   return makeEntry({ source: 'share', kind: files.length ? 'file' : url ? 'link' : 'text', text, url, files });
+}
+
+// An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4).
+export function makeCorrection(targetId, op, { text, tags = [] } = {}) {
+  return {
+    event: {
+      id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'correction',
+      payload: { ref: { type: 'event', id: targetId }, data: { op }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
+    },
+    files: [],
+  };
 }

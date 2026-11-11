@@ -3,16 +3,48 @@ import { setupComposer } from './composer.js';
 import { setupFeed } from './feed.js';
 import { startSync, synchronize } from './outbox.js';
 import { startLive } from './live.js';
+import { setupActions } from './actions.js';
+import { makeCorrection } from './shared.js';
 
 const $ = (selector) => document.querySelector(selector);
 const notice = $('#notice');
 let noticeTimer;
 
-function notify(message) {
-  notice.textContent = message;
+// A short message at the bottom; `action` adds one button, e.g. undo.
+function notify(message, action) {
+  $('#notice-text').textContent = message;
+  const button = $('#notice-action');
+  button.hidden = !action;
+  if (action) {
+    button.textContent = action.label;
+    button.onclick = () => { notice.hidden = true; action.run(); };
+  }
   notice.hidden = false;
   clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => { notice.hidden = true; }, 4500);
+  noticeTimer = setTimeout(() => { notice.hidden = true; }, action ? 6000 : 4500);
+}
+
+function setupMessageActions(feed, composer) {
+  const correct = (view, op) => composer.queue(makeCorrection(view.id, op)).catch((error) => notify(error.message));
+  setupActions({
+    list: $('#feed-list'),
+    getView: (id) => feed.view(id),
+    onAction: async (op, view) => {
+      if (op === 'reply') composer.reply(view);
+      else if (op === 'edit') composer.edit(view);
+      else if (op === 'copy') {
+        try { await navigator.clipboard.writeText(view.text); notify('Текст скопирован'); }
+        catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }
+      } else if (op === 'archive') {
+        const back = view.archived;
+        await correct(view, back ? 'unarchive' : 'archive');
+        notify(back ? 'Возвращено из архива' : 'В архиве', { label: back ? 'Отменить' : 'Вернуть', run: () => correct(view, back ? 'archive' : 'unarchive') });
+      } else if (op === 'delete') {
+        await correct(view, 'delete');
+        notify('Сообщение удалено', { label: 'Отменить', run: () => correct(view, 'restore') });
+      }
+    },
+  });
 }
 
 function plural(count, one, few, many) {
@@ -41,6 +73,10 @@ function setupStatus() {
 
 async function setupSettings(config, feed, onToken) {
   const dialog = $('#settings');
+  const archive = $('#show-archive');
+  archive.checked = Boolean(await getSetting('showArchive'));
+  if (archive.checked) await feed.setShowArchive(true);
+  archive.onchange = async () => { await setSetting('showArchive', archive.checked); await feed.setShowArchive(archive.checked); };
   const input = $('#owner-token');
   input.minLength = config.min_owner_token_length;
   $('#menu-button').onclick = () => dialog.showModal();
@@ -91,6 +127,7 @@ async function main() {
   const onQueue = setupStatus();
   const feed = setupFeed({ notify, onQueue });
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }) });
+  setupMessageActions(feed, composer);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({
     getToken: () => getSetting('ownerToken'),

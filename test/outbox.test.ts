@@ -93,3 +93,23 @@ test('composer entries carry owner tags; registry quick tags satisfy the contrac
   assert.ok(config.quick_tags.length > 0);
   validateEvent((await makeEntry({ text: 'x', tags: config.quick_tags })).event);
 });
+
+test('the queue sends oldest first, so a correction never precedes its message; entries are valid', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { makeCorrection } = await import('../web/shared.js');
+  const original = await makeEntry({ text: 'исходное' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const reply = await makeEntry({ text: 'ответ', replyTo: original.event.id });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const edit = makeCorrection(original.event.id, 'edit', { text: 'исправлено', tags: ['#задача'] });
+  const archive = makeCorrection(original.event.id, 'archive');
+  for (const entry of [original, reply, edit, archive]) validateEvent(entry.event);
+  assert.equal(reply.event.reply_to, original.event.id);
+  assert.equal('text' in archive.event.payload, false);
+  const store = new Map([edit, archive, reply, original].map((entry) => [entry.event.id, entry]));
+  const posted: string[] = [];
+  await syncEntries({ list: async () => [...store.values()], save: async () => {}, remove: async (id: string) => { store.delete(id); } }, 'token',
+    async (_url: string, init: RequestInit) => { posted.push(JSON.parse(String(init.body)).id); return new Response('{}', { status: 201 }); });
+  assert.equal(posted[0], original.event.id);
+  assert.ok(posted.indexOf(edit.event.id) > posted.indexOf(original.event.id));
+});

@@ -11,7 +11,9 @@ export async function syncEntries(repository, token, request = fetch, onAccepted
   let success = true;
   const headers = { Authorization: `Bearer ${token}` };
   const send = (url, init) => request(url, { ...init, ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) });
-  for (const entry of await repository.list()) {
+  // Oldest first: a reply or a correction never reaches the server before its message.
+  const entries = (await repository.list()).sort((a, b) => a.event.ts.localeCompare(b.event.ts));
+  for (const entry of entries) {
     try {
       for (const file of entry.files) {
         const metadata = await accepted(await send(`/api/media/${file.id}`, {

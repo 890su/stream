@@ -1,4 +1,5 @@
 import { formatDuration } from './voice.js';
+import { snippet } from './projection.js';
 
 // Static, trusted icon markup. User content is only ever set through textContent.
 const ICONS = {
@@ -7,6 +8,7 @@ const ICONS = {
   alert: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor"/><path d="M12 7.5v5.5M12 16.5v.2"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>',
+  more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>',
   file: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></svg>',
 };
 const clock = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
@@ -24,19 +26,25 @@ function sizeLabel(bytes) {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} КБ` : `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 }
 
-export function bubbleSignature(event, queued) {
-  return JSON.stringify([event.payload, event.ts, queued ? queued.error || 'queued' : 'accepted']);
+export function bubbleSignature(view, queued) {
+  const reply = view.replyTo && [view.replyTo.id, snippet(view.replyTo)];
+  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, reply,
+    queued ? queued.error || 'queued' : 'accepted']);
 }
 
-function meta(event, queued, extraClass = '') {
+function meta(view, queued, extraClass = '') {
+  const event = view.event;
   const box = element('span', `meta ${extraClass}`.trim());
+  if (view.archived) box.append(element('span', 'meta-note', 'в архиве'));
+  if (view.edited) box.append(element('span', 'meta-note', 'изменено'));
   const time = element('time', '', clock.format(new Date(event.ts)));
   time.dateTime = event.ts;
   const status = element('span');
-  const state = queued ? (queued.error ? 'alert' : 'clock') : 'check';
+  const waiting = queued || view.pending;
+  const state = queued?.error ? 'alert' : waiting ? 'clock' : 'check';
   status.innerHTML = ICONS[state];
   status.setAttribute('role', 'img');
-  status.setAttribute('aria-label', queued ? (queued.error ? 'Не отправлено' : 'В очереди') : 'Принято');
+  status.setAttribute('aria-label', queued?.error ? 'Не отправлено' : waiting ? 'В очереди' : 'Принято');
   if (queued?.error) box.classList.add('error');
   box.append(time, status);
   return box;
@@ -114,23 +122,42 @@ function file(reference, load, notify) {
   return button;
 }
 
-export function createBubble(event, queued, { load, notify }) {
+export function createBubble(view, queued, { load, notify, jump }) {
+  const event = view.event;
   const payload = event.payload ?? {};
   const media = payload.media ?? [];
   const photos = media.filter((item) => item.mime.startsWith('image/'));
   const bubble = element('div', 'bubble');
   bubble.dataset.id = event.id;
+  bubble.tabIndex = 0;
+  bubble.setAttribute('aria-label', `Сообщение: ${snippet(view)}. Действия — долгое нажатие или клавиша меню`);
   bubble.classList.toggle('has-photo', photos.length > 0);
-  bubble.classList.toggle('has-text', Boolean(payload.text || payload.url));
-  bubble.classList.toggle('has-tags', Boolean(payload.tags?.length));
+  bubble.classList.toggle('has-text', Boolean(view.text || payload.url));
+  bubble.classList.toggle('has-tags', view.tags.length > 0);
+  bubble.classList.toggle('archived', view.archived);
 
+  // Mouse users: a "more" button next to the bubble; touch users long-press or swipe (actions.js).
+  const more = element('button', 'more');
+  more.type = 'button';
+  more.innerHTML = ICONS.more;
+  more.setAttribute('aria-label', 'Действия с сообщением');
+  more.dataset.actions = '';
+  bubble.append(more);
+
+  if (view.replyTo) {
+    const quote = element('button', 'quote');
+    quote.type = 'button';
+    quote.append(element('span', 'quote-title', 'Ответ на'), element('span', 'quote-text', snippet(view.replyTo)));
+    quote.onclick = (clickEvent) => { clickEvent.stopPropagation(); if (!view.replyTo.deleted) jump(view.replyTo.id); };
+    bubble.append(quote);
+  }
   for (const reference of photos) bubble.append(photo(reference, load, notify));
   for (const reference of media) {
     if (reference.mime.startsWith('image/')) continue;
     bubble.append(event.kind === 'voice' || reference.mime.startsWith('audio/') ? voice(reference, load, notify) : file(reference, load, notify));
   }
-  if (payload.tags?.length) bubble.append(element('div', 'tags', payload.tags.join(' ')));
-  if (payload.text) bubble.append(element('div', 'text', payload.text));
+  if (view.tags.length) bubble.append(element('div', 'tags', view.tags.join(' ')));
+  if (view.text) bubble.append(element('div', 'text', view.text));
   if (payload.url) {
     try {
       const parsed = new URL(payload.url);
@@ -143,8 +170,8 @@ export function createBubble(event, queued, { load, notify }) {
       }
     } catch { /* malformed URLs stay in the journal payload */ }
   }
-  const onlyPhoto = photos.length && !payload.text && !payload.url && !payload.tags?.length;
-  bubble.append(meta(event, queued, onlyPhoto ? 'photo-meta' : ''));
+  const onlyPhoto = photos.length && !view.text && !payload.url && !view.tags.length && !view.replyTo;
+  bubble.append(meta(view, queued, onlyPhoto ? 'photo-meta' : ''));
   if (queued?.error) bubble.append(element('div', 'error-text', queued.error));
   return bubble;
 }

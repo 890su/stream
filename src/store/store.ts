@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateEvent } from '../contracts/validate.ts';
+import { checkCorrectionShape, checkCorrectionTarget } from '../contracts/correction.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
@@ -53,6 +54,7 @@ export class JournalStore {
 
   appendEvent(input: JournalEvent): { created: boolean; event: JournalEvent } {
     validateEvent(input);
+    checkCorrectionShape(input);
     // Server time is excluded, and omitted nullable fields have one canonical form.
     const { received_at, ...body } = input;
     const normalized = { ...body, reply_to: input.reply_to ?? null, topic_hint: input.topic_hint ?? null };
@@ -65,6 +67,7 @@ export class JournalStore {
         this.#db.exec('COMMIT');
         return { created: false, event: fromRow(existing) };
       }
+      if (input.kind === 'correction') checkCorrectionTarget(input, this.getEvent(input.payload.ref!.id));
       for (const reference of input.payload.media ?? []) {
         const media = this.getMedia(reference.media_id);
         if (!media) throw new HttpError(422, 'Сначала загрузите все медиа');
@@ -89,6 +92,11 @@ export class JournalStore {
       : this.#db.prepare('SELECT * FROM events ORDER BY received_at DESC LIMIT ?').all(limit + 1)) as unknown as EventRow[];
     const events = rows.slice(0, limit).map(fromRow);
     return { events, next_before: rows.length > limit ? events.at(-1)!.received_at! : null };
+  }
+
+  getEvent(id: string): JournalEvent | undefined {
+    const row = this.#db.prepare('SELECT * FROM events WHERE id = ?').get(id) as unknown as EventRow | undefined;
+    return row && fromRow(row);
   }
 
   getMedia(id: string): MediaRecord | undefined {

@@ -164,3 +164,17 @@ Cloudflare Access не ставится: его редирект на вход �
 потребовал бы общей шины (сейчас не нужен).
 **Affected:** `src/server/live.ts`, `src/server/http.ts`, `src/server/events.ts`, `src/server/share.ts`,
 `web/live.js`, `web/feed.js`, `web/app.js`, `test/live.test.ts`
+
+## 2026-11-11 — Правка, архив и удаление — события-правки поверх неизменяемого журнала
+**What:** Ответ — сообщение с `reply_to`. Изменить, в архив / вернуть, удалить / восстановить — событие
+`kind: correction` с `payload.ref = {type: event, id}` и `payload.data.op` из `edit | archive | unarchive |
+delete | restore`; для `edit` — новые `text` и `tags`. Лента — проекция: последняя правка по времени побеждает.
+Сервер принимает правку, только если исходное событие уже в журнале и само не является правкой (иначе 422 / 400).
+Очередь на телефоне отправляет записи по времени создания, чтобы правка не ушла раньше исходника.
+**Why:** Владельцу нужны привычные действия мессенджера, а журнал не меняется (правило 1). Последствия правки
+для разбора, действий, коннекторов и автоматизаций описаны таблицей в `CONCEPT.md` §2.4 и включаются с шага 3.
+**Boundary:** «Удалить» — отзыв, не стирание. Медиа не правятся. Контракт Event остаётся v1: `correction` уже
+был в списке `kind`, правила `data.op` проверяет `src/contracts/correction.ts`. Компенсирующие действия и
+`undo/update/irreversible` у коннекторов — проектные правила на шаг 3+, кода пока нет.
+**Affected:** `CONCEPT.md` §2.4, §5, `src/contracts/correction.ts`, `src/store/store.ts`, `web/projection.js`,
+`web/actions.js`, `web/composer.js`, `web/bubble.js`, `web/feed.js`

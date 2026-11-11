@@ -1,5 +1,6 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
+import { project } from './projection.js';
 
 const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
 const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -15,13 +16,6 @@ function dayLabel(date) {
   return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
 }
 
-// Like a chat: by the moment the message was written on the phone; server order breaks ties.
-function chronological(a, b) {
-  const byTime = Date.parse(a.ts) - Date.parse(b.ts);
-  if (byTime) return byTime;
-  return (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
-}
-
 export function setupFeed({ notify, onQueue }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
@@ -32,6 +26,8 @@ export function setupFeed({ notify, onQueue }) {
   let loadingOlder = false;
   let refreshing;
   let rendered = false;
+  let showArchive = false;
+  let views = new Map(); // message id -> current view, for the action panel
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -51,14 +47,16 @@ export function setupFeed({ notify, onQueue }) {
     const pending = new Map(queued.map((entry) => [entry.event.id, entry]));
     const events = new Map((await cachedEvents()).map((event) => [event.id, event]));
     for (const entry of queued) events.set(entry.event.id, entry.event);
-    const sorted = [...events.values()].sort(chronological);
+    const projected = project([...events.values()], new Set(pending.keys()));
+    views = new Map(projected.map((view) => [view.id, view]));
+    const visible = projected.filter((view) => !view.deleted && (showArchive || !view.archived));
     onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
 
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
     const children = [];
     let lastDay;
-    for (const event of sorted) {
-      const date = new Date(event.ts);
+    for (const view of visible) {
+      const date = new Date(view.event.ts);
       if (dayKey(date) !== lastDay) {
         lastDay = dayKey(date);
         const pill = document.createElement('div');
@@ -66,24 +64,34 @@ export function setupFeed({ notify, onQueue }) {
         pill.textContent = dayLabel(date);
         children.push(pill);
       }
-      const queuedEntry = pending.get(event.id);
-      const signature = bubbleSignature(event, queuedEntry);
-      let cached = nodes.get(event.id);
+      const queuedEntry = pending.get(view.id);
+      const signature = bubbleSignature(view, queuedEntry);
+      let cached = nodes.get(view.id);
       if (!cached || cached.signature !== signature) {
-        cached = { signature, node: createBubble(event, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify }) };
-        nodes.set(event.id, cached);
+        cached = { signature, node: createBubble(view, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify, jump }) };
+        nodes.set(view.id, cached);
       }
       children.push(cached.node);
     }
-    if (!sorted.length) {
+    if (!visible.length) {
       const empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = 'Здесь появятся ваши записи. Напишите, наговорите голосом или приложите фото.';
+      empty.textContent = showArchive || !projected.length
+        ? 'Здесь появятся ваши записи. Напишите, наговорите голосом или приложите фото.'
+        : 'Все сообщения в архиве. Показать их: ⋮ → «Показывать архив».';
       children.push(empty);
     }
     list.replaceChildren(...children);
     if (bottom || nearBottom || !rendered) scroller.scrollTop = scroller.scrollHeight;
     rendered = true;
+  }
+
+  // Scrolls to a message (from a reply quote) and flashes it.
+  function jump(id) {
+    const node = nodes.get(id)?.node;
+    if (!node?.isConnected) { notify('Исходное сообщение скрыто или ещё не загружено'); return; }
+    node.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    node.classList.remove('flash'); void node.offsetWidth; node.classList.add('flash');
   }
 
   async function fetchPage(older) {
@@ -134,5 +142,7 @@ export function setupFeed({ notify, onQueue }) {
     await render();
   }
 
-  return { refresh, render, receive, scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
+  function setShowArchive(value) { showArchive = value; return render(); }
+
+  return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
 }

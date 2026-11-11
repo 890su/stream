@@ -1,4 +1,5 @@
-import { makeEntry } from './shared.js';
+import { makeEntry, makeCorrection } from './shared.js';
+import { snippet } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
 
@@ -26,11 +27,12 @@ export function setupComposer(config, { notify, onSent }) {
   let pressedAt = 0;
   let locked = false;
   let busy = false;
+  let mode = null; // null, or { type: 'reply' | 'edit', view } — a message the next send refers to
 
   const hasDraft = () => Boolean(text.value.trim() || files.length);
 
   function updateAction() {
-    const send = hasDraft() || recorder.active() || pendingVoice;
+    const send = hasDraft() || recorder.active() || pendingVoice || mode?.type === 'edit';
     action.dataset.mode = send ? 'send' : 'voice';
     action.setAttribute('aria-label', recorder.active() ? 'Отправить голосовое' : send ? 'Отправить' : 'Голосовое сообщение');
     action.classList.toggle('recording', recorder.active());
@@ -104,15 +106,54 @@ export function setupComposer(config, { notify, onSent }) {
     synchronize().catch((error) => notify(error.message));
   }
 
+  const contextBar = $('#context-bar');
+
+  function setMode(next) {
+    const leavingEdit = mode?.type === 'edit';
+    mode = next;
+    contextBar.hidden = !mode;
+    contextBar.classList.toggle('reply', mode?.type === 'reply');
+    contextBar.classList.toggle('edit', mode?.type === 'edit');
+    attachButton.hidden = mode?.type === 'edit'; // photos and files are not edited, only text and tags
+    if (mode) {
+      $('#context-title').textContent = mode.type === 'edit' ? 'Редактирование' : 'Ответ';
+      $('#context-snippet').textContent = snippet(mode.view);
+    }
+    if (mode?.type === 'edit') {
+      text.value = mode.view.text; files = [];
+      tags.clear(); for (const tag of mode.view.tags) tags.add(tag);
+    } else if (leavingEdit) { text.value = ''; tags.clear(); }
+    autosize(); renderTags();
+    if (mode) text.focus();
+  }
+
+  async function sendEdit() {
+    const { view } = mode;
+    const message = text.value.trim();
+    const sameTags = [...tags].join(' ') === view.tags.join(' ');
+    if (message === view.text.trim() && sameTags) { setMode(null); return; }
+    if (!message && view.event.kind === 'text') { notify('Текст не может быть пустым. Чтобы убрать сообщение, удалите его'); return; }
+    await queue(makeCorrection(view.id, 'edit', { text: message, tags: [...tags] }));
+    setMode(null);
+  }
+
   async function sendDraft() {
-    if (!hasDraft() || busy) return;
+    if (busy) return;
+    if (mode?.type === 'edit') {
+      busy = true;
+      try { await sendEdit(); } catch (error) { notify(`Правка не сохранена. ${error.message}`); }
+      finally { busy = false; updateAction(); }
+      return;
+    }
+    if (!hasDraft()) return;
     busy = true;
     const message = text.value.trim();
     const attached = files;
     const kind = !attached.length ? 'text' : attached.every((file) => file.type.startsWith('image/')) ? 'photo' : 'file';
     try {
-      await queue(await makeEntry({ kind, text: message, files: attached, tags: [...tags] }));
+      await queue(await makeEntry({ kind, text: message, files: attached, tags: [...tags], replyTo: mode?.type === 'reply' ? mode.view.id : undefined }));
       text.value = ''; files = []; tags.clear();
+      if (mode) setMode(null);
       autosize(); renderTags(); togglePanel(tagPanel, tagButton, false);
     } catch (error) { notify(`Сообщение не сохранено. ${error.message}`); }
     finally { busy = false; updateAction(); }
@@ -121,15 +162,17 @@ export function setupComposer(config, { notify, onSent }) {
   async function queueVoice(recording) {
     pendingVoice = recording;
     try {
-      await queue(await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: [...tags] }));
+      const replyTo = mode?.type === 'reply' ? mode.view.id : undefined;
+      await queue(await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: [...tags], replyTo }));
       pendingVoice = undefined; tags.clear(); renderTags();
+      if (mode?.type === 'reply') setMode(null);
     } catch (error) { notify(`Голосовое ждёт сохранения, нажмите «Отправить» ещё раз. ${error.message}`); }
     updateAction();
   }
 
   function showRecording(on) {
     recordingBar.hidden = !on;
-    text.hidden = on; attachButton.hidden = on;
+    text.hidden = on; attachButton.hidden = on || mode?.type === 'edit';
     if (on) $('#rec-time').textContent = '0:00';
     updateAction();
   }
@@ -178,6 +221,8 @@ export function setupComposer(config, { notify, onSent }) {
     }
   });
   $('#rec-cancel').onclick = () => finishRecording(false);
+  $('#context-cancel').onclick = () => setMode(null);
+  text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) setMode(null); });
 
   text.addEventListener('input', () => { autosize(); updateAction(); });
   text.addEventListener('focus', () => togglePanel(tagPanel, tagButton, false)); // the keyboard replaces open panels
@@ -196,7 +241,10 @@ export function setupComposer(config, { notify, onSent }) {
 
   renderTags();
   return {
-    busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft(),
+    busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
+    reply: (view) => setMode({ type: 'reply', view }),
+    edit: (view) => setMode({ type: 'edit', view }),
+    queue,
     record: () => { locked = true; return startRecording(); },
     focus: () => text.focus(),
     openAttach: () => togglePanel(attachMenu, attachButton, true),
