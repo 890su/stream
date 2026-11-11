@@ -1,9 +1,9 @@
 ---
 project_id: stream
 project_type: deliverable
-status: concept
+status: implementation
 aliases: [stream, лента, личный поток событий, life feed, лента событий]
-stack: [tbd]
+stack: [node24, typescript, node-sqlite, node-http, javascript-pwa]
 updated: 2026-11-11
 ---
 
@@ -26,8 +26,11 @@ updated: 2026-11-11
 
 ## Current state
 
-**Шаг 1 начат (2026-11-11).** Решены стек, сервер и связь с iCRM (`decisions.md`). Контракты — в
-`contracts/`, стартовые цели — в `registry/`. План шага 1 — `docs/plans/2026-11-11-step1-journal-capture.md`.
+**Код шага 1 готов (2026-11-11).** Журнал, API, PWA с офлайн-очередью и комплект systemd находятся в
+`src/`, `web/` и `deploy/`. Решения по стеку, серверу и iCRM — в `decisions.md`.
+Контракты — в `contracts/`, параметры ввода — в `registry/capture.json`.
+Выкладка, визуальная проверка и приёмка на телефоне остаются открытыми по
+`docs/plans/2026-11-11-step1-journal-capture.md` и `deploy/DEPLOY.md`.
 
 Исходная постановка задачи — `attachments/previous-notes.txt` (только локально, не в git).
 Полная проработка с источниками — документ «Лента: личный поток событий с ИИ-обработчиком»:
@@ -51,11 +54,12 @@ Node 24 запускает TypeScript без сборки; база — `node:sq
 | `registry/` | Данные вместо кода: цели (`intents/`), словарь полей (`fields.yaml`), коннекторы (`connectors.yaml`) |
 | `golden/` | Эталонный набор реальных сообщений с правильным разбором |
 | `docs/plans/` | Планы шагов |
-| `src/` | Сервер (появится на шаге 1) |
-| `web/` | PWA-клиент (появится на шаге 1) |
+| `src/` | Сервер, валидация контракта, SQLite-хранилище и резервная копия |
+| `web/` | PWA-клиент, сервис-воркер, ввод, лента и IndexedDB-очередь |
 | `data/` | База и медиа (локально, не в git) |
 
-Запуск: `pnpm install`, `pnpm start` (http://127.0.0.1:3790), `pnpm test`, `pnpm typecheck` — появятся на шаге 1.
+Запуск: `pnpm install`, создать `.env` по `.env.example`, затем `pnpm start` (http://127.0.0.1:3790).
+Проверки: `pnpm test`, `pnpm typecheck`.
 
 ## Deployment
 

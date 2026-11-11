@@ -1,0 +1,13 @@
+{
+  "max_event_bytes": 1048576,
+  "max_media_bytes": 67108864,
+  "max_share_bytes": 68157440,
+  "default_page_size": 50,
+  "max_page_size": 100,
+  "retry_initial_ms": 2000,
+  "retry_max_ms": 60000,
+  "request_timeout_ms": 45000,
+  "feed_refresh_ms": 30000,
+  "min_owner_token_length": 32,
+  "mime_types": ["image/*", "audio/*", "application/pdf"]
+}

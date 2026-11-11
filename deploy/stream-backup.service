@@ -1,0 +1,11 @@
+[Unit]
+Description=Stream consistent journal and media backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/services/stream
+EnvironmentFile=%h/services/stream/.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning %h/services/stream/src/backup.ts %h/backups/stream
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true

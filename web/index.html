@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#173f35">
+  <title>Stream — личная лента</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <main>
+    <header><h1>Stream</h1><span id="network" role="status">Подключение</span></header>
+    <nav aria-label="Разделы">
+      <button type="button" data-view="capture" aria-pressed="true">Записать</button>
+      <button type="button" data-view="feed" aria-pressed="false">Лента</button>
+    </nav>
+    <p id="notice" role="status" aria-live="polite"></p>
+    <section id="capture-view" aria-label="Быстрый ввод">
+      <div class="voice">
+        <p id="record-state" aria-live="polite">Готово к записи</p>
+        <button id="record" type="button">Записать голос</button>
+      </div>
+      <form id="text-form">
+        <label for="message">Мысль, событие или ссылка</label>
+        <textarea id="message" rows="5" placeholder="Что хотите сохранить?" required></textarea>
+        <button type="submit">Сохранить текст</button>
+      </form>
+      <label class="photo-label" for="photo">Сделать фото</label>
+      <input id="photo" type="file" accept="image/*" capture="environment">
+    </section>
+    <section id="feed-view" hidden aria-label="Лента событий">
+      <div class="feed-tools"><h2>Последние записи</h2><button id="sync-now" type="button" class="secondary">Обновить</button></div>
+      <div id="feed-list"></div>
+      <button id="more" type="button" class="secondary" hidden>Загрузить ещё</button>
+    </section>
+    <footer><p id="queue-count" role="status">Проверяем очередь</p>
+      <details id="settings"><summary>Настройки доступа</summary>
+        <form id="token-form">
+          <label for="owner-token">Токен владельца</label>
+          <input id="owner-token" type="password" autocomplete="off" spellcheck="false" required>
+          <button type="submit" class="secondary">Сохранить токен</button>
+        </form>
+        <p class="hint">Токен хранится в этом браузере. Очередь отправляется, пока Stream открыт. Сохранённые на устройстве записи ждут сети.</p>
+      </details>
+    </footer>
+    <noscript>Для записи и офлайн-очереди включите JavaScript.</noscript>
+  </main>
+</body>
+</html>

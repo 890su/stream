@@ -1,0 +1,18 @@
+[Unit]
+Description=Stream journal capture
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/services/stream
+EnvironmentFile=%h/services/stream/.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning %h/services/stream/src/main.ts
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

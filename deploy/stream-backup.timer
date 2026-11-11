@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly Stream backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+Unit=stream-backup.service
+
+[Install]
+WantedBy=timers.target
