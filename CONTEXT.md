@@ -26,11 +26,14 @@ updated: 2026-11-11
 
 ## Current state
 
-**Код шага 1 готов (2026-11-11).** Журнал, API, PWA с офлайн-очередью и комплект systemd находятся в
-`src/`, `web/` и `deploy/`. Решения по стеку, серверу и iCRM — в `decisions.md`.
-Контракты — в `contracts/`, параметры ввода — в `registry/capture.json`.
-Выкладка, визуальная проверка и приёмка на телефоне остаются открытыми по
-`docs/plans/2026-11-11-step1-journal-capture.md` и `deploy/DEPLOY.md`.
+**Шаг 1 работает на https://stream.sekond.pl (2026-11-14), ветка `step1-journal-capture`.** Журнал, API,
+PWA с офлайн-очередью и мгновенной синхронизацией между устройствами; экран-чат со строкой меток (П1),
+правками поверх журнала (изменить, архив, удалить), связями сообщений, темами, левой панелью тем и
+меток-фильтров, выделением и экраном темы (`CONCEPT.md` §5). Разбора и ИИ ещё нет — это шаги 2–3.
+
+Приёмка владельцем на телефоне открыта: `docs/plans/2026-11-11-step1-journal-capture.md`, `deploy/DEPLOY.md`.
+Агент сам коммитит, пушит и выкладывает каждую правку (`deploy/DEPLOY.md`, «Выкладка агентом без пароля»).
+Решения — в `decisions.md`, контракты — в `contracts/`, параметры ввода и метки — в `registry/`.
 
 Исходная постановка задачи — `attachments/previous-notes.txt` (только локально, не в git).
 Полная проработка с источниками — документ «Лента: личный поток событий с ИИ-обработчиком»:
@@ -51,14 +54,17 @@ Node 24 запускает TypeScript без сборки; база — `node:sq
 | Где | Что |
 |---|---|
 | `contracts/` | JSON Schema контрактов: event, normalized, interpretation, task, action, intent |
-| `registry/` | Данные вместо кода: цели (`intents/`), словарь полей (`fields.yaml`), коннекторы (`connectors.yaml`) |
-| `golden/` | Эталонный набор реальных сообщений с правильным разбором |
-| `docs/plans/` | Планы шагов |
-| `src/` | Сервер, валидация контракта, SQLite-хранилище и резервная копия |
-| `web/` | PWA-клиент, сервис-воркер, ввод, лента и IndexedDB-очередь |
+| `registry/` | Данные вместо кода: цели (`intents/`), поля (`fields.yaml`), коннекторы (`connectors.yaml`), словарь меток (`tags.json`), параметры ввода (`capture.json`) |
+| `golden/` | Эталонный набор: в git — обезличенные примеры, реальные сообщения — `cases.local.jsonl` (вне git) |
+| `docs/plans/` | Планы шагов и пакетов |
+| `src/` | Сервер, проверка контрактов и правок, SQLite-хранилище, поток `/api/live`, резервная копия |
+| `web/` | PWA-клиент без сборщика: один модуль — одна задача (`composer`, `feed`, `projection`, `bubble`, `actions`, `select`, `drawer`, `topicscreen`, `thread`, `picker`, `tagrow`, `outbox`, `live`, `sw.js`…) |
+| `test/` | `node --test`: сервер, контракты, проекция ленты, подсказчик меток, синтаксис всех модулей клиента |
 | `data/` | База и медиа (локально, не в git) |
 
-Запуск: `pnpm install`, создать `.env` по `.env.example`, затем `pnpm start` (http://127.0.0.1:3790).
+Запуск: `pnpm install`, создать `.env` по `.env.example` (`STREAM_OWNER_TOKEN` — не короче 32 символов),
+затем `pnpm start` (http://127.0.0.1:3790). Файлы клиента отдаются по адресу сборки `/v/<build>/`; новый модуль
+`web/*.js` нужно добавить в список `VERSIONED` в `src/server/static.ts` (это проверяет тест).
 Проверки: `pnpm test`, `pnpm typecheck`.
 
 ## Deployment
@@ -67,7 +73,7 @@ server: srv-150 (192.168.0.149, WireGuard 10.0.0.1)
 server_path: /srv/stream (app, data, backups, .env); пользователь `stream`; compose-проект `stream`
 domain: https://stream.sekond.pl (локальный конфиг Cloudflare Tunnel на srv-150)
 port: 127.0.0.1:3790
-deploy: `sudo bash /srv/stream/app/deploy/install.sh [ref]` — см. `deploy/DEPLOY.md`
+deploy: `sudo bash /srv/stream/app/deploy/install.sh [ref]` — см. `deploy/DEPLOY.md`; агент — `sudo -n` без пароля, только этот скрипт
 health_check: https://stream.sekond.pl/healthz
 secrets_ref: `/srv/stream/.env` — `STREAM_OWNER_TOKEN`
 repo: https://github.com/890su/stream
