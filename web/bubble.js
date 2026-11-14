@@ -27,17 +27,26 @@ function sizeLabel(bytes) {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} КБ` : `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 }
 
-export function bubbleSignature(view, queued) {
+export function bubbleSignature(view, queued, chain) {
   const reply = view.replyTo && [view.replyTo.id, snippet(view.replyTo)];
   return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply,
+    chain && [chain.index, chain.ids.length, chain.title],
     queued ? queued.error || 'queued' : 'accepted']);
 }
 
-function meta(view, queued, extraClass = '') {
+function meta(view, queued, extraClass = '', hasHistory = false) {
   const event = view.event;
   const box = element('span', `meta ${extraClass}`.trim());
   if (view.archived) box.append(element('span', 'meta-note', 'в архиве'));
-  if (view.edited) box.append(element('span', 'meta-note', 'изменено'));
+  // A small link instead of the word "edited": opens versions and related messages (thread.js).
+  if (hasHistory) {
+    const link = element('button', 'history-link');
+    link.type = 'button';
+    link.innerHTML = ICONS.history;
+    link.setAttribute('aria-label', view.edited ? 'Изменено. Открыть историю' : 'Открыть связанные сообщения');
+    link.dataset.history = '';
+    box.append(link);
+  }
   const time = element('time', '', clock.format(new Date(event.ts)));
   time.dateTime = event.ts;
   const status = element('span');
@@ -94,12 +103,19 @@ function voice(reference, load, notify) {
   return box;
 }
 
-function photo(reference, load, notify) {
+function gallery(photos, load, notify, view) {
+  const box = element('div', `gallery count-${Math.min(photos.length, 4)}`);
+  for (const reference of photos) box.append(photo(reference, load, notify, view));
+  return box;
+}
+
+function photo(reference, load, notify, view) {
   const image = element('img', 'photo');
   image.alt = 'Фото';
   image.decoding = 'async';
   load(reference).then((url) => { image.src = url; }).catch((error) => { image.alt = 'Фото недоступно'; notify(error.message); });
-  image.onclick = () => { if (image.src) window.open(image.src, '_blank', 'noopener'); };
+  image.dataset.viewer = ''; // a tap opens the full-size viewer (app.js)
+  image.alt = view?.text ? `Фото: ${snippet(view)}` : 'Фото';
   return image;
 }
 
@@ -123,7 +139,42 @@ function file(reference, load, notify) {
   return button;
 }
 
-export function createBubble(view, queued, { load, notify, jump }) {
+// Long texts fold under a cut; the limits are data in registry/capture.json.
+function textBlock(text, limits) {
+  const block = element('div', 'text', text);
+  const long = text.length > limits.collapse_chars || text.split(/\r?\n/).length > limits.collapse_lines;
+  if (!long) return block;
+  block.classList.add('clamped');
+  const wrap = element('div', 'cut');
+  const toggle = element('button', 'cut-toggle', 'Показать полностью');
+  toggle.type = 'button';
+  toggle.onclick = (event) => {
+    event.stopPropagation();
+    const open = block.classList.toggle('clamped') === false;
+    toggle.textContent = open ? 'Свернуть' : 'Показать полностью';
+  };
+  wrap.append(block, toggle);
+  return wrap;
+}
+
+// The topic line: the chain this message belongs to, with arrows to its previous and next message.
+function topicLine(chain, jump) {
+  const line = element('div', 'topic-line');
+  const arrow = (step, label, glyph) => {
+    const button = element('button', 'topic-arrow', glyph);
+    button.type = 'button';
+    button.setAttribute('aria-label', label);
+    const target = chain.ids[chain.index + step];
+    button.disabled = !target;
+    button.onclick = (event) => { event.stopPropagation(); if (target) jump(target); };
+    return button;
+  };
+  line.append(arrow(-1, 'Предыдущее сообщение темы', '‹'), element('span', 'topic-title', chain.title),
+    element('span', 'topic-pos', `${chain.index + 1}/${chain.ids.length}`), arrow(1, 'Следующее сообщение темы', '›'));
+  return line;
+}
+
+export function createBubble(view, queued, { load, notify, jump, chain, limits }) {
   const event = view.event;
   const payload = event.payload ?? {};
   const media = payload.media ?? [];
@@ -137,7 +188,7 @@ export function createBubble(view, queued, { load, notify, jump }) {
   bubble.classList.toggle('has-tags', view.tags.length > 0);
   bubble.classList.toggle('archived', view.archived);
 
-  // Mouse users: a "more" button next to the bubble; touch users long-press or swipe (actions.js).
+  // Mouse users: a "more" button next to the bubble; touch users long-press (actions.js).
   const more = element('button', 'more');
   more.type = 'button';
   more.innerHTML = ICONS.more;
@@ -145,17 +196,7 @@ export function createBubble(view, queued, { load, notify, jump }) {
   more.dataset.actions = '';
   bubble.append(more);
 
-  // History and related messages: shown when there is something to look at (thread.js).
-  if (view.edited || view.replyTo || view.replies) {
-    const history = element('button', 'history');
-    history.type = 'button';
-    history.innerHTML = ICONS.history;
-    history.setAttribute('aria-label', 'История и связанные сообщения');
-    history.dataset.history = '';
-    bubble.append(history);
-    bubble.classList.add('has-history');
-  }
-
+  if (chain) bubble.append(topicLine(chain, jump));
   if (view.replyTo) {
     const quote = element('button', 'quote');
     quote.type = 'button';
@@ -163,13 +204,13 @@ export function createBubble(view, queued, { load, notify, jump }) {
     quote.onclick = (clickEvent) => { clickEvent.stopPropagation(); if (!view.replyTo.deleted) jump(view.replyTo.id); };
     bubble.append(quote);
   }
-  for (const reference of photos) bubble.append(photo(reference, load, notify));
+  if (photos.length) bubble.append(gallery(photos, load, notify, view));
   for (const reference of media) {
     if (reference.mime.startsWith('image/')) continue;
     bubble.append(event.kind === 'voice' || reference.mime.startsWith('audio/') ? voice(reference, load, notify) : file(reference, load, notify));
   }
   if (view.tags.length) bubble.append(element('div', 'tags', view.tags.join(' ')));
-  if (view.text) bubble.append(element('div', 'text', view.text));
+  if (view.text) bubble.append(textBlock(view.text, limits));
   if (payload.url) {
     try {
       const parsed = new URL(payload.url);
@@ -182,8 +223,8 @@ export function createBubble(view, queued, { load, notify, jump }) {
       }
     } catch { /* malformed URLs stay in the journal payload */ }
   }
-  const onlyPhoto = photos.length && !view.text && !payload.url && !view.tags.length && !view.replyTo;
-  bubble.append(meta(view, queued, onlyPhoto ? 'photo-meta' : ''));
+  const onlyPhoto = photos.length && !view.text && !payload.url && !view.tags.length && !view.replyTo && !chain;
+  bubble.append(meta(view, queued, onlyPhoto ? 'photo-meta' : '', Boolean(view.edited || view.replyTo || view.replies || chain)));
   if (queued?.error) bubble.append(element('div', 'error-text', queued.error));
   return bubble;
 }

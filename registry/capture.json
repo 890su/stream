@@ -9,5 +9,8 @@
   "request_timeout_ms": 45000,
   "feed_refresh_ms": 30000,
   "min_owner_token_length": 32,
-  "mime_types": ["image/*", "audio/*", "application/pdf"]
+  "mime_types": ["image/*", "audio/*", "application/pdf"],
+  "burst_gap_min": 5,
+  "collapse_chars": 600,
+  "collapse_lines": 12
 }

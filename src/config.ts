@@ -4,6 +4,7 @@ export const captureConfig = JSON.parse(readFileSync(new URL('../registry/captur
   max_event_bytes: number; max_media_bytes: number; max_share_bytes: number;
   default_page_size: number; max_page_size: number; mime_types: string[];
   min_owner_token_length: number;
+  burst_gap_min: number; collapse_chars: number; collapse_lines: number;
 };
 
 // Tag dictionary (CONCEPT.md §2.2): suggestion hints, auto-activation threshold, engine version.

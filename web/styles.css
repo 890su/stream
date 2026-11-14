@@ -81,8 +81,12 @@ svg .fill, svg circle:only-child { fill: currentColor; stroke: none; }
 .photo-meta { position: absolute; right: 8px; bottom: 7px; margin: 0; float: none; background: rgba(0, 0, 0, .4); color: #fff; padding: 1px 6px; border-radius: 10px; top: auto; }
 .bubble.has-text .photo-meta, .bubble.has-tags .photo-meta { position: static; background: none; color: var(--bubble-meta); float: right; margin: 6px 4px 0 10px; }
 .error-text { color: var(--danger); font-size: 13.5px; margin-top: 4px; }
-.photo { display: block; width: 100%; min-width: 200px; min-height: 120px; max-height: 420px; object-fit: cover; border-radius: 11px; background: color-mix(in srgb, var(--bubble-meta) 18%, transparent); }
-.photo + .photo { margin-top: 3px; }
+.photo { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 9px; cursor: zoom-in; background: color-mix(in srgb, var(--bubble-meta) 18%, transparent); }
+/* Thumbnails, not full-screen photos: one photo is a preview, several form a grid; a tap opens the viewer. */
+.gallery { display: grid; gap: 3px; width: min(260px, 100%); }
+.gallery.count-1 { height: 200px; }
+.gallery.count-2, .gallery.count-3, .gallery.count-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 120px; }
+.gallery.count-3 .photo:first-child { grid-row: span 2; }
 .voice { display: flex; align-items: center; gap: 10px; min-width: 210px; padding: 2px 0; }
 .play { flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--bubble-icon); color: var(--bubble); display: grid; place-items: center; }
 .play svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
@@ -181,11 +185,12 @@ dialog input { width: 100%; border: 0; border-bottom: 2px solid var(--accent); b
 
 .action-layer { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .28); }
 .action-panel {
+  max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center;
   position: fixed; top: 0; left: 0; z-index: 12; display: flex; gap: 2px; padding: 6px; border-radius: 16px; /* above the selected bubble (11) */
   background: var(--panel); color: var(--bar-text); box-shadow: 0 8px 28px rgba(0, 0, 0, .28); animation: panel-in .14s ease-out;
 }
 .action-panel button {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 62px; min-height: 58px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 58px; min-height: 58px;
   padding: 6px 4px; border-radius: 11px; font-size: 12px; color: var(--bar-text);
 }
 .action-panel button:hover, .action-panel button:focus-visible, .action-panel button:active { background: var(--press); }
@@ -222,14 +227,7 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 .new-tag input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 8px 2px; outline: none; }
 .new-tag input:focus { border-bottom-color: var(--accent); }
 
-/* History icon on a message and the history window (thread.js) */
-.history {
-  position: absolute; left: -40px; top: 0; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--pill); color: var(--pill-text);
-}
-.history svg { width: 19px; height: 19px; }
-.history:active { opacity: .7; }
-.bubble.has-history .more { left: -82px; top: 0; transform: none; width: 34px; height: 34px; }
+/* History window (thread.js) */
 .thread { width: min(96vw, 560px); max-height: 86dvh; padding: 0; display: none; flex-direction: column; }
 .thread[open] { display: flex; }
 .thread-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 8px 18px; border-bottom: 1px solid var(--line); }
@@ -247,3 +245,38 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 .version-bar .icon-button { color: var(--bubble-meta); font-size: 26px; line-height: 1; width: 44px; height: 40px; }
 .version-bar .icon-button:disabled { opacity: .3; cursor: default; }
 .version-count { font-size: 13px; min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Messages in a row: one bubble with thin separators; every part keeps its own actions. */
+.burst {
+  align-self: flex-end; max-width: min(84%, 480px); display: flex; flex-direction: column; min-width: 92px;
+  background: var(--bubble); border-radius: 14px 14px 4px 14px; box-shadow: var(--shadow);
+}
+.burst > .bubble { align-self: stretch; max-width: none; background: none; box-shadow: none; border-radius: 0; }
+.burst > .bubble:first-child { border-radius: 14px 14px 0 0; }
+.burst > .bubble:last-child { border-radius: 0 0 4px 14px; }
+.burst > .bubble + .bubble { border-top: 1px solid color-mix(in srgb, var(--bubble-meta) 22%, transparent); }
+.burst > .bubble.selected { background: var(--bubble); border-radius: 12px; }
+
+/* Topic line above a message: chain title and arrows to its previous and next message. */
+.topic-line { display: flex; align-items: center; gap: 2px; margin: -2px -4px 3px; font-size: 12.5px; color: var(--bubble-meta); min-width: 0; }
+.topic-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topic-pos { font-variant-numeric: tabular-nums; }
+.topic-arrow { width: 30px; height: 26px; border-radius: 8px; font-size: 20px; line-height: 1; color: var(--bubble-meta); flex: none; }
+.topic-arrow:disabled { opacity: .3; cursor: default; }
+.topic-arrow:not(:disabled):active { background: var(--press); }
+
+/* History link in the meta line, instead of the word "edited". */
+.history-link { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: -4px 0 -4px -2px; border-radius: 50%; color: var(--bubble-meta); }
+.history-link svg { width: 15px; height: 15px; }
+.history-link:active { background: var(--press); }
+
+/* Long messages fold under a cut. */
+.text.clamped { max-height: 13.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.cut-toggle { display: block; color: var(--link); font-size: 14px; font-weight: 500; padding: 4px 0; min-height: 32px; }
+
+/* Full-size photo viewer */
+.viewer { padding: 0; border: 0; background: transparent; max-width: 100vw; max-height: 100dvh; width: 100vw; height: 100dvh; }
+.viewer::backdrop { background: rgba(0, 0, 0, .92); }
+.viewer[open] { display: grid; place-items: center; }
+.viewer img { max-width: 100vw; max-height: 100dvh; object-fit: contain; }
+.viewer .icon-button { position: fixed; top: max(8px, env(safe-area-inset-top)); right: 8px; color: #fff; background: rgba(0, 0, 0, .4); }

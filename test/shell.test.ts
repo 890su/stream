@@ -58,3 +58,11 @@ test('page and worker are always revalidated; versioned files are immutable; old
     }
   } finally { await f.stop(); }
 });
+
+test('every client module parses, so a typo cannot ship a blank screen', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { readdirSync: list } = await import('node:fs');
+  for (const file of list(new URL('../web/', import.meta.url)).filter((name) => name.endsWith('.js'))) {
+    execFileSync(process.execPath, ['--check', new URL(`../web/${file}`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], { stdio: 'pipe' });
+  }
+});

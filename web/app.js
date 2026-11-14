@@ -27,6 +27,17 @@ function notify(message, action) {
 
 function setupMessageActions(feed, composer) {
   const thread = setupThread({ getViews: () => feed.views() });
+  // Photos are thumbnails in the feed; a tap opens them full size.
+  const viewer = $('#viewer');
+  $('#viewer-close').onclick = () => viewer.close();
+  viewer.addEventListener('click', (event) => { if (event.target === viewer || event.target.id === 'viewer-image') viewer.close(); });
+  $('#feed-list').addEventListener('click', (event) => {
+    const image = event.target.closest('[data-viewer]');
+    if (!image?.src) return;
+    $('#viewer-image').src = image.src;
+    $('#viewer-image').alt = image.alt;
+    viewer.showModal();
+  });
   const correct = (view, op) => composer.queue(makeCorrection(view.id, op)).catch((error) => notify(error.message));
   setupActions({
     list: $('#feed-list'),
@@ -130,7 +141,7 @@ async function main() {
   if (!response.ok) throw new Error('Не удалось загрузить настройки приложения. Повторите запуск');
   const config = await response.json();
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue });
+  const feed = setupFeed({ notify, onQueue, limits: config });
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views() });
   setupMessageActions(feed, composer);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));

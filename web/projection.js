@@ -71,3 +71,31 @@ export function versions(view) {
   list.push({ text: view.text, tags: view.tags, at: view.history.length ? view.history.at(-1).ts : view.event.ts });
   return list.map((item, index) => ({ ...item, label: index === 0 ? (list.length === 1 ? 'Без правок' : 'Исходное') : index === list.length - 1 ? 'Текущая' : `Редакция ${index}` }));
 }
+
+const dayOf = (ts) => new Date(ts).toDateString();
+
+// Messages written one after another (pause up to `gapMinutes`, same day) are shown as one bubble.
+// A reply starts a new bubble: its quote belongs at the top.
+export function bursts(views, gapMinutes) {
+  const groups = [];
+  let previous;
+  for (const view of views) {
+    const gap = previous ? Date.parse(view.event.ts) - Date.parse(previous.event.ts) : Infinity;
+    const joins = previous && gap >= 0 && gap <= gapMinutes * 60000 && dayOf(view.event.ts) === dayOf(previous.event.ts) && !view.replyTo;
+    if (joins) groups.at(-1).push(view); else groups.push([view]);
+    previous = view;
+  }
+  return groups;
+}
+
+// For every message in a reply chain of two or more: the chain, its title and the message's position in it.
+export function chains(views) {
+  const result = new Map();
+  for (const view of views) {
+    if (result.has(view.id) || view.deleted) continue;
+    const chain = related(views, view.id);
+    if (chain.length < 2) continue;
+    chain.forEach((item, index) => result.set(item.id, { ids: chain.map((entry) => entry.id), index, title: snippet(chain[0]) }));
+  }
+  return result;
+}

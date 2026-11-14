@@ -68,3 +68,18 @@ test('related messages follow reply links in both directions; versions run from 
   assert.equal(versions(edited)[0].at, a.ts);
   assert.deepEqual(versions(views[0]).map((item: { label: string }) => item.label), ['Без правок']);
 });
+
+test('messages in a row join one bubble; a pause, a new day or a reply starts the next', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { bursts, chains } = await import('../web/projection.js');
+  const at = (time: string) => `2026-11-12T${time}:00Z`;
+  const a = message('выезжаю', { ts: at('09:00') }), b = message('приехал', { ts: at('09:03') }), c = message('на машине', { ts: at('09:07') });
+  const d = message('через час', { ts: at('10:30') }), e = message('ответ', { ts: at('10:31'), reply_to: d.id });
+  const f = message('после полуночи', { ts: '2026-11-13T00:01:00Z' });
+  const views = project([a, b, c, d, e, f]);
+  assert.deepEqual(bursts(views, 5).map((group: Array<{ text: string }>) => group.map((view) => view.text)),
+    [['выезжаю', 'приехал', 'на машине'], ['через час'], ['ответ'], ['после полуночи']]);
+  const chain = chains(views);
+  assert.deepEqual([chain.get(d.id).index, chain.get(e.id).index, chain.get(e.id).title], [0, 1, 'через час']);
+  assert.equal(chain.has(a.id), false, 'a single message is not a chain');
+});

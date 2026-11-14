@@ -1,6 +1,6 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
-import { project } from './projection.js';
+import { project, bursts, chains } from './projection.js';
 
 const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
 const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -16,7 +16,7 @@ function dayLabel(date) {
   return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
 }
 
-export function setupFeed({ notify, onQueue }) {
+export function setupFeed({ notify, onQueue, limits }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -56,9 +56,22 @@ export function setupFeed({ notify, onQueue }) {
 
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
     const children = [];
+    const chainOf = chains(visible);
+    const node = (view) => {
+      const queuedEntry = pending.get(view.id);
+      const chain = chainOf.get(view.id);
+      const signature = bubbleSignature(view, queuedEntry, chain);
+      let cached = nodes.get(view.id);
+      if (!cached || cached.signature !== signature) {
+        cached = { signature, node: createBubble(view, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify, jump, chain, limits }) };
+        nodes.set(view.id, cached);
+      }
+      return cached.node;
+    };
     let lastDay;
-    for (const view of visible) {
-      const date = new Date(view.event.ts);
+    // Messages written in a row share one bubble; each keeps its own actions and history.
+    for (const group of bursts(visible, limits.burst_gap_min)) {
+      const date = new Date(group[0].event.ts);
       if (dayKey(date) !== lastDay) {
         lastDay = dayKey(date);
         const pill = document.createElement('div');
@@ -66,14 +79,11 @@ export function setupFeed({ notify, onQueue }) {
         pill.textContent = dayLabel(date);
         children.push(pill);
       }
-      const queuedEntry = pending.get(view.id);
-      const signature = bubbleSignature(view, queuedEntry);
-      let cached = nodes.get(view.id);
-      if (!cached || cached.signature !== signature) {
-        cached = { signature, node: createBubble(view, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify, jump }) };
-        nodes.set(view.id, cached);
-      }
-      children.push(cached.node);
+      if (group.length === 1) { children.push(node(group[0])); continue; }
+      const burst = document.createElement('div');
+      burst.className = 'burst';
+      burst.append(...group.map(node));
+      children.push(burst);
     }
     if (!visible.length) {
       const empty = document.createElement('div');
