@@ -6,8 +6,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#17212b",
+  "theme_color": "#17212b",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -55,31 +55,5 @@
         }
       ]
     }
-  },
-  "user_preferences": {
-    "color_scheme": {
-      "dark": {
-        "theme_color": "#17212b",
-        "background_color": "#17212b"
-      }
-    }
-  },
-  "theme_colors": [
-    {
-      "color": "#17212b",
-      "media": "(prefers-color-scheme: dark)"
-    },
-    {
-      "color": "#ffffff"
-    }
-  ],
-  "background_colors": [
-    {
-      "color": "#17212b",
-      "media": "(prefers-color-scheme: dark)"
-    },
-    {
-      "color": "#ffffff"
-    }
-  ]
+  }
 }
