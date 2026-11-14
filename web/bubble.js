@@ -8,6 +8,7 @@ const ICONS = {
   alert: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor"/><path d="M12 7.5v5.5M12 16.5v.2"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>',
+  history: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4 4.5v4h4M12 8v4.5l3 1.8"/></svg>',
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>',
   file: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></svg>',
 };
@@ -28,7 +29,7 @@ function sizeLabel(bytes) {
 
 export function bubbleSignature(view, queued) {
   const reply = view.replyTo && [view.replyTo.id, snippet(view.replyTo)];
-  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, reply,
+  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply,
     queued ? queued.error || 'queued' : 'accepted']);
 }
 
@@ -143,6 +144,17 @@ export function createBubble(view, queued, { load, notify, jump }) {
   more.setAttribute('aria-label', 'Действия с сообщением');
   more.dataset.actions = '';
   bubble.append(more);
+
+  // History and related messages: shown when there is something to look at (thread.js).
+  if (view.edited || view.replyTo || view.replies) {
+    const history = element('button', 'history');
+    history.type = 'button';
+    history.innerHTML = ICONS.history;
+    history.setAttribute('aria-label', 'История и связанные сообщения');
+    history.dataset.history = '';
+    bubble.append(history);
+    bubble.classList.add('has-history');
+  }
 
   if (view.replyTo) {
     const quote = element('button', 'quote');

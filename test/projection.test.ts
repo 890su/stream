@@ -53,3 +53,18 @@ test('pending corrections mark their message as waiting for the queue', () => {
   assert.equal(project([original, edit], new Set([edit.id]))[0].pending, true);
   assert.equal(project([original, edit])[0].pending, false);
 });
+
+test('related messages follow reply links in both directions; versions run from the source to the current text', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { related, versions } = await import('../web/projection.js');
+  const root = message('заявка'), a = message('ответ 1', { reply_to: root.id }), b = message('ответ на ответ', { reply_to: a.id });
+  const other = message('другое'), gone = message('удалённый ответ', { reply_to: root.id });
+  const views = project([root, a, b, other, gone, fix(gone.id, 'delete'), fix(a.id, 'edit', { text: 'ответ 1, исправлен' }), fix(a.id, 'edit', { text: 'ответ 1, финал' })]);
+  for (const from of [root.id, a.id, b.id]) assert.deepEqual(related(views, from).map((view: { text: string }) => view.text), ['заявка', 'ответ 1, финал', 'ответ на ответ']);
+  assert.deepEqual(related(views, other.id).map((view: { text: string }) => view.text), ['другое']);
+  const edited = views.find((view: { id: string }) => view.id === a.id);
+  assert.deepEqual(versions(edited).map((item: { label: string; text: string }) => [item.label, item.text]),
+    [['Исходное', 'ответ 1'], ['Редакция 1', 'ответ 1, исправлен'], ['Текущая', 'ответ 1, финал']]);
+  assert.equal(versions(edited)[0].at, a.ts);
+  assert.deepEqual(versions(views[0]).map((item: { label: string }) => item.label), ['Без правок']);
+});

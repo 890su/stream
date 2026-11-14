@@ -5,6 +5,7 @@ import { startSync, synchronize } from './outbox.js';
 import { startLive } from './live.js';
 import { setupActions } from './actions.js';
 import { makeCorrection } from './shared.js';
+import { setupThread } from './thread.js';
 
 const $ = (selector) => document.querySelector(selector);
 const notice = $('#notice');
@@ -25,6 +26,7 @@ function notify(message, action) {
 }
 
 function setupMessageActions(feed, composer) {
+  const thread = setupThread({ getViews: () => feed.views() });
   const correct = (view, op) => composer.queue(makeCorrection(view.id, op)).catch((error) => notify(error.message));
   setupActions({
     list: $('#feed-list'),
@@ -32,6 +34,7 @@ function setupMessageActions(feed, composer) {
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
       else if (op === 'edit') composer.edit(view);
+      else if (op === 'history') thread.open(view.id);
       else if (op === 'copy') {
         try { await navigator.clipboard.writeText(view.text); notify('Текст скопирован'); }
         catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }

@@ -36,6 +36,8 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6"/><path d="M4.5 12H14a6 6 0 0 1 6 6v1"/></svg><span>Ответить</span></button>
     <button type="button" role="menuitem" data-op="edit" aria-label="Изменить">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg><span>Изменить</span></button>
+    <button type="button" role="menuitem" data-op="history" aria-label="История и связанные сообщения">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4 4.5v4h4M12 8v4.5l3 1.8"/></svg><span>История</span></button>
     <button type="button" role="menuitem" data-op="copy" aria-label="Копировать текст">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg><span>Копировать</span></button>
     <button type="button" role="menuitem" data-op="archive" aria-label="В архив">
@@ -100,6 +102,16 @@
     <input id="gallery-input" type="file" accept="image/*" multiple hidden>
     <input id="file-input" type="file" multiple hidden>
   </footer>
+
+  <dialog id="thread" class="thread" aria-labelledby="thread-title">
+    <header class="thread-head">
+      <h2 id="thread-title">История сообщения</h2>
+      <button id="thread-close" type="button" class="icon-button" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div id="thread-list" class="thread-list"></div>
+  </dialog>
 
   <dialog id="settings" aria-labelledby="settings-title">
     <form id="token-form" method="dialog">

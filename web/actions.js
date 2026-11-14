@@ -1,8 +1,6 @@
-// Message actions: long press or swipe left (touch), "more" button or right click (mouse), menu key (keyboard).
+// Message actions: long press (touch), "more" button or right click (mouse), menu key (keyboard).
 const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 10;
-const SWIPE_OPEN_PX = 64;
-const SWIPE_MAX_PX = 96;
 const GAP_PX = 8;
 
 export function setupActions({ list, getView, onAction }) {
@@ -10,7 +8,7 @@ export function setupActions({ list, getView, onAction }) {
   const panel = document.querySelector('#action-panel');
   const archiveButton = panel.querySelector('[data-op="archive"]');
   let selected; // the bubble the panel belongs to
-  let gesture; // { x, y, bubble, timer, swiping, dx }
+  let gesture; // { x, y, timer } of a possible long press
   let suppressClick = false;
 
   function place(bubble) {
@@ -50,12 +48,6 @@ export function setupActions({ list, getView, onAction }) {
     selected = undefined;
   }
 
-  function reset(bubble) {
-    bubble.style.transition = 'transform .18s ease-out';
-    bubble.style.transform = '';
-    setTimeout(() => { bubble.style.transition = ''; }, 200);
-  }
-
   const bubbleOf = (target) => target.closest('.bubble');
   const isControl = (target) => target.closest('button, a, audio, input');
 
@@ -72,37 +64,21 @@ export function setupActions({ list, getView, onAction }) {
     fingerDown = event.pointerType !== 'mouse';
     const bubble = bubbleOf(event.target);
     if (!bubble || event.pointerType === 'mouse' || isControl(event.target)) return;
-    gesture = { x: event.clientX, y: event.clientY, bubble, swiping: false, dx: 0,
+    gesture = { x: event.clientX, y: event.clientY,
       timer: setTimeout(() => { swallowNextClick(); gesture = undefined; open(bubble); }, LONG_PRESS_MS) };
   });
+  // Moving the finger means scrolling, not a long press.
   list.addEventListener('pointermove', (event) => {
-    if (!gesture) return;
-    const dx = event.clientX - gesture.x;
-    const dy = event.clientY - gesture.y;
-    if (!gesture.swiping) {
-      if (Math.abs(dy) > MOVE_CANCEL_PX && Math.abs(dy) > Math.abs(dx)) { clearTimeout(gesture.timer); gesture = undefined; return; } // a scroll
-      if (dx < -MOVE_CANCEL_PX && Math.abs(dx) > Math.abs(dy)) { clearTimeout(gesture.timer); gesture.swiping = true; }
-    }
-    if (gesture.swiping) {
-      gesture.dx = Math.max(Math.min(dx, 0), -SWIPE_MAX_PX);
-      gesture.bubble.style.transform = `translateX(${gesture.dx}px)`;
-    }
+    if (gesture && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > MOVE_CANCEL_PX) { clearTimeout(gesture.timer); gesture = undefined; }
   });
-  const end = () => {
-    if (!gesture) return;
-    clearTimeout(gesture.timer);
-    if (gesture.swiping) {
-      const { bubble, dx } = gesture;
-      reset(bubble);
-      if (dx <= -SWIPE_OPEN_PX) { swallowNextClick(); open(bubble); }
-    }
-    gesture = undefined;
-  };
+  const end = () => { if (gesture) { clearTimeout(gesture.timer); gesture = undefined; } };
   list.addEventListener('pointerup', end);
   list.addEventListener('pointercancel', end);
   list.addEventListener('click', (event) => {
     if (suppressClick) { event.preventDefault(); event.stopPropagation(); return; }
     if (event.target.closest('[data-actions]')) { event.stopPropagation(); open(bubbleOf(event.target)); }
+    const history = event.target.closest('[data-history]');
+    if (history) { event.stopPropagation(); const view = getView(bubbleOf(history).dataset.id); if (view) onAction('history', view); }
   }, true);
   list.addEventListener('contextmenu', (event) => {
     const bubble = bubbleOf(event.target);

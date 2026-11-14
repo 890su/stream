@@ -10,7 +10,7 @@ export function project(events, pendingIds = new Set()) {
     if (event.kind === 'correction') { corrections.push(event); continue; }
     views.set(event.id, {
       id: event.id, event, text: event.payload?.text ?? '', tags: event.payload?.tags ?? [],
-      edited: false, archived: false, deleted: false, history: [], pending: pendingIds.has(event.id), replyTo: null,
+      edited: false, archived: false, deleted: false, history: [], pending: pendingIds.has(event.id), replyTo: null, replies: 0,
     });
   }
   for (const correction of corrections.sort(order)) {
@@ -35,6 +35,7 @@ export function project(events, pendingIds = new Set()) {
     const parentId = view.event.reply_to;
     if (!parentId) continue;
     const parent = views.get(parentId);
+    if (parent && !view.deleted) parent.replies += 1;
     view.replyTo = !parent ? { id: parentId, missing: true } : parent.deleted ? { id: parentId, deleted: true } : { id: parentId, text: parent.text, event: parent.event };
   }
   return [...views.values()].sort((a, b) => order(a.event, b.event));
@@ -48,4 +49,25 @@ export function snippet(view) {
   if (text) return text.length > 80 ? `${text.slice(0, 79)}…` : text;
   const kind = view.event?.kind;
   return kind === 'voice' ? 'Голосовое' : kind === 'photo' ? 'Фото' : kind === 'file' ? 'Файл' : 'Сообщение';
+}
+
+// Every message connected to `id` through replies (until topics exist, this is "the related messages").
+export function related(views, id) {
+  const byId = new Map(views.map((view) => [view.id, view]));
+  const rootOf = (view) => {
+    const seen = new Set();
+    while (view.event.reply_to && byId.has(view.event.reply_to) && !seen.has(view.id)) { seen.add(view.id); view = byId.get(view.event.reply_to); }
+    return view.id;
+  };
+  const start = byId.get(id);
+  if (!start) return [];
+  const root = rootOf(start);
+  return views.filter((view) => !view.deleted && rootOf(view) === root);
+}
+
+// Versions of one message, oldest (the source) first, the current one last.
+export function versions(view) {
+  const list = view.history.map((item, index) => ({ text: item.text, tags: item.tags, at: index === 0 ? view.event.ts : view.history[index - 1].ts }));
+  list.push({ text: view.text, tags: view.tags, at: view.history.length ? view.history.at(-1).ts : view.event.ts });
+  return list.map((item, index) => ({ ...item, label: index === 0 ? (list.length === 1 ? 'Без правок' : 'Исходное') : index === list.length - 1 ? 'Текущая' : `Редакция ${index}` }));
 }

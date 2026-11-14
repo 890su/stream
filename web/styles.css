@@ -221,3 +221,29 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 .new-tag { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .new-tag input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 8px 2px; outline: none; }
 .new-tag input:focus { border-bottom-color: var(--accent); }
+
+/* History icon on a message and the history window (thread.js) */
+.history {
+  position: absolute; left: -40px; top: 0; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--pill); color: var(--pill-text);
+}
+.history svg { width: 19px; height: 19px; }
+.history:active { opacity: .7; }
+.bubble.has-history .more { left: -82px; top: 0; transform: none; width: 34px; height: 34px; }
+.thread { width: min(96vw, 560px); max-height: 86dvh; padding: 0; display: none; flex-direction: column; }
+.thread[open] { display: flex; }
+.thread-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 8px 18px; border-bottom: 1px solid var(--line); }
+.thread-head h2 { margin: 0; font-size: 17px; }
+.thread-list { overflow-y: auto; overscroll-behavior: contain; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--chat); }
+.thread-card { background: var(--bubble); color: var(--bubble-text); border-radius: 14px; box-shadow: var(--shadow); }
+.thread-card.focused { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.versions { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; border-radius: 14px; }
+.versions::-webkit-scrollbar { display: none; }
+.version { flex: 0 0 100%; scroll-snap-align: start; padding: 10px 12px; min-width: 0; overflow-wrap: anywhere; }
+.version .text { white-space: pre-wrap; }
+.version .tags { color: var(--chip-text); font-size: 15px; }
+.version-label { font-size: 13px; color: var(--bubble-meta); margin-bottom: 3px; }
+.version-bar { display: flex; align-items: center; justify-content: center; gap: 6px; border-top: 1px solid color-mix(in srgb, var(--bubble-meta) 25%, transparent); color: var(--bubble-meta); }
+.version-bar .icon-button { color: var(--bubble-meta); font-size: 26px; line-height: 1; width: 44px; height: 40px; }
+.version-bar .icon-button:disabled { opacity: .3; cursor: default; }
+.version-count { font-size: 13px; min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
