@@ -26,11 +26,11 @@ export async function entryFromShare(form) {
 }
 
 // An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4).
-export function makeCorrection(targetId, op, { text, tags = [], target } = {}) {
+export function makeCorrection(targetId, op, { text, tags = [], target, title } = {}) {
   return {
     event: {
       id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'correction',
-      payload: { ref: { type: 'event', id: targetId }, data: { op, ...(target ? { target } : {}) }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
+      payload: { ref: { type: 'event', id: targetId }, data: { op, ...(target ? { target } : {}), ...(title ? { title } : {}) }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
     },
     files: [],
   };

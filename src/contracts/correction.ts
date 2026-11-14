@@ -2,7 +2,7 @@ import { HttpError } from '../server/errors.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Owner actions on a message are new journal events (CONCEPT.md §2.4); the original never changes.
-export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink'] as const;
+export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic'] as const;
 
 // Shape rules that need no database. `target` is checked separately, inside the write transaction.
 export function checkCorrectionShape(event: JournalEvent): void {
@@ -15,6 +15,10 @@ export function checkCorrectionShape(event: JournalEvent): void {
     throw new HttpError(400, `Неизвестное действие правки. Допустимо: ${CORRECTION_OPS.join(', ')}`);
   }
   if (op === 'edit' && typeof event.payload.text !== 'string') throw new HttpError(400, 'Правка текста должна содержать text');
+  if (op === 'topic') {
+    const title = event.payload.data?.title;
+    if (typeof title !== 'string' || !title.trim() || title.length > 80) throw new HttpError(400, 'Название темы — от 1 до 80 знаков');
+  }
   if (op === 'link') {
     const target = event.payload.data?.target;
     if (typeof target !== 'string' || !/^[0-9a-f-]{36}$/i.test(target)) throw new HttpError(400, 'Связь должна указывать target — id сообщения');

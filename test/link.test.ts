@@ -35,3 +35,15 @@ test('link and unlink correct a connection later; a message cannot be linked to 
     assert.equal((await post(fix(b.id, { op: 'link', target: link.id }))).status, 400, 'not to a correction');
   } finally { await f.stop(); }
 });
+
+test('a topic is named by hand with a correction on its first message', async () => {
+  const f = await fixture();
+  const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const fix = (ref: string, data: Record<string, unknown>) => event({ kind: 'correction', payload: { ref: { type: 'event', id: ref }, data } });
+  try {
+    const a = event({ payload: { text: 'выезжаю' } });
+    assert.equal((await post(a)).status, 201);
+    assert.equal((await post(fix(a.id, { op: 'topic', title: 'Клиент А — сеть в офисе' }))).status, 201);
+    for (const title of [undefined, '   ', 'x'.repeat(81)]) assert.equal((await post(fix(a.id, { op: 'topic', title }))).status, 400, String(title));
+  } finally { await f.stop(); }
+});

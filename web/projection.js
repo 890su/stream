@@ -32,6 +32,7 @@ export function project(events, pendingIds = new Set()) {
       case 'restore': view.deleted = false; break;
       case 'link': view.continues = correction.payload.data.target; break;
       case 'unlink': view.continues = null; break;
+      case 'topic': view.topicTitle = correction.payload.data.title.trim(); break;
       default: break;
     }
   }
@@ -97,7 +98,8 @@ export function chains(views) {
     if (result.has(view.id) || view.deleted) continue;
     const chain = related(views, view.id);
     if (chain.length < 2) continue;
-    chain.forEach((item, index) => result.set(item.id, { ids: chain.map((entry) => entry.id), index, title: snippet(chain[0]) }));
+    const root = chain[0];
+    chain.forEach((item, index) => result.set(item.id, { ids: chain.map((entry) => entry.id), index, root: root.id, title: root.topicTitle || snippet(root), named: Boolean(root.topicTitle) }));
   }
   return result;
 }

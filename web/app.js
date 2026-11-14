@@ -39,6 +39,34 @@ function setupMessageActions(feed, composer) {
     viewer.showModal();
   });
   const correct = (view, op) => composer.queue(makeCorrection(view.id, op)).catch((error) => notify(error.message));
+  // Topic window: name the topic by hand (a correction on its first message) or detach this message.
+  const topicDialog = $('#topic');
+  let topicView;
+  const openTopic = (view) => {
+    const chain = feed.chain(view.id);
+    if (!chain) return;
+    topicView = view;
+    $('#topic-title').value = chain.named ? chain.title : '';
+    $('#topic-title').placeholder = chain.title;
+    $('#topic-hint').textContent = `Сообщений в теме: ${chain.ids.length}. Пока имени нет, тема называется по первому сообщению.`;
+    $('#topic-detach').hidden = !view.continues; // replies stay replies; only a continuation can be detached
+    topicDialog.showModal();
+  };
+  $('#topic-cancel').onclick = () => topicDialog.close();
+  $('#topic-detach').onclick = async () => {
+    topicDialog.close();
+    const view = topicView;
+    await correct(view, 'unlink');
+    notify('Сообщение отделено от темы', { label: 'Отменить', run: () => link(view, view.continues) });
+  };
+  $('#topic-form').onsubmit = async (event) => {
+    event.preventDefault();
+    const title = $('#topic-title').value.trim();
+    const chain = feed.chain(topicView.id);
+    topicDialog.close();
+    if (!title || !chain || title === chain.title) return;
+    await composer.queue(makeCorrection(chain.root, 'topic', { title })).catch((error) => notify(error.message));
+  };
   const link = (view, target) => composer.queue(makeCorrection(view.id, 'link', { target })).catch((error) => notify(error.message));
   setupActions({
     list: $('#feed-list'),
@@ -47,7 +75,8 @@ function setupMessageActions(feed, composer) {
       if (op === 'reply') composer.reply(view);
       else if (op === 'edit') composer.edit(view);
       else if (op === 'history') thread.open(view.id);
-      else if (op === 'continue') composer.proceed(view);
+      else if (op === 'continue' || op === 'pick') { document.body.classList.remove('picking'); composer.proceed(view); }
+      else if (op === 'topic') openTopic(view);
       else if (op === 'link') {
         if (view.continues) { await correct(view, 'unlink'); notify('Отделено от предыдущего', { label: 'Отменить', run: () => link(view, view.continues) }); return; }
         const previous = feed.previous(view.id);

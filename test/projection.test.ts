@@ -86,3 +86,13 @@ test('only continuations join a bubble, never time alone; links and unlinks chan
   assert.deepEqual(related(views, d.id).map((view: { text: string }) => view.text), ['другое дело', 'на машине']);
   assert.equal(chains(views).get(c.id).title, 'другое дело');
 });
+
+test('a hand-given topic name replaces the first message as the title of its chain', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { chains } = await import('../web/projection.js');
+  const a = message('выезжаю'), b = message('приехал', { payload: { text: 'приехал', data: { continuation: { target: a.id, on: true } } } });
+  let chain = chains(project([a, b])).get(b.id);
+  assert.deepEqual([chain.title, chain.named, chain.root], ['выезжаю', false, a.id]);
+  chain = chains(project([a, b, fix(a.id, 'topic', { data: { op: 'topic', title: 'Клиент А — сеть' } })])).get(b.id);
+  assert.deepEqual([chain.title, chain.named], ['Клиент А — сеть', true]);
+});

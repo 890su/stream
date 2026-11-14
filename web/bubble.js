@@ -9,6 +9,7 @@ const ICONS = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>',
   history: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4 4.5v4h4M12 8v4.5l3 1.8"/></svg>',
+  link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
   continue: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h9"/><path d="m15 12 4 4-4 4"/></svg>',
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>',
   file: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/></svg>',
@@ -170,7 +171,13 @@ function topicLine(chain, jump) {
     button.onclick = (event) => { event.stopPropagation(); if (target) jump(target); };
     return button;
   };
-  line.append(arrow(-1, 'Предыдущее сообщение темы', '‹'), element('span', 'topic-title', chain.title),
+  // The link icon opens the topic: rename it, or detach this message (app.js).
+  const link = element('button', 'topic-link');
+  link.type = 'button';
+  link.innerHTML = ICONS.link;
+  link.setAttribute('aria-label', `Тема «${chain.title}»: переименовать или отделить`);
+  link.dataset.topic = '';
+  line.append(link, arrow(-1, 'Предыдущее сообщение темы', '‹'), element('span', `topic-title${chain.named ? ' named' : ''}`, chain.title),
     element('span', 'topic-pos', `${chain.index + 1}/${chain.ids.length}`), arrow(1, 'Следующее сообщение темы', '›'));
   return line;
 }

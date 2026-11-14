@@ -111,6 +111,20 @@
     </button>
   </dialog>
 
+  <dialog id="topic" aria-labelledby="topic-heading">
+    <form id="topic-form" method="dialog">
+      <h2 id="topic-heading">Тема</h2>
+      <label for="topic-title">Название</label>
+      <input id="topic-title" type="text" maxlength="80" autocomplete="off" enterkeyhint="done">
+      <p id="topic-hint" class="hint"></p>
+      <div class="dialog-actions">
+        <button id="topic-detach" type="button" class="link-button danger-link">Отделить сообщение</button>
+        <button id="topic-cancel" type="button" class="link-button">Отмена</button>
+        <button type="submit" class="primary">Сохранить</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="thread" class="thread" aria-labelledby="thread-title">
     <header class="thread-head">
       <h2 id="thread-title">История сообщения</h2>

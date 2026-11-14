@@ -170,6 +170,7 @@ export function setupFeed({ notify, onQueue, limits }) {
   function setShowArchive(value) { showArchive = value; return render(); }
 
   return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), views: () => viewList,
+    chain: (id) => chains(visibleList).get(id),
     previous: (id) => visibleList[visibleList.findIndex((view) => view.id === id) - 1],
     latest: () => visibleList.at(-1), scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
 }

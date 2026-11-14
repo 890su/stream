@@ -25,8 +25,24 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest }) {
   // "↳ продолжение": offered when writing soon after the latest message; on or off, the answer is saved.
   let suggestTarget = null; // the message the next one may continue
   let continueOn = false;
+  // "связать…": the next tap on a message in the feed connects the draft to it (actions.js, app.js).
+  const pickChip = () => {
+    if (mode) return [];
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    const picking = document.body.classList.contains('picking');
+    chip.className = `chip link-chip ${picking ? 'on' : 'suggest'}`;
+    chip.textContent = picking ? 'выберите сообщение…' : 'связать…';
+    chip.setAttribute('aria-pressed', String(picking));
+    chip.onclick = () => {
+      const on = document.body.classList.toggle('picking');
+      if (on) notify('Коснитесь сообщения в ленте, с которым связать новое');
+      tagRow.render();
+    };
+    return [chip];
+  };
   const continuationChip = () => {
-    if (!suggestTarget) return [];
+    if (!suggestTarget) return [...pickChip()];
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = `chip continue-chip ${continueOn ? 'on' : 'suggest'}`;
@@ -34,7 +50,7 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest }) {
     chip.setAttribute('aria-pressed', String(continueOn));
     chip.setAttribute('aria-label', `Продолжение сообщения: ${snippet(suggestTarget)}`);
     chip.onclick = () => { continueOn = !continueOn; tagRow.render(); };
-    return [chip];
+    return [chip, ...pickChip()];
   };
   const refreshSuggestion = () => {
     const latest = getLatest();

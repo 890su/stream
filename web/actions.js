@@ -80,6 +80,13 @@ export function setupActions({ list, getView, onAction }) {
   list.addEventListener('click', (event) => {
     if (suppressClick) { event.preventDefault(); event.stopPropagation(); return; }
     if (event.target.closest('[data-actions]')) { event.stopPropagation(); open(bubbleOf(event.target)); }
+    // Choosing a message to connect the draft to (composer "Связать"): the next tap on a message picks it.
+    if (document.body.classList.contains('picking')) {
+      const picked = bubbleOf(event.target);
+      if (picked) { event.preventDefault(); event.stopPropagation(); const view = getView(picked.dataset.id); if (view) onAction('pick', view); return; }
+    }
+    const topic = event.target.closest('[data-topic]');
+    if (topic) { event.stopPropagation(); const view = getView(bubbleOf(topic).dataset.id); if (view) onAction('topic', view); return; }
     const proceed = event.target.closest('[data-continue]');
     if (proceed) { event.stopPropagation(); const view = getView(bubbleOf(proceed).dataset.id); if (view) onAction('continue', view); return; }
     const history = event.target.closest('[data-history]');
