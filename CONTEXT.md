@@ -95,6 +95,11 @@ repo: https://github.com/890su/stream
 13. **Сначала концепция, потом код.** Меняется замысел — сначала правится `CONCEPT.md`, затем код.
 14. **Простая доработка.** Один файл — одна ответственность (ориентир до 300 строк). Новая возможность —
     новым файлом. Поведение покрыто тестами.
+15. **Система отдельно от содержания.** В git идут только система, структура и логика: код, контракты,
+    схемы, правила, общие словари и обезличенные примеры. Содержание и частности в git не идут: сообщения
+    владельца, клиенты и контрагенты, контакты и телефоны, семья, суммы и расходы, эталонные разборы реальных
+    сообщений, справочники с настоящими именами. Они живут в данных (`data/`, база на сервере) и в локальных
+    файлах вне git (`*.local.*`). Пример в документе или тесте — всегда вымышленный.
 
 ## Navigation
 
@@ -125,3 +130,5 @@ repo: https://github.com/890su/stream
 - Do not add UPDATE/DELETE paths for events.
 - Do not hard-code client-, service- or phrase-specific branches in the pipeline — add registry data instead.
 - Do not read `.library/`, `node_modules/`, `dist/`, `.git/`, `data/`.
+- Do not commit content: real messages, client or contact names, phone numbers, family or money details.
+  Only system, structure and logic go to git (rule 15); real data stays in `data/` and `*.local.*` files.

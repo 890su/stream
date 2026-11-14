@@ -18,5 +18,8 @@
   durable decisions → `decisions.md` (What / Why / Boundary / Affected).
 - Never edit `ROADMAP.md` unless explicitly asked.
 - Respect `.aiignore` and `.rai.yaml`. Never read `.library/`, `data/`, or secret files.
+- Git holds only system, structure and logic. Never commit content: real owner messages, client or contact
+  names, phone numbers, family or money details. Real data lives in `data/` and `*.local.*` files; examples
+  in docs and tests are fictional.
 - Do not store credentials in project files; use `.env` (gitignored) and `secrets_ref`.
 - User-facing text: Russian. Code, identifiers, comments, commit messages: English.

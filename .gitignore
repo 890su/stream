@@ -27,3 +27,6 @@ attachments/
 
 # real owner messages with client and family data: local only, repository is public
 golden/*.local.jsonl
+
+# content, never system: any local data file (CONTEXT.md, rule 15)
+*.local.*
