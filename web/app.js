@@ -6,6 +6,13 @@ import { startLive } from './live.js';
 import { setupActions } from './actions.js';
 import { makeCorrection } from './shared.js';
 import { setupThread } from './thread.js';
+import { setupTopicScreen } from './topicscreen.js';
+import { setupPicker } from './picker.js';
+import { setupSelection } from './select.js';
+
+let topicScreen;
+let picker;
+let bulk;
 
 const $ = (selector) => document.querySelector(selector);
 const notice = $('#notice');
@@ -25,13 +32,59 @@ function notify(message, action) {
   noticeTimer = setTimeout(() => { notice.hidden = true; }, action ? 6000 : 4500);
 }
 
-function setupMessageActions(feed, composer) {
-  const thread = setupThread({ getViews: () => feed.views() });
+// Tags to offer for a selection: the dictionary and every tag already used, most used first.
+function tagChoices(feed, config) {
+  const counts = new Map(config.tagging.tags.map((entry) => [entry.tag, 0]));
+  for (const view of feed.views()) for (const tag of view.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru')).map(([tag]) => tag);
+}
+
+// Bulk actions on selected messages (select.js). Each one is ordinary corrections, so undo works as usual.
+function setupBulk(feed, composer, { correct, link, tagsFor }) {
+  const each = (views, op) => Promise.all(views.map((view) => correct(view, op)));
+  const tagDialog = $('#tag-assign');
+  $('#tag-assign-close').onclick = () => tagDialog.close();
+  return setupSelection({
+    getView: (id) => feed.view(id),
+    actions: {
+      link: async (views) => {
+        if (views.length === 1) { picker.open({ exclude: views[0].id, onPick: (target) => link(views[0], target.id) }); return; }
+        // Oldest first: each message continues the one before it, so they become one topic.
+        const changed = views.slice(1).filter((view, index) => view.continues !== views[index].id);
+        await Promise.all(changed.map((view) => link(view, views[views.indexOf(view) - 1].id)));
+        notify(`Связано в одну тему: ${views.length}`, { label: 'Отменить', run: () => each(changed, 'unlink') });
+      },
+      tag: (views) => {
+        $('#tag-assign-list').replaceChildren(...tagsFor().map((tag) => {
+          const chip = document.createElement('button');
+          chip.type = 'button'; chip.className = 'chip suggest'; chip.textContent = tag;
+          chip.onclick = async () => {
+            tagDialog.close();
+            const targets = views.filter((view) => !view.tags.includes(tag));
+            await Promise.all(targets.map((view) => composer.queue(makeCorrection(view.id, 'edit', { text: view.text, tags: [...view.tags, tag] }))));
+            notify(`Метка ${tag}: ${targets.length}`);
+          };
+          return chip;
+        }));
+        tagDialog.showModal();
+      },
+      copy: async (views) => {
+        try { await navigator.clipboard.writeText(views.map((view) => view.text).filter(Boolean).join(String.fromCharCode(10, 10))); notify(`Скопировано: ${views.length}`); }
+        catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }
+      },
+      archive: async (views) => { await each(views, 'archive'); notify(`В архиве: ${views.length}`, { label: 'Вернуть', run: () => each(views, 'unarchive') }); },
+      delete: async (views) => { await each(views, 'delete'); notify(`Удалено: ${views.length}`, { label: 'Отменить', run: () => each(views, 'restore') }); },
+    },
+  });
+}
+
+function setupMessageActions(feed, composer, config) {
+  const thread = setupThread({ getView: (id) => feed.view(id), getChain: (id) => feed.chain(id), openTopic: (id) => topicScreen.open(id) });
   // Photos are thumbnails in the feed; a tap opens them full size.
   const viewer = $('#viewer');
   $('#viewer-close').onclick = () => viewer.close();
   viewer.addEventListener('click', (event) => { if (event.target === viewer || event.target.id === 'viewer-image') viewer.close(); });
-  $('#feed-list').addEventListener('click', (event) => {
+  document.body.addEventListener('click', (event) => {
     const image = event.target.closest('[data-viewer]');
     if (!image?.src) return;
     $('#viewer-image').src = image.src;
@@ -39,50 +92,46 @@ function setupMessageActions(feed, composer) {
     viewer.showModal();
   });
   const correct = (view, op) => composer.queue(makeCorrection(view.id, op)).catch((error) => notify(error.message));
-  // Topic window: name the topic by hand (a correction on its first message) or detach this message.
+  // Rename a topic by hand: a correction on its first message.
   const topicDialog = $('#topic');
-  let topicView;
-  const openTopic = (view) => {
-    const chain = feed.chain(view.id);
-    if (!chain) return;
-    topicView = view;
+  let renaming;
+  const renameTopic = (chain) => {
+    renaming = chain;
     $('#topic-title').value = chain.named ? chain.title : '';
     $('#topic-title').placeholder = chain.title;
-    $('#topic-hint').textContent = `Сообщений в теме: ${chain.ids.length}. Пока имени нет, тема называется по первому сообщению.`;
-    $('#topic-detach').hidden = !view.continues; // replies stay replies; only a continuation can be detached
+    $('#topic-hint').textContent = 'Без имени тема называется по первому сообщению.';
     topicDialog.showModal();
   };
   $('#topic-cancel').onclick = () => topicDialog.close();
-  $('#topic-detach').onclick = async () => {
-    topicDialog.close();
-    const view = topicView;
-    await correct(view, 'unlink');
-    notify('Сообщение отделено от темы', { label: 'Отменить', run: () => link(view, view.continues) });
-  };
   $('#topic-form').onsubmit = async (event) => {
     event.preventDefault();
     const title = $('#topic-title').value.trim();
-    const chain = feed.chain(topicView.id);
     topicDialog.close();
-    if (!title || !chain || title === chain.title) return;
-    await composer.queue(makeCorrection(chain.root, 'topic', { title })).catch((error) => notify(error.message));
+    if (!title || !renaming || title === renaming.title) return;
+    await composer.queue(makeCorrection(renaming.root, 'topic', { title })).catch((error) => notify(error.message));
   };
+  topicScreen = setupTopicScreen({ feed, composer, onRename: renameTopic });
+  picker = setupPicker({ getVisible: () => feed.visible(), getChain: (id) => feed.chain(id), notify });
   const link = (view, target) => composer.queue(makeCorrection(view.id, 'link', { target })).catch((error) => notify(error.message));
+  bulk = setupBulk(feed, composer, { correct, link, tagsFor: () => tagChoices(feed, config) });
   setupActions({
-    list: $('#feed-list'),
+    list: document.body, // the feed and the topic screen share the same message actions
     getView: (id) => feed.view(id),
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
       else if (op === 'edit') composer.edit(view);
       else if (op === 'history') thread.open(view.id);
-      else if (op === 'continue' || op === 'pick') { document.body.classList.remove('picking'); composer.proceed(view); }
-      else if (op === 'topic') openTopic(view);
+      else if (op === 'continue') composer.proceed(view);
+      else if (op === 'pick') picker.take(view);
+      else if (op === 'select') bulk.enter(view);
+      else if (op === 'toggle') bulk.toggle(view);
+      else if (op === 'topic-open') topicScreen.open(view.id);
       else if (op === 'link') {
         if (view.continues) { await correct(view, 'unlink'); notify('Отделено от предыдущего', { label: 'Отменить', run: () => link(view, view.continues) }); return; }
-        const previous = feed.previous(view.id);
-        if (!previous) { notify('Выше нет сообщения, с которым можно связать'); return; }
-        await link(view, previous.id);
-        notify('Связано с предыдущим', { label: 'Отменить', run: () => correct(view, 'unlink') });
+        picker.open({ exclude: view.id, onPick: async (target) => {
+          await link(view, target.id);
+          notify('Связано', { label: 'Отменить', run: () => correct(view, 'unlink') });
+        } });
       }
       else if (op === 'copy') {
         try { await navigator.clipboard.writeText(view.text); notify('Текст скопирован'); }
@@ -179,9 +228,10 @@ async function main() {
   if (!response.ok) throw new Error('Не удалось загрузить настройки приложения. Повторите запуск');
   const config = await response.json();
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue, limits: config });
-  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(), getLatest: () => feed.latest() });
-  setupMessageActions(feed, composer);
+  const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); } });
+  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(), getLatest: () => feed.latest(),
+    onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
+  setupMessageActions(feed, composer, config);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({
     getToken: () => getSetting('ownerToken'),

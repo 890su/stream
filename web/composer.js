@@ -8,7 +8,7 @@ const HOLD_MS = 350; // holding the mic longer than this and releasing sends the
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent, getViews, getLatest }) {
+export function setupComposer(config, { notify, onSent, getViews, getLatest, onPickRequest }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
@@ -26,19 +26,16 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest }) {
   let suggestTarget = null; // the message the next one may continue
   let continueOn = false;
   // "связать…": the next tap on a message in the feed connects the draft to it (actions.js, app.js).
+  // Inside the topic screen every new message continues the topic's latest message (topicscreen.js).
+  let topic = null; // { last: () => view }
+  // "связать…": choose any message or topic to connect the draft to (picker.js).
   const pickChip = () => {
-    if (mode) return [];
+    if (mode || topic) return [];
     const chip = document.createElement('button');
     chip.type = 'button';
-    const picking = document.body.classList.contains('picking');
-    chip.className = `chip link-chip ${picking ? 'on' : 'suggest'}`;
-    chip.textContent = picking ? 'выберите сообщение…' : 'связать…';
-    chip.setAttribute('aria-pressed', String(picking));
-    chip.onclick = () => {
-      const on = document.body.classList.toggle('picking');
-      if (on) notify('Коснитесь сообщения в ленте, с которым связать новое');
-      tagRow.render();
-    };
+    chip.className = 'chip link-chip suggest';
+    chip.textContent = 'связать…';
+    chip.onclick = () => onPickRequest();
     return [chip];
   };
   const continuationChip = () => {
@@ -54,12 +51,13 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest }) {
   };
   const refreshSuggestion = () => {
     const latest = getLatest();
-    const fresh = latest && !mode && Date.now() - Date.parse(latest.event.ts) <= config.burst_gap_min * 60000;
+    const fresh = latest && !mode && !topic && Date.now() - Date.parse(latest.event.ts) <= config.burst_gap_min * 60000;
     if (!fresh) { suggestTarget = null; continueOn = false; return; }
     if (suggestTarget?.id !== latest.id) { suggestTarget = latest; continueOn = false; }
   };
   // What to save about the connection: the explicit "continue" mode, or the answer to the suggestion.
   const continuation = () => (mode?.type === 'continue' ? { target: mode.view.id, on: true }
+    : topic?.last() ? { target: topic.last().id, on: true }
     : suggestTarget ? { target: suggestTarget.id, on: continueOn } : undefined);
   const tagRow = createTagRow({
     dictionary: config.tagging, getViews, lead: continuationChip,
@@ -282,6 +280,8 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest }) {
     reply: (view) => setMode({ type: 'reply', view }),
     proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),
+    enterTopic: (state) => { topic = state; resetTags(tagRow.active()); text.placeholder = 'Сообщение в тему'; },
+    leaveTopic: () => { topic = null; resetTags(tagRow.active()); text.placeholder = 'Сообщение'; },
     queue,
     record: () => { locked = true; return startRecording(); },
     focus: () => text.focus(),

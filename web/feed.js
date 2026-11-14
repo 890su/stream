@@ -16,7 +16,7 @@ function dayLabel(date) {
   return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
 }
 
-export function setupFeed({ notify, onQueue, limits }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -107,6 +107,7 @@ export function setupFeed({ notify, onQueue, limits }) {
     list.replaceChildren(...children);
     if (bottom || nearBottom || !rendered) scroller.scrollTop = scroller.scrollHeight;
     rendered = true;
+    onRender();
   }
 
   // Scrolls to a message (from a reply quote) and flashes it.
@@ -171,6 +172,9 @@ export function setupFeed({ notify, onQueue, limits }) {
 
   return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), views: () => viewList,
     chain: (id) => chains(visibleList).get(id),
+    // A fresh bubble for another surface (topic screen): same rendering and media loading, no feed bookkeeping.
+    bubble: (view) => createBubble(view, undefined, { load: (reference) => load(reference), notify, jump, limits }),
     previous: (id) => visibleList[visibleList.findIndex((view) => view.id === id) - 1],
-    latest: () => visibleList.at(-1), scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
+    latest: () => visibleList.at(-1),
+    visible: () => visibleList, scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
 }

@@ -159,26 +159,16 @@ function textBlock(text, limits) {
   return wrap;
 }
 
-// The topic line: the chain this message belongs to, with arrows to its previous and next message.
-function topicLine(chain, jump) {
-  const line = element('div', 'topic-line');
-  const arrow = (step, label, glyph) => {
-    const button = element('button', 'topic-arrow', glyph);
-    button.type = 'button';
-    button.setAttribute('aria-label', label);
-    const target = chain.ids[chain.index + step];
-    button.disabled = !target;
-    button.onclick = (event) => { event.stopPropagation(); if (target) jump(target); };
-    return button;
-  };
-  // The link icon opens the topic: rename it, or detach this message (app.js).
-  const link = element('button', 'topic-link');
-  link.type = 'button';
-  link.innerHTML = ICONS.link;
-  link.setAttribute('aria-label', `Тема «${chain.title}»: переименовать или отделить`);
-  link.dataset.topic = '';
-  line.append(link, arrow(-1, 'Предыдущее сообщение темы', '‹'), element('span', `topic-title${chain.named ? ' named' : ''}`, chain.title),
-    element('span', 'topic-pos', `${chain.index + 1}/${chain.ids.length}`), arrow(1, 'Следующее сообщение темы', '›'));
+// The topic line: one tappable line with the topic name and size; it opens the topic screen (topicscreen.js).
+function topicLine(chain) {
+  const line = element('button', 'topic-line');
+  line.type = 'button';
+  line.dataset.topicOpen = '';
+  line.setAttribute('aria-label', `Тема «${chain.title}», сообщений: ${chain.ids.length}. Открыть тему`);
+  const icon = element('span', 'topic-icon');
+  icon.innerHTML = ICONS.link;
+  line.append(icon, element('span', `topic-title${chain.named ? ' named' : ''}`, chain.title),
+    element('span', 'topic-pos', `· ${chain.ids.length}`), element('span', 'topic-go', '›'));
   return line;
 }
 
@@ -204,7 +194,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits }
   more.dataset.actions = '';
   bubble.append(more);
 
-  if (chain) bubble.append(topicLine(chain, jump));
+  if (chain) bubble.append(topicLine(chain));
   if (view.replyTo) {
     const quote = element('button', 'quote');
     quote.type = 'button';

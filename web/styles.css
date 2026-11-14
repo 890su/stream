@@ -228,7 +228,7 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 .new-tag input:focus { border-bottom-color: var(--accent); }
 
 /* History window (thread.js) */
-.thread { width: min(96vw, 560px); max-height: 86dvh; padding: 0; display: none; flex-direction: column; }
+.thread { width: min(100vw, 560px); max-width: 100vw; max-height: 80dvh; margin: auto auto 0; padding: 0 0 env(safe-area-inset-bottom); border-radius: 16px 16px 0 0; display: none; flex-direction: column; }
 .thread[open] { display: flex; }
 .thread-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 8px 18px; border-bottom: 1px solid var(--line); }
 .thread-head h2 { margin: 0; font-size: 17px; }
@@ -257,13 +257,14 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 .burst > .bubble + .bubble { border-top: 1px solid color-mix(in srgb, var(--bubble-meta) 22%, transparent); }
 .burst > .bubble.selected { background: var(--bubble); border-radius: 12px; }
 
-/* Topic line above a message: chain title and arrows to its previous and next message. */
-.topic-line { display: flex; align-items: center; gap: 2px; margin: -2px -4px 3px; font-size: 12.5px; color: var(--bubble-meta); min-width: 0; }
+/* Topic line above a message: one tappable line that opens the topic screen. */
+.topic-line { display: flex; align-items: center; gap: 4px; width: calc(100% + 6px); margin: -2px -3px 3px; padding: 2px 3px; border-radius: 8px; font-size: 12.5px; color: var(--bubble-meta); text-align: left; min-width: 0; min-height: 28px; }
+.topic-line:active { background: var(--press); }
+.topic-icon { display: grid; place-items: center; flex: none; }
+.topic-icon svg { width: 14px; height: 14px; }
 .topic-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.topic-pos { font-variant-numeric: tabular-nums; }
-.topic-arrow { width: 30px; height: 26px; border-radius: 8px; font-size: 20px; line-height: 1; color: var(--bubble-meta); flex: none; }
-.topic-arrow:disabled { opacity: .3; cursor: default; }
-.topic-arrow:not(:disabled):active { background: var(--press); }
+.topic-pos { font-variant-numeric: tabular-nums; flex: none; }
+.topic-go { font-size: 18px; line-height: 1; flex: none; }
 
 /* History link in the meta line, instead of the word "edited". */
 .history-link { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: -4px 0 -4px -2px; border-radius: 50%; color: var(--bubble-meta); }
@@ -290,10 +291,6 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 #feed-list > .close { margin-top: 0; }
 .chip.continue-chip.suggest { color: var(--link); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link) 45%, transparent); }
 
-/* Topic line: link icon (rename the topic, detach a message) */
-.topic-link { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: var(--bubble-meta); flex: none; }
-.topic-link svg { width: 15px; height: 15px; }
-.topic-link:active { background: var(--press); }
 .topic-title.named { font-weight: 600; }
 .danger-link { color: var(--danger); margin-right: auto; }
 
@@ -301,3 +298,57 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 body.picking #feed-list .bubble { cursor: pointer; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); }
 body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
 .chip.link-chip.suggest { color: var(--link); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link) 45%, transparent); }
+
+/* Topic screen: takes the place of the feed; the composer stays at the bottom. */
+body.in-topic .topbar, body.in-topic #messages { display: none; }
+.topic-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.topic-head {
+  flex: none; display: flex; align-items: center; gap: 2px; background: var(--bar); box-shadow: var(--shadow);
+  padding: max(4px, env(safe-area-inset-top)) 4px 4px; min-height: 56px; position: relative; z-index: 2;
+}
+.topic-head-text { flex: 1; min-width: 0; }
+.topic-name { display: block; max-width: 100%; font-size: 17px; font-weight: 500; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bar-text); }
+.topic-name.named { font-weight: 600; }
+.topic-meta { margin: 1px 0 0; font-size: 13.5px; color: var(--muted); }
+.topic-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 10px 8px 6px; display: flex; flex-direction: column; gap: 6px; }
+.topic-list > .bubble:first-child { margin-top: auto; }
+
+.thread-topic { display: flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 6px; color: var(--link); font-size: 15px; text-align: left; border-radius: 10px; }
+.thread-topic:active { background: var(--press); }
+.thread-topic-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Bottom sheet (picker) and the "choose in the feed" banner */
+dialog.sheet { width: min(100vw, 560px); max-width: 100vw; max-height: 82dvh; margin: auto auto 0; padding: 0 0 env(safe-area-inset-bottom); border-radius: 16px 16px 0 0; display: none; flex-direction: column; }
+dialog.sheet[open] { display: flex; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 4px 18px; }
+.sheet-head h2 { margin: 0; font-size: 17px; }
+.sheet-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 12px 8px; }
+#picker-search { width: 100%; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 10px 2px; outline: none; font-size: 16px; }
+#picker-search:focus { border-bottom-color: var(--accent); }
+.picker-section { margin: 14px 4px 4px; font-size: 13px; color: var(--muted); }
+.picker-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 6px; border-radius: 10px; text-align: left; }
+.picker-row:active, .picker-row:hover { background: var(--press); }
+.picker-icon.topic { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; margin: 0 4px; }
+.picker-text { display: flex; flex-direction: column; min-width: 0; }
+.picker-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker-sub { font-size: 12.5px; color: var(--muted); }
+.picker-empty { margin: 6px 6px; font-size: 14px; color: var(--muted); }
+.picker-feed { min-height: 52px; border-top: 1px solid var(--line); color: var(--link); font-weight: 500; }
+.pick-banner { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 4px 16px; background: var(--accent-strong); color: #fff; font-size: 14px; }
+.pick-banner .link-button { color: #fff; }
+
+/* Selection mode: picked messages and the bulk action bar in place of the composer */
+body.selecting .composer-area > :not(#select-bar) { display: none !important; }
+.bubble.picked { box-shadow: 0 0 0 2px var(--accent-strong), var(--shadow); }
+.burst > .bubble.picked { box-shadow: inset 0 0 0 2px var(--accent-strong); border-radius: 12px; }
+.bubble.picked::before {
+  content: '✓'; position: absolute; left: -30px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 13px; background: var(--accent-strong); color: #fff;
+}
+.select-bar { padding: 2px 4px 4px; }
+.select-head { display: flex; align-items: center; gap: 4px; }
+.select-count { font-size: 15px; font-weight: 500; }
+.select-actions { display: flex; justify-content: space-around; }
+.select-actions button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 56px; min-height: 56px; padding: 4px 2px; border-radius: 10px; font-size: 12px; color: var(--bar-text); }
+.select-actions button:active { background: var(--press); }
+.select-actions .danger { color: var(--danger); }

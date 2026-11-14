@@ -1,4 +1,4 @@
-import { related, versions, snippet } from './projection.js';
+import { versions, snippet } from './projection.js';
 
 const stamp = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const KIND = { voice: 'Голосовое', photo: 'Фото', file: 'Файл', link: 'Ссылка' };
@@ -10,9 +10,9 @@ function element(tag, className, text) {
   return node;
 }
 
-// The history window: the message and everything related to it. Up and down — messages;
-// left and right on one message — its versions, the source text at the far left.
-export function setupThread({ getViews }) {
+// The message card (bottom sheet): versions of one message, the source text at the far left;
+// later also its interpretation. Topic messages live on the topic screen (topicscreen.js).
+export function setupThread({ getView, getChain, openTopic }) {
   const dialog = document.querySelector('#thread');
   const list = document.querySelector('#thread-list');
   document.querySelector('#thread-close').onclick = () => dialog.close();
@@ -59,14 +59,22 @@ export function setupThread({ getViews }) {
   }
 
   function open(id) {
-    const group = related(getViews(), id);
-    if (!group.length) return;
-    document.querySelector('#thread-title').textContent = group.length > 1 ? `Связанные сообщения: ${group.length}` : 'История сообщения';
-    const cards = group.map((view) => card(view, view.id === id));
-    list.replaceChildren(...cards);
+    const view = getView(id);
+    if (!view) return;
+    const chain = getChain(id);
+    document.querySelector('#thread-title').textContent = view.edited ? 'История сообщения' : 'Сообщение';
+    const item = card(view, false);
+    const children = [item];
+    if (chain) {
+      const link = element('button', 'thread-topic');
+      link.type = 'button';
+      link.append(element('span', '', 'Тема: '), element('span', 'thread-topic-name', chain.title), element('span', '', ` · ${chain.ids.length} ›`));
+      link.onclick = () => { dialog.close(); openTopic(id); };
+      children.push(link);
+    }
+    list.replaceChildren(...children);
     dialog.showModal();
-    for (const item of cards) item.ready?.();
-    list.querySelector('.focused')?.scrollIntoView({ block: 'center' });
+    item.ready?.();
   }
 
   return { open };

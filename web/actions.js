@@ -1,4 +1,5 @@
-// Message actions: long press (touch), "more" button or right click (mouse), menu key (keyboard).
+// Message actions: a tap opens the action panel; a long press (or Ctrl/Shift+click) selects messages for bulk
+// actions (select.js). Right click and the menu key also open the panel.
 const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 10;
 const GAP_PX = 8;
@@ -52,7 +53,10 @@ export function setupActions({ list, getView, onAction }) {
   }
 
   const bubbleOf = (target) => target.closest('.bubble');
-  const isControl = (target) => target.closest('button, a, audio, input');
+  const isControl = (target) => target.closest('button, a, audio, input, [data-viewer]');
+  let lastPointer = 'mouse';
+  const selecting = () => document.body.classList.contains('selecting');
+  const viewOf = (bubble) => bubble && getView(bubble.dataset.id);
 
   // After a long press or swipe the browser may or may not send a click, and the panel is now under the finger.
   // Swallow clicks while the finger is down and for a moment after it lifts, in the feed and on the backdrop.
@@ -64,11 +68,12 @@ export function setupActions({ list, getView, onAction }) {
 
   list.addEventListener('pointerdown', (event) => {
     suppressClick = false;
+    lastPointer = event.pointerType;
     fingerDown = event.pointerType !== 'mouse';
     const bubble = bubbleOf(event.target);
     if (!bubble || event.pointerType === 'mouse' || isControl(event.target)) return;
     gesture = { x: event.clientX, y: event.clientY,
-      timer: setTimeout(() => { swallowNextClick(); gesture = undefined; open(bubble); }, LONG_PRESS_MS) };
+      timer: setTimeout(() => { swallowNextClick(); gesture = undefined; const view = viewOf(bubble); if (view) { navigator.vibrate?.(15); onAction('select', view); } }, LONG_PRESS_MS) };
   });
   // Moving the finger means scrolling, not a long press.
   list.addEventListener('pointermove', (event) => {
@@ -85,17 +90,25 @@ export function setupActions({ list, getView, onAction }) {
       const picked = bubbleOf(event.target);
       if (picked) { event.preventDefault(); event.stopPropagation(); const view = getView(picked.dataset.id); if (view) onAction('pick', view); return; }
     }
-    const topic = event.target.closest('[data-topic]');
-    if (topic) { event.stopPropagation(); const view = getView(bubbleOf(topic).dataset.id); if (view) onAction('topic', view); return; }
+    const topic = event.target.closest('[data-topic-open]');
+    if (topic) { event.stopPropagation(); const view = getView(bubbleOf(topic).dataset.id); if (view) onAction('topic-open', view); return; }
     const proceed = event.target.closest('[data-continue]');
     if (proceed) { event.stopPropagation(); const view = getView(bubbleOf(proceed).dataset.id); if (view) onAction('continue', view); return; }
     const history = event.target.closest('[data-history]');
-    if (history) { event.stopPropagation(); const view = getView(bubbleOf(history).dataset.id); if (view) onAction('history', view); }
+    if (history) { event.stopPropagation(); const view = getView(bubbleOf(history).dataset.id); if (view) onAction('history', view); return; }
+    // A plain tap on a message: toggles it while selecting, otherwise opens the action panel.
+    const bubble = bubbleOf(event.target);
+    if (!bubble || isControl(event.target) || String(window.getSelection?.() ?? '')) return;
+    const view = viewOf(bubble);
+    if (!view) return;
+    if (selecting() || event.ctrlKey || event.metaKey || event.shiftKey) { event.preventDefault(); onAction(selecting() ? 'toggle' : 'select', view); return; }
+    open(bubble);
   }, true);
   list.addEventListener('contextmenu', (event) => {
     const bubble = bubbleOf(event.target);
     if (!bubble) return;
     event.preventDefault();
+    if (lastPointer !== 'mouse') return; // on touch a long press selects; the browser menu stays closed
     if (!selected) open(bubble);
   });
   list.addEventListener('keydown', (event) => {
