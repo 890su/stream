@@ -24,3 +24,6 @@ __pycache__/
 
 # personal source notes: kept locally, repository is public
 attachments/
+
+# real owner messages with client and family data: local only, repository is public
+golden/*.local.jsonl
