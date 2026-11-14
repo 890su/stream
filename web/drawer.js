@@ -22,19 +22,79 @@ export function setupDrawer({ feed, onJump, onArchiveTopic, onFilterChange }) {
   const topicsBox = document.querySelector('#drawer-topics');
   const tagsBox = document.querySelector('#drawer-tags');
 
+  // The drawer sits between the top bar and the composer; both stay visible and usable.
+  function place() {
+    const top = document.querySelector('.topbar').getBoundingClientRect().bottom;
+    const bottom = window.innerHeight - document.querySelector('.composer-area').getBoundingClientRect().top;
+    document.documentElement.style.setProperty('--drawer-top', `${Math.max(0, top)}px`);
+    document.documentElement.style.setProperty('--drawer-bottom', `${Math.max(0, bottom)}px`);
+  }
+  const isOpen = () => drawer.classList.contains('open');
+
+  function show(on) {
+    drawer.classList.remove('dragging'); backdrop.classList.remove('dragging');
+    drawer.style.transform = ''; backdrop.style.opacity = '';
+    if (on) {
+      place(); render();
+      drawer.hidden = false; backdrop.hidden = false;
+      void drawer.offsetWidth; // apply the closed position first, so the opening slides in
+      drawer.classList.add('open');
+      if (!history.state?.drawer) history.pushState({ drawer: true }, '');
+    } else {
+      drawer.classList.remove('open');
+      backdrop.hidden = true;
+      setTimeout(() => { if (!isOpen()) drawer.hidden = true; }, 230);
+    }
+  }
+
   function close() {
-    if (drawer.hidden) return;
-    drawer.hidden = true;
-    backdrop.hidden = true;
+    if (!isOpen()) return;
+    show(false);
     if (history.state?.drawer) history.back();
   }
 
-  function open() {
-    render();
-    drawer.hidden = false;
-    backdrop.hidden = false;
-    history.pushState({ drawer: true }, '');
+  function open() { show(true); }
+
+  // Swipe left to right on the feed opens the drawer; right to left on the drawer or backdrop closes it.
+  // The panel follows the finger; letting go past a third of its width finishes the move.
+  const START_PX = 12;
+  let drag = null; // { x, y, opening, width, horizontal }
+  function begin(event, opening) {
+    if (event.pointerType === 'mouse' || document.body.classList.contains('selecting') || document.body.classList.contains('picking')) return;
+    drag = { x: event.clientX, y: event.clientY, opening, width: drawer.offsetWidth || 300, horizontal: null };
   }
+  function move(event) {
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (drag.horizontal === null) {
+      if (Math.abs(dx) < START_PX && Math.abs(dy) < START_PX) return;
+      drag.horizontal = Math.abs(dx) > Math.abs(dy) * 1.5 && (drag.opening ? dx > 0 : dx < 0);
+      if (!drag.horizontal) { drag = null; return; }
+      if (drag.opening) { place(); render(); drawer.hidden = false; backdrop.hidden = false; }
+      drawer.classList.add('dragging'); backdrop.classList.add('dragging');
+    }
+    const offset = drag.opening ? Math.min(0, dx - drag.width) : Math.min(0, dx);
+    drawer.style.transform = `translateX(${offset}px)`;
+    backdrop.style.opacity = String(1 + offset / drag.width);
+  }
+  function end(event) {
+    if (!drag) return;
+    const moved = drag.horizontal ? event.clientX - drag.x : 0;
+    const { opening, width, horizontal } = drag;
+    drag = null;
+    if (!horizontal) return;
+    const far = Math.abs(moved) > width / 3;
+    if (opening) show(far);
+    else if (far) close(); else show(true);
+  }
+  const feedArea = document.querySelector('#messages');
+  feedArea.addEventListener('pointerdown', (event) => { if (!isOpen()) begin(event, true); });
+  for (const surface of [drawer, backdrop]) surface.addEventListener('pointerdown', (event) => { if (isOpen()) begin(event, false); });
+  window.addEventListener('pointermove', move, { passive: true });
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', () => { if (drag?.horizontal) show(drag.opening ? false : true); drag = null; });
+  window.addEventListener('resize', () => { if (!drawer.hidden) place(); });
 
   function topicRow(topic) {
     const row = element('div', `drawer-topic${topic.archived ? ' archived' : ''}`);
@@ -81,6 +141,6 @@ export function setupDrawer({ feed, onJump, onArchiveTopic, onFilterChange }) {
   document.querySelector('#drawer-button').onclick = open;
   document.querySelector('#drawer-close').onclick = close;
   backdrop.onclick = close;
-  window.addEventListener('popstate', () => { if (!drawer.hidden && !history.state?.drawer) { drawer.hidden = true; backdrop.hidden = true; } });
+  window.addEventListener('popstate', () => { if (isOpen() && !history.state?.drawer) show(false); });
   return { render: () => { if (!drawer.hidden) render(); }, close };
 }
