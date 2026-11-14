@@ -21,6 +21,8 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
+/* Android paints the system navigation bar from the page's root background: match the composer bar. */
+html { background: var(--bar); }
 body {
   margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden;
   /* With the on-screen keyboard overlaying the page (app.js), make room for it smoothly. */
