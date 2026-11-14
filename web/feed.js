@@ -138,6 +138,8 @@ export function setupFeed({ notify, onQueue }) {
     if (scroller.scrollTop < NEAR_TOP) loadOlder();
   }, { passive: true });
   list.addEventListener('load', () => { if (stick) scroller.scrollTop = scroller.scrollHeight; }, true);
+  // The keyboard opening or closing resizes the feed: keep the last message glued to the composer.
+  new ResizeObserver(() => { if (stick) scroller.scrollTop = scroller.scrollHeight; }).observe(scroller);
   // A live event from any device: cache it like a fetched page and redraw.
   async function receive(event) {
     await cacheEvents([event]);

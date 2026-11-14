@@ -23,6 +23,8 @@
 html, body { height: 100%; }
 body {
   margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden;
+  /* With the on-screen keyboard overlaying the page (app.js), make room for it smoothly. */
+  padding-bottom: env(keyboard-inset-height, 0px); transition: padding-bottom .22s ease-out;
   background: var(--chat); color: var(--bar-text); font-size: 16px; line-height: 1.35;
 }
 button, input, textarea { font: inherit; color: inherit; }
@@ -177,7 +179,7 @@ dialog input { width: 100%; border: 0; border-bottom: 2px solid var(--accent); b
 
 .action-layer { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .28); }
 .action-panel {
-  position: absolute; top: 0; left: 0; display: flex; gap: 2px; padding: 6px; border-radius: 16px;
+  position: fixed; top: 0; left: 0; z-index: 12; display: flex; gap: 2px; padding: 6px; border-radius: 16px; /* above the selected bubble (11) */
   background: var(--panel); color: var(--bar-text); box-shadow: 0 8px 28px rgba(0, 0, 0, .28); animation: panel-in .14s ease-out;
 }
 .action-panel button {

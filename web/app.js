@@ -121,6 +121,8 @@ async function registerWorker(feed, composer) {
 }
 
 async function main() {
+  // Chrome on Android: let the keyboard overlay the page so CSS can slide the layout instead of a jump resize.
+  if ('virtualKeyboard' in navigator) navigator.virtualKeyboard.overlaysContent = true;
   const response = await fetch('/capture-config.json');
   if (!response.ok) throw new Error('Не удалось загрузить настройки приложения. Повторите запуск');
   const config = await response.json();

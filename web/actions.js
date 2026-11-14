@@ -34,6 +34,7 @@ export function setupActions({ list, getView, onAction }) {
     archiveButton.querySelector('span').textContent = archived ? 'Вернуть' : 'В архив';
     archiveButton.setAttribute('aria-label', archived ? 'Вернуть из архива' : 'В архив');
     layer.hidden = false;
+    panel.hidden = false;
     place(bubble);
     bubble.classList.add('selected');
     panel.querySelector('button').focus({ preventScroll: true });
@@ -43,6 +44,7 @@ export function setupActions({ list, getView, onAction }) {
   function close() {
     if (layer.hidden) return;
     layer.hidden = true;
+    panel.hidden = true;
     selected?.classList.remove('selected');
     selected?.focus({ preventScroll: true });
     selected = undefined;
@@ -117,7 +119,7 @@ export function setupActions({ list, getView, onAction }) {
   });
 
   layer.addEventListener('click', (event) => { if (event.target === layer && !suppressClick) close(); });
-  layer.addEventListener('keydown', (event) => {
+  panel.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') { event.preventDefault(); close(); return; }
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
       const buttons = [...panel.querySelectorAll('button')];

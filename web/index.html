@@ -29,19 +29,18 @@
 
   <div id="notice" class="toast" role="status" aria-live="polite" hidden><span id="notice-text"></span><button id="notice-action" type="button" hidden></button></div>
 
-  <div id="action-layer" class="action-layer" hidden>
-    <div id="action-panel" class="action-panel" role="menu" aria-label="Действия с сообщением">
-      <button type="button" role="menuitem" data-op="reply" aria-label="Ответить">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6"/><path d="M4.5 12H14a6 6 0 0 1 6 6v1"/></svg><span>Ответить</span></button>
-      <button type="button" role="menuitem" data-op="edit" aria-label="Изменить">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg><span>Изменить</span></button>
-      <button type="button" role="menuitem" data-op="copy" aria-label="Копировать текст">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg><span>Копировать</span></button>
-      <button type="button" role="menuitem" data-op="archive" aria-label="В архив">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg><span>В архив</span></button>
-      <button type="button" role="menuitem" data-op="delete" class="danger" aria-label="Удалить">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M9.5 6.5V4.8a.8.8 0 0 1 .8-.8h3.4a.8.8 0 0 1 .8.8v1.7M6.5 6.5l.8 12.2a1.5 1.5 0 0 0 1.5 1.3h6.4a1.5 1.5 0 0 0 1.5-1.3l.8-12.2M10 10.5v6M14 10.5v6"/></svg><span>Удалить</span></button>
-    </div>
+  <div id="action-layer" class="action-layer" hidden></div>
+  <div id="action-panel" class="action-panel" hidden role="menu" aria-label="Действия с сообщением">
+    <button type="button" role="menuitem" data-op="reply" aria-label="Ответить">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6"/><path d="M4.5 12H14a6 6 0 0 1 6 6v1"/></svg><span>Ответить</span></button>
+    <button type="button" role="menuitem" data-op="edit" aria-label="Изменить">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg><span>Изменить</span></button>
+    <button type="button" role="menuitem" data-op="copy" aria-label="Копировать текст">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg><span>Копировать</span></button>
+    <button type="button" role="menuitem" data-op="archive" aria-label="В архив">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg><span>В архив</span></button>
+    <button type="button" role="menuitem" data-op="delete" class="danger" aria-label="Удалить">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M9.5 6.5V4.8a.8.8 0 0 1 .8-.8h3.4a.8.8 0 0 1 .8.8v1.7M6.5 6.5l.8 12.2a1.5 1.5 0 0 0 1.5 1.3h6.4a1.5 1.5 0 0 0 1.5-1.3l.8-12.2M10 10.5v6M14 10.5v6"/></svg><span>Удалить</span></button>
   </div>
 
   <footer class="composer-area">
