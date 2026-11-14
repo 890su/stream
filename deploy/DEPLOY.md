@@ -46,6 +46,19 @@ cd /srv/stream/app/deploy && sudo docker compose ps && sudo docker compose logs 
 systemctl list-timers stream-backup.timer
 ```
 
+## Выкладка агентом без пароля
+
+Один раз на сервере владелец разрешает запуск только скрипта установки без пароля:
+
+```bash
+echo 'admin890brain ALL=(root) NOPASSWD: /usr/bin/bash /srv/stream/app/deploy/install.sh *' | sudo tee /etc/sudoers.d/stream-deploy
+sudo chmod 440 /etc/sudoers.d/stream-deploy && sudo visudo -c
+```
+
+Дальше агент выкладывает сам: `ssh … 'sudo -n /usr/bin/bash /srv/stream/app/deploy/install.sh <ref>'`.
+Скрипт берёт код из GitHub, поэтому любой, кто может писать в репозиторий, по сути запускает код с правами
+root на сервере — держите доступ к репозиторию только у себя. Отозвать: `sudo rm /etc/sudoers.d/stream-deploy`.
+
 ## HTTPS через существующий Cloudflare Tunnel
 
 `install.sh` сам добавляет в локальный конфиг туннеля srv-150 (`/etc/cloudflared/config.yml`) правило

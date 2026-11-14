@@ -14,14 +14,39 @@
 </head>
 <body>
   <header class="topbar">
+    <button id="drawer-button" type="button" class="icon-button" aria-label="Темы и метки" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
     <div class="title">
       <h1>Stream</h1>
       <p id="network" role="status">подключение…</p>
     </div>
+    <button id="filter-reset" type="button" class="filter-reset" hidden aria-label="Сбросить фильтр по меткам">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5Z"/><path d="m16 16 5 5M21 16l-5 5"/></svg>
+      <span id="filter-count"></span>
+    </button>
+    <button id="archive-toggle" type="button" class="icon-button" aria-pressed="false" aria-label="Показывать архив">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>
+    </button>
     <button id="menu-button" type="button" class="icon-button" aria-label="Настройки" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
     </button>
   </header>
+
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="drawer" class="drawer" hidden aria-label="Темы и метки">
+    <header class="drawer-head">
+      <h2>Темы</h2>
+      <button id="drawer-close" type="button" class="icon-button" aria-label="Закрыть панель">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="drawer-body">
+      <div id="drawer-topics"></div>
+      <h3 class="drawer-section">Метки</h3>
+      <div id="drawer-tags" class="chips"></div>
+    </div>
+  </aside>
 
   <main id="messages" aria-label="Лента сообщений" tabindex="-1">
     <div id="history-state" class="service-pill" hidden></div>
@@ -48,16 +73,6 @@
     <span>Выберите сообщение для связи</span>
     <button id="pick-cancel" type="button" class="link-button">Отмена</button>
   </div>
-
-  <dialog id="tag-assign" class="sheet" aria-labelledby="tag-assign-heading">
-    <header class="sheet-head">
-      <h2 id="tag-assign-heading">Метка для выбранных</h2>
-      <button id="tag-assign-close" type="button" class="icon-button" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
-    </header>
-    <div class="sheet-body"><div id="tag-assign-list" class="chips"></div></div>
-  </dialog>
 
   <dialog id="picker" class="sheet" aria-labelledby="picker-heading">
     <header class="sheet-head">
@@ -156,8 +171,6 @@
         <span id="select-count" class="select-count"></span>
       </div>
       <div class="select-actions">
-        <button type="button" data-bulk="link"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span>Связать</span></button>
-        <button type="button" data-bulk="tag"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3.5 7.5 20.5M16.5 3.5l-2 17M4 8.5h16.5M3.5 15.5H20"/></svg><span>Метка</span></button>
         <button type="button" data-bulk="copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></svg><span>Копировать</span></button>
         <button type="button" data-bulk="archive"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg><span>В архив</span></button>
         <button type="button" data-bulk="delete" class="danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M9.5 6.5V4.8a.8.8 0 0 1 .8-.8h3.4a.8.8 0 0 1 .8.8v1.7M6.5 6.5l.8 12.2a1.5 1.5 0 0 0 1.5 1.3h6.4a1.5 1.5 0 0 0 1.5-1.3l.8-12.2"/></svg><span>Удалить</span></button>
@@ -204,7 +217,6 @@
       <label for="owner-token">Токен владельца</label>
       <input id="owner-token" type="password" autocomplete="off" spellcheck="false">
       <p class="hint">Токен хранится только в этом браузере. Без сети записи ждут на устройстве и уходят сами.</p>
-      <label class="switch-row"><input id="show-archive" type="checkbox"> Показывать архив</label>
       <p id="queue-count" class="hint" role="status"></p>
       <div class="dialog-actions">
         <button id="settings-close" type="button" class="link-button">Закрыть</button>

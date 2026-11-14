@@ -8,7 +8,7 @@ const HOLD_MS = 350; // holding the mic longer than this and releasing sends the
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent, getViews, getLatest, onPickRequest }) {
+export function setupComposer(config, { notify, onSent, getViews, onPickRequest }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
@@ -22,45 +22,32 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest, onP
   inputs.file.accept = config.mime_types.join(',');
 
   const recorder = createRecorder(config);
-  // "↳ продолжение": offered when writing soon after the latest message; on or off, the answer is saved.
-  let suggestTarget = null; // the message the next one may continue
-  let continueOn = false;
-  // "связать…": the next tap on a message in the feed connects the draft to it (actions.js, app.js).
   // Inside the topic screen every new message continues the topic's latest message (topicscreen.js).
   let topic = null; // { last: () => view }
-  // "связать…": choose any message or topic to connect the draft to (picker.js).
-  const pickChip = () => {
+  // While messages are selected (select.js) the tag row acts on the selection: link, unlink, tags.
+  let selection = null; // { link(), unlink(), toggleTag(tag), stateOf(tag) }
+  const roundIcon = (svg, label, onClick) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chip round-chip';
+    button.innerHTML = svg;
+    button.setAttribute('aria-label', label);
+    button.onclick = onClick;
+    return button;
+  };
+  // Leading buttons of the tag row: "link" for the draft (picker.js), or link / unlink for a selection.
+  const lead = () => {
+    if (selection) return [roundIcon('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>', 'Привязать выбранные', () => selection.link()),
+      roundIcon('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-.5.5"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l.5-.5"/><path d="M4 4l16 16"/></svg>', 'Отвязать выбранные', () => selection.unlink())];
     if (mode || topic) return [];
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'chip link-chip suggest';
-    chip.textContent = 'связать…';
-    chip.onclick = () => onPickRequest();
-    return [chip];
+    return [roundIcon('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>', 'Связать новое сообщение с другим', () => onPickRequest())];
   };
-  const continuationChip = () => {
-    if (!suggestTarget) return [...pickChip()];
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = `chip continue-chip ${continueOn ? 'on' : 'suggest'}`;
-    chip.textContent = '↳ продолжение';
-    chip.setAttribute('aria-pressed', String(continueOn));
-    chip.setAttribute('aria-label', `Продолжение сообщения: ${snippet(suggestTarget)}`);
-    chip.onclick = () => { continueOn = !continueOn; tagRow.render(); };
-    return [chip, ...pickChip()];
-  };
-  const refreshSuggestion = () => {
-    const latest = getLatest();
-    const fresh = latest && !mode && !topic && Date.now() - Date.parse(latest.event.ts) <= config.burst_gap_min * 60000;
-    if (!fresh) { suggestTarget = null; continueOn = false; return; }
-    if (suggestTarget?.id !== latest.id) { suggestTarget = latest; continueOn = false; }
-  };
-  // What to save about the connection: the explicit "continue" mode, or the answer to the suggestion.
+  // The connection of the draft: the explicit "continue" mode, or the topic screen.
   const continuation = () => (mode?.type === 'continue' ? { target: mode.view.id, on: true }
-    : topic?.last() ? { target: topic.last().id, on: true }
-    : suggestTarget ? { target: suggestTarget.id, on: continueOn } : undefined);
+    : topic?.last() ? { target: topic.last().id, on: true } : undefined);
   const tagRow = createTagRow({
-    dictionary: config.tagging, getViews, lead: continuationChip,
+    dictionary: config.tagging, getViews, lead,
+    override: () => selection && { click: (tag) => selection.toggleTag(tag), stateOf: (tag) => selection.stateOf(tag) },
     onChange: (on) => tagButton.classList.toggle('active', on.length > 0),
   });
   let files = [];
@@ -112,7 +99,7 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest, onP
   }
 
   // A fresh draft: tags start from suggestions again (edit mode starts from the message's own tags).
-  function resetTags(initial = []) { tagRow.reset(initial); refreshSuggestion(); tagRow.update(text.value); }
+  function resetTags(initial = []) { tagRow.reset(initial); tagRow.update(text.value); }
 
   function accept(list) {
     for (const file of list) {
@@ -252,14 +239,14 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest, onP
   $('#context-cancel').onclick = () => setMode(null);
   text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) setMode(null); });
 
-  text.addEventListener('input', () => { autosize(); updateAction(); refreshSuggestion(); tagRow.update(text.value); });
+  text.addEventListener('input', () => { autosize(); updateAction(); tagRow.update(text.value); });
   $('#new-tag-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const input = $('#new-tag');
     if (tagRow.addNew(input.value)) input.value = '';
     else notify('Метка — одно слово: буквы, цифры, «-» или «_»');
   });
-  text.addEventListener('focus', () => { togglePanel(tagPanel, tagButton, false); refreshSuggestion(); tagRow.render(); }); // the keyboard replaces open panels
+  text.addEventListener('focus', () => togglePanel(tagPanel, tagButton, false)); // the keyboard replaces open panels
   form.addEventListener('submit', (event) => { event.preventDefault(); sendDraft(); });
   tagButton.onclick = () => togglePanel(tagPanel, tagButton);
   attachButton.onclick = () => togglePanel(attachMenu, attachButton);
@@ -275,7 +262,8 @@ export function setupComposer(config, { notify, onSent, getViews, getLatest, onP
 
   resetTags();
   return {
-    refreshTags: () => { refreshSuggestion(); tagRow.update(text.value); },
+    refreshTags: () => tagRow.update(text.value),
+    selectionTags: (state) => { selection = state; tagRow.update(selection ? '' : text.value); },
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
     reply: (view) => setMode({ type: 'reply', view }),
     proceed: (view) => setMode({ type: 'continue', view }),

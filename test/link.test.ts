@@ -47,3 +47,15 @@ test('a topic is named by hand with a correction on its first message', async ()
     for (const title of [undefined, '   ', 'x'.repeat(81)]) assert.equal((await post(fix(a.id, { op: 'topic', title }))).status, 400, String(title));
   } finally { await f.stop(); }
 });
+
+test('topics are archived and restored with corrections on their first message', async () => {
+  const f = await fixture();
+  const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const a = event({ payload: { text: 'дело' } });
+    assert.equal((await post(a)).status, 201);
+    for (const op of ['topic_archive', 'topic_unarchive']) {
+      assert.equal((await post(event({ kind: 'correction', payload: { ref: { type: 'event', id: a.id }, data: { op } } }))).status, 201, op);
+    }
+  } finally { await f.stop(); }
+});

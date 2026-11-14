@@ -5,7 +5,7 @@ const TAG = /^#[\p{L}0-9_-]+$/u;
 
 // The tag row above the composer: suggested (off), switched on by the owner, switched on automatically.
 // Remembers what the owner did with suggestions, which is saved with the message as payload.data.tagging.
-export function createTagRow({ dictionary, getViews, onChange, lead = () => [] }) {
+export function createTagRow({ dictionary, getViews, onChange, lead = () => [], override = () => null }) {
   const row = document.querySelector('#tag-row');
   const options = document.querySelector('#tag-options');
   const owner = new Set(); // switched on by the owner (row, full list or new tag)
@@ -53,7 +53,7 @@ export function createTagRow({ dictionary, getViews, onChange, lead = () => [] }
     button.setAttribute('aria-label', state === 'auto' ? `${tag}, включена автоматически` : tag);
     if (state === 'auto') button.innerHTML = SPARK;
     button.append(tag);
-    button.onclick = () => toggle(tag);
+    button.onclick = () => { const other = override(); if (other) { other.click(tag); render(); } else toggle(tag); };
     return button;
   }
 
@@ -62,6 +62,13 @@ export function createTagRow({ dictionary, getViews, onChange, lead = () => [] }
     const autoOn = new Set(auto);
     // Switched-off automatic tags stay in the row, inactive, so one tap brings them back.
     shown = [...new Set([...off, ...suggestions.map((item) => item.tag)])].filter((tag) => !on.includes(tag));
+    const other = override();
+    if (other) { // a selection: every frequent tag, lit when all selected messages carry it
+      const all = suggestions.map((item) => item.tag);
+      row.replaceChildren(...lead(), ...all.map((tag) => chip(tag, other.stateOf(tag) ? 'on' : 'suggest')));
+      row.hidden = false;
+      return;
+    }
     row.replaceChildren(...lead(), ...on.map((tag) => chip(tag, autoOn.has(tag) ? 'auto' : 'on')), ...shown.map((tag) => chip(tag, 'suggest')));
     row.hidden = !row.childElementCount;
     // Full list behind the # button: dictionary and every tag used before.

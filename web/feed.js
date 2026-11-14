@@ -16,6 +16,19 @@ function dayLabel(date) {
   return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
 }
 
+// Topics for the drawer: title, first and last message, size, last activity, archived.
+function topicsOf(views, allChains) {
+  const byRoot = new Map();
+  for (const view of views) {
+    const chain = allChains.get(view.id);
+    if (!chain) continue;
+    const topic = byRoot.get(chain.root) ?? { root: chain.root, title: chain.title, named: chain.named, archived: chain.archived, ids: chain.ids, first: view, last: view };
+    if (Date.parse(view.event.ts) > Date.parse(topic.last.event.ts)) topic.last = view;
+    byRoot.set(chain.root, topic);
+  }
+  return [...byRoot.values()].sort((a, b) => Date.parse(b.last.event.ts) - Date.parse(a.last.event.ts));
+}
+
 export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
@@ -30,6 +43,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   let views = new Map(); // message id -> current view, for the action panel
   let viewList = []; // all current views, a new array per render (tag statistics key on it)
   let visibleList = [];
+  let tagFilter = new Set(); // feed shows messages carrying every selected tag (drawer.js)
+  let topicList = []; // all topics, for the drawer
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -52,21 +67,31 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     const projected = project([...events.values()], new Set(pending.keys()));
     views = new Map(projected.map((view) => [view.id, view]));
     viewList = projected;
-    const visible = projected.filter((view) => !view.deleted && (showArchive || !view.archived));
+    // Archived topics hide all their messages, like archived messages, until "show archived" is on.
+    const live = projected.filter((view) => !view.deleted);
+    const allChains = chains(live);
+    const inArchivedTopic = (view) => allChains.get(view.id)?.archived;
+    const tagged = (view) => [...tagFilter].every((tag) => view.tags.includes(tag));
+    const visible = live.filter((view) => (showArchive || (!view.archived && !inArchivedTopic(view))) && tagged(view));
     visibleList = visible;
+    topicList = topicsOf(live, allChains);
     onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
 
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
     const children = [];
     const chainOf = chains(visible);
+    const nextOf = new Map();
+    for (const view of visible) if (view.continues && !nextOf.has(view.continues)) nextOf.set(view.continues, view.id);
     // The topic line goes once per bubble: on its first part.
     const node = (view, first = true) => {
       const queuedEntry = pending.get(view.id);
       const chain = first ? chainOf.get(view.id) : undefined;
-      const signature = bubbleSignature(view, queuedEntry, chain);
+      const next = nextOf.get(view.id); // the message that continues this one, for "unlink" under it
+      const faded = Boolean(view.archived || inArchivedTopic(view));
+      const signature = bubbleSignature(view, queuedEntry, chain) + (next ?? '') + faded;
       let cached = nodes.get(view.id);
       if (!cached || cached.signature !== signature) {
-        cached = { signature, node: createBubble(view, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify, jump, chain, limits }) };
+        cached = { signature, node: createBubble(view, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify, jump, chain, limits, next, faded }) };
         nodes.set(view.id, cached);
       }
       return cached.node;
@@ -169,8 +194,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   }
 
   function setShowArchive(value) { showArchive = value; return render(); }
+  function setTagFilter(tags) { tagFilter = new Set(tags); return render({ bottom: true }); }
 
-  return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), views: () => viewList,
+  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], topics: () => topicList,
+    showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
+    view: (id) => views.get(id), views: () => viewList,
     chain: (id) => chains(visibleList).get(id),
     // A fresh bubble for another surface (topic screen): same rendering and media loading, no feed bookkeeping.
     bubble: (view) => createBubble(view, undefined, { load: (reference) => load(reference), notify, jump, limits }),

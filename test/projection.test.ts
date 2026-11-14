@@ -96,3 +96,12 @@ test('a hand-given topic name replaces the first message as the title of its cha
   chain = chains(project([a, b, fix(a.id, 'topic', { data: { op: 'topic', title: 'Клиент А — сеть' } })])).get(b.id);
   assert.deepEqual([chain.title, chain.named], ['Клиент А — сеть', true]);
 });
+
+test('a topic is archived and restored on its first message; the whole chain reports it', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { chains } = await import('../web/projection.js');
+  const a = message('выезжаю'), b = message('приехал', { payload: { text: 'приехал', data: { continuation: { target: a.id, on: true } } } });
+  const archive = fix(a.id, 'topic_archive', { data: { op: 'topic_archive' } });
+  assert.equal(chains(project([a, b, archive])).get(b.id).archived, true);
+  assert.equal(chains(project([a, b, archive, fix(a.id, 'topic_unarchive', { data: { op: 'topic_unarchive' } })])).get(b.id).archived, false);
+});

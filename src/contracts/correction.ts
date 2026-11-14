@@ -2,7 +2,7 @@ import { HttpError } from '../server/errors.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Owner actions on a message are new journal events (CONCEPT.md §2.4); the original never changes.
-export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic'] as const;
+export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive'] as const;
 
 // Shape rules that need no database. `target` is checked separately, inside the write transaction.
 export function checkCorrectionShape(event: JournalEvent): void {

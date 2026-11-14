@@ -4,7 +4,7 @@ import { entryFromShare } from '/v/__BUILD__/shared.js';
 
 const BUILD = '__BUILD__';
 const CACHE = `stream-shell-${BUILD}`;
-const VERSIONED = ['app.js', 'composer.js', 'voice.js', 'bubble.js', 'feed.js', 'outbox.js', 'sync.js', 'db.js', 'shared.js', 'live.js', 'projection.js', 'actions.js', 'suggest.js', 'tagrow.js', 'thread.js', 'topicscreen.js', 'picker.js', 'select.js', 'styles.css'];
+const VERSIONED = ['app.js', 'composer.js', 'voice.js', 'bubble.js', 'feed.js', 'outbox.js', 'sync.js', 'db.js', 'shared.js', 'live.js', 'projection.js', 'actions.js', 'suggest.js', 'tagrow.js', 'thread.js', 'topicscreen.js', 'picker.js', 'select.js', 'drawer.js', 'styles.css'];
 const STATIC = ['/manifest.json', '/capture-config.json', '/icon-192.png', '/icon-512.png', '/fonts/inter-latin-wght-normal.woff2', '/fonts/inter-cyrillic-wght-normal.woff2'];
 const SHELL = ['/', ...STATIC, ...VERSIONED.map((file) => `/v/${BUILD}/${file}`)];
 // The page and settings come from the network when it answers, so a new version shows on the next open.

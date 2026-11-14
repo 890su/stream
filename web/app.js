@@ -9,10 +9,21 @@ import { setupThread } from './thread.js';
 import { setupTopicScreen } from './topicscreen.js';
 import { setupPicker } from './picker.js';
 import { setupSelection } from './select.js';
+import { setupDrawer } from './drawer.js';
 
 let topicScreen;
 let picker;
 let bulk;
+let drawer;
+
+// The reset button shows how many tags filter the feed.
+function updateFilter() {
+  const count = feedRef?.tagFilter().length ?? 0;
+  $('#filter-reset').hidden = !count;
+  $('#filter-count').textContent = count ? String(count) : '';
+}
+let feedRef;
+let composerRef; // tag suggestions follow the feed: frequent tags are known once it is loaded
 
 const $ = (selector) => document.querySelector(selector);
 const notice = $('#notice');
@@ -32,42 +43,41 @@ function notify(message, action) {
   noticeTimer = setTimeout(() => { notice.hidden = true; }, action ? 6000 : 4500);
 }
 
-// Tags to offer for a selection: the dictionary and every tag already used, most used first.
-function tagChoices(feed, config) {
-  const counts = new Map(config.tagging.tags.map((entry) => [entry.tag, 0]));
-  for (const view of feed.views()) for (const tag of view.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru')).map(([tag]) => tag);
-}
-
 // Bulk actions on selected messages (select.js). Each one is ordinary corrections, so undo works as usual.
-function setupBulk(feed, composer, { correct, link, tagsFor }) {
+function setupBulk(feed, composer, { correct, link, pickLink }) {
   const each = (views, op) => Promise.all(views.map((view) => correct(view, op)));
-  const tagDialog = $('#tag-assign');
-  $('#tag-assign-close').onclick = () => tagDialog.close();
-  return setupSelection({
+  // The tag row acts on the selection: link (one topic, or the picker for one message), unlink, toggle a tag.
+  let selection;
+  const linkAll = async (views) => {
+    if (views.length === 1) { selection.leave(); pickLink(views[0]); return; }
+    const changed = views.slice(1).filter((view, index) => view.continues !== views[index].id);
+    await Promise.all(changed.map((view) => link(view, views[views.indexOf(view) - 1].id)));
+    selection.leave();
+    notify(`Связано в одну тему: ${views.length}`, { label: 'Отменить', run: () => each(changed, 'unlink') });
+  };
+  const unlinkAll = async (views) => {
+    const linked = views.filter((view) => view.continues);
+    if (!linked.length) { notify('Выбранные ни к чему не привязаны'); return; }
+    const targets = linked.map((view) => [view, view.continues]);
+    await each(linked, 'unlink');
+    selection.leave();
+    notify(`Отвязано: ${linked.length}`, { label: 'Отменить', run: () => Promise.all(targets.map(([view, target]) => link(view, target))) });
+  };
+  const toggleTag = async (views, tag) => {
+    const all = views.every((view) => view.tags.includes(tag));
+    const targets = all ? views : views.filter((view) => !view.tags.includes(tag));
+    await Promise.all(targets.map((view) => composer.queue(makeCorrection(view.id, 'edit',
+      { text: view.text, tags: all ? view.tags.filter((item) => item !== tag) : [...view.tags, tag] }))));
+  };
+  selection = setupSelection({
     getView: (id) => feed.view(id),
+    onChange: (views) => composer.selectionTags(views && {
+      link: () => linkAll(selection.selected()),
+      unlink: () => unlinkAll(selection.selected()),
+      toggleTag: (tag) => toggleTag(selection.selected(), tag),
+      stateOf: (tag) => selection.selected().every((view) => view.tags.includes(tag)),
+    }),
     actions: {
-      link: async (views) => {
-        if (views.length === 1) { picker.open({ exclude: views[0].id, onPick: (target) => link(views[0], target.id) }); return; }
-        // Oldest first: each message continues the one before it, so they become one topic.
-        const changed = views.slice(1).filter((view, index) => view.continues !== views[index].id);
-        await Promise.all(changed.map((view) => link(view, views[views.indexOf(view) - 1].id)));
-        notify(`Связано в одну тему: ${views.length}`, { label: 'Отменить', run: () => each(changed, 'unlink') });
-      },
-      tag: (views) => {
-        $('#tag-assign-list').replaceChildren(...tagsFor().map((tag) => {
-          const chip = document.createElement('button');
-          chip.type = 'button'; chip.className = 'chip suggest'; chip.textContent = tag;
-          chip.onclick = async () => {
-            tagDialog.close();
-            const targets = views.filter((view) => !view.tags.includes(tag));
-            await Promise.all(targets.map((view) => composer.queue(makeCorrection(view.id, 'edit', { text: view.text, tags: [...view.tags, tag] }))));
-            notify(`Метка ${tag}: ${targets.length}`);
-          };
-          return chip;
-        }));
-        tagDialog.showModal();
-      },
       copy: async (views) => {
         try { await navigator.clipboard.writeText(views.map((view) => view.text).filter(Boolean).join(String.fromCharCode(10, 10))); notify(`Скопировано: ${views.length}`); }
         catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }
@@ -76,6 +86,7 @@ function setupBulk(feed, composer, { correct, link, tagsFor }) {
       delete: async (views) => { await each(views, 'delete'); notify(`Удалено: ${views.length}`, { label: 'Отменить', run: () => each(views, 'restore') }); },
     },
   });
+  return selection;
 }
 
 function setupMessageActions(feed, composer, config) {
@@ -113,7 +124,23 @@ function setupMessageActions(feed, composer, config) {
   topicScreen = setupTopicScreen({ feed, composer, onRename: renameTopic });
   picker = setupPicker({ getVisible: () => feed.visible(), getChain: (id) => feed.chain(id), notify });
   const link = (view, target) => composer.queue(makeCorrection(view.id, 'link', { target })).catch((error) => notify(error.message));
-  bulk = setupBulk(feed, composer, { correct, link, tagsFor: () => tagChoices(feed, config) });
+  // Connect a message to any other one chosen in the picker.
+  const pickLink = (view) => picker.open({ exclude: view.id, onPick: async (target) => {
+    await link(view, target.id);
+    notify('Связано', { label: 'Отменить', run: () => correct(view, 'unlink') });
+  } });
+  bulk = setupBulk(feed, composer, { correct, link, pickLink });
+  drawer = setupDrawer({
+    feed,
+    onJump: (id) => feed.jump(id),
+    onArchiveTopic: async (topic) => {
+      const root = feed.view(topic.root);
+      const op = topic.archived ? 'topic_unarchive' : 'topic_archive';
+      await correct(root, op);
+      notify(topic.archived ? 'Тема возвращена из архива' : 'Тема в архиве', { label: 'Отменить', run: () => correct(root, topic.archived ? 'topic_archive' : 'topic_unarchive') });
+    },
+    onFilterChange: updateFilter,
+  });
   setupActions({
     list: document.body, // the feed and the topic screen share the same message actions
     getView: (id) => feed.view(id),
@@ -122,16 +149,19 @@ function setupMessageActions(feed, composer, config) {
       else if (op === 'edit') composer.edit(view);
       else if (op === 'history') thread.open(view.id);
       else if (op === 'continue') composer.proceed(view);
+      else if (op === 'unlink-next') {
+        const next = feed.nextLinked(view.id);
+        if (!next) return;
+        await correct(next, 'unlink');
+        notify('Следующее сообщение отвязано', { label: 'Отменить', run: () => link(next, view.id) });
+      } else if (op === 'link-from') pickLink(view);
       else if (op === 'pick') picker.take(view);
       else if (op === 'select') bulk.enter(view);
       else if (op === 'toggle') bulk.toggle(view);
       else if (op === 'topic-open') topicScreen.open(view.id);
       else if (op === 'link') {
         if (view.continues) { await correct(view, 'unlink'); notify('Отделено от предыдущего', { label: 'Отменить', run: () => link(view, view.continues) }); return; }
-        picker.open({ exclude: view.id, onPick: async (target) => {
-          await link(view, target.id);
-          notify('Связано', { label: 'Отменить', run: () => correct(view, 'unlink') });
-        } });
+        pickLink(view);
       }
       else if (op === 'copy') {
         try { await navigator.clipboard.writeText(view.text); notify('Текст скопирован'); }
@@ -174,10 +204,18 @@ function setupStatus() {
 
 async function setupSettings(config, feed, onToken) {
   const dialog = $('#settings');
-  const archive = $('#show-archive');
-  archive.checked = Boolean(await getSetting('showArchive'));
-  if (archive.checked) await feed.setShowArchive(true);
-  archive.onchange = async () => { await setSetting('showArchive', archive.checked); await feed.setShowArchive(archive.checked); };
+  // "Show archived" in the top bar: archived messages and topics, in the feed and in the drawer. Off by default.
+  const archive = $('#archive-toggle');
+  const showArchive = async (on) => {
+    archive.setAttribute('aria-pressed', String(on));
+    archive.setAttribute('aria-label', on ? 'Скрыть архив' : 'Показывать архив');
+    await feed.setShowArchive(on);
+    drawer?.render();
+  };
+  if (await getSetting('showArchive')) await showArchive(true);
+  archive.onclick = async () => { const on = archive.getAttribute('aria-pressed') !== 'true'; await setSetting('showArchive', on); await showArchive(on); };
+  // Tag filter reset, shown while the feed is filtered (drawer.js).
+  $('#filter-reset').onclick = async () => { await feed.setTagFilter([]); updateFilter(); drawer?.render(); };
   const input = $('#owner-token');
   input.minLength = config.min_owner_token_length;
   $('#menu-button').onclick = () => dialog.showModal();
@@ -228,9 +266,11 @@ async function main() {
   if (!response.ok) throw new Error('Не удалось загрузить настройки приложения. Повторите запуск');
   const config = await response.json();
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); } });
-  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(), getLatest: () => feed.latest(),
+  const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); composerRef?.refreshTags(); } });
+  feedRef = feed;
+  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
+  composerRef = composer;
   setupMessageActions(feed, composer, config);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({

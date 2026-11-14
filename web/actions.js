@@ -92,6 +92,10 @@ export function setupActions({ list, getView, onAction }) {
     }
     const topic = event.target.closest('[data-topic-open]');
     if (topic) { event.stopPropagation(); const view = getView(bubbleOf(topic).dataset.id); if (view) onAction('topic-open', view); return; }
+    for (const [attribute, op] of [['data-unlink-next', 'unlink-next'], ['data-link-from', 'link-from']]) {
+      const control = event.target.closest(`[${attribute}]`);
+      if (control) { event.stopPropagation(); const view = getView(bubbleOf(control).dataset.id); if (view) onAction(op, view); return; }
+    }
     const proceed = event.target.closest('[data-continue]');
     if (proceed) { event.stopPropagation(); const view = getView(bubbleOf(proceed).dataset.id); if (view) onAction('continue', view); return; }
     const history = event.target.closest('[data-history]');

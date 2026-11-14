@@ -9,6 +9,7 @@ const ICONS = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>',
   history: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4 4.5v4h4M12 8v4.5l3 1.8"/></svg>',
+  unlink: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-.5.5"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l.5-.5"/><path d="M4 4l16 16"/></svg>',
   link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
   continue: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h9"/><path d="m15 12 4 4-4 4"/></svg>',
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>',
@@ -159,20 +160,49 @@ function textBlock(text, limits) {
   return wrap;
 }
 
-// The topic line: one tappable line with the topic name and size; it opens the topic screen (topicscreen.js).
-function topicLine(chain) {
-  const line = element('button', 'topic-line');
-  line.type = 'button';
-  line.dataset.topicOpen = '';
-  line.setAttribute('aria-label', `Тема «${chain.title}», сообщений: ${chain.ids.length}. Открыть тему`);
-  const icon = element('span', 'topic-icon');
-  icon.innerHTML = ICONS.link;
-  line.append(icon, element('span', `topic-title${chain.named ? ' named' : ''}`, chain.title),
-    element('span', 'topic-pos', `· ${chain.ids.length}`), element('span', 'topic-go', '›'));
+// The topic line. First message: title · N following ›. Later ones: ‹ N above · title · N below ›
+// (no › on the last). Arrows jump to the neighbouring message of the topic; the title opens the topic screen.
+function topicLine(chain, jump) {
+  const line = element('div', 'topic-line');
+  const above = chain.index;
+  const below = chain.ids.length - 1 - chain.index;
+  const arrow = (step, label, glyph) => {
+    const button = element('button', 'topic-arrow', glyph);
+    button.type = 'button';
+    button.setAttribute('aria-label', label);
+    button.onclick = (event) => { event.stopPropagation(); jump(chain.ids[chain.index + step]); };
+    return button;
+  };
+  const title = element('button', `topic-title${chain.named ? ' named' : ''}`, chain.title);
+  title.type = 'button';
+  title.dataset.topicOpen = '';
+  title.setAttribute('aria-label', `Тема «${chain.title}», сообщений: ${chain.ids.length}. Открыть тему`);
+  const count = (value, label) => { const node = element('span', 'topic-count', String(value)); node.setAttribute('aria-label', label); return node; };
+  if (above) line.append(arrow(-1, 'Предыдущее сообщение темы', '‹'), count(above, `Выше в теме: ${above}`));
+  line.append(title);
+  if (below) line.append(count(below, `Ниже в теме: ${below}`), arrow(1, 'Следующее сообщение темы', '›'));
   return line;
 }
 
-export function createBubble(view, queued, { load, notify, jump, chain, limits }) {
+// Icon buttons under the message, bottom left: continue; unlink the next message (when one continues this);
+// link this message to another (picker).
+function linkRow(next) {
+  const row = element('span', 'link-row');
+  const icon = (name, data, label) => {
+    const button = element('button', 'continue-link');
+    button.type = 'button';
+    button.innerHTML = ICONS[name];
+    button.setAttribute('aria-label', label);
+    button.dataset[data] = '';
+    return button;
+  };
+  row.append(icon('continue', 'continue', 'Продолжить это сообщение'));
+  if (next) row.append(icon('unlink', 'unlinkNext', 'Отвязать следующее сообщение'));
+  row.append(icon('link', 'linkFrom', 'Связать с другим сообщением'));
+  return row;
+}
+
+export function createBubble(view, queued, { load, notify, jump, chain, limits, next, faded }) {
   const event = view.event;
   const payload = event.payload ?? {};
   const media = payload.media ?? [];
@@ -184,7 +214,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits }
   bubble.classList.toggle('has-photo', photos.length > 0);
   bubble.classList.toggle('has-text', Boolean(view.text || payload.url));
   bubble.classList.toggle('has-tags', view.tags.length > 0);
-  bubble.classList.toggle('archived', view.archived);
+  bubble.classList.toggle('archived', Boolean(faded ?? view.archived));
 
   // Mouse users: a "more" button next to the bubble; touch users long-press (actions.js).
   const more = element('button', 'more');
@@ -194,7 +224,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits }
   more.dataset.actions = '';
   bubble.append(more);
 
-  if (chain) bubble.append(topicLine(chain));
+  if (chain) bubble.append(topicLine(chain, jump));
   if (view.replyTo) {
     const quote = element('button', 'quote');
     quote.type = 'button';
@@ -222,13 +252,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits }
     } catch { /* malformed URLs stay in the journal payload */ }
   }
   const onlyPhoto = photos.length && !view.text && !payload.url && !view.tags.length && !view.replyTo && !chain;
-  // Bottom left: continue this message — the next one is written already connected to it.
-  const next = element('button', 'continue-link');
-  next.type = 'button';
-  next.innerHTML = ICONS.continue;
-  next.setAttribute('aria-label', 'Продолжить это сообщение');
-  next.dataset.continue = '';
-  bubble.append(next);
+  bubble.append(linkRow(next));
   bubble.append(meta(view, queued, onlyPhoto ? 'photo-meta' : '', Boolean(view.edited || view.replyTo || view.replies || chain)));
   if (queued?.error) bubble.append(element('div', 'error-text', queued.error));
   return bubble;

@@ -1,6 +1,6 @@
 // Selection mode: a long press selects a message, then taps add or remove more; a bar replaces the composer
 // with bulk actions. Back or × leaves the mode.
-export function setupSelection({ getView, actions }) {
+export function setupSelection({ getView, actions, onChange = () => {} }) {
   const bar = document.querySelector('#select-bar');
   const count = document.querySelector('#select-count');
   const ids = new Set();
@@ -12,7 +12,7 @@ export function setupSelection({ getView, actions }) {
     for (const element of document.querySelectorAll('.bubble.picked')) if (!ids.has(element.dataset.id)) element.classList.remove('picked');
     for (const id of ids) node(id)?.classList.add('picked');
     count.textContent = `Выбрано: ${ids.size}`;
-    document.querySelector('[data-bulk="link"]').querySelector('span').textContent = ids.size > 1 ? 'Связать' : 'Связать с…';
+    onChange(ids.size ? selected() : null);
   }
 
   function enter(view) {
@@ -50,5 +50,5 @@ export function setupSelection({ getView, actions }) {
     };
   }
 
-  return { enter, toggle, leave, repaint: () => { if (ids.size) paint(); } };
+  return { enter, toggle, leave, selected, repaint: () => { if (ids.size) paint(); } };
 }

@@ -33,6 +33,9 @@ export function project(events, pendingIds = new Set()) {
       case 'link': view.continues = correction.payload.data.target; break;
       case 'unlink': view.continues = null; break;
       case 'topic': view.topicTitle = correction.payload.data.title.trim(); break;
+      // A topic is archived on its first message; the whole chain follows it (feed.js, drawer.js).
+      case 'topic_archive': view.topicArchived = true; break;
+      case 'topic_unarchive': view.topicArchived = false; break;
       default: break;
     }
   }
@@ -99,7 +102,7 @@ export function chains(views) {
     const chain = related(views, view.id);
     if (chain.length < 2) continue;
     const root = chain[0];
-    chain.forEach((item, index) => result.set(item.id, { ids: chain.map((entry) => entry.id), index, root: root.id, title: root.topicTitle || snippet(root), named: Boolean(root.topicTitle) }));
+    chain.forEach((item, index) => result.set(item.id, { ids: chain.map((entry) => entry.id), index, root: root.id, title: root.topicTitle || snippet(root), named: Boolean(root.topicTitle), archived: Boolean(root.topicArchived) }));
   }
   return result;
 }
