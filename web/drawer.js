@@ -13,7 +13,7 @@ function element(tag, className, text) {
 
 function age(ts) {
   const days = Math.floor((Date.now() - Date.parse(ts)) / DAY);
-  return days <= 0 ? 'сегодня' : `${days} дн.`;
+  return days <= 0 ? 'сегодня' : `${days} дн. назад`;
 }
 
 export function setupDrawer({ feed, onJump, onArchiveTopic, onFilterChange }) {
@@ -96,25 +96,79 @@ export function setupDrawer({ feed, onJump, onArchiveTopic, onFilterChange }) {
   window.addEventListener('pointercancel', () => { if (drag?.horizontal) show(drag.opening ? false : true); drag = null; });
   window.addEventListener('resize', () => { if (!drawer.hidden) place(); });
 
+  // A topic row: the title takes the whole first line; the second holds the count, the age and the archive button.
+  // The left half opens the first message, the right half the newest. Swiping the row to the right archives it.
   function topicRow(topic) {
     const row = element('div', `drawer-topic${topic.archived ? ' archived' : ''}`);
+    const body = element('div', 'drawer-topic-body');
+    const title = element('span', `drawer-title${topic.named ? ' named' : ''}`, topic.title);
+    const meta = element('div', 'drawer-meta');
+    meta.append(element('span', 'drawer-count', `${topic.ids.length} в теме · ${age(topic.last.event.ts)}`), element('span', 'drawer-spacer'));
     const first = element('button', 'drawer-half first');
     first.type = 'button';
-    first.append(element('span', `drawer-title${topic.named ? ' named' : ''}`, topic.title), element('span', 'drawer-sub', `${topic.ids.length} в теме`));
     first.setAttribute('aria-label', `${topic.title}: к первому сообщению`);
     first.onclick = () => { close(); onJump(topic.first.id); };
     const last = element('button', 'drawer-half last');
     last.type = 'button';
-    last.append(element('span', 'drawer-age', age(topic.last.event.ts)), element('span', 'drawer-go', '›'));
     last.setAttribute('aria-label', `${topic.title}: к последнему сообщению`);
     last.onclick = () => { close(); onJump(topic.last.id); };
-    const archive = element('button', 'icon-button drawer-archive');
+    const archive = element('button', topic.archived ? 'drawer-restore' : 'icon-button drawer-archive');
     archive.type = 'button';
-    archive.innerHTML = topic.archived ? RESTORE : ARCHIVE;
+    if (topic.archived) { archive.innerHTML = RESTORE; archive.append('Из архива'); }
+    else archive.innerHTML = ARCHIVE;
     archive.setAttribute('aria-label', topic.archived ? `Вернуть тему «${topic.title}» из архива` : `Тему «${topic.title}» в архив`);
     archive.onclick = () => onArchiveTopic(topic);
-    row.append(first, last, archive);
+    meta.append(archive);
+    body.append(title, meta, first, last);
+    if (!topic.archived) {
+      const hint = element('div', 'drawer-swipe');
+      hint.innerHTML = ARCHIVE;
+      hint.append('В архив');
+      row.append(hint);
+      swipeToArchive(row, body, () => onArchiveTopic(topic));
+    }
+    row.append(body);
     return row;
+  }
+
+  // The row follows the finger to the right; letting go past a third of its width archives the topic.
+  function swipeToArchive(row, body, archive) {
+    let swipe = null; // { x, y, on, width }
+    let swallowUntil = 0;
+    const reset = () => { row.classList.remove('dragging', 'armed'); body.style.transform = ''; swipe = null; };
+    body.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse' || event.target.closest('.drawer-archive')) return;
+      swipe = { x: event.clientX, y: event.clientY, on: null, width: row.offsetWidth || 300 };
+    });
+    body.addEventListener('pointermove', (event) => {
+      if (!swipe) return;
+      const dx = event.clientX - swipe.x;
+      const dy = event.clientY - swipe.y;
+      if (swipe.on === null) {
+        if (Math.abs(dx) < START_PX && Math.abs(dy) < START_PX) return;
+        swipe.on = dx > 0 && dx > Math.abs(dy) * 1.5;
+        if (!swipe.on) { swipe = null; return; }
+        row.classList.add('dragging');
+      }
+      const offset = Math.max(0, dx);
+      body.style.transform = `translateX(${offset}px)`;
+      row.classList.toggle('armed', offset > swipe.width / 3);
+    });
+    body.addEventListener('pointerup', (event) => {
+      if (!swipe?.on) { swipe = null; return; }
+      swallowUntil = Date.now() + 400; // the tap that ends a swipe is not a jump
+      const done = event.clientX - swipe.x > swipe.width / 3;
+      const width = swipe.width;
+      row.classList.remove('dragging');
+      swipe = null;
+      if (!done) { reset(); return; }
+      body.style.transform = `translateX(${width}px)`;
+      setTimeout(archive, 180);
+    });
+    body.addEventListener('pointercancel', reset);
+    body.addEventListener('click', (event) => {
+      if (Date.now() < swallowUntil) { event.preventDefault(); event.stopPropagation(); }
+    }, true);
   }
 
   function render() {
