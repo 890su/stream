@@ -39,6 +39,7 @@ function setupMessageActions(feed, composer) {
     viewer.showModal();
   });
   const correct = (view, op) => composer.queue(makeCorrection(view.id, op)).catch((error) => notify(error.message));
+  const link = (view, target) => composer.queue(makeCorrection(view.id, 'link', { target })).catch((error) => notify(error.message));
   setupActions({
     list: $('#feed-list'),
     getView: (id) => feed.view(id),
@@ -46,6 +47,14 @@ function setupMessageActions(feed, composer) {
       if (op === 'reply') composer.reply(view);
       else if (op === 'edit') composer.edit(view);
       else if (op === 'history') thread.open(view.id);
+      else if (op === 'continue') composer.proceed(view);
+      else if (op === 'link') {
+        if (view.continues) { await correct(view, 'unlink'); notify('Отделено от предыдущего', { label: 'Отменить', run: () => link(view, view.continues) }); return; }
+        const previous = feed.previous(view.id);
+        if (!previous) { notify('Выше нет сообщения, с которым можно связать'); return; }
+        await link(view, previous.id);
+        notify('Связано с предыдущим', { label: 'Отменить', run: () => correct(view, 'unlink') });
+      }
       else if (op === 'copy') {
         try { await navigator.clipboard.writeText(view.text); notify('Текст скопирован'); }
         catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }
@@ -142,7 +151,7 @@ async function main() {
   const config = await response.json();
   const onQueue = setupStatus();
   const feed = setupFeed({ notify, onQueue, limits: config });
-  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views() });
+  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(), getLatest: () => feed.latest() });
   setupMessageActions(feed, composer);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({

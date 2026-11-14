@@ -31,6 +31,9 @@ export function setupActions({ list, getView, onAction }) {
     const archived = view.archived;
     archiveButton.querySelector('span').textContent = archived ? 'Вернуть' : 'В архив';
     archiveButton.setAttribute('aria-label', archived ? 'Вернуть из архива' : 'В архив');
+    const linkButton = panel.querySelector('[data-op="link"]');
+    linkButton.querySelector('span').textContent = view.continues ? 'Отделить' : 'Связать';
+    linkButton.setAttribute('aria-label', view.continues ? 'Отделить от предыдущего' : 'Связать с предыдущим сообщением');
     layer.hidden = false;
     panel.hidden = false;
     place(bubble);
@@ -77,6 +80,8 @@ export function setupActions({ list, getView, onAction }) {
   list.addEventListener('click', (event) => {
     if (suppressClick) { event.preventDefault(); event.stopPropagation(); return; }
     if (event.target.closest('[data-actions]')) { event.stopPropagation(); open(bubbleOf(event.target)); }
+    const proceed = event.target.closest('[data-continue]');
+    if (proceed) { event.stopPropagation(); const view = getView(bubbleOf(proceed).dataset.id); if (view) onAction('continue', view); return; }
     const history = event.target.closest('[data-history]');
     if (history) { event.stopPropagation(); const view = getView(bubbleOf(history).dataset.id); if (view) onAction('history', view); }
   }, true);

@@ -87,6 +87,16 @@
         "data": {
           "type": "object",
           "properties": {
+            "continuation": {
+              "type": "object",
+              "description": "Owner's answer to the 'continuation' suggestion at capture (CONCEPT.md 2.5): does this message continue `target`? Kept when declined too, as training data.",
+              "required": ["target", "on"],
+              "additionalProperties": false,
+              "properties": {
+                "target": { "type": "string", "format": "uuid" },
+                "on": { "type": "boolean" }
+              }
+            },
             "tagging": {
               "type": "object",
               "description": "Owner feedback on tag suggestions at capture (CONCEPT.md 2.2): training data for interpretation. auto and owner_on are subsets of payload.tags; owner_off is disjoint from it.",

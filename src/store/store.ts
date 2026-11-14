@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateEvent } from '../contracts/validate.ts';
-import { checkCorrectionShape, checkCorrectionTarget } from '../contracts/correction.ts';
+import { checkCorrectionShape, checkCorrectionTarget, linkTargets, checkLinkTarget } from '../contracts/correction.ts';
 import { checkTagging } from '../contracts/tagging.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { HttpError } from '../server/errors.ts';
@@ -70,6 +70,7 @@ export class JournalStore {
         return { created: false, event: fromRow(existing) };
       }
       if (input.kind === 'correction') checkCorrectionTarget(input, this.getEvent(input.payload.ref!.id));
+      for (const target of linkTargets(input)) checkLinkTarget(this.getEvent(target));
       for (const reference of input.payload.media ?? []) {
         const media = this.getMedia(reference.media_id);
         if (!media) throw new HttpError(422, 'Сначала загрузите все медиа');

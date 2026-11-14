@@ -8,7 +8,7 @@ const HOLD_MS = 350; // holding the mic longer than this and releasing sends the
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent, getViews }) {
+export function setupComposer(config, { notify, onSent, getViews, getLatest }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
@@ -22,8 +22,31 @@ export function setupComposer(config, { notify, onSent, getViews }) {
   inputs.file.accept = config.mime_types.join(',');
 
   const recorder = createRecorder(config);
+  // "↳ продолжение": offered when writing soon after the latest message; on or off, the answer is saved.
+  let suggestTarget = null; // the message the next one may continue
+  let continueOn = false;
+  const continuationChip = () => {
+    if (!suggestTarget) return [];
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `chip continue-chip ${continueOn ? 'on' : 'suggest'}`;
+    chip.textContent = '↳ продолжение';
+    chip.setAttribute('aria-pressed', String(continueOn));
+    chip.setAttribute('aria-label', `Продолжение сообщения: ${snippet(suggestTarget)}`);
+    chip.onclick = () => { continueOn = !continueOn; tagRow.render(); };
+    return [chip];
+  };
+  const refreshSuggestion = () => {
+    const latest = getLatest();
+    const fresh = latest && !mode && Date.now() - Date.parse(latest.event.ts) <= config.burst_gap_min * 60000;
+    if (!fresh) { suggestTarget = null; continueOn = false; return; }
+    if (suggestTarget?.id !== latest.id) { suggestTarget = latest; continueOn = false; }
+  };
+  // What to save about the connection: the explicit "continue" mode, or the answer to the suggestion.
+  const continuation = () => (mode?.type === 'continue' ? { target: mode.view.id, on: true }
+    : suggestTarget ? { target: suggestTarget.id, on: continueOn } : undefined);
   const tagRow = createTagRow({
-    dictionary: config.tagging, getViews,
+    dictionary: config.tagging, getViews, lead: continuationChip,
     onChange: (on) => tagButton.classList.toggle('active', on.length > 0),
   });
   let files = [];
@@ -75,7 +98,7 @@ export function setupComposer(config, { notify, onSent, getViews }) {
   }
 
   // A fresh draft: tags start from suggestions again (edit mode starts from the message's own tags).
-  function resetTags(initial = []) { tagRow.reset(initial); tagRow.update(text.value); }
+  function resetTags(initial = []) { tagRow.reset(initial); refreshSuggestion(); tagRow.update(text.value); }
 
   function accept(list) {
     for (const file of list) {
@@ -101,15 +124,16 @@ export function setupComposer(config, { notify, onSent, getViews }) {
     contextBar.hidden = !mode;
     contextBar.classList.toggle('reply', mode?.type === 'reply');
     contextBar.classList.toggle('edit', mode?.type === 'edit');
+    contextBar.classList.toggle('continue', mode?.type === 'continue');
     attachButton.hidden = mode?.type === 'edit'; // photos and files are not edited, only text and tags
     if (mode) {
-      $('#context-title').textContent = mode.type === 'edit' ? 'Редактирование' : 'Ответ';
+      $('#context-title').textContent = { edit: 'Редактирование', reply: 'Ответ', continue: 'Продолжение' }[mode.type];
       $('#context-snippet').textContent = snippet(mode.view);
     }
     if (mode?.type === 'edit') {
       text.value = mode.view.text; files = [];
       resetTags(mode.view.tags);
-    } else if (leavingEdit) { text.value = ''; resetTags(); }
+    } else if (leavingEdit) { text.value = ''; resetTags(); } else resetTags(tagRow.active());
     autosize(); renderDraft();
     if (mode) text.focus();
   }
@@ -139,7 +163,7 @@ export function setupComposer(config, { notify, onSent, getViews }) {
     const attached = files;
     const kind = !attached.length ? 'text' : attached.every((file) => file.type.startsWith('image/')) ? 'photo' : 'file';
     try {
-      await queue(await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(),
+      await queue(await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
         replyTo: mode?.type === 'reply' ? mode.view.id : undefined }));
       text.value = ''; files = [];
       if (mode) setMode(null);
@@ -152,9 +176,10 @@ export function setupComposer(config, { notify, onSent, getViews }) {
     pendingVoice = recording;
     try {
       const replyTo = mode?.type === 'reply' ? mode.view.id : undefined;
-      await queue(await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: tagRow.active(), tagging: tagRow.tagging(), replyTo }));
-      pendingVoice = undefined; resetTags();
-      if (mode?.type === 'reply') setMode(null);
+      await queue(await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(), replyTo }));
+      pendingVoice = undefined;
+      if (mode?.type === 'reply' || mode?.type === 'continue') setMode(null);
+      resetTags();
     } catch (error) { notify(`Голосовое ждёт сохранения, нажмите «Отправить» ещё раз. ${error.message}`); }
     updateAction();
   }
@@ -213,14 +238,14 @@ export function setupComposer(config, { notify, onSent, getViews }) {
   $('#context-cancel').onclick = () => setMode(null);
   text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) setMode(null); });
 
-  text.addEventListener('input', () => { autosize(); updateAction(); tagRow.update(text.value); });
+  text.addEventListener('input', () => { autosize(); updateAction(); refreshSuggestion(); tagRow.update(text.value); });
   $('#new-tag-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const input = $('#new-tag');
     if (tagRow.addNew(input.value)) input.value = '';
     else notify('Метка — одно слово: буквы, цифры, «-» или «_»');
   });
-  text.addEventListener('focus', () => togglePanel(tagPanel, tagButton, false)); // the keyboard replaces open panels
+  text.addEventListener('focus', () => { togglePanel(tagPanel, tagButton, false); refreshSuggestion(); tagRow.render(); }); // the keyboard replaces open panels
   form.addEventListener('submit', (event) => { event.preventDefault(); sendDraft(); });
   tagButton.onclick = () => togglePanel(tagPanel, tagButton);
   attachButton.onclick = () => togglePanel(attachMenu, attachButton);
@@ -236,9 +261,10 @@ export function setupComposer(config, { notify, onSent, getViews }) {
 
   resetTags();
   return {
-    refreshTags: () => tagRow.update(text.value),
+    refreshTags: () => { refreshSuggestion(); tagRow.update(text.value); },
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
     reply: (view) => setMode({ type: 'reply', view }),
+    proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),
     queue,
     record: () => { locked = true; return startRecording(); },

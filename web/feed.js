@@ -29,6 +29,7 @@ export function setupFeed({ notify, onQueue, limits }) {
   let showArchive = false;
   let views = new Map(); // message id -> current view, for the action panel
   let viewList = []; // all current views, a new array per render (tag statistics key on it)
+  let visibleList = [];
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -52,14 +53,16 @@ export function setupFeed({ notify, onQueue, limits }) {
     views = new Map(projected.map((view) => [view.id, view]));
     viewList = projected;
     const visible = projected.filter((view) => !view.deleted && (showArchive || !view.archived));
+    visibleList = visible;
     onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
 
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
     const children = [];
     const chainOf = chains(visible);
-    const node = (view) => {
+    // The topic line goes once per bubble: on its first part.
+    const node = (view, first = true) => {
       const queuedEntry = pending.get(view.id);
-      const chain = chainOf.get(view.id);
+      const chain = first ? chainOf.get(view.id) : undefined;
       const signature = bubbleSignature(view, queuedEntry, chain);
       let cached = nodes.get(view.id);
       if (!cached || cached.signature !== signature) {
@@ -69,8 +72,10 @@ export function setupFeed({ notify, onQueue, limits }) {
       return cached.node;
     };
     let lastDay;
-    // Messages written in a row share one bubble; each keeps its own actions and history.
-    for (const group of bursts(visible, limits.burst_gap_min)) {
+    let lastTs = 0;
+    // A message and its continuations share one bubble; each keeps its own actions and history.
+    // Messages close in time only stand closer together (time alone is not a connection).
+    for (const group of bursts(visible)) {
       const date = new Date(group[0].event.ts);
       if (dayKey(date) !== lastDay) {
         lastDay = dayKey(date);
@@ -79,11 +84,17 @@ export function setupFeed({ notify, onQueue, limits }) {
         pill.textContent = dayLabel(date);
         children.push(pill);
       }
-      if (group.length === 1) { children.push(node(group[0])); continue; }
-      const burst = document.createElement('div');
-      burst.className = 'burst';
-      burst.append(...group.map(node));
-      children.push(burst);
+      const close = Date.parse(group[0].event.ts) - lastTs <= limits.burst_gap_min * 60000;
+      lastTs = Date.parse(group.at(-1).event.ts);
+      let item;
+      if (group.length === 1) item = node(group[0]);
+      else {
+        item = document.createElement('div');
+        item.className = 'burst';
+        item.append(...group.map((view, index) => node(view, index === 0)));
+      }
+      item.classList.toggle('close', close && children.at(-1)?.className !== 'date-pill');
+      children.push(item);
     }
     if (!visible.length) {
       const empty = document.createElement('div');
@@ -158,5 +169,7 @@ export function setupFeed({ notify, onQueue, limits }) {
 
   function setShowArchive(value) { showArchive = value; return render(); }
 
-  return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), views: () => viewList, scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
+  return { refresh, render, receive, jump, setShowArchive, view: (id) => views.get(id), views: () => viewList,
+    previous: (id) => visibleList[visibleList.findIndex((view) => view.id === id) - 1],
+    latest: () => visibleList.at(-1), scrollToBottom: () => { scroller.scrollTop = scroller.scrollHeight; } };
 }

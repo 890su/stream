@@ -5,7 +5,7 @@ const TAG = /^#[\p{L}0-9_-]+$/u;
 
 // The tag row above the composer: suggested (off), switched on by the owner, switched on automatically.
 // Remembers what the owner did with suggestions, which is saved with the message as payload.data.tagging.
-export function createTagRow({ dictionary, getViews, onChange }) {
+export function createTagRow({ dictionary, getViews, onChange, lead = () => [] }) {
   const row = document.querySelector('#tag-row');
   const options = document.querySelector('#tag-options');
   const owner = new Set(); // switched on by the owner (row, full list or new tag)
@@ -62,7 +62,7 @@ export function createTagRow({ dictionary, getViews, onChange }) {
     const autoOn = new Set(auto);
     // Switched-off automatic tags stay in the row, inactive, so one tap brings them back.
     shown = [...new Set([...off, ...suggestions.map((item) => item.tag)])].filter((tag) => !on.includes(tag));
-    row.replaceChildren(...on.map((tag) => chip(tag, autoOn.has(tag) ? 'auto' : 'on')), ...shown.map((tag) => chip(tag, 'suggest')));
+    row.replaceChildren(...lead(), ...on.map((tag) => chip(tag, autoOn.has(tag) ? 'auto' : 'on')), ...shown.map((tag) => chip(tag, 'suggest')));
     row.hidden = !row.childElementCount;
     // Full list behind the # button: dictionary and every tag used before.
     const all = [...new Set([...dictionary.tags.map((entry) => normalizeTag(entry.tag)), ...currentStats().keys(), ...on])].sort((a, b) => a.localeCompare(b, 'ru'));

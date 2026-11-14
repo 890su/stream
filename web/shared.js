@@ -1,4 +1,4 @@
-export async function makeEntry({ kind = 'text', text = '', url, files = [], source = 'app', duration, tags = [], replyTo, tagging }) {
+export async function makeEntry({ kind = 'text', text = '', url, files = [], source = 'app', duration, tags = [], replyTo, tagging, continuation }) {
   const media = [];
   const storedFiles = [];
   for (const blob of files) {
@@ -11,7 +11,7 @@ export async function makeEntry({ kind = 'text', text = '', url, files = [], sou
     event: {
       id: crypto.randomUUID(), schema_version: 1, source, author: 'me', ts: new Date().toISOString(), kind,
       ...(replyTo ? { reply_to: replyTo } : {}),
-      payload: { ...(text ? { text } : {}), ...(url ? { url } : {}), ...(media.length ? { media } : {}), ...(tags.length ? { tags } : {}), ...(tagging ? { data: { tagging } } : {}) },
+      payload: { ...(text ? { text } : {}), ...(url ? { url } : {}), ...(media.length ? { media } : {}), ...(tags.length ? { tags } : {}), ...(tagging || continuation ? { data: { ...(tagging ? { tagging } : {}), ...(continuation ? { continuation } : {}) } } : {}) },
     },
     files: storedFiles,
   };
@@ -26,11 +26,11 @@ export async function entryFromShare(form) {
 }
 
 // An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4).
-export function makeCorrection(targetId, op, { text, tags = [] } = {}) {
+export function makeCorrection(targetId, op, { text, tags = [], target } = {}) {
   return {
     event: {
       id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'correction',
-      payload: { ref: { type: 'event', id: targetId }, data: { op }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
+      payload: { ref: { type: 'event', id: targetId }, data: { op, ...(target ? { target } : {}) }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
     },
     files: [],
   };

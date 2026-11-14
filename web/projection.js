@@ -11,6 +11,8 @@ export function project(events, pendingIds = new Set()) {
     views.set(event.id, {
       id: event.id, event, text: event.payload?.text ?? '', tags: event.payload?.tags ?? [],
       edited: false, archived: false, deleted: false, history: [], pending: pendingIds.has(event.id), replyTo: null, replies: 0,
+      // The message this one continues (CONCEPT.md §2.5): the owner's choice at capture, changed later by link/unlink.
+      continues: event.payload?.data?.continuation?.on ? event.payload.data.continuation.target : null,
     });
   }
   for (const correction of corrections.sort(order)) {
@@ -28,6 +30,8 @@ export function project(events, pendingIds = new Set()) {
       case 'unarchive': view.archived = false; break;
       case 'delete': view.deleted = true; break;
       case 'restore': view.deleted = false; break;
+      case 'link': view.continues = correction.payload.data.target; break;
+      case 'unlink': view.continues = null; break;
       default: break;
     }
   }
@@ -51,12 +55,14 @@ export function snippet(view) {
   return kind === 'voice' ? 'Голосовое' : kind === 'photo' ? 'Фото' : kind === 'file' ? 'Файл' : 'Сообщение';
 }
 
-// Every message connected to `id` through replies (until topics exist, this is "the related messages").
+// Every message connected to `id` through replies and continuations (until topics exist, the "related" ones).
 export function related(views, id) {
   const byId = new Map(views.map((view) => [view.id, view]));
+  const parentOf = (view) => [view.event.reply_to, view.continues].find((target) => target && byId.has(target) && target !== view.id);
   const rootOf = (view) => {
     const seen = new Set();
-    while (view.event.reply_to && byId.has(view.event.reply_to) && !seen.has(view.id)) { seen.add(view.id); view = byId.get(view.event.reply_to); }
+    let parent;
+    while ((parent = parentOf(view)) && !seen.has(view.id)) { seen.add(view.id); view = byId.get(parent); }
     return view.id;
   };
   const start = byId.get(id);
@@ -72,23 +78,19 @@ export function versions(view) {
   return list.map((item, index) => ({ ...item, label: index === 0 ? (list.length === 1 ? 'Без правок' : 'Исходное') : index === list.length - 1 ? 'Текущая' : `Редакция ${index}` }));
 }
 
-const dayOf = (ts) => new Date(ts).toDateString();
-
-// Messages written one after another (pause up to `gapMinutes`, same day) are shown as one bubble.
-// A reply starts a new bubble: its quote belongs at the top.
-export function bursts(views, gapMinutes) {
+// One bubble = a message and the messages that continue it right after it. Time alone never joins messages:
+// several unrelated things are often written within a minute (decisions.md, 2026-11-14).
+export function bursts(views) {
   const groups = [];
   let previous;
   for (const view of views) {
-    const gap = previous ? Date.parse(view.event.ts) - Date.parse(previous.event.ts) : Infinity;
-    const joins = previous && gap >= 0 && gap <= gapMinutes * 60000 && dayOf(view.event.ts) === dayOf(previous.event.ts) && !view.replyTo;
-    if (joins) groups.at(-1).push(view); else groups.push([view]);
+    if (previous && view.continues === previous.id && !view.replyTo) groups.at(-1).push(view); else groups.push([view]);
     previous = view;
   }
   return groups;
 }
 
-// For every message in a reply chain of two or more: the chain, its title and the message's position in it.
+// For every message in a chain of two or more (replies and continuations): the chain, its title and the message's position in it.
 export function chains(views) {
   const result = new Map();
   for (const view of views) {
