@@ -396,3 +396,9 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row) { display: none 
 .drawer-archive { align-self: center; color: var(--muted); }
 .drawer-section { margin: 18px 6px 8px; font-size: 14px; color: var(--muted); font-weight: 500; }
 .drawer-empty { margin: 10px 6px; font-size: 14px; color: var(--muted); }
+
+/* Horizontal swipes belong to the drawer (open on the feed, close on the drawer or backdrop). Buttons default to
+   touch-action: manipulation, which lets the browser claim a sideways pan and cancel the gesture; inside the feed
+   and the drawer only vertical scrolling is left to the browser (pan-y also removes the double-tap delay). */
+#messages *, .drawer, .drawer * { touch-action: pan-y; }
+.drawer-backdrop { touch-action: none; }
