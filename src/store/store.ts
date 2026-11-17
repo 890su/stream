@@ -7,6 +7,10 @@ import { checkCorrectionShape, checkCorrectionTarget, linkTargets, checkLinkTarg
 import { checkTagging } from '../contracts/tagging.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { checkPhone } from '../contracts/phone.ts';
+import { checkTelegram } from '../contracts/telegram.ts';
+import { ActionStore } from './actions.ts';
+import { StatusStore } from './status.ts';
+import { TelegramQueries } from './telegram.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
 
@@ -30,6 +34,9 @@ function fromRow(row: EventRow): JournalEvent {
 export class JournalStore {
   #db: DatabaseSync;
   #mediaDirectory: string;
+  readonly actions: ActionStore;
+  readonly status: StatusStore;
+  readonly telegram: TelegramQueries;
 
   constructor(directory: string) {
     mkdirSync(directory, { recursive: true });
@@ -37,6 +44,9 @@ export class JournalStore {
     mkdirSync(this.#mediaDirectory, { recursive: true });
     this.#db = new DatabaseSync(join(directory, 'stream.db'));
     this.#db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
+    this.actions = new ActionStore(this.#db);
+    this.status = new StatusStore(this.#db);
+    this.telegram = new TelegramQueries(this.#db);
   }
 
   close(): void { this.#db.close(); }
@@ -59,6 +69,7 @@ export class JournalStore {
     checkCorrectionShape(input);
     checkTagging(input);
     checkPhone(input);
+    checkTelegram(input);
     // Server time is excluded, and omitted nullable fields have one canonical form.
     const { received_at, ...body } = input;
     const normalized = { ...body, reply_to: input.reply_to ?? null, topic_hint: input.topic_hint ?? null };
@@ -86,6 +97,7 @@ export class JournalStore {
         (id, schema_version, source, author, ts, received_at, kind, payload, reply_to, topic_hint, body_hash)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(input.id, input.schema_version, input.source, input.author,
         input.ts, timestamp, input.kind, JSON.stringify(input.payload), normalized.reply_to, normalized.topic_hint, hash);
+      this.actions.fromEvent(input, timestamp);
       this.#db.exec('COMMIT');
       return { created: true, event: { ...normalized, received_at: timestamp } };
     } catch (error) { this.#db.exec('ROLLBACK'); throw error; }

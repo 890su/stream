@@ -2,7 +2,7 @@ import { HttpError } from '../server/errors.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Owner actions on a message are new journal events (CONCEPT.md §2.4); the original never changes.
-export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive'] as const;
+export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive', 'untrack', 'track'] as const;
 
 // Shape rules that need no database. `target` is checked separately, inside the write transaction.
 export function checkCorrectionShape(event: JournalEvent): void {
@@ -45,6 +45,9 @@ export function checkCorrectionTarget(event: JournalEvent, target: JournalEvent 
   if (event.kind !== 'correction') return;
   if (!target) throw new HttpError(422, 'Исходное сообщение ещё не принято. Правка будет отправлена позже');
   if (target.kind === 'correction') throw new HttpError(400, 'Правку нельзя править');
+  // "Не отслеживать" / back (CONCEPT.md §8.2) name a chat through one of its messages.
+  const op = event.payload.data?.op;
+  if ((op === 'untrack' || op === 'track') && !target.payload.data?.telegram) throw new HttpError(400, 'Не отслеживать можно только чат мессенджера');
   const empty = event.payload.data?.op === 'edit' && !event.payload.text?.trim();
   // A photo, voice or file may lose its caption; a text message would become nothing.
   if (empty && target.kind === 'text') throw new HttpError(400, 'Текст сообщения не может быть пустым. Чтобы убрать сообщение, удалите его');

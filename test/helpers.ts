@@ -10,6 +10,7 @@ import type { JournalEvent } from '../src/contracts/validate.ts';
 
 export const token = 'test-owner-token-for-local-tests-only';
 export const phoneToken = 'test-phone-token-for-local-tests-only';
+export const gatewayToken = 'test-gateway-token-by-for-local-tests';
 export const event = (overrides: Partial<JournalEvent> = {}): JournalEvent => ({
   id: randomUUID(), schema_version: 1, source: 'app', author: 'me',
   ts: '2026-11-11T10:00:00.000Z', kind: 'text', payload: { text: 'Проверка' }, ...overrides,
@@ -24,7 +25,7 @@ export function temporaryStore() {
 // `phone: ''` starts a server without a phone token.
 export async function fixture({ phone = phoneToken }: { phone?: string } = {}) {
   const storage = temporaryStore();
-  const server = createApp({ store: storage.store, ownerToken: token, phoneToken: phone || undefined });
+  const server = createApp({ store: storage.store, ownerToken: token, phoneToken: phone || undefined, gatewayTokens: { by: gatewayToken } });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -40,6 +41,12 @@ export async function fixture({ phone = phoneToken }: { phone?: string } = {}) {
       const headers = new Headers({ Authorization: authorization });
       if (body !== undefined) headers.set('Content-Type', 'application/json');
       return fetch(base + path, { method: body === undefined ? 'GET' : 'POST', headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
+    },
+    // A request as the Telegram gateway of account `by` makes it.
+    gatewayRequest(path: string, body?: unknown, method?: string, authorization = `Bearer ${gatewayToken}`) {
+      const headers = new Headers({ Authorization: authorization });
+      if (body !== undefined) headers.set('Content-Type', 'application/json');
+      return fetch(`${base}/api/gateway/telegram/by/${path}`, { method: method ?? (body === undefined ? 'GET' : 'POST'), headers, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual' });
     },
     async stop() { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); storage.cleanup(); },
   };

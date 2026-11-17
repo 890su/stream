@@ -8,19 +8,26 @@ import { events } from './events.ts';
 import { media } from './media.ts';
 import { share } from './share.ts';
 import { phone } from './phone.ts';
+import { gateway } from './gateway.ts';
+import { system, watchSilence } from './system.ts';
 import { staticFile } from './static.ts';
 import { LiveFeed } from './live.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
 // phoneToken (optional) opens only /api/phone/*: the Android companion never holds the owner token.
-export function createApp({ store, ownerToken, phoneToken }: { store: JournalStore; ownerToken: string; phoneToken?: string }) {
+// gatewayTokens (optional) — one per Telegram account; each opens only /api/gateway/telegram/<account>/*.
+export function createApp({ store, ownerToken, phoneToken, gatewayTokens = {} }: { store: JournalStore; ownerToken: string; phoneToken?: string; gatewayTokens?: Record<string, string> }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   const expected = bearer(ownerToken);
   const expectedPhone = phoneToken === undefined ? undefined : bearer(phoneToken);
+  for (const [account, value] of Object.entries(gatewayTokens)) {
+    if (value.length < captureConfig.min_owner_token_length) throw new Error(`Токен шлюза ${account} должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
+  }
+  const expectedGateway = new Map(Object.entries(gatewayTokens).map(([account, value]) => [account, bearer(value)]));
   const live = new LiveFeed();
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
@@ -31,8 +38,13 @@ export function createApp({ store, ownerToken, phoneToken }: { store: JournalSto
         const isPhonePath = url.pathname.startsWith('/api/phone/');
         const owner = timingSafeEqual(expected, actual);
         const phoneAllowed = isPhonePath && expectedPhone !== undefined && timingSafeEqual(expectedPhone, actual);
-        if (!owner && !phoneAllowed) { response.setHeader('WWW-Authenticate', 'Bearer'); throw new HttpError(401, isPhonePath ? 'Проверьте токен телефона' : 'Введите токен владельца в настройках'); }
+        const gatewayPath = /^\/api\/gateway\/telegram\/([a-z]{2,8})\/(.+)$/.exec(url.pathname);
+        const gatewayToken = gatewayPath && expectedGateway.get(gatewayPath[1]!);
+        const gatewayAllowed = Boolean(gatewayToken && timingSafeEqual(gatewayToken, actual));
+        if (!owner && !phoneAllowed && !gatewayAllowed) { response.setHeader('WWW-Authenticate', 'Bearer'); throw new HttpError(401, isPhonePath ? 'Проверьте токен телефона' : gatewayPath ? 'Проверьте токен шлюза' : 'Введите токен владельца в настройках'); }
         if (isPhonePath) return await phone(request, response, url.pathname.slice('/api/phone/'.length), store, live);
+        if (gatewayPath) return await gateway(request, response, gatewayPath[1]!, gatewayPath[2]!, store, live);
+        if (url.pathname === '/api/system' || url.pathname.startsWith('/api/actions/')) return await system(request, response, url.pathname.slice('/api/'.length), store, live);
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
         if (url.pathname === '/api/events') return await events(request, response, url, store, live);
         if (url.pathname.startsWith('/api/media/')) return await media(request, response, url.pathname.slice('/api/media/'.length), store);
@@ -51,4 +63,7 @@ export function createApp({ store, ownerToken, phoneToken }: { store: JournalSto
       json(response, status, { error: status === 500 ? 'Ошибка сервера. Запись останется в очереди' : (error as Error).message });
     }
   });
+  const stopWatching = watchSilence(store, live);
+  server.on('close', stopWatching);
+  return server;
 }

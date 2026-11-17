@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "accounts": {
+    "by": { "title": "Telegram BY", "connector": "telegram_by", "sphere": "work_by", "timezone": "Europe/Minsk" },
+    "pl": { "title": "Telegram PL", "connector": "telegram_pl", "sphere": "work_pl", "timezone": "Europe/Warsaw" }
+  },
+  "folder": "Stream",
+  "media_max_bytes": 20971520,
+  "backfill_max_per_chat": 300,
+  "pulse_every_s": 60,
+  "silent_after_s": 300,
+  "actions_wait_s": 25,
+  "config_poll_s": 60
+}

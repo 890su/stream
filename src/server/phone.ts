@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createHash } from 'node:crypto';
+import { nameId } from '../ids.ts';
 import type { JournalStore } from '../store/store.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { captureConfig } from '../config.ts';
@@ -15,13 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CALL_DIRECTIONS = ['in', 'out', 'missed', 'rejected', 'unknown'];
 const SMS_DIRECTIONS = ['in', 'out'];
 
-export function phoneEventId(key: string): string {
-  const bytes = createHash('sha256').update(key, 'utf8').digest().subarray(0, 16);
-  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
+export const phoneEventId = nameId;
 
 type Body = Record<string, unknown>;
 
@@ -60,7 +54,7 @@ function phoneEvent(id: string, kind: string, ts: number, payload: JournalEvent[
 
 function save(response: ServerResponse, store: JournalStore, live: LiveFeed, event: JournalEvent): void {
   const result = store.appendEvent(event);
-  if (result.created) live.publish(result.event);
+  if (result.created) { live.publish(result.event); store.status.seen('android_phone', result.event.received_at!); }
   json(response, result.created ? 201 : 200, { id: result.event.id });
 }
 
