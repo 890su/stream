@@ -75,9 +75,11 @@ export class TelegramBot {
   }
 
   #note(text: string, state: SourceState, key: string) {
-    const at = new Date().toISOString();
+    // One note per key: Telegram repeats a connection update, the note is written once.
+    const id = nameId(`tg-note|${this.account}|${key}`);
+    if (this.#store.getEvent(id)) return;
     const result = this.#store.appendEvent({
-      id: nameId(`tg-note|${this.account}|${key}`), schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'system',
+      id, schema_version: 1, source: 'system', author: 'system', ts: new Date().toISOString(), kind: 'system',
       payload: { text: `${sourceTitle(this.connector)}: ${text}`, data: { system: { source: this.connector, state } } },
     });
     if (result.created) this.#live.publish(result.event);
@@ -155,7 +157,10 @@ export class TelegramBot {
     const action = this.#store.actions.take(this.connector);
     if (!action) return false;
     const params = action.params as { chat_id: string; text: string; reply_to_message_id?: number };
-    const fail = (error: string) => actionChanged(this.#store, this.#live, this.#store.actions.finish(action.id, this.connector, 'failed', null, error).action);
+    const fail = (error: string, cause?: unknown) => {
+      console.log(`Telegram ${this.account}: reply ${action.id} failed — ${error}${cause instanceof Error ? ` (${cause.message})` : ''}`);
+      return actionChanged(this.#store, this.#live, this.#store.actions.finish(action.id, this.connector, 'failed', null, error).action);
+    };
     const connection = this.#store.connections.active(this.account);
     if (params.chat_id.startsWith('-')) { fail('В группе ответ из ленты не отправляется: бот писал бы от своего имени — ответьте в Telegram'); return true; }
     if (!connection) { fail('Бот не подключён к аккаунту — экран «Система»'); return true; }
@@ -168,9 +173,10 @@ export class TelegramBot {
         ...(params.reply_to_message_id ? { reply_parameters: { message_id: params.reply_to_message_id, allow_sending_without_reply: true } } : {}),
       }, 30_000);
     } catch (error) {
-      fail(error instanceof TelegramError ? sendError(error) : 'Нет ответа от Telegram — проверьте в чате, ушло ли сообщение');
+      fail(error instanceof TelegramError ? sendError(error) : 'Нет ответа от Telegram — проверьте в чате, ушло ли сообщение', error);
       return true;
     }
+    console.log(`Telegram ${this.account}: reply ${action.id} sent`);
     actionChanged(this.#store, this.#live, this.#store.actions.finish(action.id, this.connector, 'done', `${params.chat_id}:${sent.message_id}`, null).action);
     return true;
   }
