@@ -8,10 +8,12 @@ import { checkTagging } from '../contracts/tagging.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { checkPhone } from '../contracts/phone.ts';
 import { checkTelegram } from '../contracts/telegram.ts';
+import { checkTask } from '../contracts/task.ts';
 import { ActionStore } from './actions.ts';
 import { StatusStore } from './status.ts';
 import { TelegramQueries } from './telegram.ts';
 import { ConnectionStore } from './connections.ts';
+import { TriageStore } from './triage.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
 
@@ -39,6 +41,7 @@ export class JournalStore {
   readonly status: StatusStore;
   readonly telegram: TelegramQueries;
   readonly connections: ConnectionStore;
+  readonly triage: TriageStore;
 
   constructor(directory: string) {
     mkdirSync(directory, { recursive: true });
@@ -50,6 +53,7 @@ export class JournalStore {
     this.status = new StatusStore(this.#db);
     this.telegram = new TelegramQueries(this.#db);
     this.connections = new ConnectionStore(this.#db);
+    this.triage = new TriageStore(this.#db);
   }
 
   close(): void { this.#db.close(); }
@@ -73,6 +77,7 @@ export class JournalStore {
     checkTagging(input);
     checkPhone(input);
     checkTelegram(input);
+    checkTask(input);
     // Server time is excluded, and omitted nullable fields have one canonical form.
     const { received_at, ...body } = input;
     const normalized = { ...body, reply_to: input.reply_to ?? null, topic_hint: input.topic_hint ?? null };

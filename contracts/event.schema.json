@@ -462,6 +462,84 @@
                   ]
                 }
               }
+            },
+            "task": {
+              "type": "object",
+              "description": "On kind: task_change (payload.ref → {type: task, id}). Creates or changes a task (CONCEPT.md 2.8); the task is the fold of these events.",
+              "required": [
+                "op"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "op": {
+                  "enum": [
+                    "create",
+                    "update"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "status": {
+                  "enum": [
+                    "inbox",
+                    "todo",
+                    "doing",
+                    "waiting",
+                    "done",
+                    "cancelled"
+                  ]
+                },
+                "assignee": {
+                  "enum": [
+                    "me",
+                    "ai",
+                    "system",
+                    "person"
+                  ]
+                },
+                "person": {
+                  "type": "string",
+                  "description": "Who, when assignee is person."
+                },
+                "template": {
+                  "type": "string"
+                },
+                "due": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "add": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "description": "Messages that belong to the task from now on."
+                },
+                "remove": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "description": "Messages that no longer belong to it."
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "note": {
+                  "type": "string"
+                },
+                "processor": {
+                  "type": "string",
+                  "description": "Name and version of the handler that made the change (absent for the owner)."
+                }
+              }
             }
           },
           "description": "Kind-specific structured data, e.g. task_change {status, due} or correction {fields}."

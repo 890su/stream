@@ -16,7 +16,9 @@ const phoneToken = process.env.STREAM_PHONE_TOKEN || undefined;
 const tokens = Object.fromEntries(Object.keys(telegramConfig.accounts)
   .map((account) => [account, process.env[`STREAM_TG_${account.toUpperCase()}_BOT_TOKEN`] ?? ''] as const).filter(([, value]) => value));
 // TELEGRAM_API_BASE — only for local tests against a fake Bot API.
-const server = createApp({ store, ownerToken, phoneToken, telegram: { tokens, apiBase: process.env.TELEGRAM_API_BASE || undefined } });
+// Task triage (CONCEPT.md §2.8): the AI planner is connected once the Anthropic SDK is installed.
+const triage = { planner: null, reason: 'ИИ не подключён: нужен ключ ANTHROPIC_API_KEY и библиотека @anthropic-ai/sdk' };
+const server = createApp({ store, ownerToken, phoneToken, telegram: { tokens, apiBase: process.env.TELEGRAM_API_BASE || undefined }, triage });
 // Bind to loopback by default; the container sets HOST=0.0.0.0 and Docker publishes only on host loopback.
 const host = process.env.HOST || '127.0.0.1';
 server.listen(port, host, () => console.log(`Stream http://${host}:${port}`));

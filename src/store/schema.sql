@@ -87,3 +87,17 @@ CREATE TABLE IF NOT EXISTS tg_groups (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (account, chat_id)
 );
+
+-- Messages already looked at by the task triage (CONCEPT.md §2.8): derived state, so a rerun is possible.
+CREATE TABLE IF NOT EXISTS triaged (
+  event_id TEXT PRIMARY KEY,
+  run_at TEXT NOT NULL,
+  tasks INTEGER NOT NULL
+);
+-- AI spending per month against the limit in registry/tasks.json.
+CREATE TABLE IF NOT EXISTS ai_usage (
+  month TEXT PRIMARY KEY,
+  input_tokens INTEGER NOT NULL,
+  output_tokens INTEGER NOT NULL,
+  cost_usd REAL NOT NULL
+);

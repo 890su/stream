@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "quiet_s": 60,
+  "lookback_h": 24,
+  "max_batch": 40,
+  "open_tasks_in_context": 40,
+  "low_confidence": 0.6,
+  "ai": {
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "effort": "low",
+    "max_tokens": 4000,
+    "monthly_budget_usd": 10,
+    "price_per_mtok": { "input": 0.1, "output": 0.5 },
+    "processor": "triage-ai-v1"
+  },
+  "assignees": ["me", "ai", "system", "person"],
+  "templates": [
+    { "name": "diary", "tag": "#дневник", "title": "Записать в дневник", "assignee": "ai",
+      "instruction": "Записать дословно, исправив только орфографию и пунктуацию; смысл и слова не менять." },
+    { "name": "plan", "tag": "#план", "title": "Добавить в план проекта", "assignee": "ai",
+      "instruction": "Сформулировать пункт плана и определить проект." },
+    { "name": "lead", "tag": "#заявка", "title": "Заявка: назначить исполнителя", "assignee": "me",
+      "instruction": "Заявка клиента: что сделать, где, когда, контакт. Исполнитель — владелец, пока не указан другой человек." },
+    { "name": "money", "tag": "#расход", "title": "Учесть деньги", "assignee": "ai",
+      "instruction": "Чек, расход, приход, наличка: классифицировать (сумма, валюта, категория, клиент) и записать в учёт." },
+    { "name": "callback", "tag": "#перезвонить", "title": "Перезвонить", "assignee": "me",
+      "instruction": "Кому и по какому поводу перезвонить." },
+    { "name": "todo", "tag": "#задача", "title": "Сделать", "assignee": "me",
+      "instruction": "Обычное дело владельца." }
+  ]
+}

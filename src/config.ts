@@ -19,3 +19,11 @@ export const telegramConfig = JSON.parse(readFileSync(new URL('../registry/teleg
   accounts: Record<string, { title: string; connector: string; sphere: string; timezone: string }>;
   media_max_bytes: number; silent_after_s: number; reply_window_h: number;
 };
+
+// Task triage (CONCEPT.md §2.8): quiet window, AI model and budget, task templates.
+export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.json', import.meta.url), 'utf8')) as {
+  version: number; quiet_s: number; lookback_h: number; max_batch: number; open_tasks_in_context: number; low_confidence: number;
+  ai: { provider: string; model: string; effort: string; max_tokens: number; monthly_budget_usd: number; price_per_mtok: { input: number; output: number }; processor: string };
+  assignees: string[];
+  templates: Array<{ name: string; tag: string; title: string; assignee: string; instruction: string }>;
+};
