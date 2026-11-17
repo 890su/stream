@@ -6,6 +6,7 @@ import { validateEvent } from '../contracts/validate.ts';
 import { checkCorrectionShape, checkCorrectionTarget, linkTargets, checkLinkTarget } from '../contracts/correction.ts';
 import { checkTagging } from '../contracts/tagging.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
+import { checkPhone } from '../contracts/phone.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
 
@@ -57,6 +58,7 @@ export class JournalStore {
     validateEvent(input);
     checkCorrectionShape(input);
     checkTagging(input);
+    checkPhone(input);
     // Server time is excluded, and omitted nullable fields have one canonical form.
     const { received_at, ...body } = input;
     const normalized = { ...body, reply_to: input.reply_to ?? null, topic_hint: input.topic_hint ?? null };

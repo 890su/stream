@@ -47,7 +47,9 @@
         "task_change",
         "proposal",
         "action_result",
-        "system"
+        "system",
+        "call",
+        "sms"
       ]
     },
     "payload": {
@@ -87,6 +89,33 @@
         "data": {
           "type": "object",
           "properties": {
+            "call": {
+              "type": "object",
+              "description": "A phone call from the Android companion (CONCEPT.md 8.1). Only on kind: call.",
+              "required": ["direction", "started_at"],
+              "additionalProperties": false,
+              "properties": {
+                "direction": { "enum": ["in", "out", "missed", "rejected", "unknown"] },
+                "number": { "type": "string", "description": "As the phone gave it; empty for a hidden number." },
+                "name": { "type": "string", "description": "Name from the phone's contacts, if any." },
+                "started_at": { "type": "string", "format": "date-time" },
+                "duration_s": { "type": "integer", "minimum": 0 },
+                "sim": { "type": "string" }
+              }
+            },
+            "sms": {
+              "type": "object",
+              "description": "An SMS from the Android companion (CONCEPT.md 8.1); its text is payload.text. Only on kind: sms.",
+              "required": ["direction", "number", "sent_at"],
+              "additionalProperties": false,
+              "properties": {
+                "direction": { "enum": ["in", "out"] },
+                "number": { "type": "string" },
+                "name": { "type": "string" },
+                "sent_at": { "type": "string", "format": "date-time" },
+                "sim": { "type": "string" }
+              }
+            },
             "continuation": {
               "type": "object",
               "description": "Owner's answer to the 'continuation' suggestion at capture (CONCEPT.md 2.5): does this message continue `target`? Kept when declined too, as training data.",
