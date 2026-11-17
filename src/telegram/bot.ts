@@ -98,6 +98,8 @@ export class TelegramBot {
   }
 
   async handle(update: Record<string, any>): Promise<void> {
+    // Diagnostics without content: the update type only (CONCEPT.md §8.2 — messages are personal data).
+    console.log(`Telegram ${this.account}: update ${Object.keys(update).filter((key) => key !== 'update_id').join(',')}`);
     const connections = this.#store.connections;
     const owners = connections.trusted(this.account);
     if (update.business_connection) {
@@ -111,7 +113,8 @@ export class TelegramBot {
     }
     const business = update.business_message ?? update.edited_business_message;
     if (business) {
-      if (!connections.get(business.business_connection_id)?.trusted) return; // someone else's account
+      const known = connections.get(business.business_connection_id);
+      if (!known?.trusted) { console.log(`Telegram ${this.account}: message skipped — connection ${known ? 'not trusted' : 'unknown'}`); return; }
       const item = await toItem(business, owners, this.#files(), Boolean(update.edited_business_message));
       if (item) ingest(this.account, [item], this.#store, this.#live);
       return;
@@ -192,6 +195,7 @@ export class TelegramBot {
         if (!this.#username) {
           const me = await this.call('getMe');
           this.#username = me.username;
+          console.log(`Telegram ${this.account}: @${me.username} polling, business ${me.can_connect_to_business ? 'on' : 'off'}`);
           if (!me.can_connect_to_business) { this.#health('error', `включите Secretary Mode (бывший Business Mode) у @${me.username} в @BotFather`); await this.#sleep(300_000); this.#username = null; continue; }
         }
         await this.#pollOnce();
