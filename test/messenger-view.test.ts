@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { project, sourceKey, chatOf } from '../web/projection.js';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { messengerLabel, setAccounts, deliveryText } from '../web/tgbubble.js';
 
 // Telegram messages in the feed (CONCEPT.md §8.2). Names are made up.
