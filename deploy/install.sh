@@ -46,6 +46,16 @@ if ! grep -q '^STREAM_PHONE_TOKEN=' "$ENV_FILE"; then
   echo "STREAM_PHONE_TOKEN=$(openssl rand -hex 32)" >> "$ENV_FILE"
   echo "Added a phone token to $ENV_FILE (read it with: sudo grep PHONE $ENV_FILE)"
 fi
+# Telegram gateway tokens (each opens only /api/gateway/telegram/<account>/*) and their state folders.
+for ACCOUNT in by pl; do
+  KEY="STREAM_TG_$(echo "$ACCOUNT" | tr a-z A-Z)_TOKEN"
+  if ! grep -q "^$KEY=" "$ENV_FILE"; then
+    echo "$KEY=$(openssl rand -hex 32)" >> "$ENV_FILE"
+    echo "Added $KEY to $ENV_FILE"
+  fi
+  install -d -m 700 -o stream -g stream "$ROOT/tg" "$ROOT/tg/$ACCOUNT"
+done
+grep -q '^TG_API_ID=' "$ENV_FILE" || echo "Telegram: add TG_API_ID and TG_API_HASH to $ENV_FILE, then log in (deploy/TELEGRAM.md)"
 chmod 600 "$ENV_FILE"
 ln -sfn "$ENV_FILE" "$APP/deploy/.env"   # compose reads variables from the project directory
 
