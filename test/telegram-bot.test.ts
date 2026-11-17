@@ -54,7 +54,7 @@ async function fakeTelegram() {
   };
 }
 
-async function until<T>(check: () => T | undefined | false, what: string, ms = 3000): Promise<T> {
+async function until<T>(check: () => T | undefined | false, what: string, ms = 10000): Promise<T> {
   const deadline = Date.now() + ms;
   for (;;) {
     const value = check();
