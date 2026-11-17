@@ -9,8 +9,13 @@
 В Telegram откройте @BotFather (с любого своего аккаунта):
 
 1. `/newbot` → имя `Stream BY` → имя пользователя, например `что-то_by_bot` → BotFather пришлёт **токен**.
-2. `/mybots` → этот бот → **Bot Settings → Business Mode → Turn on**: без этого бота нельзя подключить к аккаунту.
-3. Там же **Bot Settings → Group Privacy → Turn off**: иначе в группах бот видит только команды, а не всю переписку.
+2. Настройки бота (Mode Settings):
+   - **Secretary Mode — вкл.** (раньше называлось Business Mode): без этого бота нельзя подключить к аккаунту.
+   - **Allow Groups — вкл.**, **Group Privacy — выкл.**: иначе в группах бот видит только команды и ответы ему.
+   - Group Admin Rights и Channel Admin Rights — выкл. (0/13): права администратора боту не нужны.
+   - Остальное выключено: Inline, Bot Management, Guest Chat, Guard, Bot to Bot, Threaded Mode.
+   - Restrict bot usage — выкл. (чужие подключения Stream и так не принимает).
+3. Токен: в BotFather «API Token» (или `/token`).
 4. То же для `Stream PL`.
 
 Токен — секрет: не пересылайте его в чаты и не кладите в файлы проекта.
@@ -83,7 +88,7 @@ cd /srv/stream/app/deploy && sudo docker compose up -d
 ## Если что-то не так
 
 - «токен бота не принят» — проверить токен в `/srv/stream/.env`, перезапустить Stream.
-- «включите Business Mode у @…» — шаг 1.2.
+- «включите Secretary Mode у @…» — шаг 1.2.
 - В группе бот ничего не пишет в ленту — проверить Group Privacy (шаг 1.3): после смены настройки удалите
   бота из группы и добавьте снова.
 - Журнал сервера: `cd /srv/stream/app/deploy && sudo docker compose logs --tail 100 stream`.

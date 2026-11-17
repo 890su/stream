@@ -192,7 +192,7 @@ export class TelegramBot {
         if (!this.#username) {
           const me = await this.call('getMe');
           this.#username = me.username;
-          if (!me.can_connect_to_business) { this.#health('error', `включите Business Mode у @${me.username} в @BotFather`); await this.#sleep(300_000); this.#username = null; continue; }
+          if (!me.can_connect_to_business) { this.#health('error', `включите Secretary Mode (бывший Business Mode) у @${me.username} в @BotFather`); await this.#sleep(300_000); this.#username = null; continue; }
         }
         await this.#pollOnce();
         delay = 5_000;
