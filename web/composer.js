@@ -3,12 +3,13 @@ import { snippet } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow } from './tagrow.js';
+import { accountTitle } from './tgbubble.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent, getViews, onPickRequest }) {
+export function setupComposer(config, { notify, onSent, getViews, onPickRequest, onChatClose }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
@@ -55,12 +56,14 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   let pressedAt = 0;
   let locked = false;
   let busy = false;
-  let mode = null; // null, or { type: 'reply' | 'edit', view } — a message the next send refers to
+  let mode = null; // null, or { type: 'reply' | 'edit' | 'continue', view }, or { type: 'outbound', chat, view? }
+  // While one messenger chat is shown (chat bar), the composer writes to that chat by default (CONCEPT.md §8.2).
+  let chatDefault = null;
 
   const hasDraft = () => Boolean(text.value.trim() || files.length);
 
   function updateAction() {
-    const send = hasDraft() || recorder.active() || pendingVoice || mode?.type === 'edit';
+    const send = hasDraft() || recorder.active() || pendingVoice || mode?.type === 'edit' || mode?.type === 'outbound';
     action.dataset.mode = send ? 'send' : 'voice';
     action.setAttribute('aria-label', recorder.active() ? 'Отправить голосовое' : send ? 'Отправить' : 'Голосовое сообщение');
     action.classList.toggle('recording', recorder.active());
@@ -126,17 +129,43 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     contextBar.classList.toggle('reply', mode?.type === 'reply');
     contextBar.classList.toggle('edit', mode?.type === 'edit');
     contextBar.classList.toggle('continue', mode?.type === 'continue');
-    attachButton.hidden = mode?.type === 'edit'; // photos and files are not edited, only text and tags
-    if (mode) {
+    contextBar.classList.toggle('outbound', mode?.type === 'outbound');
+    // Photos and files are not edited; replies to Telegram are text only for now.
+    attachButton.hidden = mode?.type === 'edit' || mode?.type === 'outbound';
+    if (mode?.type === 'outbound') {
+      $('#context-title').textContent = `→ ${accountTitle(mode.chat.account)}`;
+      $('#context-snippet').textContent = mode.view ? `${mode.chat.title}: ${snippet(mode.view)}` : mode.chat.title;
+    } else if (mode) {
       $('#context-title').textContent = { edit: 'Редактирование', reply: 'Ответ', continue: 'Продолжение' }[mode.type];
       $('#context-snippet').textContent = snippet(mode.view);
     }
+    if (mode?.type === 'outbound') files = [];
     if (mode?.type === 'edit') {
       text.value = mode.view.text; files = [];
       resetTags(mode.view.tags);
     } else if (leavingEdit) { text.value = ''; resetTags(); } else resetTags(tagRow.active());
     autosize(); renderDraft();
     if (mode) text.focus();
+    updateAction();
+  }
+
+  // What a reply to Telegram carries: the chat, and the message it answers when there is one in that chat.
+  function outbound() {
+    const { chat, view } = mode;
+    const answered = view?.event.payload?.data?.telegram;
+    return {
+      connector: config.telegram?.accounts?.[chat.account]?.connector ?? `telegram_${chat.account}`, chat_id: chat.chat_id, chat_title: chat.title,
+      ...(answered && answered.chat_id === chat.chat_id ? { reply_to_message_id: answered.message_id } : {}),
+    };
+  }
+
+  async function sendOutbound() {
+    const message = text.value.trim();
+    if (!message) { notify('Напишите текст ответа: в Telegram уходит только текст'); return; }
+    await queue(await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), outbound: outbound(), replyTo: mode.view?.id }));
+    text.value = '';
+    setMode(chatDefault ? { type: 'outbound', chat: chatDefault } : null);
+    autosize(); resetTags(); togglePanel(tagPanel, tagButton, false);
   }
 
   async function sendEdit() {
@@ -155,6 +184,12 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     if (mode?.type === 'edit') {
       busy = true;
       try { await sendEdit(); } catch (error) { notify(`Правка не сохранена. ${error.message}`); }
+      finally { busy = false; updateAction(); }
+      return;
+    }
+    if (mode?.type === 'outbound') {
+      busy = true;
+      try { await sendOutbound(); } catch (error) { notify(`Ответ не сохранён. ${error.message}`); }
       finally { busy = false; updateAction(); }
       return;
     }
@@ -236,7 +271,11 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     }
   });
   $('#rec-cancel').onclick = () => finishRecording(false);
-  $('#context-cancel').onclick = () => setMode(null);
+  // In a chat view × on the chat line closes the chat; × on a reply returns to writing into the chat.
+  $('#context-cancel').onclick = () => {
+    if (mode?.type === 'outbound' && !mode.view && chatDefault) onChatClose?.();
+    else setMode(chatDefault ? { type: 'outbound', chat: chatDefault } : null);
+  };
   text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) setMode(null); });
 
   text.addEventListener('input', () => { autosize(); updateAction(); tagRow.update(text.value); });
@@ -266,6 +305,8 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     selectionTags: (state) => { selection = state; tagRow.update(selection ? '' : text.value); },
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
     reply: (view) => setMode({ type: 'reply', view }),
+    outbound: (chat, view) => setMode({ type: 'outbound', chat, view }),
+    chat: (chat) => { chatDefault = chat; setMode(chat ? { type: 'outbound', chat } : null); },
     proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),
     enterTopic: (state) => { topic = state; resetTags(tagRow.active()); text.placeholder = 'Сообщение в тему'; },

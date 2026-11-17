@@ -106,6 +106,11 @@ sudo rm /etc/systemd/system/stream-backup.{service,timer}
 
 Сборка, установка и настройка — `deploy/PHONE.md`. Токен телефона: `sudo grep PHONE /srv/stream/.env`.
 
+## Telegram BY и PL
+
+`install.sh` ставит контейнеры шлюзов `tg-by` и `tg-pl` и дописывает их токены в `.env`. `api_id` и вход в
+аккаунты — владелец, по `deploy/TELEGRAM.md`.
+
 ## Проверка владельцем на телефоне
 
 - [ ] Установка PWA и запуск по HTTPS.

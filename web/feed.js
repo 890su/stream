@@ -1,6 +1,6 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
-import { project, bursts, chains } from './projection.js';
+import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
 
 const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
 const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -44,6 +44,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   let viewList = []; // all current views, a new array per render (tag statistics key on it)
   let visibleList = [];
   let tagFilter = new Set(); // feed shows messages carrying every selected tag (drawer.js)
+  let sourceFilter = null; // 'me' | 'telegram:by' | 'phone' | 'system'… (drawer.js)
+  let chatFilter = null; // one messenger chat { key, account, chat_id, title } (app.js, chat bar)
   let topicList = []; // all topics, for the drawer
 
   async function load(reference, queued) {
@@ -72,7 +74,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     const allChains = chains(live);
     const inArchivedTopic = (view) => allChains.get(view.id)?.archived;
     const tagged = (view) => [...tagFilter].every((tag) => view.tags.includes(tag));
-    const visible = live.filter((view) => (showArchive || (!view.archived && !inArchivedTopic(view))) && tagged(view));
+    const inSource = (view) => !sourceFilter || sourceKey(view.event) === sourceFilter;
+    const inChat = (view) => !chatFilter || chatOf(view.event)?.key === chatFilter.key;
+    const visible = live.filter((view) => (showArchive || (!view.archived && !inArchivedTopic(view))) && tagged(view) && inSource(view) && inChat(view));
     visibleList = visible;
     topicList = topicsOf(live, allChains);
     onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
@@ -124,7 +128,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     if (!visible.length) {
       const empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = showArchive || !projected.length
+      empty.textContent = chatFilter || sourceFilter || tagFilter.size ? 'Под фильтр ничего не подходит.'
+        : showArchive || !projected.length
         ? 'Здесь появятся ваши записи. Напишите, наговорите голосом или приложите фото.'
         : 'Все сообщения в архиве. Показать их: ⋮ → «Показывать архив».';
       children.push(empty);
@@ -195,8 +200,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
 
   function setShowArchive(value) { showArchive = value; return render(); }
   function setTagFilter(tags) { tagFilter = new Set(tags); return render({ bottom: true }); }
+  function setSourceFilter(key) { sourceFilter = key || null; return render({ bottom: true }); }
+  function setChatFilter(chat) { chatFilter = chat || null; return render({ bottom: true }); }
 
   return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], topics: () => topicList,
+    setSourceFilter, sourceFilter: () => sourceFilter, setChatFilter, chatFilter: () => chatFilter,
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
     view: (id) => views.get(id), views: () => viewList,
     chain: (id) => chains(visibleList).get(id),

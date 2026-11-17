@@ -5,11 +5,43 @@ import { phoneLabel } from './phonebubble.js';
 
 const order = (a, b) => (Date.parse(a.ts) - Date.parse(b.ts)) || (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
 
+// Where a message belongs for the source filter (drawer.js): my own notes, a messenger account, the phone, the system.
+// A reply sent to Telegram from the feed belongs to that account's conversation.
+export function sourceKey(event) {
+  const data = event?.payload?.data ?? {};
+  if (data.telegram) return `telegram:${data.telegram.account}`;
+  if (data.outbound) return `telegram:${data.outbound.connector.replace(/^telegram_/, '')}`;
+  if (event?.source === 'android_phone') return 'phone';
+  if (event?.kind === 'system' || event?.kind === 'action_result') return 'system';
+  return 'me';
+}
+
+// The messenger chat a message belongs to (CONCEPT.md §8.2), or null: { key, account, chat_id, title, group }.
+export function chatOf(event) {
+  const data = event?.payload?.data ?? {};
+  if (data.telegram) {
+    const t = data.telegram;
+    return { key: `${t.account}|${t.chat_id}`, account: t.account, chat_id: t.chat_id, title: t.chat_title || t.from_name || 'Чат', group: t.chat_type === 'group' };
+  }
+  if (data.outbound) {
+    const account = data.outbound.connector.replace(/^telegram_/, '');
+    return { key: `${account}|${data.outbound.chat_id}`, account, chat_id: data.outbound.chat_id, title: data.outbound.chat_title || 'Чат', group: false };
+  }
+  return null;
+}
+
 export function project(events, pendingIds = new Set()) {
   const views = new Map();
   const corrections = [];
+  const deliveries = new Map(); // reply event id -> the latest action_result for it
   for (const event of events) {
     if (event.kind === 'correction') { corrections.push(event); continue; }
+    if (event.kind === 'action_result') {
+      const action = event.payload?.data?.action;
+      const previous = action?.source_event && deliveries.get(action.source_event);
+      if (action?.source_event && (!previous || order(previous, event) < 0)) deliveries.set(action.source_event, event);
+      continue;
+    }
     views.set(event.id, {
       id: event.id, event, text: event.payload?.text ?? '', tags: event.payload?.tags ?? [],
       edited: false, archived: false, deleted: false, history: [], pending: pendingIds.has(event.id), replyTo: null, replies: 0,
@@ -40,6 +72,13 @@ export function project(events, pendingIds = new Set()) {
       case 'topic_unarchive': view.topicArchived = false; break;
       default: break;
     }
+  }
+  // A reply to a messenger: «отправляется» until the gateway reports, then «в Telegram» or «не отправлено».
+  for (const view of views.values()) {
+    if (!view.event.payload?.data?.outbound) continue;
+    const result = deliveries.get(view.id);
+    const action = result?.payload.data.action;
+    view.delivery = action ? { status: action.status, error: action.error ?? null, action: result.payload.ref.id } : { status: 'approved', error: null, action: null };
   }
   for (const view of views.values()) {
     const parentId = view.event.reply_to;

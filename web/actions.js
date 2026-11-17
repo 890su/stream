@@ -33,7 +33,11 @@ export function setupActions({ list, getView, onAction }) {
     archiveButton.querySelector('span').textContent = archived ? 'Вернуть' : 'В архив';
     archiveButton.setAttribute('aria-label', archived ? 'Вернуть из архива' : 'В архив');
     // A call has no text and an SMS text is not the owner's to rewrite (CONCEPT.md §8.1).
-    panel.querySelector('[data-op="edit"]').hidden = view.event.kind === 'call' || view.event.kind === 'sms';
+    // Someone else's Telegram message is not the owner's to rewrite either (CONCEPT.md §8.2).
+    const telegram = view.event.payload?.data?.telegram;
+    panel.querySelector('[data-op="edit"]').hidden = view.event.kind === 'call' || view.event.kind === 'sms' || Boolean(telegram && view.event.author !== 'me')
+      || Boolean(view.event.payload?.data?.outbound);
+    panel.querySelector('[data-op="tg-reply"]').hidden = !telegram;
     const linkButton = panel.querySelector('[data-op="link"]');
     linkButton.querySelector('span').textContent = view.continues ? 'Отделить' : 'Связать';
     linkButton.setAttribute('aria-label', view.continues ? 'Отделить от предыдущего' : 'Связать с предыдущим сообщением');
@@ -94,7 +98,7 @@ export function setupActions({ list, getView, onAction }) {
     }
     const topic = event.target.closest('[data-topic-open]');
     if (topic) { event.stopPropagation(); const view = getView(bubbleOf(topic).dataset.id); if (view) onAction('topic-open', view); return; }
-    for (const [attribute, op] of [['data-unlink-next', 'unlink-next'], ['data-link-from', 'link-from']]) {
+    for (const [attribute, op] of [['data-unlink-next', 'unlink-next'], ['data-link-from', 'link-from'], ['data-chat-open', 'chat-open'], ['data-retry', 'retry']]) {
       const control = event.target.closest(`[${attribute}]`);
       if (control) { event.stopPropagation(); const view = getView(bubbleOf(control).dataset.id); if (view) onAction(op, view); return; }
     }
@@ -108,6 +112,7 @@ export function setupActions({ list, getView, onAction }) {
     const view = viewOf(bubble);
     if (!view) return;
     if (selecting() || event.ctrlKey || event.metaKey || event.shiftKey) { event.preventDefault(); onAction(selecting() ? 'toggle' : 'select', view); return; }
+    if (bubble.dataset.systemOpen !== undefined) { onAction('system', view); return; }
     open(bubble);
   }, true);
   list.addEventListener('contextmenu', (event) => {

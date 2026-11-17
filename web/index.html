@@ -33,6 +33,14 @@
     </button>
   </header>
 
+  <div id="chat-bar" class="chat-bar" hidden role="status">
+    <span id="chat-title" class="chat-title"></span>
+    <button id="chat-untrack" type="button" class="link-button">Не отслеживать</button>
+    <button id="chat-close" type="button" class="icon-button" aria-label="Показать всю ленту">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
   <aside id="drawer" class="drawer" hidden aria-label="Темы и метки">
     <header class="drawer-head">
@@ -43,6 +51,8 @@
     </header>
     <div class="drawer-body">
       <div id="drawer-topics"></div>
+      <h3 class="drawer-section">Источники</h3>
+      <div id="drawer-sources" class="chips"></div>
       <h3 class="drawer-section">Метки</h3>
       <div id="drawer-tags" class="chips"></div>
     </div>
@@ -98,6 +108,8 @@
   <div id="action-panel" class="action-panel" hidden role="menu" aria-label="Действия с сообщением">
     <button type="button" role="menuitem" data-op="reply" aria-label="Ответить">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6"/><path d="M4.5 12H14a6 6 0 0 1 6 6v1"/></svg><span>Ответить</span></button>
+    <button type="button" role="menuitem" data-op="tg-reply" aria-label="Ответить в Telegram" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4 3.5 10.6l5.6 2 2.2 6.9 3.1-3.9 4.6 3.4L20.5 4Z"/><path d="m9.1 12.6 7.4-5.1"/></svg><span>В Telegram</span></button>
     <button type="button" role="menuitem" data-op="edit" aria-label="Изменить">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg><span>Изменить</span></button>
     <button type="button" role="menuitem" data-op="copy" aria-label="Копировать текст">
@@ -134,6 +146,7 @@
     <div id="context-bar" class="context-bar" hidden>
       <svg id="context-icon-reply" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6"/><path d="M4.5 12H14a6 6 0 0 1 6 6v1"/></svg>
       <svg id="context-icon-continue" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h9"/><path d="m15 12 4 4-4 4"/></svg>
+      <svg id="context-icon-outbound" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4 3.5 10.6l5.6 2 2.2 6.9 3.1-3.9 4.6 3.4L20.5 4Z"/><path d="m9.1 12.6 7.4-5.1"/></svg>
       <svg id="context-icon-edit" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
       <div class="context-text"><span id="context-title"></span><span id="context-snippet"></span></div>
       <button id="context-cancel" type="button" class="icon-button" aria-label="Отменить">
@@ -218,11 +231,43 @@
       <input id="owner-token" type="password" autocomplete="off" spellcheck="false">
       <p class="hint">Токен хранится только в этом браузере. Без сети записи ждут на устройстве и уходят сами.</p>
       <p id="queue-count" class="hint" role="status"></p>
+      <button id="system-button" type="button" class="link-button">Система: источники и отправки</button>
       <div class="dialog-actions">
         <button id="settings-close" type="button" class="link-button">Закрыть</button>
         <button type="submit" class="primary">Сохранить</button>
       </div>
     </form>
+  </dialog>
+  <dialog id="untrack" aria-labelledby="untrack-heading">
+    <form method="dialog">
+      <h2 id="untrack-heading">Не отслеживать чат</h2>
+      <p id="untrack-text" class="hint"></p>
+      <div class="dialog-stack">
+        <button type="submit" value="archive" class="primary">Не отслеживать и убрать в архив</button>
+        <button type="submit" value="keep" class="link-button">Только не отслеживать</button>
+        <button type="submit" value="cancel" class="link-button">Отмена</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="system" class="sheet" aria-labelledby="system-heading">
+    <header class="sheet-head">
+      <h2 id="system-heading">Система</h2>
+      <button id="system-refresh" type="button" class="icon-button" aria-label="Обновить">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg>
+      </button>
+      <button id="system-close" type="button" class="icon-button" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="sheet-body">
+      <p class="picker-section">Источники</p>
+      <div id="system-sources"></div>
+      <p class="picker-section">Отправки</p>
+      <div id="system-actions"></div>
+      <p class="picker-section">Не отслеживаются</p>
+      <div id="system-exclusions"></div>
+    </div>
   </dialog>
   <noscript>Для записи и офлайн-очереди включите JavaScript.</noscript>
 </body>

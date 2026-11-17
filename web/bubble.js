@@ -1,6 +1,7 @@
 import { formatDuration } from './voice.js';
 import { snippet } from './projection.js';
 import { phoneBlock, isPhoneEvent } from './phonebubble.js';
+import { messengerBlock, deliveryLine, isMessenger } from './tgbubble.js';
 
 // Static, trusted icon markup. User content is only ever set through textContent.
 const ICONS = {
@@ -33,7 +34,7 @@ function sizeLabel(bytes) {
 
 export function bubbleSignature(view, queued, chain) {
   const reply = view.replyTo && [view.replyTo.id, snippet(view.replyTo)];
-  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply,
+  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply, view.delivery,
     chain && [chain.index, chain.ids.length, chain.title],
     queued ? queued.error || 'queued' : 'accepted']);
 }
@@ -129,7 +130,7 @@ function file(reference, load, notify) {
   const round = element('span', 'round');
   round.innerHTML = ICONS.file;
   const label = element('span');
-  const kind = reference.mime === 'application/pdf' ? 'PDF' : reference.mime.split('/')[0] === 'audio' ? 'Аудио' : 'Файл';
+  const kind = reference.mime === 'application/pdf' ? 'PDF' : { audio: 'Аудио', video: 'Видео' }[reference.mime.split('/')[0]] ?? 'Файл';
   label.append(element('div', 'file-name', kind), element('div', 'file-size', sizeLabel(reference.size_bytes)));
   button.append(round, label);
   button.onclick = async () => {
@@ -217,7 +218,10 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits, 
   bubble.classList.toggle('has-tags', view.tags.length > 0);
   bubble.classList.toggle('archived', Boolean(faded ?? view.archived));
   // Someone else's SMS sits on the left, like a chat partner's message (CONCEPT.md §8.1).
-  bubble.classList.toggle('incoming', event.kind === 'sms' && payload.data?.sms?.direction === 'in');
+  bubble.classList.toggle('incoming', (event.kind === 'sms' && payload.data?.sms?.direction === 'in') || (Boolean(payload.data?.telegram) && event.author !== 'me'));
+  // State changes of sources and connectors (System screen) are notes, not messages; a tap opens the screen.
+  bubble.classList.toggle('system', event.kind === 'system');
+  if (event.kind === 'system') bubble.dataset.systemOpen = '';
 
   // Mouse users: a "more" button next to the bubble; touch users long-press (actions.js).
   const more = element('button', 'more');
@@ -236,6 +240,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits, 
     bubble.append(quote);
   }
   if (isPhoneEvent(event)) bubble.append(phoneBlock(view));
+  if (isMessenger(event)) bubble.append(messengerBlock(view));
   if (photos.length) bubble.append(gallery(photos, load, notify, view));
   for (const reference of media) {
     if (reference.mime.startsWith('image/')) continue;
@@ -256,6 +261,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits, 
     } catch { /* malformed URLs stay in the journal payload */ }
   }
   const onlyPhoto = photos.length && !view.text && !payload.url && !view.tags.length && !view.replyTo && !chain;
+  if (view.delivery) bubble.append(deliveryLine(view));
   bubble.append(linkRow(next));
   bubble.append(meta(view, queued, onlyPhoto ? 'photo-meta' : '', Boolean(view.edited || view.replyTo || view.replies || chain)));
   if (queued?.error) bubble.append(element('div', 'error-text', queued.error));

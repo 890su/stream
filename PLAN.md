@@ -96,8 +96,9 @@ updated: 2026-11-11
   телефона в `/srv/stream/.env`); APK подписан, ключ — `%USERPROFILE%\.stream\stream-phone.jks` (вне git).
   Проверено на эмуляторе: звонок с уведомлением и ответом, пропущенный, SMS с номера и от `mBank`, очередь без сети.
 
-- [ ] **П11. Telegram BY и PL в ленте, ответ из ленты, экран «Система»** (`CONCEPT.md` §8.2) — проект
-  `docs/plans/2026-11-17-p11-telegram.md`, ❓ одобрение владельцем. Шлюз на клиентском API на каждый аккаунт;
+- [ ] **П11. Telegram BY и PL в ленте, ответ из ленты, экран «Система»** (`CONCEPT.md` §8.2) — код готов
+  2026-11-17, выложен; ❓ владелец: `api_id` и вход обоих аккаунтов по `deploy/TELEGRAM.md`, папка «Stream»,
+  неделя использования. Проект `docs/plans/2026-11-17-p11-telegram.md`. Шлюз на клиентском API на каждый аккаунт;
   личные чаты — все, кроме «не отслеживать»; группы — из папки «Stream»; при включении чата — сообщения за
   сегодня; ответ из ленты — действие класса C. Учёт автоматизаций — экран «Система», не n8n.
   Дальше по тому же образцу: WhatsApp BY / PL, Viber (❓ обычный номер или бизнес-аккаунт), IP-телефония.
@@ -138,6 +139,11 @@ updated: 2026-11-11
 - [ ] Резервные коннекторы задач: Todoist, затем TickTick
 
 ## Done
+- [x] П11 «Telegram BY и PL»: шлюз на Telethon на каждый аккаунт, адреса `/api/gateway/telegram/<account>/*`,
+  ответ из ленты (действие `send_message`, статус под ответом), «Не отслеживать», фильтр источников, экран
+  «Система» с пульсом и оповещениями — 2026-11-17
+  - Result: `gateway/telegram/`, `src/server/gateway.ts`, `src/server/system.ts`, `src/store/`, `web/tgbubble.js`,
+    `web/chatview.js`, `web/system.js`, `deploy/TELEGRAM.md`, `test/gateway.test.ts`, `test/messenger-view.test.ts`
 - [x] П10 «Звонки и SMS»: события `call` / `sms`, `/api/phone/*` с токеном телефона, пузыри с «Описать»,
   приложение «Stream · телефон» (журнал вызовов и SMS, очередь WorkManager, уведомление с ответом) — 2026-11-17
   - Result: `src/server/phone.ts`, `src/contracts/phone.ts`, `web/phonebubble.js`, `android/`, `deploy/PHONE.md`,

@@ -1,3 +1,6 @@
+import { sourceKey } from './projection.js';
+import { accountTitle } from './tgbubble.js';
+
 // Left panel: active topics (days since the last message, archive) and tags that filter the feed.
 // The left half of a topic goes to its first message, the right half to its newest one.
 const ARCHIVE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>';
@@ -21,6 +24,7 @@ export function setupDrawer({ feed, onJump, onArchiveTopic, onFilterChange }) {
   const backdrop = document.querySelector('#drawer-backdrop');
   const topicsBox = document.querySelector('#drawer-topics');
   const tagsBox = document.querySelector('#drawer-tags');
+  const sourcesBox = document.querySelector('#drawer-sources');
 
   // The drawer sits between the top bar and the composer; both stay visible and usable.
   function place() {
@@ -171,9 +175,28 @@ export function setupDrawer({ feed, onJump, onArchiveTopic, onFilterChange }) {
     }, true);
   }
 
+  // Sources (CONCEPT.md §8.2): my notes, each messenger account, the phone, the system. One at a time.
+  const SOURCE_TITLES = { me: 'Мои', phone: 'Телефон', system: 'Система' };
+  const sourceTitle = (key) => SOURCE_TITLES[key] ?? (key.startsWith('telegram:') ? accountTitle(key.slice(9)) : key);
+  function renderSources() {
+    const counts = new Map();
+    for (const view of feed.views()) if (!view.deleted) { const key = sourceKey(view.event); counts.set(key, (counts.get(key) ?? 0) + 1); }
+    const active = feed.sourceFilter();
+    const keys = [...counts.keys()].sort((a, b) => (a === 'me' ? -1 : b === 'me' ? 1 : sourceTitle(a).localeCompare(sourceTitle(b), 'ru')));
+    sourcesBox.previousElementSibling.hidden = sourcesBox.hidden = keys.length < 2 && !active;
+    sourcesBox.replaceChildren(...keys.map((key) => {
+      const chip = element('button', `chip ${active === key ? 'on' : 'suggest'}`, `${sourceTitle(key)} ${counts.get(key)}`);
+      chip.type = 'button';
+      chip.setAttribute('aria-pressed', String(active === key));
+      chip.onclick = async () => { await feed.setSourceFilter(active === key ? null : key); onFilterChange(); render(); };
+      return chip;
+    }));
+  }
+
   function render() {
     const topics = feed.topics().filter((topic) => feed.showArchive() || !topic.archived);
     topicsBox.replaceChildren(...(topics.length ? topics.map(topicRow) : [element('p', 'drawer-empty', 'Тем пока нет. Свяжите сообщения — появится тема.')]));
+    renderSources();
     const counts = new Map();
     for (const view of feed.views()) if (!view.deleted) for (const tag of view.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     const active = new Set(feed.tagFilter());

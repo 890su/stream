@@ -198,7 +198,9 @@ dialog input { width: 100%; border: 0; border-bottom: 2px solid var(--accent); b
 
 .context-bar { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 14px; border-bottom: 1px solid var(--line); }
 .context-icon { flex: none; color: var(--link); }
-.context-bar:not(.reply) #context-icon-reply, .context-bar:not(.edit) #context-icon-edit, .context-bar:not(.continue) #context-icon-continue { display: none; }
+.context-bar:not(.reply) #context-icon-reply, .context-bar:not(.edit) #context-icon-edit, .context-bar:not(.continue) #context-icon-continue, .context-bar:not(.outbound) #context-icon-outbound { display: none; }
+.context-bar.outbound { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.context-bar.outbound #context-title { color: var(--accent-strong); font-weight: 600; }
 .context-text { flex: 1; min-width: 0; display: flex; flex-direction: column; border-left: 3px solid var(--link); padding-left: 8px; }
 #context-title { color: var(--link); font-size: 14px; font-weight: 600; }
 #context-snippet { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -435,3 +437,36 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row) { display: none 
   justify-self: start; margin-top: 6px; height: 32px; padding: 0 14px; border-radius: 16px; font-size: 14px; font-weight: 600;
   background: color-mix(in srgb, var(--bubble-meta) 16%, transparent); color: var(--bubble-meta);
 }
+
+/* Telegram (CONCEPT.md §8.2): chat header, forwards, files not downloaded, delivery of replies */
+.tg-block { display: grid; gap: 2px; padding: 0 0 4px; }
+.tg-head { justify-self: start; text-align: left; font-size: 13.5px; font-weight: 600; color: var(--bubble-meta); }
+.bubble.incoming .tg-head { color: var(--accent-strong); }
+.tg-forward { font-size: 13.5px; font-style: italic; color: var(--bubble-meta); }
+.bubble.incoming .tg-forward, .bubble.incoming .tg-skipped { color: var(--muted); }
+.tg-skipped { font-size: 14px; color: var(--bubble-meta); }
+.tg-delivery { font-size: 13px; color: var(--bubble-meta); padding-top: 2px; }
+.tg-delivery.failed { color: var(--danger); font-weight: 600; }
+.tg-delivery .link-button { font-size: 13px; min-height: 32px; color: inherit; text-decoration: underline; }
+.chat-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14.5px; }
+.chat-title { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-bar .link-button { font-size: 14px; color: var(--muted); }
+.bubble.system { align-self: center; max-width: 92%; background: var(--panel); color: var(--muted); font-size: 14px; box-shadow: none; border-radius: 12px; cursor: pointer; }
+.bubble.system .link-row, .bubble.system .more { display: none; }
+
+/* System screen */
+.system-source { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.system-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--muted); grid-row: span 2; }
+.system-dot.ok { background: #2e9d4f; }
+.system-dot.silent { background: #d08b00; }
+.system-dot.login_required, .system-dot.error { background: var(--danger); }
+.system-name { font-weight: 600; }
+.system-detail { font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+.system-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.system-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.system-row .state { flex: none; font-size: 13px; color: var(--muted); }
+.system-row .state.failed { color: var(--danger); }
+.system-empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
+.dialog-stack { display: grid; gap: 4px; margin-top: 16px; }
+.dialog-stack .link-button { min-height: 44px; }
+#system-button { display: block; margin: 4px 0 0; min-height: 44px; color: var(--link); }

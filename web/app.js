@@ -10,15 +10,21 @@ import { setupTopicScreen } from './topicscreen.js';
 import { setupPicker } from './picker.js';
 import { setupSelection } from './select.js';
 import { setupDrawer } from './drawer.js';
+import { setupSystem } from './system.js';
+import { setAccounts } from './tgbubble.js';
+import { setupChatView } from './chatview.js';
+import { chatOf } from './projection.js';
 
 let topicScreen;
 let picker;
 let bulk;
 let drawer;
+let system;
+let chatView; // { open(chat), close() } — one messenger chat in the feed (CONCEPT.md §8.2)
 
 // The reset button shows how many tags filter the feed.
 function updateFilter() {
-  const count = feedRef?.tagFilter().length ?? 0;
+  const count = (feedRef?.tagFilter().length ?? 0) + (feedRef?.sourceFilter() ? 1 : 0);
   $('#filter-reset').hidden = !count;
   $('#filter-count').textContent = count ? String(count) : '';
 }
@@ -130,6 +136,8 @@ function setupMessageActions(feed, composer, config) {
     notify('Связано', { label: 'Отменить', run: () => correct(view, 'unlink') });
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink });
+  chatView = setupChatView({ feed, composer, correct, notify });
+  system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
     onJump: (id) => feed.jump(id),
@@ -146,6 +154,10 @@ function setupMessageActions(feed, composer, config) {
     getView: (id) => feed.view(id),
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
+      else if (op === 'tg-reply') composer.outbound(chatOf(view.event), view);
+      else if (op === 'chat-open') chatView.open(chatOf(view.event));
+      else if (op === 'system') system.open();
+      else if (op === 'retry') { if (view.delivery?.action) system.retry(view.delivery.action); }
       else if (op === 'edit') composer.edit(view);
       else if (op === 'history') thread.open(view.id);
       else if (op === 'continue') composer.proceed(view);
@@ -215,7 +227,8 @@ async function setupSettings(config, feed, onToken) {
   if (await getSetting('showArchive')) await showArchive(true);
   archive.onclick = async () => { const on = archive.getAttribute('aria-pressed') !== 'true'; await setSetting('showArchive', on); await showArchive(on); };
   // Tag filter reset, shown while the feed is filtered (drawer.js).
-  $('#filter-reset').onclick = async () => { await feed.setTagFilter([]); updateFilter(); drawer?.render(); };
+  $('#filter-reset').onclick = async () => { await feed.setSourceFilter(null); await feed.setTagFilter([]); updateFilter(); drawer?.render(); };
+  $('#system-button').onclick = () => { dialog.close(); system.open(); };
   const input = $('#owner-token');
   input.minLength = config.min_owner_token_length;
   $('#menu-button').onclick = () => dialog.showModal();
@@ -265,10 +278,11 @@ async function main() {
   const response = await fetch('/capture-config.json');
   if (!response.ok) throw new Error('Не удалось загрузить настройки приложения. Повторите запуск');
   const config = await response.json();
+  setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
   const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); composerRef?.refreshTags(); } });
   feedRef = feed;
-  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
+  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(), onChatClose: () => chatView.close(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
   composerRef = composer;
   setupMessageActions(feed, composer, config);
