@@ -25,6 +25,17 @@ export async function entryFromShare(form) {
   return makeEntry({ source: 'share', kind: files.length ? 'file' : url ? 'link' : 'text', text, url, files });
 }
 
+// A task change by the owner (CONCEPT.md §2.8): create (with the message it came from) or update.
+export function makeTaskChange(taskId, task) {
+  return {
+    event: {
+      id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'task_change',
+      payload: { ref: { type: 'task', id: taskId }, data: { task } },
+    },
+    files: [],
+  };
+}
+
 // An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4).
 export function makeCorrection(targetId, op, { text, tags = [], target, title } = {}) {
   return {

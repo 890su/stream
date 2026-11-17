@@ -34,7 +34,7 @@ function sizeLabel(bytes) {
 
 export function bubbleSignature(view, queued, chain) {
   const reply = view.replyTo && [view.replyTo.id, snippet(view.replyTo)];
-  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply, view.delivery, view.remoteDeleted,
+  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply, view.delivery, view.remoteDeleted, view.taskIds,
     chain && [chain.index, chain.ids.length, chain.title],
     queued ? queued.error || 'queued' : 'accepted']);
 }
@@ -44,6 +44,14 @@ function meta(view, queued, extraClass = '', hasHistory = false) {
   const box = element('span', `meta ${extraClass}`.trim());
   if (view.archived) box.append(element('span', 'meta-note', 'в архиве'));
   if (view.remoteDeleted) box.append(element('span', 'meta-note', 'удалено в Telegram'));
+  // The message belongs to tasks (CONCEPT.md §2.8): a tap opens the first one in the right panel.
+  if (view.taskIds?.length) {
+    const mark = element('button', 'task-mark', view.taskIds.length > 1 ? `☐ ${view.taskIds.length}` : '☐');
+    mark.type = 'button';
+    mark.dataset.taskOpen = view.taskIds[0];
+    mark.setAttribute('aria-label', view.taskIds.length > 1 ? `В ${view.taskIds.length} задачах` : 'В задаче');
+    box.append(mark);
+  }
   // A small link instead of the word "edited": opens versions and related messages (thread.js).
   if (hasHistory) {
     const link = element('button', 'history-link');

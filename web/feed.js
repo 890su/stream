@@ -1,6 +1,7 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
+import { foldTasks, tasksByMessage } from './taskfold.js';
 
 const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
 const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -47,6 +48,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   let sourceFilter = null; // 'me' | 'telegram:by' | 'phone' | 'system'… (drawer.js)
   let chatFilter = null; // one messenger chat { key, account, chat_id, title } (app.js, chat bar)
   let topicList = []; // all topics, for the drawer
+  let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -67,6 +69,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     const events = new Map((await cachedEvents()).map((event) => [event.id, event]));
     for (const entry of queued) events.set(entry.event.id, entry.event);
     const projected = project([...events.values()], new Set(pending.keys()));
+    taskList = foldTasks([...events.values()]);
+    const byMessage = tasksByMessage(taskList);
+    for (const view of projected) view.taskIds = byMessage.get(view.id) ?? [];
     views = new Map(projected.map((view) => [view.id, view]));
     viewList = projected;
     // Archived topics hide all their messages, like archived messages, until "show archived" is on.
@@ -204,7 +209,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   function setChatFilter(chat) { chatFilter = chat || null; return render({ bottom: true }); }
 
   return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], topics: () => topicList,
-    setSourceFilter, sourceFilter: () => sourceFilter, setChatFilter, chatFilter: () => chatFilter,
+    setSourceFilter, sourceFilter: () => sourceFilter, setChatFilter, chatFilter: () => chatFilter, tasks: () => taskList,
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
     view: (id) => views.get(id), views: () => viewList,
     chain: (id) => chains(visibleList).get(id),

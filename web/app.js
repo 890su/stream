@@ -13,6 +13,7 @@ import { setupDrawer } from './drawer.js';
 import { setupSystem } from './system.js';
 import { setAccounts } from './tgbubble.js';
 import { setupChatView } from './chatview.js';
+import { setupTaskPanel } from './taskpanel.js';
 import { chatOf } from './projection.js';
 
 let topicScreen;
@@ -20,6 +21,7 @@ let picker;
 let bulk;
 let drawer;
 let system;
+let taskPanel;
 let chatView; // { open(chat), close() } — one messenger chat in the feed (CONCEPT.md §8.2)
 
 // The reset button shows how many tags filter the feed.
@@ -137,6 +139,7 @@ function setupMessageActions(feed, composer, config) {
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink });
   chatView = setupChatView({ feed, composer, correct, notify });
+  taskPanel = setupTaskPanel({ feed, composer, notify });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
@@ -154,6 +157,7 @@ function setupMessageActions(feed, composer, config) {
     getView: (id) => feed.view(id),
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
+      else if (op === 'task') taskPanel.createFrom(view);
       else if (op === 'tg-reply') composer.outbound(chatOf(view.event), view);
       else if (op === 'chat-open') chatView.open(chatOf(view.event));
       else if (op === 'system') system.open();
@@ -280,7 +284,7 @@ async function main() {
   const config = await response.json();
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); composerRef?.refreshTags(); } });
+  const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); taskPanel?.render(); composerRef?.refreshTags(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(), onChatClose: () => chatView.close(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });

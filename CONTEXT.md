@@ -57,7 +57,7 @@ Node 24 запускает TypeScript без сборки; база — `node:sq
 | `registry/` | Данные вместо кода: цели (`intents/`), поля (`fields.yaml`), коннекторы (`connectors.yaml`), словарь меток (`tags.json`), параметры ввода (`capture.json`) |
 | `golden/` | Эталонный набор: в git — обезличенные примеры, реальные сообщения — `cases.local.jsonl` (вне git) |
 | `docs/plans/` | Планы шагов и пакетов |
-| `src/` | Сервер, проверка контрактов и правок, SQLite-хранилище, поток `/api/live`, резервная копия; `src/telegram/` — боты Telegram BY / PL (`deploy/TELEGRAM.md`) |
+| `src/` | Сервер, проверка контрактов и правок, SQLite-хранилище, поток `/api/live`, резервная копия; `src/telegram/` — боты Telegram BY / PL (`deploy/TELEGRAM.md`); `src/tasks/` — задачи и разбор пачками |
 | `web/` | PWA-клиент без сборщика: один модуль — одна задача (`composer`, `feed`, `projection`, `bubble`, `actions`, `select`, `drawer`, `topicscreen`, `thread`, `picker`, `tagrow`, `outbox`, `live`, `sw.js`…) |
 | `android/` | Приложение «Stream · телефон» на Kotlin: звонки и SMS в ленту, вопрос после звонка (`deploy/PHONE.md`) |
 | `test/` | `node --test`: сервер, контракты, проекция ленты, подсказчик меток, синтаксис всех модулей клиента |
