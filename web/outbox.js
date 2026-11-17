@@ -1,3 +1,4 @@
+// The outbox: queue entries on the device and sync them in order, with retries.
 import { listEntries, saveEntry, removeEntry, getSetting, cacheEvents } from './db.js';
 import { syncEntries } from './sync.js';
 

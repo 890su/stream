@@ -1,0 +1,145 @@
+/* Feed: message actions panel, tag row, history window, bubbles in a row, topic line, cut, viewer,
+ * continue links, picking a message. Loaded after styles.css. */
+/* Message actions (actions.js) */
+.bubble { touch-action: pan-y; }
+.bubble:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: none) { .bubble { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } .more { display: none; } }
+.more {
+  position: absolute; left: -44px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--pill); color: var(--pill-text); opacity: 0; transition: opacity .12s ease-out;
+}
+.more svg { width: 20px; height: 20px; }
+.more circle { fill: currentColor; stroke: none; }
+@media (hover: hover) { .bubble:hover .more, .bubble:focus-within .more { opacity: 1; } }
+.bubble.selected { position: relative; z-index: 11; box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.bubble.archived { opacity: .7; }
+.bubble.flash { animation: flash 1.2s ease-out; }
+.meta-note { margin-right: 3px; }
+.quote {
+  display: flex; flex-direction: column; width: 100%; text-align: left; margin: 2px 0 5px; padding: 3px 8px;
+  border-left: 3px solid var(--link); border-radius: 4px; background: color-mix(in srgb, var(--link) 10%, transparent); min-width: 0;
+}
+.bubble.has-photo .quote { margin: 3px 3px 5px; width: auto; }
+.quote-title { font-size: 13px; font-weight: 600; color: var(--link); }
+.quote-text { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+.action-layer { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .28); }
+.action-panel {
+  max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center;
+  position: fixed; top: 0; left: 0; z-index: 12; display: flex; gap: 2px; padding: 6px; border-radius: 16px; /* above the selected bubble (11) */
+  background: var(--panel); color: var(--bar-text); box-shadow: 0 8px 28px rgba(0, 0, 0, .28); animation: panel-in .14s ease-out;
+}
+.action-panel button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 58px; min-height: 58px;
+  padding: 6px 4px; border-radius: 11px; font-size: 12px; color: var(--bar-text);
+}
+.action-panel button:hover, .action-panel button:focus-visible, .action-panel button:active { background: var(--press); }
+.action-panel .danger { color: var(--danger); }
+
+.context-bar { display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 14px; border-bottom: 1px solid var(--line); }
+.context-icon { flex: none; color: var(--link); }
+.context-bar:not(.reply) #context-icon-reply, .context-bar:not(.edit) #context-icon-edit, .context-bar:not(.continue) #context-icon-continue, .context-bar:not(.outbound) #context-icon-outbound { display: none; }
+.context-bar.outbound { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.context-bar.outbound #context-title { color: var(--accent-strong); font-weight: 600; }
+.context-bar.outbound.closed #context-snippet { color: var(--danger); }
+.context-text { flex: 1; min-width: 0; display: flex; flex-direction: column; border-left: 3px solid var(--link); padding-left: 8px; }
+#context-title { color: var(--link); font-size: 14px; font-weight: 600; }
+#context-snippet { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.toast { display: flex; align-items: center; gap: 14px; }
+#notice-action { color: #8cc4f5; font-weight: 600; padding: 0 4px; min-height: 36px; flex: none; }
+dialog label.switch-row { display: flex; align-items: center; gap: 12px; min-height: 48px; margin: 4px 0 0; color: var(--bar-text); font-size: 15px; }
+dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent-strong); border: 0; }
+
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 3px var(--accent), var(--shadow); } 100% { box-shadow: var(--shadow); } }
+@keyframes panel-in { from { opacity: 0; scale: .92; } to { opacity: 1; scale: 1; } }
+
+/* Tag row above the composer (tagrow.js) */
+.tag-row {
+  display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  padding: 6px 10px 2px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
+.tag-row::-webkit-scrollbar { display: none; }
+.tag-row .chip, #tag-options .chip { flex: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.chip.suggest { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.chip.on { background: var(--accent-strong); color: #fff; }
+.chip.auto { background: var(--chip); color: var(--chip-text); box-shadow: inset 0 0 0 1.5px var(--accent-strong); }
+.chip .spark { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+.new-tag { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.new-tag input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 8px 2px; outline: none; }
+.new-tag input:focus { border-bottom-color: var(--accent); }
+
+/* History window (thread.js) */
+.thread { width: min(100vw, 560px); max-width: 100vw; max-height: 80dvh; margin: auto auto 0; padding: 0 0 env(safe-area-inset-bottom); border-radius: 16px 16px 0 0; display: none; flex-direction: column; }
+.thread[open] { display: flex; }
+.thread-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 6px 8px 18px; border-bottom: 1px solid var(--line); }
+.thread-head h2 { margin: 0; font-size: 17px; }
+.thread-list { overflow-y: auto; overscroll-behavior: contain; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--chat); }
+.thread-card { background: var(--bubble); color: var(--bubble-text); border-radius: 14px; box-shadow: var(--shadow); }
+.thread-card.focused { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.versions { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; border-radius: 14px; }
+.versions::-webkit-scrollbar { display: none; }
+.version { flex: 0 0 100%; scroll-snap-align: start; padding: 10px 12px; min-width: 0; overflow-wrap: anywhere; }
+.version .text { white-space: pre-wrap; }
+.version .tags { color: var(--chip-text); font-size: 15px; }
+.version-label { font-size: 13px; color: var(--bubble-meta); margin-bottom: 3px; }
+.version-bar { display: flex; align-items: center; justify-content: center; gap: 6px; border-top: 1px solid color-mix(in srgb, var(--bubble-meta) 25%, transparent); color: var(--bubble-meta); }
+.version-bar .icon-button { color: var(--bubble-meta); font-size: 26px; line-height: 1; width: 44px; height: 40px; }
+.version-bar .icon-button:disabled { opacity: .3; cursor: default; }
+.version-count { font-size: 13px; min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Messages in a row: one bubble with thin separators; every part keeps its own actions. */
+.burst {
+  align-self: flex-end; max-width: min(84%, 480px); display: flex; flex-direction: column; min-width: 92px;
+  background: var(--bubble); border-radius: 14px 14px 4px 14px; box-shadow: var(--shadow);
+}
+.burst > .bubble { align-self: stretch; max-width: none; background: none; box-shadow: none; border-radius: 0; }
+.burst > .bubble:first-child { border-radius: 14px 14px 0 0; }
+.burst > .bubble:last-child { border-radius: 0 0 4px 14px; }
+.burst > .bubble + .bubble { border-top: 1px solid color-mix(in srgb, var(--bubble-meta) 22%, transparent); }
+.burst > .bubble.selected { background: var(--bubble); border-radius: 12px; }
+
+/* Topic line above a message: ‹ above · title · below ›; the title opens the topic screen. */
+.topic-line { display: flex; align-items: center; gap: 2px; margin: -2px -4px 3px; font-size: 12.5px; color: var(--bubble-meta); min-width: 0; min-height: 28px; }
+.topic-title { flex: 1; min-width: 0; text-align: left; padding: 2px 4px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: inherit; }
+.topic-title.named { font-weight: 600; }
+.topic-title:active { background: var(--press); }
+.topic-count { font-variant-numeric: tabular-nums; flex: none; min-width: 14px; text-align: center; }
+.topic-arrow { width: 30px; height: 28px; border-radius: 8px; font-size: 20px; line-height: 1; color: var(--bubble-meta); flex: none; }
+.topic-arrow:active { background: var(--press); }
+
+/* History link in the meta line, instead of the word "edited". */
+.history-link { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: -4px 0 -4px -2px; border-radius: 50%; color: var(--bubble-meta); }
+.history-link svg { width: 15px; height: 15px; }
+.history-link:active { background: var(--press); }
+
+/* Long messages fold under a cut. */
+.text.clamped { max-height: 13.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.cut-toggle { display: block; color: var(--link); font-size: 14px; font-weight: 500; padding: 4px 0; min-height: 32px; }
+
+/* Full-size photo viewer */
+.viewer { padding: 0; border: 0; background: transparent; max-width: 100vw; max-height: 100dvh; width: 100vw; height: 100dvh; }
+.viewer::backdrop { background: rgba(0, 0, 0, .92); }
+.viewer[open] { display: grid; place-items: center; }
+.viewer img { max-width: 100vw; max-height: 100dvh; object-fit: contain; }
+.viewer .icon-button { position: fixed; top: max(8px, env(safe-area-inset-top)); right: 8px; color: #fff; background: rgba(0, 0, 0, .4); }
+
+/* Continue a message: bottom-left link; messages close in time stand closer, but stay separate. */
+.link-row { float: left; display: inline-flex; gap: 2px; margin: 5px 6px -6px -4px; }
+.link-row .continue-link { float: none; margin: 0; }
+.continue-link { float: left; display: inline-grid; place-items: center; width: 26px; height: 26px; margin: 5px 6px -6px -4px; border-radius: 50%; color: var(--bubble-meta); }
+.continue-link svg { width: 16px; height: 16px; }
+.continue-link:active { background: var(--press); }
+.bubble:has(> .photo-meta) > .link-row { display: none; }
+#feed-list > .bubble, #feed-list > .burst { margin-top: 6px; }
+#feed-list > .close { margin-top: 0; }
+.chip.continue-chip.suggest { color: var(--link); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link) 45%, transparent); }
+
+.topic-title.named { font-weight: 600; }
+.danger-link { color: var(--danger); margin-right: auto; }
+
+/* Picking a message to connect the draft to: messages invite a tap. */
+body.picking #feed-list .bubble { cursor: pointer; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); }
+body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+.chip.link-chip.suggest { color: var(--link); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link) 45%, transparent); }

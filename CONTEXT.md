@@ -26,12 +26,16 @@ updated: 2026-11-11
 
 ## Current state
 
-**Шаг 1 работает на https://stream.sekond.pl (2026-11-14), ветка `step1-journal-capture`.** Журнал, API,
-PWA с офлайн-очередью и мгновенной синхронизацией между устройствами; экран-чат со строкой меток (П1),
-правками поверх журнала (изменить, архив, удалить), связями сообщений, темами, левой панелью тем и
-меток-фильтров, выделением и экраном темы (`CONCEPT.md` §5). Разбора и ИИ ещё нет — это шаги 2–3.
+**Работает на https://stream.sekond.pl (2026-11-18), ветка `step1-journal-capture`.**
+- Журнал, API, PWA с офлайн-очередью и мгновенной синхронизацией; экран-чат со строкой меток, правками поверх
+  журнала, связями, темами, левой панелью (темы, источники, метки, «Завершённые») — `CONCEPT.md` §5.
+- Звонки и SMS — приложение «Stream · телефон» на Kotlin (П10, `deploy/PHONE.md`, §8.1).
+- Telegram BY и PL — официальные бизнес-боты внутри сервера, ответ из ленты (П11, `deploy/TELEGRAM.md`, §8.2).
+- Задачи — главная сущность: правая панель «Задачи», разбор новых сообщений пачками через ИИ (Claude Haiku 5.5),
+  сделанное уходит из ленты (П12, §2.8). Экран «Система» — состояние источников и отправок (§5).
+- Ещё нет: нормализация (голос → текст), исполнение задач по шаблонам, справочник контактов.
 
-Приёмка владельцем на телефоне открыта: `docs/plans/2026-11-11-step1-journal-capture.md`, `deploy/DEPLOY.md`.
+Открытые проверки владельца — `PLAN.md` («In progress», П10–П12).
 Агент сам коммитит, пушит и выкладывает каждую правку (`deploy/DEPLOY.md`, «Выкладка агентом без пароля»).
 Решения — в `decisions.md`, контракты — в `contracts/`, параметры ввода и метки — в `registry/`.
 
@@ -49,14 +53,16 @@ https://claude.ai/artifact/2C1D9sLkW141UWgmN5Zco5
 ## Stack and layout
 
 Node 24 запускает TypeScript без сборки; база — `node:sqlite` (`data/stream.db`); HTTP — `node:http`;
-клиент — обычный JavaScript без сборщика. Альтернатива на будущее — Python/FastAPI (`decisions.md`).
+клиент — обычный JavaScript без сборщика. Единственная зависимость сервера — `@anthropic-ai/sdk` (разбор задач).
+**Карта кода** (модули, что где, ключевые функции) — `docs/CODEMAP.md`: читать её вместо обхода файлов. Альтернатива на будущее — Python/FastAPI (`decisions.md`).
 
 | Где | Что |
 |---|---|
 | `contracts/` | JSON Schema контрактов: event, normalized, interpretation, task, action, intent |
 | `registry/` | Данные вместо кода: цели (`intents/`), поля (`fields.yaml`), коннекторы (`connectors.yaml`), словарь меток (`tags.json`), параметры ввода (`capture.json`) |
 | `golden/` | Эталонный набор: в git — обезличенные примеры, реальные сообщения — `cases.local.jsonl` (вне git) |
-| `docs/plans/` | Планы шагов и пакетов |
+| `docs/plans/` | Планы активных пакетов; `docs/archive/` — выполненные и заменённые планы, решения, старый Done |
+| `docs/CODEMAP.md` | Оглавление кода (English): файлы, ответственность, точки входа |
 | `src/` | Сервер, проверка контрактов и правок, SQLite-хранилище, поток `/api/live`, резервная копия; `src/telegram/` — боты Telegram BY / PL (`deploy/TELEGRAM.md`); `src/tasks/` — задачи и разбор пачками |
 | `web/` | PWA-клиент без сборщика: один модуль — одна задача (`composer`, `feed`, `projection`, `bubble`, `actions`, `select`, `drawer`, `topicscreen`, `thread`, `picker`, `tagrow`, `outbox`, `live`, `sw.js`…) |
 | `android/` | Приложение «Stream · телефон» на Kotlin: звонки и SMS в ленту, вопрос после звонка (`deploy/PHONE.md`) |
@@ -115,7 +121,8 @@ repo: https://github.com/890su/stream
 | Concept, model, steps | `CONCEPT.md` |
 | Current tasks | `PLAN.md` |
 | Decisions and reasons | `decisions.md` |
-| Step 1 plan | `docs/plans/2026-11-11-step1-journal-capture.md` |
+| Code map | `docs/CODEMAP.md` |
+| Package plans | `docs/plans/` (archive: `docs/archive/`) |
 | Data contracts | `contracts/*.schema.json` |
 | Intents, fields, connectors | `registry/` |
 | Reference messages | `golden/` |

@@ -1,3 +1,4 @@
+// Server entry point: reads .env, opens the journal store, starts HTTP, Telegram bots and the task triage.
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { JournalStore } from './store/store.ts';

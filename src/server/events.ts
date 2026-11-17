@@ -1,3 +1,4 @@
+// /api/events: append an event (POST) and page through the journal (GET).
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { JournalStore } from '../store/store.ts';
 import { validateEvent, isDateTime } from '../contracts/validate.ts';

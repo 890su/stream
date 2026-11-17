@@ -1,3 +1,4 @@
+// JournalStore: the append-only events table, media files, and the derived stores (actions, status, Telegram, tasks).
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, rmSync, existsSync, copyFileSync } from 'node:fs';

@@ -1,3 +1,4 @@
+// Event contract: JournalEvent type and a small JSON Schema interpreter for contracts/event.schema.json.
 import { readFileSync } from 'node:fs';
 import { HttpError } from '../server/errors.ts';
 

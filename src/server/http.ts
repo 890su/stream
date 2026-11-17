@@ -1,3 +1,4 @@
+// HTTP server: auth (owner and phone tokens), routing to API modules, static files, background workers.
 import { createServer } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import type { JournalStore } from '../store/store.ts';

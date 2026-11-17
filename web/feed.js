@@ -1,3 +1,4 @@
+// The feed: renders projected messages (bursts, topics, day pills, folded finished tasks), filters, paging and live updates.
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey, chatOf } from './projection.js';

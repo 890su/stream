@@ -1,3 +1,4 @@
+// Sending queued entries: media first, then the event; pure enough to test in node.
 async function accepted(response) {
   if (response.status === 200 || response.status === 201) return response.json();
   const body = await response.json().catch(() => ({}));

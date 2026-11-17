@@ -6,7 +6,8 @@
 
 ## Claude Rules
 
-- `CONTEXT.md` is the canonical AI entrypoint.
+- `CONTEXT.md` is the canonical AI entrypoint; `docs/CODEMAP.md` is the table of contents of the code — read it
+  before exploring files and update it when files are added, moved or split.
 - `PLAN.md` is the active task state.
 - `CONCEPT.md` is the source of truth; change it first, then code.
 - Update `PLAN.md` after completed work.

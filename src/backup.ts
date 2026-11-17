@@ -1,3 +1,4 @@
+// Nightly backup entry point: copies the database and media into a dated folder (deploy/stream-backup.timer).
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { JournalStore } from './store/store.ts';

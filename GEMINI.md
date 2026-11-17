@@ -5,6 +5,7 @@ Read first:
 1. `CONTEXT.md` — canonical AI entrypoint and navigation.
 2. `PLAN.md` — active tasks and blockers.
 3. `CONCEPT.md` — concept, model, contracts and steps (source of truth).
+4. `docs/CODEMAP.md` — table of contents of the code.
 
 ## Gemini Rules
 

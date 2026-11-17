@@ -102,3 +102,24 @@ export function createTagRow({ dictionary, getViews, onChange, lead = () => [], 
 
   return { update, reset, active, tagging, addNew, render };
 }
+
+const LINK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
+const UNLINK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-.5.5"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l.5-.5"/><path d="M4 4l16 16"/></svg>';
+
+function roundIcon(svg, label, onClick) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'chip round-chip';
+  button.innerHTML = svg;
+  button.setAttribute('aria-label', label);
+  button.onclick = onClick;
+  return button;
+}
+
+// Leading buttons of the tag row: link / unlink for a selection; "link" for a fresh draft; none while the
+// composer is in a mode or inside a topic (`quiet`).
+export function leadButtons({ selection, quiet, onPick }) {
+  if (selection) return [roundIcon(LINK, 'Привязать выбранные', () => selection.link()), roundIcon(UNLINK, 'Отвязать выбранные', () => selection.unlink())];
+  if (quiet) return [];
+  return [roundIcon(LINK, 'Связать новое сообщение с другим', () => onPick())];
+}

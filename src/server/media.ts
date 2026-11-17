@@ -1,3 +1,4 @@
+// /api/media/<sha256>: upload (PUT) and download with byte ranges (GET).
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { JournalStore } from '../store/store.ts';
 import { captureConfig } from '../config.ts';

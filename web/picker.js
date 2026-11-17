@@ -1,3 +1,4 @@
+// Link picker: search, open topics, recent messages and «choose in the feed».
 import { snippet } from './projection.js';
 
 const RECENT = 15;

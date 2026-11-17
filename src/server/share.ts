@@ -1,3 +1,4 @@
+// Android share target: a POSTed form becomes a journal event with its files.
 import { randomUUID, createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { JournalStore } from '../store/store.ts';

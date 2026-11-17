@@ -1,3 +1,4 @@
+// IndexedDB on the device: settings, the outbox queue and the cached journal.
 let connection;
 
 function open() {

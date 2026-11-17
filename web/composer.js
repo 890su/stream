@@ -1,12 +1,11 @@
+// The composer: text, voice, files, tags and modes (reply, edit, continue, reply to Telegram) of the next message.
 import { makeEntry, makeCorrection } from './shared.js';
 import { snippet } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
-import { createTagRow } from './tagrow.js';
+import { createTagRow, leadButtons } from './tagrow.js';
 import { accountTitle } from './tgbubble.js';
-import { chatOf } from './projection.js';
-
-const REPLY_WINDOW_MS = 24 * 3600 * 1000; // a bot answers only within 24 hours of an incoming message
+import { replyWindowClosed, outboundData } from './outbound.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
 
@@ -30,22 +29,8 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
   let topic = null; // { last: () => view }
   // While messages are selected (select.js) the tag row acts on the selection: link, unlink, tags.
   let selection = null; // { link(), unlink(), toggleTag(tag), stateOf(tag) }
-  const roundIcon = (svg, label, onClick) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'chip round-chip';
-    button.innerHTML = svg;
-    button.setAttribute('aria-label', label);
-    button.onclick = onClick;
-    return button;
-  };
   // Leading buttons of the tag row: "link" for the draft (picker.js), or link / unlink for a selection.
-  const lead = () => {
-    if (selection) return [roundIcon('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>', 'Привязать выбранные', () => selection.link()),
-      roundIcon('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-.5.5"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l.5-.5"/><path d="M4 4l16 16"/></svg>', 'Отвязать выбранные', () => selection.unlink())];
-    if (mode || topic) return [];
-    return [roundIcon('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>', 'Связать новое сообщение с другим', () => onPickRequest())];
-  };
+  const lead = () => leadButtons({ selection, quiet: Boolean(mode || topic), onPick: onPickRequest });
   // The connection of the draft: the explicit "continue" mode, or the topic screen.
   const continuation = () => (mode?.type === 'continue' ? { target: mode.view.id, on: true }
     : topic?.last() ? { target: topic.last().id, on: true } : undefined);
@@ -154,26 +139,12 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     updateAction();
   }
 
-  // The newest incoming message of the chat is older than 24 hours: the bot cannot answer there.
-  function windowClosed(chat) {
-    const last = getViews().filter((view) => view.event.author !== 'me' && view.event.payload?.data?.telegram && chatOf(view.event)?.key === chat.key).at(-1);
-    return !last || Date.now() - Date.parse(last.event.ts) > REPLY_WINDOW_MS;
-  }
-
-  // What a reply to Telegram carries: the chat, and the message it answers when there is one in that chat.
-  function outbound() {
-    const { chat, view } = mode;
-    const answered = view?.event.payload?.data?.telegram;
-    return {
-      connector: config.telegram?.accounts?.[chat.account]?.connector ?? `telegram_${chat.account}`, chat_id: chat.chat_id, chat_title: chat.title,
-      ...(answered && answered.chat_id === chat.chat_id ? { reply_to_message_id: answered.message_id } : {}),
-    };
-  }
+  const windowClosed = (chat) => replyWindowClosed(chat, getViews());
 
   async function sendOutbound() {
     const message = text.value.trim();
     if (!message) { notify('Напишите текст ответа: в Telegram уходит только текст'); return; }
-    await queue(await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), outbound: outbound(), replyTo: mode.view?.id }));
+    await queue(await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), outbound: outboundData(mode.chat, mode.view, config), replyTo: mode.view?.id }));
     text.value = '';
     setMode(chatDefault ? { type: 'outbound', chat: chatDefault } : null);
     autosize(); resetTags(); togglePanel(tagPanel, tagButton, false);

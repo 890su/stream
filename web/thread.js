@@ -1,3 +1,4 @@
+// History window: versions of a message (left-right) and related messages (up-down).
 import { versions, snippet } from './projection.js';
 
 const stamp = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });

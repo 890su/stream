@@ -1,3 +1,4 @@
+// Request body reading with a size limit, and JSON responses.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { HttpError } from './errors.ts';
 

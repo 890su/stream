@@ -1,3 +1,4 @@
+// Builders of journal entries on the device: messages, shares, owner corrections, task changes.
 export async function makeEntry({ kind = 'text', text = '', url, files = [], source = 'app', duration, tags = [], replyTo, tagging, continuation, outbound }) {
   const media = [];
   const storedFiles = [];
