@@ -45,11 +45,21 @@ connectors:
     title: Почта
     operations: []
 
-  telegram_business:
-    status: later
-    title: Telegram через бизнес-подключение
-    operations: []
-    notes: Ответ только в чатах, активных за последние 24 часа.
+  telegram_by:
+    status: planned
+    title: Telegram BY (шлюз аккаунта)
+    operations: [send_message]
+    irreversible: [send_message]
+    notes: >-
+      Шлюз — отдельный контейнер, клиентский API Telegram от имени владельца (CONCEPT.md §8.2). send_message —
+      класс C, только после подтверждения; params: chat, text, reply_to (номер сообщения). Сфера — работа BY.
+
+  telegram_pl:
+    status: planned
+    title: Telegram PL (шлюз аккаунта)
+    operations: [send_message]
+    irreversible: [send_message]
+    notes: Как telegram_by; сфера — работа PL.
 
   google_reviews:
     status: later
