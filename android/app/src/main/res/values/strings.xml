@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Stream · телефон</string>
+    <string name="intro">Звонки и SMS попадают в ленту Stream. После разговора приходит вопрос «О чём был звонок?» — ответ ляжет под звонком.</string>
+    <string name="connection">Связь</string>
+    <string name="server_hint">Адрес сервера</string>
+    <string name="token_hint">Токен телефона</string>
+    <string name="save_and_check">Сохранить и проверить связь</string>
+    <string name="checking">Проверяю…</string>
+    <string name="check_ok">✓ Связь есть, токен принят</string>
+    <string name="check_token">Сервер не принял токен телефона</string>
+    <string name="check_server">Сервер ответил ошибкой %1$d</string>
+    <string name="check_offline">Нет связи с сервером</string>
+    <string name="what_to_send">Что отправлять</string>
+    <string name="calls">Звонки</string>
+    <string name="sms">SMS</string>
+    <string name="sms_filter_hint">SMS от банков, служб доставки и коротких номеров не отправляются. Свои исключения — номера через запятую:</string>
+    <string name="exclusions_hint">Номера, которые не отправлять</string>
+    <string name="permissions">Разрешения</string>
+    <string name="permissions_ok">✓ Все разрешения выданы</string>
+    <string name="permissions_missing">Не выдано разрешений: %1$d</string>
+    <string name="grant_permissions">Выдать разрешения</string>
+    <string name="restricted_hint">Если Android не даёт выдать разрешение: «О приложении» → ⋮ → «Разрешить ограниченные настройки», затем снова «Выдать разрешения».</string>
+    <string name="open_app_info">О приложении</string>
+    <string name="battery_ok">✓ Экономия батареи не мешает</string>
+    <string name="battery_saving">Экономия батареи может усыплять приложение</string>
+    <string name="battery_button">Не экономить батарею</string>
+    <string name="state">Состояние</string>
+    <string name="status">Последняя отправка: %1$s</string>
+    <string name="never">ещё не было</string>
+    <string name="channel_after_call">После звонка</string>
+    <string name="channel_after_call_description">Вопрос «О чём был звонок?» после разговора</string>
+    <string name="what_was_it">О чём был звонок?</string>
+    <string name="note_hint">О чём договорились</string>
+    <string name="describe">Описать</string>
+    <string name="not_needed">Не нужно</string>
+    <string name="saved">Записано в Stream</string>
+</resources>

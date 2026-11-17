@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView style="@style/Heading" android:text="@string/app_name" android:textSize="24sp" />
+        <TextView style="@style/Hint" android:text="@string/intro" />
+
+        <TextView style="@style/Heading" android:text="@string/connection" />
+        <EditText
+            android:id="@+id/server"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/server_hint"
+            android:inputType="textUri"
+            android:importantForAutofill="no" />
+        <EditText
+            android:id="@+id/token"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/token_hint"
+            android:inputType="textPassword"
+            android:importantForAutofill="no" />
+        <Button android:id="@+id/save" style="@style/Action" android:text="@string/save_and_check" />
+        <TextView android:id="@+id/check_result" style="@style/Hint" />
+
+        <TextView style="@style/Heading" android:text="@string/what_to_send" />
+        <Switch android:id="@+id/calls" style="@style/Toggle" android:text="@string/calls" />
+        <Switch android:id="@+id/sms" style="@style/Toggle" android:text="@string/sms" />
+        <TextView style="@style/Hint" android:text="@string/sms_filter_hint" />
+        <EditText
+            android:id="@+id/exclusions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/exclusions_hint"
+            android:inputType="phone|textMultiLine"
+            android:importantForAutofill="no" />
+
+        <TextView style="@style/Heading" android:text="@string/permissions" />
+        <TextView android:id="@+id/permissions_state" style="@style/Hint" />
+        <Button android:id="@+id/permissions" style="@style/Action" android:text="@string/grant_permissions" />
+        <TextView style="@style/Hint" android:text="@string/restricted_hint" />
+        <Button android:id="@+id/app_info" style="@style/Action" android:text="@string/open_app_info" />
+        <TextView android:id="@+id/battery_state" style="@style/Hint" />
+        <Button android:id="@+id/battery" style="@style/Action" android:text="@string/battery_button" />
+
+        <TextView style="@style/Heading" android:text="@string/state" />
+        <TextView android:id="@+id/status" style="@style/Hint" />
+    </LinearLayout>
+</ScrollView>
