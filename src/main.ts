@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { JournalStore } from './store/store.ts';
 import { createApp } from './server/http.ts';
+import { anthropicPlanner } from './tasks/anthropic.ts';
 import { captureConfig, telegramConfig } from './config.ts';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -16,8 +17,9 @@ const phoneToken = process.env.STREAM_PHONE_TOKEN || undefined;
 const tokens = Object.fromEntries(Object.keys(telegramConfig.accounts)
   .map((account) => [account, process.env[`STREAM_TG_${account.toUpperCase()}_BOT_TOKEN`] ?? ''] as const).filter(([, value]) => value));
 // TELEGRAM_API_BASE — only for local tests against a fake Bot API.
-// Task triage (CONCEPT.md §2.8): the AI planner is connected once the Anthropic SDK is installed.
-const triage = { planner: null, reason: 'ИИ не подключён: нужен ключ ANTHROPIC_API_KEY и библиотека @anthropic-ai/sdk' };
+// Task triage (CONCEPT.md §2.8): without ANTHROPIC_API_KEY the triage is off and the System screen says so.
+const aiKey = process.env.ANTHROPIC_API_KEY || '';
+const triage = { planner: aiKey ? anthropicPlanner(aiKey) : null, reason: 'нет ключа ANTHROPIC_API_KEY в /srv/stream/.env — задачи пока вручную' };
 const server = createApp({ store, ownerToken, phoneToken, telegram: { tokens, apiBase: process.env.TELEGRAM_API_BASE || undefined }, triage });
 // Bind to loopback by default; the container sets HOST=0.0.0.0 and Docker publishes only on host loopback.
 const host = process.env.HOST || '127.0.0.1';

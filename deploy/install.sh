@@ -48,6 +48,7 @@ if ! grep -q '^STREAM_PHONE_TOKEN=' "$ENV_FILE"; then
   echo "STREAM_PHONE_TOKEN=$(openssl rand -hex 32)" >> "$ENV_FILE"
   echo "Added a phone token to $ENV_FILE (read it with: sudo grep PHONE $ENV_FILE)"
 fi
+grep -Eq '^ANTHROPIC_API_KEY=.+' "$ENV_FILE" && echo "AI: ANTHROPIC_API_KEY is set" || echo "AI: ANTHROPIC_API_KEY is missing in $ENV_FILE - task triage is off"
 # Telegram bot tokens: report which are set (never their values).
 for KEY in STREAM_TG_BY_BOT_TOKEN STREAM_TG_PL_BOT_TOKEN; do
   if grep -Eq "^$KEY=[0-9]+:[A-Za-z0-9_-]{30,}[[:space:]]*$" "$ENV_FILE"; then echo "Telegram: $KEY is set"
