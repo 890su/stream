@@ -30,3 +30,14 @@ golden/*.local.jsonl
 
 # content, never system: any local data file (CONTEXT.md, rule 15)
 *.local.*
+
+# Android companion (android/): build output, local SDK path, signing key and its password
+android/.gradle/
+android/build/
+android/app/build/
+android/.kotlin/
+android/local.properties
+android/keystore.local.properties
+*.jks
+*.keystore
+*.apk

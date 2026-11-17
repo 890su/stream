@@ -3,3 +3,6 @@
 *.jpg binary
 *.webm binary
 *.db binary
+*.bat text eol=crlf
+gradlew text eol=lf
+*.jar binary
