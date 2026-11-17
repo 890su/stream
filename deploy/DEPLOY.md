@@ -19,7 +19,7 @@ Stream живёт на srv-150 отдельно от остальных прое
 | Код | `/srv/stream/app` — checkout из GitHub, владелец root |
 | База и медиа | `/srv/stream/data` (права 700, владелец `stream`) |
 | Копии | `/srv/stream/backups`, ночью в 03:15, хранятся 30 дней |
-| Секреты | `/srv/stream/.env` (600): `STREAM_OWNER_TOKEN`, `STREAM_UID`, `STREAM_GID` |
+| Секреты | `/srv/stream/.env` (600): `STREAM_OWNER_TOKEN`, `STREAM_PHONE_TOKEN` (только `/api/phone/*`, для приложения «Stream · телефон»), `STREAM_UID`, `STREAM_GID` |
 | Контейнер | свой compose-проект `stream` и своя сеть; без прав (`cap_drop: ALL`), файловая система только для чтения, 256 МБ, 0,5 CPU |
 | Порт | `127.0.0.1:3790` на хосте; наружу — только через Cloudflare Tunnel |
 
@@ -101,6 +101,10 @@ sudo systemctl disable --now stream-backup.timer
 sudo rm /etc/systemd/system/stream-backup.{service,timer}
 # /srv/stream (данные и копии) удалять только вручную и осознанно
 ```
+
+## Приложение «Stream · телефон» (звонки и SMS)
+
+Сборка, установка и настройка — `deploy/PHONE.md`. Токен телефона: `sudo grep PHONE /srv/stream/.env`.
 
 ## Проверка владельцем на телефоне
 
