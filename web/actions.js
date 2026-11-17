@@ -32,6 +32,8 @@ export function setupActions({ list, getView, onAction }) {
     const archived = view.archived;
     archiveButton.querySelector('span').textContent = archived ? 'Вернуть' : 'В архив';
     archiveButton.setAttribute('aria-label', archived ? 'Вернуть из архива' : 'В архив');
+    // A call has no text and an SMS text is not the owner's to rewrite (CONCEPT.md §8.1).
+    panel.querySelector('[data-op="edit"]').hidden = view.event.kind === 'call' || view.event.kind === 'sms';
     const linkButton = panel.querySelector('[data-op="link"]');
     linkButton.querySelector('span').textContent = view.continues ? 'Отделить' : 'Связать';
     linkButton.setAttribute('aria-label', view.continues ? 'Отделить от предыдущего' : 'Связать с предыдущим сообщением');

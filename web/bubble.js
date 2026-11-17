@@ -1,5 +1,6 @@
 import { formatDuration } from './voice.js';
 import { snippet } from './projection.js';
+import { phoneBlock, isPhoneEvent } from './phonebubble.js';
 
 // Static, trusted icon markup. User content is only ever set through textContent.
 const ICONS = {
@@ -215,6 +216,8 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits, 
   bubble.classList.toggle('has-text', Boolean(view.text || payload.url));
   bubble.classList.toggle('has-tags', view.tags.length > 0);
   bubble.classList.toggle('archived', Boolean(faded ?? view.archived));
+  // Someone else's SMS sits on the left, like a chat partner's message (CONCEPT.md §8.1).
+  bubble.classList.toggle('incoming', event.kind === 'sms' && payload.data?.sms?.direction === 'in');
 
   // Mouse users: a "more" button next to the bubble; touch users long-press (actions.js).
   const more = element('button', 'more');
@@ -232,6 +235,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits, 
     quote.onclick = (clickEvent) => { clickEvent.stopPropagation(); if (!view.replyTo.deleted) jump(view.replyTo.id); };
     bubble.append(quote);
   }
+  if (isPhoneEvent(event)) bubble.append(phoneBlock(view));
   if (photos.length) bubble.append(gallery(photos, load, notify, view));
   for (const reference of media) {
     if (reference.mime.startsWith('image/')) continue;

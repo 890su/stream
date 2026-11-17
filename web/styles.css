@@ -419,3 +419,19 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row) { display: none 
    and the drawer only vertical scrolling is left to the browser (pan-y also removes the double-tap delay). */
 #messages *, .drawer, .drawer * { touch-action: pan-y; }
 .drawer-backdrop { touch-action: none; }
+
+/* Calls and SMS from the phone companion (phonebubble.js) */
+.bubble.incoming { align-self: flex-start; background: var(--panel); color: var(--bar-text); border-radius: 14px 14px 14px 4px; }
+.bubble.incoming .meta, .bubble.incoming .tags { color: var(--muted); }
+.phone-block { display: grid; gap: 2px; padding: 2px 0 4px; }
+.phone-head { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--bubble-meta); }
+.bubble.incoming .phone-head { color: var(--muted); }
+.phone-head.missed, .phone-head.rejected { color: var(--danger); }
+.phone-icon svg { width: 20px; height: 20px; display: block; }
+.phone-who { font-size: 16px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.phone-who a { color: var(--link); text-decoration: none; font-weight: 500; }
+.phone-number { font-size: 13.5px; color: var(--muted); }
+.phone-describe {
+  justify-self: start; margin-top: 6px; height: 32px; padding: 0 14px; border-radius: 16px; font-size: 14px; font-weight: 600;
+  background: color-mix(in srgb, var(--bubble-meta) 16%, transparent); color: var(--bubble-meta);
+}

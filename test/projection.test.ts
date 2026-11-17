@@ -105,3 +105,23 @@ test('a topic is archived and restored on its first message; the whole chain rep
   assert.equal(chains(project([a, b, archive])).get(b.id).archived, true);
   assert.equal(chains(project([a, b, archive, fix(a.id, 'topic_unarchive', { data: { op: 'topic_unarchive' } })])).get(b.id).archived, false);
 });
+
+test('calls and SMS get a header from their data; hidden numbers are named', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { phoneLabel } = await import('../web/phonebubble.js');
+  const call = (data: Record<string, unknown>) => ({ kind: 'call', payload: { data: { call: { started_at: at(), ...data } } } });
+  const sms = (data: Record<string, unknown>) => ({ kind: 'sms', payload: { text: 'Буду в 10', data: { sms: { sent_at: at(), ...data } } } });
+  assert.deepEqual(phoneLabel(call({ direction: 'in', number: '+48500000001', duration_s: 75 })), { icon: 'in', title: 'Входящий · 1 мин 15 с', who: '+48500000001', number: '+48500000001' });
+  assert.equal(phoneLabel(call({ direction: 'out', number: '+48500000001', duration_s: 12 })).title, 'Исходящий · 12 с');
+  assert.equal(phoneLabel(call({ direction: 'out', number: '1', duration_s: 3720 })).title, 'Исходящий · 1 ч 2 мин');
+  assert.equal(phoneLabel(call({ direction: 'missed', number: '+48500000001' })).title, 'Пропущенный');
+  assert.equal(phoneLabel(call({ direction: 'rejected', number: '+48500000001' })).title, 'Отклонённый');
+  assert.deepEqual(phoneLabel(call({ direction: 'missed', number: '' })), { icon: 'missed', title: 'Пропущенный', who: 'Скрытый номер', number: null });
+  assert.equal(phoneLabel(call({ direction: 'in', number: '+48500000001', name: 'Анна', duration_s: 5 })).who, 'Анна');
+  assert.equal(phoneLabel(sms({ direction: 'in', number: '+48500000002' })).title, 'Входящее SMS');
+  assert.equal(phoneLabel(sms({ direction: 'out', number: '+48500000002' })).icon, 'sms-out');
+
+  const [callView, smsView] = project([{ id: crypto.randomUUID(), ...call({ direction: 'in', number: '1' }), ts: at() }, { id: crypto.randomUUID(), ...sms({ direction: 'in', number: '2' }), ts: at() }]);
+  assert.equal(snippet(callView), 'Входящий · 1');
+  assert.equal(snippet(smsView), 'Буду в 10');
+});

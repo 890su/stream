@@ -1,3 +1,5 @@
+import { phoneLabel } from './phonebubble.js';
+
 // Folds journal events into what the feed shows (CONCEPT.md §2.4). Pure: no DOM, no storage.
 // Messages keep their original event; corrections change only the view, latest correction wins.
 
@@ -56,7 +58,8 @@ export function snippet(view) {
   const text = (view.text ?? '').trim().replace(/\s+/g, ' ');
   if (text) return text.length > 80 ? `${text.slice(0, 79)}…` : text;
   const kind = view.event?.kind;
-  return kind === 'voice' ? 'Голосовое' : kind === 'photo' ? 'Фото' : kind === 'file' ? 'Файл' : 'Сообщение';
+  if (kind === 'call') { const label = phoneLabel(view.event); return `${label.title} · ${label.who}`; }
+  return kind === 'voice' ? 'Голосовое' : kind === 'photo' ? 'Фото' : kind === 'file' ? 'Файл' : kind === 'call' ? 'Звонок' : kind === 'sms' ? 'SMS' : 'Сообщение';
 }
 
 // Every message connected to `id` through replies and continuations (until topics exist, the "related" ones).
