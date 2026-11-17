@@ -7,12 +7,18 @@ import { json } from './body.ts';
 import { events } from './events.ts';
 import { media } from './media.ts';
 import { share } from './share.ts';
+import { phone } from './phone.ts';
 import { staticFile } from './static.ts';
 import { LiveFeed } from './live.ts';
 
-export function createApp({ store, ownerToken }: { store: JournalStore; ownerToken: string }) {
+const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
+
+// phoneToken (optional) opens only /api/phone/*: the Android companion never holds the owner token.
+export function createApp({ store, ownerToken, phoneToken }: { store: JournalStore; ownerToken: string; phoneToken?: string }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
-  const expected = createHash('sha256').update(`Bearer ${ownerToken}`).digest();
+  if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
+  const expected = bearer(ownerToken);
+  const expectedPhone = phoneToken === undefined ? undefined : bearer(phoneToken);
   const live = new LiveFeed();
   return createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -22,7 +28,11 @@ export function createApp({ store, ownerToken }: { store: JournalStore; ownerTok
       const url = new URL(request.url ?? '/', 'http://localhost');
       if (url.pathname.startsWith('/api/') || (url.pathname === '/share-target' && request.method === 'POST')) {
         const actual = createHash('sha256').update(request.headers.authorization ?? '').digest();
-        if (!timingSafeEqual(expected, actual)) { response.setHeader('WWW-Authenticate', 'Bearer'); throw new HttpError(401, 'Введите токен владельца в настройках'); }
+        const isPhonePath = url.pathname.startsWith('/api/phone/');
+        const owner = timingSafeEqual(expected, actual);
+        const phoneAllowed = isPhonePath && expectedPhone !== undefined && timingSafeEqual(expectedPhone, actual);
+        if (!owner && !phoneAllowed) { response.setHeader('WWW-Authenticate', 'Bearer'); throw new HttpError(401, isPhonePath ? 'Проверьте токен телефона' : 'Введите токен владельца в настройках'); }
+        if (isPhonePath) return await phone(request, response, url.pathname.slice('/api/phone/'.length), store, live);
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
         if (url.pathname === '/api/events') return await events(request, response, url, store, live);
         if (url.pathname.startsWith('/api/media/')) return await media(request, response, url.pathname.slice('/api/media/'.length), store);

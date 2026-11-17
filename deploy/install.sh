@@ -41,6 +41,11 @@ if [ ! -f "$ENV_FILE" ]; then
     } > "$ENV_FILE" )
   echo "Created $ENV_FILE with a new owner token (read it with: sudo grep TOKEN $ENV_FILE)"
 fi
+# Phone companion token (opens only /api/phone/*), added to older .env files too.
+if ! grep -q '^STREAM_PHONE_TOKEN=' "$ENV_FILE"; then
+  echo "STREAM_PHONE_TOKEN=$(openssl rand -hex 32)" >> "$ENV_FILE"
+  echo "Added a phone token to $ENV_FILE (read it with: sudo grep PHONE $ENV_FILE)"
+fi
 chmod 600 "$ENV_FILE"
 ln -sfn "$ENV_FILE" "$APP/deploy/.env"   # compose reads variables from the project directory
 

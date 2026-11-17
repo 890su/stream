@@ -10,7 +10,9 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Нек
 const ownerToken = process.env.STREAM_OWNER_TOKEN ?? '';
 if (ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`Задайте STREAM_OWNER_TOKEN длиной минимум ${captureConfig.min_owner_token_length} символа`);
 const store = new JournalStore(resolve(process.env.DATA_DIR || 'data'));
-const server = createApp({ store, ownerToken });
+// Optional: without it the phone companion cannot write; the owner token still opens /api/phone/*.
+const phoneToken = process.env.STREAM_PHONE_TOKEN || undefined;
+const server = createApp({ store, ownerToken, phoneToken });
 // Bind to loopback by default; the container sets HOST=0.0.0.0 and Docker publishes only on host loopback.
 const host = process.env.HOST || '127.0.0.1';
 server.listen(port, host, () => console.log(`Stream http://${host}:${port}`));

@@ -1,23 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fixture, event, token } from './helpers.ts';
-
-// Reads the event stream until `predicate` matches the accumulated text or the timeout passes.
-async function readUntil(response: Response, predicate: (text: string) => boolean, timeoutMs = 3000): Promise<string> {
-  const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
-  let text = '';
-  const deadline = Date.now() + timeoutMs;
-  try {
-    while (!predicate(text)) {
-      const left = deadline - Date.now();
-      if (left <= 0) break;
-      const chunk = await Promise.race([reader.read(), new Promise<null>((resolve) => setTimeout(() => resolve(null), left))]);
-      if (!chunk || chunk.done) break;
-      text += chunk.value;
-    }
-  } finally { await reader.cancel().catch(() => {}); }
-  return text;
-}
+import { fixture, event, token, readUntil } from './helpers.ts';
 
 const appended = (text: string) => [...text.matchAll(/event: append\ndata: (.+)\n\n/g)].map((match) => JSON.parse(match[1]!));
 
