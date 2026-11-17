@@ -37,7 +37,8 @@ export function setupActions({ list, getView, onAction }) {
     const telegram = view.event.payload?.data?.telegram;
     panel.querySelector('[data-op="edit"]').hidden = view.event.kind === 'call' || view.event.kind === 'sms' || Boolean(telegram && view.event.author !== 'me')
       || Boolean(view.event.payload?.data?.outbound);
-    panel.querySelector('[data-op="tg-reply"]').hidden = !telegram;
+    // Replies go only to personal chats: in a group the bot would speak for itself (CONCEPT.md §8.2).
+    panel.querySelector('[data-op="tg-reply"]').hidden = !telegram || telegram.chat_type === 'group';
     const linkButton = panel.querySelector('[data-op="link"]');
     linkButton.querySelector('span').textContent = view.continues ? 'Отделить' : 'Связать';
     linkButton.setAttribute('aria-label', view.continues ? 'Отделить от предыдущего' : 'Связать с предыдущим сообщением');

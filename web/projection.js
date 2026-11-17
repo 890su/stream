@@ -70,10 +70,12 @@ export function project(events, pendingIds = new Set()) {
       // A topic is archived on its first message; the whole chain follows it (feed.js, drawer.js).
       case 'topic_archive': view.topicArchived = true; break;
       case 'topic_unarchive': view.topicArchived = false; break;
+      // Deleted by its author in Telegram: the message stays, marked (CONCEPT.md §8.2).
+      case 'remote_delete': view.remoteDeleted = true; break;
       default: break;
     }
   }
-  // A reply to a messenger: «отправляется» until the gateway reports, then «в Telegram» or «не отправлено».
+  // A reply to a messenger: «отправляется» until the bot reports, then «в Telegram» or «не отправлено».
   for (const view of views.values()) {
     if (!view.event.payload?.data?.outbound) continue;
     const result = deliveries.get(view.id);

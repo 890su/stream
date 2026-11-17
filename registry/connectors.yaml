@@ -47,19 +47,20 @@ connectors:
 
   telegram_by:
     status: planned
-    title: Telegram BY (шлюз аккаунта)
+    title: Telegram BY (бот аккаунта)
     operations: [send_message]
     irreversible: [send_message]
     notes: >-
-      Шлюз — отдельный контейнер, клиентский API Telegram от имени владельца (CONCEPT.md §8.2). send_message —
-      класс C, только после подтверждения; params: chat, text, reply_to (номер сообщения). Сфера — работа BY.
+      Бизнес-бот «Stream BY», подключённый к аккаунту (CONCEPT.md §8.2); сервер шлёт sendMessage с
+      business_connection_id. send_message — класс C, только после подтверждения; только личные чаты с входящим
+      за 24 часа. params: chat_id, text, reply_to_message_id. Сфера — работа BY.
 
   telegram_pl:
     status: planned
-    title: Telegram PL (шлюз аккаунта)
+    title: Telegram PL (бот аккаунта)
     operations: [send_message]
     irreversible: [send_message]
-    notes: Как telegram_by; сфера — работа PL.
+    notes: Как telegram_by, бот «Stream PL»; сфера — работа PL.
 
   google_reviews:
     status: later

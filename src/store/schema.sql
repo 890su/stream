@@ -58,3 +58,32 @@ CREATE TABLE IF NOT EXISTS source_status (
   last_event_at TEXT,
   info TEXT
 );
+
+-- Telegram business connections of the account bots (CONCEPT.md §8.2). Anyone who knows a bot's name can
+-- connect it; only accounts the owner trusted on the System screen are read and answered.
+CREATE TABLE IF NOT EXISTS tg_connections (
+  id TEXT PRIMARY KEY,
+  account TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  user_name TEXT,
+  can_reply INTEGER NOT NULL,
+  enabled INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tg_trust (
+  account TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  trusted INTEGER NOT NULL,
+  decided_at TEXT NOT NULL,
+  PRIMARY KEY (account, user_id)
+);
+-- Groups a bot is a member of; a group is read while the account that added the bot is trusted.
+CREATE TABLE IF NOT EXISTS tg_groups (
+  account TEXT NOT NULL,
+  chat_id TEXT NOT NULL,
+  title TEXT,
+  added_by TEXT,
+  member INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (account, chat_id)
+);

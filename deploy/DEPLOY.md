@@ -108,8 +108,9 @@ sudo rm /etc/systemd/system/stream-backup.{service,timer}
 
 ## Telegram BY и PL
 
-`install.sh` ставит контейнеры шлюзов `tg-by` и `tg-pl` и дописывает их токены в `.env`. `api_id` и вход в
-аккаунты — владелец, по `deploy/TELEGRAM.md`.
+Боты работают внутри Stream. Владелец создаёт их в @BotFather, кладёт токены `STREAM_TG_BY_BOT_TOKEN` /
+`STREAM_TG_PL_BOT_TOKEN` в `/srv/stream/.env` и подключает к аккаунтам — `deploy/TELEGRAM.md`. Старые строки
+`STREAM_TG_*_TOKEN`, `TG_API_*` и папку `/srv/stream/tg/` от прежнего шлюза можно удалить.
 
 ## Проверка владельцем на телефоне
 

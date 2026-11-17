@@ -7,6 +7,8 @@ import { nameId } from '../ids.ts';
 import { HttpError } from './errors.ts';
 import { json } from './body.ts';
 import type { LiveFeed } from './live.ts';
+import type { TelegramBot } from '../telegram/bot.ts';
+import { readBody } from './body.ts';
 
 // The System screen (CONCEPT.md §5): what works without the owner, its state and its actions.
 // State transitions become `system` events in the feed; the pulse itself stays out of the journal.
@@ -54,15 +56,30 @@ export function watchSilence(store: JournalStore, live: LiveFeed): () => void {
   return () => clearInterval(timer);
 }
 
-export async function system(request: IncomingMessage, response: ServerResponse, path: string, store: JournalStore, live: LiveFeed): Promise<void> {
+export async function system(request: IncomingMessage, response: ServerResponse, path: string, store: JournalStore, live: LiveFeed, bots: TelegramBot[] = []): Promise<void> {
   if (path === 'system' && request.method === 'GET') {
     const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
     const known = new Map(store.status.all().map((item) => [item.source, item]));
     for (const account of Object.values(telegramConfig.accounts)) if (!known.has(account.connector)) {
-      known.set(account.connector, { source: account.connector, state: 'silent', detail: 'шлюз ещё не подключён', pulse_at: null, last_event_at: null, info: null });
+      known.set(account.connector, { source: account.connector, state: 'silent', detail: 'нет токена бота в /srv/stream/.env — см. deploy/TELEGRAM.md', pulse_at: null, last_event_at: null, info: null });
     }
     const sources = [...known.values()].map((item) => ({ ...item, title: sourceTitle(item.source), failed_24h: store.actions.failedSince(item.source, dayAgo) }));
-    json(response, 200, { sources, actions: store.actions.recent(30), exclusions: store.telegram.exclusions() });
+    const telegram = {
+      bots: Object.fromEntries(bots.map((bot) => [bot.account, bot.username])),
+      connections: store.connections.list(), groups: store.connections.groups(),
+    };
+    json(response, 200, { sources, actions: store.actions.recent(30), exclusions: store.telegram.exclusions(), telegram });
+    return;
+  }
+  // The owner's decision on an account connected to a bot: trusted — its chats are read and answered.
+  if (path === 'telegram/trust' && request.method === 'POST') {
+    let body: { account?: unknown; user_id?: unknown; trusted?: unknown };
+    try { body = JSON.parse((await readBody(request, 4096)).toString('utf8')); } catch { throw new HttpError(400, 'Некорректный JSON'); }
+    if (typeof body.account !== 'string' || !telegramConfig.accounts[body.account] || typeof body.user_id !== 'string' || typeof body.trusted !== 'boolean') {
+      throw new HttpError(400, 'Нужны account, user_id и trusted');
+    }
+    store.connections.decide(body.account, body.user_id, body.trusted);
+    response.writeHead(204, { 'Cache-Control': 'no-store' }).end();
     return;
   }
   const retry = /^actions\/([0-9a-f-]{36})\/retry$/.exec(path);

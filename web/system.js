@@ -1,6 +1,7 @@
-// The System screen (CONCEPT.md §5): what works without the owner — gateways, the phone companion —
+// The System screen (CONCEPT.md §5): what works without the owner — Telegram bots, the phone companion —
 // its state, the replies sent outside, and the chats switched off with «Не отслеживать».
 import { getSetting } from './db.js';
+import { accountTitle } from './tgbubble.js';
 
 const STATE = { ok: 'работает', silent: 'молчит', login_required: 'нужен вход', error: 'ошибка' };
 const ACTION = { proposed: 'ждёт', approved: 'в очереди', running: 'отправляется', done: 'отправлено', failed: 'не отправлено', rejected: 'отменено' };
@@ -27,11 +28,12 @@ export function setupSystem({ notify, onTrack }) {
   const sources = document.querySelector('#system-sources');
   const actions = document.querySelector('#system-actions');
   const exclusions = document.querySelector('#system-exclusions');
+  const telegramBox = document.querySelector('#system-telegram');
 
   async function call(path, init = {}) {
-    const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${await getSetting('ownerToken')}` } });
+    const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${await getSetting('ownerToken')}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
     if (!response.ok) throw new Error(response.status === 401 ? 'Токен не принят' : 'Сервер недоступен');
-    return response.json();
+    return response.status === 204 ? null : response.json();
   }
 
   function sourceRow(item) {
@@ -62,6 +64,36 @@ export function setupSystem({ notify, onTrack }) {
     return row;
   }
 
+  // Accounts connected to the bots (CONCEPT.md §8.2): only trusted ones are read and answered.
+  function connectionRow(item) {
+    const row = element('div', 'system-row connection');
+    const state = item.trusted === true ? (item.enabled ? 'принято' : 'бот отключён в Telegram') : item.trusted === false ? 'отклонено' : 'ждёт решения';
+    row.append(element('span', '', `${accountTitle(item.account)} · ${item.user_name ?? item.user_id}`), element('span', `state ${item.trusted === false ? 'failed' : ''}`, state));
+    const decide = (label, trusted) => {
+      const button = element('button', 'link-button', label);
+      button.type = 'button';
+      button.onclick = async () => {
+        try { await call('/api/telegram/trust', { method: 'POST', body: JSON.stringify({ account: item.account, user_id: item.user_id, trusted }) }); render(); }
+        catch (error) { notify(error.message); }
+      };
+      return button;
+    };
+    if (item.trusted !== true) row.append(decide('Принять', true));
+    if (item.trusted !== false) row.append(decide(item.trusted ? 'Отключить' : 'Отклонить', false));
+    return row;
+  }
+
+  function telegramRows(data) {
+    const rows = [];
+    for (const [account, username] of Object.entries(data.bots ?? {})) {
+      rows.push(element('p', 'system-detail', `${accountTitle(account)}: бот @${username ?? '…'} — подключите его в Telegram: Настройки → Telegram для бизнеса → Чат-боты`));
+    }
+    rows.push(...(data.connections ?? []).map(connectionRow));
+    const groups = (data.groups ?? []).filter((group) => group.member);
+    if (groups.length) rows.push(element('p', 'system-detail', `Группы: ${groups.map((group) => `${group.title ?? group.chat_id} (${accountTitle(group.account)}${group.allowed ? '' : ', не читается'})`).join(', ')}`));
+    return rows.length ? rows : [element('p', 'system-empty', 'Боты Telegram не настроены — см. deploy/TELEGRAM.md')];
+  }
+
   function exclusionRow(item) {
     const row = element('div', 'system-row');
     row.append(element('span', '', item.chat_title || item.chat_id));
@@ -81,6 +113,7 @@ export function setupSystem({ notify, onTrack }) {
     try {
       const data = await call('/api/system');
       sources.replaceChildren(...data.sources.map(sourceRow));
+      telegramBox.replaceChildren(...telegramRows(data.telegram ?? {}));
       actions.replaceChildren(...(data.actions.length ? data.actions.map(actionRow) : [element('p', 'system-empty', 'Ответов наружу ещё не было')]));
       exclusions.replaceChildren(...(data.exclusions.length ? data.exclusions.map(exclusionRow) : [element('p', 'system-empty', 'Все чаты отслеживаются')]));
     } catch (error) {

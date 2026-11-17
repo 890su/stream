@@ -11,6 +11,7 @@ import { checkTelegram } from '../contracts/telegram.ts';
 import { ActionStore } from './actions.ts';
 import { StatusStore } from './status.ts';
 import { TelegramQueries } from './telegram.ts';
+import { ConnectionStore } from './connections.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
 
@@ -37,6 +38,7 @@ export class JournalStore {
   readonly actions: ActionStore;
   readonly status: StatusStore;
   readonly telegram: TelegramQueries;
+  readonly connections: ConnectionStore;
 
   constructor(directory: string) {
     mkdirSync(directory, { recursive: true });
@@ -47,6 +49,7 @@ export class JournalStore {
     this.actions = new ActionStore(this.#db);
     this.status = new StatusStore(this.#db);
     this.telegram = new TelegramQueries(this.#db);
+    this.connections = new ConnectionStore(this.#db);
   }
 
   close(): void { this.#db.close(); }

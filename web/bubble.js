@@ -34,7 +34,7 @@ function sizeLabel(bytes) {
 
 export function bubbleSignature(view, queued, chain) {
   const reply = view.replyTo && [view.replyTo.id, snippet(view.replyTo)];
-  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply, view.delivery,
+  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply, view.delivery, view.remoteDeleted,
     chain && [chain.index, chain.ids.length, chain.title],
     queued ? queued.error || 'queued' : 'accepted']);
 }
@@ -43,6 +43,7 @@ function meta(view, queued, extraClass = '', hasHistory = false) {
   const event = view.event;
   const box = element('span', `meta ${extraClass}`.trim());
   if (view.archived) box.append(element('span', 'meta-note', 'в архиве'));
+  if (view.remoteDeleted) box.append(element('span', 'meta-note', 'удалено в Telegram'));
   // A small link instead of the word "edited": opens versions and related messages (thread.js).
   if (hasHistory) {
     const link = element('button', 'history-link');

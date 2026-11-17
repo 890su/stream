@@ -37,17 +37,21 @@ export class ActionStore {
       .run(nameId(`action|${event.id}`), outbound.connector, JSON.stringify(params), event.id, event.id, at, at);
   }
 
-  // Approved actions for a connector become running; running ones are handed out again after a restart
-  // (the connector makes the side effect idempotent with the action id).
-  claim(connector: string): Action[] {
-    const rows = this.#db.prepare("SELECT * FROM actions WHERE connector = ? AND status IN ('approved', 'running') ORDER BY created_at")
-      .all(connector) as unknown as ActionRow[];
+  // Sending through the Bot API is not idempotent: an action left `running` by a restart may or may not have
+  // gone out, so it is not sent again — it fails with a request to check in Telegram (CONCEPT.md §8.2).
+  failRunning(connector: string, error: string): Action[] {
+    const rows = this.#db.prepare("SELECT id FROM actions WHERE connector = ? AND status = 'running'").all(connector) as { id: string }[];
     const now = new Date().toISOString();
-    for (const row of rows) if (row.status === 'approved') {
-      this.#db.prepare("UPDATE actions SET status = 'running', updated_at = ? WHERE id = ?").run(now, row.id);
-      row.status = 'running'; row.updated_at = now;
-    }
-    return rows.map(fromRow);
+    for (const row of rows) this.#db.prepare("UPDATE actions SET status = 'failed', error = ?, updated_at = ? WHERE id = ?").run(error, now, row.id);
+    return rows.map((row) => this.get(row.id)!);
+  }
+
+  // The next approved action becomes running.
+  take(connector: string): Action | undefined {
+    const row = this.#db.prepare("SELECT id FROM actions WHERE connector = ? AND status = 'approved' ORDER BY created_at LIMIT 1").get(connector) as { id: string } | undefined;
+    if (!row) return undefined;
+    this.#db.prepare("UPDATE actions SET status = 'running', updated_at = ? WHERE id = ?").run(new Date().toISOString(), row.id);
+    return this.get(row.id);
   }
 
   hasWork(connector: string): boolean {

@@ -13,10 +13,9 @@ export const tagConfig = JSON.parse(readFileSync(new URL('../registry/tags.json'
   tags: Array<{ tag: string; intent?: string; hints: string[] }>;
 };
 
-// Telegram account gateways (CONCEPT.md §8.2): accounts, folder name, limits and timings.
+// Telegram account bots (CONCEPT.md §8.2): accounts, file limit, reply window, silence threshold.
 export const telegramConfig = JSON.parse(readFileSync(new URL('../registry/telegram.json', import.meta.url), 'utf8')) as {
   version: number;
   accounts: Record<string, { title: string; connector: string; sphere: string; timezone: string }>;
-  folder: string; media_max_bytes: number; backfill_max_per_chat: number;
-  pulse_every_s: number; silent_after_s: number; actions_wait_s: number; config_poll_s: number;
+  media_max_bytes: number; silent_after_s: number; reply_window_h: number;
 };

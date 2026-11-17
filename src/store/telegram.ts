@@ -32,6 +32,22 @@ export class TelegramQueries {
     return row?.id;
   }
 
+  albumFirst(account: string, chatId: string, albumId: string): string | undefined {
+    const row = this.#db.prepare(`SELECT id FROM events WHERE source = 'telegram' AND kind != 'correction'
+        AND json_extract(payload, '$.data.telegram.account') = ? AND json_extract(payload, '$.data.telegram.chat_id') = ?
+        AND json_extract(payload, '$.data.telegram.album_id') = ? ORDER BY json_extract(payload, '$.data.telegram.message_id') LIMIT 1`)
+      .get(account, chatId, albumId) as { id: string } | undefined;
+    return row?.id;
+  }
+
+  // The newest incoming message of a chat: replies through a bot are possible for 24 hours after it.
+  lastIncomingAt(account: string, chatId: string): string | undefined {
+    const row = this.#db.prepare(`SELECT max(ts) AS at FROM events WHERE source = 'telegram' AND kind != 'correction' AND author != 'me'
+        AND json_extract(payload, '$.data.telegram.account') = ? AND json_extract(payload, '$.data.telegram.chat_id') = ?`)
+      .get(account, chatId) as { at: string | null };
+    return row.at ?? undefined;
+  }
+
   lastMessageAt(account: string): string | undefined {
     const row = this.#db.prepare(`SELECT max(ts) AS at FROM events WHERE source = 'telegram' AND kind != 'correction'
         AND json_extract(payload, '$.data.telegram.account') = ?`).get(account) as { at: string | null };

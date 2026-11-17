@@ -10,8 +10,12 @@ export function setupChatView({ feed, composer, correct, notify }) {
     if (!chat) return;
     current = chat;
     $('#chat-title').textContent = `${accountTitle(chat.account)} · ${chat.title}`;
+    // A personal chat opens in the Telegram app by the user id; a group has no such link.
+    const app = $('#chat-app');
+    app.hidden = chat.group;
+    app.href = chat.group ? '#' : `tg://user?id=${chat.chat_id}`;
     bar.hidden = false;
-    composer.chat(chat);
+    composer.chat(chat.group ? null : chat); // replies go only to personal chats
     await feed.setChatFilter(chat);
   };
   const close = async () => {
@@ -22,7 +26,7 @@ export function setupChatView({ feed, composer, correct, notify }) {
     await feed.setChatFilter(null);
   };
   $('#chat-close').onclick = close;
-  // «Не отслеживать»: the gateway stops writing this chat; what is already written may go to the archive.
+  // «Не отслеживать»: Stream stops writing this chat; what is already written may go to the archive.
   const dialog = $('#untrack');
   $('#chat-untrack').onclick = () => {
     $('#untrack-text').textContent = `Новые сообщения из «${current.title}» больше не попадут в Stream, разбор на них не тратится. Вернуть можно в ⋮ → Система.`;

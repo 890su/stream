@@ -4,6 +4,9 @@ import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow } from './tagrow.js';
 import { accountTitle } from './tgbubble.js';
+import { chatOf } from './projection.js';
+
+const REPLY_WINDOW_MS = 24 * 3600 * 1000; // a bot answers only within 24 hours of an incoming message
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
 
@@ -132,9 +135,11 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     contextBar.classList.toggle('outbound', mode?.type === 'outbound');
     // Photos and files are not edited; replies to Telegram are text only for now.
     attachButton.hidden = mode?.type === 'edit' || mode?.type === 'outbound';
+    contextBar.classList.toggle('closed', mode?.type === 'outbound' && windowClosed(mode.chat));
     if (mode?.type === 'outbound') {
       $('#context-title').textContent = `→ ${accountTitle(mode.chat.account)}`;
-      $('#context-snippet').textContent = mode.view ? `${mode.chat.title}: ${snippet(mode.view)}` : mode.chat.title;
+      $('#context-snippet').textContent = windowClosed(mode.chat) ? `${mode.chat.title}: окно 24 часа закрыто — ответьте в Telegram`
+        : mode.view ? `${mode.chat.title}: ${snippet(mode.view)}` : mode.chat.title;
     } else if (mode) {
       $('#context-title').textContent = { edit: 'Редактирование', reply: 'Ответ', continue: 'Продолжение' }[mode.type];
       $('#context-snippet').textContent = snippet(mode.view);
@@ -147,6 +152,12 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     autosize(); renderDraft();
     if (mode) text.focus();
     updateAction();
+  }
+
+  // The newest incoming message of the chat is older than 24 hours: the bot cannot answer there.
+  function windowClosed(chat) {
+    const last = getViews().filter((view) => view.event.author !== 'me' && view.event.payload?.data?.telegram && chatOf(view.event)?.key === chat.key).at(-1);
+    return !last || Date.now() - Date.parse(last.event.ts) > REPLY_WINDOW_MS;
   }
 
   // What a reply to Telegram carries: the chat, and the message it answers when there is one in that chat.

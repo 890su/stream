@@ -57,17 +57,16 @@ Node 24 запускает TypeScript без сборки; база — `node:sq
 | `registry/` | Данные вместо кода: цели (`intents/`), поля (`fields.yaml`), коннекторы (`connectors.yaml`), словарь меток (`tags.json`), параметры ввода (`capture.json`) |
 | `golden/` | Эталонный набор: в git — обезличенные примеры, реальные сообщения — `cases.local.jsonl` (вне git) |
 | `docs/plans/` | Планы шагов и пакетов |
-| `src/` | Сервер, проверка контрактов и правок, SQLite-хранилище, поток `/api/live`, резервная копия |
+| `src/` | Сервер, проверка контрактов и правок, SQLite-хранилище, поток `/api/live`, резервная копия; `src/telegram/` — боты Telegram BY / PL (`deploy/TELEGRAM.md`) |
 | `web/` | PWA-клиент без сборщика: один модуль — одна задача (`composer`, `feed`, `projection`, `bubble`, `actions`, `select`, `drawer`, `topicscreen`, `thread`, `picker`, `tagrow`, `outbox`, `live`, `sw.js`…) |
 | `android/` | Приложение «Stream · телефон» на Kotlin: звонки и SMS в ленту, вопрос после звонка (`deploy/PHONE.md`) |
-| `gateway/telegram/` | Шлюз аккаунта Telegram на Python (Telethon), по контейнеру на аккаунт BY / PL (`deploy/TELEGRAM.md`) |
 | `test/` | `node --test`: сервер, контракты, проекция ленты, подсказчик меток, синтаксис всех модулей клиента |
 | `data/` | База и медиа (локально, не в git) |
 
 Запуск: `pnpm install`, создать `.env` по `.env.example` (`STREAM_OWNER_TOKEN` — не короче 32 символов),
 затем `pnpm start` (http://127.0.0.1:3790). Файлы клиента отдаются по адресу сборки `/v/<build>/`; новый модуль
 `web/*.js` нужно добавить в список `VERSIONED` в `src/server/static.ts` (это проверяет тест).
-Проверки: `pnpm test`, `pnpm typecheck`; шлюз — `python -m unittest discover -s tests` в `gateway/telegram/`.
+Проверки: `pnpm test`, `pnpm typecheck`.
 
 ## Deployment
 
@@ -77,7 +76,7 @@ domain: https://stream.sekond.pl (локальный конфиг Cloudflare Tun
 port: 127.0.0.1:3790
 deploy: `sudo bash /srv/stream/app/deploy/install.sh [ref]` — см. `deploy/DEPLOY.md`; агент — `sudo -n` без пароля, только этот скрипт
 health_check: https://stream.sekond.pl/healthz
-secrets_ref: `/srv/stream/.env` — `STREAM_OWNER_TOKEN`, `STREAM_PHONE_TOKEN`, `STREAM_TG_BY_TOKEN`, `STREAM_TG_PL_TOKEN`, `TG_API_ID`, `TG_API_HASH`; сессии Telegram — `/srv/stream/tg/`
+secrets_ref: `/srv/stream/.env` — `STREAM_OWNER_TOKEN`, `STREAM_PHONE_TOKEN`, `STREAM_TG_BY_BOT_TOKEN`, `STREAM_TG_PL_BOT_TOKEN`
 repo: https://github.com/890su/stream
 
 ## Development rules
