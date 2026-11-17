@@ -183,8 +183,12 @@ export function setupDrawer({ feed, onJump, onArchiveTopic, onFilterChange }) {
     for (const view of feed.views()) if (!view.deleted) { const key = sourceKey(view.event); counts.set(key, (counts.get(key) ?? 0) + 1); }
     const active = feed.sourceFilter();
     const keys = [...counts.keys()].sort((a, b) => (a === 'me' ? -1 : b === 'me' ? 1 : sourceTitle(a).localeCompare(sourceTitle(b), 'ru')));
-    sourcesBox.previousElementSibling.hidden = sourcesBox.hidden = keys.length < 2 && !active;
-    sourcesBox.replaceChildren(...keys.map((key) => {
+    // «Завершённые»: messages of tasks finished long ago come back to the feed (CONCEPT.md §2.8).
+    const done = element('button', `chip ${feed.showDone() ? 'on' : 'suggest'}`, '✓ Завершённые');
+    done.type = 'button';
+    done.setAttribute('aria-pressed', String(feed.showDone()));
+    done.onclick = async () => { await feed.setShowDone(!feed.showDone()); render(); };
+    sourcesBox.replaceChildren(done, ...(keys.length < 2 && !active ? [] : keys).map((key) => {
       const chip = element('button', `chip ${active === key ? 'on' : 'suggest'}`, `${sourceTitle(key)} ${counts.get(key)}`);
       chip.type = 'button';
       chip.setAttribute('aria-pressed', String(active === key));

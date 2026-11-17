@@ -27,3 +27,25 @@ test('tasks fold from their changes; the panel shows mine by default, others by 
   assert.deepEqual(tasksByMessage(tasks).get('m2'), ['t2']);
   assert.equal(project(events).length, 1, 'task changes are not feed messages');
 });
+
+test('messages of finished tasks: collapsed the day they finish, faded two days, then hidden', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { doneStage } = await import('../web/taskfold.js');
+  const tasks = foldTasks([
+    change('a', '2026-11-18T08:00:00', { op: 'create', title: 'A', status: 'todo', add: ['m1', 'm2'] }),
+    change('a', '2026-11-18T09:00:00', { op: 'update', status: 'done' }),
+    change('b', '2026-11-18T08:00:00', { op: 'create', title: 'B', status: 'todo', add: ['m2'] }),
+  ]);
+  const byId = new Map(tasks.map((task: { id: string }) => [task.id, task]));
+  const at = (iso: string) => new Date(iso);
+  assert.equal(doneStage(['a'], byId, at('2026-11-18T20:00:00')), 'collapsed');
+  assert.equal(doneStage(['a'], byId, at('2026-11-20T10:00:00')), 'faded');
+  assert.equal(doneStage(['a'], byId, at('2026-11-21T10:00:00')), 'hidden');
+  assert.equal(doneStage(['a', 'b'], byId, at('2026-11-25T10:00:00')), null, 'an open task keeps the message');
+  assert.equal(doneStage([], byId, at('2026-11-25T10:00:00')), null);
+  const reopened = foldTasks([
+    change('a', '2026-11-18T08:00:00', { op: 'create', title: 'A', status: 'done', add: ['m1'] }),
+    change('a', '2026-11-18T09:00:00', { op: 'update', status: 'todo' }),
+  ]);
+  assert.equal(reopened[0].doneAt, undefined, 'reopening clears the finish time');
+});

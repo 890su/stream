@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import type { JournalStore } from '../store/store.ts';
-import { captureConfig, tagConfig, telegramConfig } from '../config.ts';
+import { captureConfig, tagConfig, telegramConfig, tasksConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json } from './body.ts';
 import { events } from './events.ts';
@@ -55,7 +55,7 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
       if (url.pathname === '/healthz') { json(response, 200, { ok: true }); return; }
       if (url.pathname === '/capture-config.json') {
         const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])) };
-        json(response, 200, { ...captureConfig, tagging: tagConfig, telegram }); return;
+        json(response, 200, { ...captureConfig, tagging: tagConfig, telegram, tasks: { done_fade_days: tasksConfig.done_fade_days } }); return;
       }
       const file = await staticFile(url.pathname);
       if (!file) throw new HttpError(404, 'Страница не найдена');

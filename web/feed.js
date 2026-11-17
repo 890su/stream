@@ -1,7 +1,7 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
-import { foldTasks, tasksByMessage } from './taskfold.js';
+import { foldTasks, tasksByMessage, doneStage } from './taskfold.js';
 
 const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
 const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -49,6 +49,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   let chatFilter = null; // one messenger chat { key, account, chat_id, title } (app.js, chat bar)
   let topicList = []; // all topics, for the drawer
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
+  let showDone = false; // messages of long-finished tasks are hidden unless this is on (drawer.js)
+  const expanded = new Set(); // folded rows of finished tasks the reader opened
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -71,7 +73,12 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     const projected = project([...events.values()], new Set(pending.keys()));
     taskList = foldTasks([...events.values()]);
     const byMessage = tasksByMessage(taskList);
-    for (const view of projected) view.taskIds = byMessage.get(view.id) ?? [];
+    const tasksById = new Map(taskList.map((task) => [task.id, task]));
+    const now = new Date();
+    for (const view of projected) {
+      view.taskIds = byMessage.get(view.id) ?? [];
+      view.doneStage = doneStage(view.taskIds, tasksById, now, limits.tasks?.done_fade_days ?? 2);
+    }
     views = new Map(projected.map((view) => [view.id, view]));
     viewList = projected;
     // Archived topics hide all their messages, like archived messages, until "show archived" is on.
@@ -81,7 +88,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     const tagged = (view) => [...tagFilter].every((tag) => view.tags.includes(tag));
     const inSource = (view) => !sourceFilter || sourceKey(view.event) === sourceFilter;
     const inChat = (view) => !chatFilter || chatOf(view.event)?.key === chatFilter.key;
-    const visible = live.filter((view) => (showArchive || (!view.archived && !inArchivedTopic(view))) && tagged(view) && inSource(view) && inChat(view));
+    // Finished long ago: out of the feed unless «Завершённые» is on (CONCEPT.md §2.8).
+    const shown = (view) => showDone || view.doneStage !== 'hidden';
+    const visible = live.filter((view) => (showArchive || (!view.archived && !inArchivedTopic(view))) && tagged(view) && inSource(view) && inChat(view) && shown(view));
     visibleList = visible;
     topicList = topicsOf(live, allChains);
     onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
@@ -109,7 +118,45 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     let lastTs = 0;
     // A message and its continuations share one bubble; each keeps its own actions and history.
     // Messages close in time only stand closer together (time alone is not a connection).
+    // Messages whose tasks are all finished fold into one row per task set (CONCEPT.md §2.8).
+    const foldKey = (group) => (group.every((view) => view.doneStage) ? group[0].taskIds.slice().sort().join(',') : null);
+    const items = [];
     for (const group of bursts(visible)) {
+      const key = foldKey(group);
+      const previous = items.at(-1);
+      if (key && previous?.key === key) previous.views.push(...group);
+      else items.push({ key, group, views: [...group] });
+    }
+    const foldRow = (item) => {
+      const titles = [...new Set(item.views[0].taskIds.map((id) => tasksById.get(id)?.title).filter(Boolean))];
+      const faded = item.views.every((view) => view.doneStage !== 'collapsed');
+      const open = expanded.has(item.key);
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = `done-row${faded ? ' faded' : ''}${open ? ' open' : ''}`;
+      row.textContent = `${open ? '▾' : '▸'} ✓ ${titles.join(' · ')} · ${item.views.length} сообщ.`;
+      row.setAttribute('aria-expanded', String(open));
+      row.onclick = () => { if (open) expanded.delete(item.key); else expanded.add(item.key); render(); };
+      return row;
+    };
+    for (const entry of items) {
+      if (entry.key) {
+        const date = new Date(entry.views[0].event.ts);
+        if (dayKey(date) !== lastDay) {
+          lastDay = dayKey(date);
+          const pill = document.createElement('div');
+          pill.className = 'date-pill';
+          pill.textContent = dayLabel(date);
+          children.push(pill);
+        }
+        lastTs = Date.parse(entry.views.at(-1).event.ts);
+        children.push(foldRow(entry));
+        if (!expanded.has(entry.key)) continue;
+      }
+      const groups = entry.key ? bursts(entry.views) : [entry.group];
+      for (const group of groups) renderGroup(group, Boolean(entry.key) && entry.views.every((view) => view.doneStage !== 'collapsed'));
+    }
+    function renderGroup(group, dim) {
       const date = new Date(group[0].event.ts);
       if (dayKey(date) !== lastDay) {
         lastDay = dayKey(date);
@@ -128,6 +175,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
         item.append(...group.map((view, index) => node(view, index === 0)));
       }
       item.classList.toggle('close', close && children.at(-1)?.className !== 'date-pill');
+      item.classList.toggle('done-dim', dim);
       children.push(item);
     }
     if (!visible.length) {
@@ -205,11 +253,13 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
 
   function setShowArchive(value) { showArchive = value; return render(); }
   function setTagFilter(tags) { tagFilter = new Set(tags); return render({ bottom: true }); }
+  function setShowDone(value) { showDone = value; return render(); }
   function setSourceFilter(key) { sourceFilter = key || null; return render({ bottom: true }); }
   function setChatFilter(chat) { chatFilter = chat || null; return render({ bottom: true }); }
 
   return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], topics: () => topicList,
     setSourceFilter, sourceFilter: () => sourceFilter, setChatFilter, chatFilter: () => chatFilter, tasks: () => taskList,
+    setShowDone, showDone: () => showDone,
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
     view: (id) => views.get(id), views: () => viewList,
     chain: (id) => chains(visibleList).get(id),

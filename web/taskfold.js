@@ -23,6 +23,8 @@ export function foldTasks(events) {
     for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note']) {
       if (change[key] !== undefined) task[key] = change[key];
     }
+    // When the task was finished: the feed folds its messages away by this age (CONCEPT.md §2.8).
+    if (change.status !== undefined) task.doneAt = OPEN.has(change.status) ? undefined : event.ts;
     for (const message of change.add ?? []) if (!task.messages.includes(message)) task.messages.push(message);
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
     task.updatedAt = event.ts;
@@ -35,6 +37,18 @@ export function visibleTasks(tasks, { who = 'me', done = false } = {}) {
   return tasks
     .filter((task) => (who === 'all' || task.assignee === who) && (done ? !isOpen(task) : isOpen(task)))
     .sort((a, b) => (a.status === 'inbox') - (b.status === 'inbox') || b.updatedAt.localeCompare(a.updatedAt));
+}
+
+const dayStart = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+
+// How the feed shows a message whose tasks are all finished: 'collapsed' on the day the last one finished,
+// 'faded' for `fadeDays` more days, then 'hidden'. null — no tasks, or one is still open.
+export function doneStage(taskIds, tasksById, now = new Date(), fadeDays = 2) {
+  const tasks = (taskIds ?? []).map((id) => tasksById.get(id)).filter(Boolean);
+  if (!tasks.length || tasks.some(isOpen)) return null;
+  const finished = Math.max(...tasks.map((task) => Date.parse(task.doneAt ?? task.updatedAt)));
+  const days = Math.round((dayStart(now) - dayStart(new Date(finished))) / 86_400_000);
+  return days <= 0 ? 'collapsed' : days <= fadeDays ? 'faded' : 'hidden';
 }
 
 // message id -> ids of the tasks it belongs to (for the mark under a message).
