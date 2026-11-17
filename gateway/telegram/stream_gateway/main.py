@@ -39,7 +39,7 @@ class Gateway:
         self.state_dir = Path(os.environ.get("STATE_DIR", "/state"))
         self.stream = Stream(os.environ.get("STREAM_URL", "http://stream:3790"), self.account, os.environ["STREAM_GATEWAY_TOKEN"])
         self.state = State(self.state_dir / "pointers.json")
-        self.client = client_for(self.state_dir, self.account)
+        self.client: TelegramClient | None = None  # created once api_id / api_hash are set
         self.config: dict = {}
         self.tracked: dict[str, logic.Chat] = {}
         self.folder: set[str] = set()
@@ -220,6 +220,13 @@ class Gateway:
                 pass
 
     async def session(self) -> None:
+        if not os.environ.get("TG_API_ID") or not os.environ.get("TG_API_HASH"):
+            # Not configured yet: report it and wait; the owner adds the keys and restarts (deploy/TELEGRAM.md).
+            self.set_health("login_required", "нет TG_API_ID и TG_API_HASH в /srv/stream/.env — см. deploy/TELEGRAM.md")
+            await asyncio.sleep(3600)
+            return
+        if self.client is None:
+            self.client = client_for(self.state_dir, self.account)
         await self.client.connect()
         if not await self.client.is_user_authorized():
             self.set_health("login_required", "войдите: docker compose run --rm -it tg-%s login" % self.account)

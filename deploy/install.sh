@@ -30,6 +30,8 @@ else
 fi
 git -C "$APP" checkout --quiet --detach "origin/$REF" 2>/dev/null || git -C "$APP" checkout --quiet --detach "$REF"
 echo "Code: $(git -C "$APP" log -1 --format='%h %s')"
+# Bash reads a script as it runs: continue with the version just checked out, not the old one.
+if [ "${STREAM_INSTALL_REEXEC:-}" != 1 ]; then STREAM_INSTALL_REEXEC=1 exec /usr/bin/bash "$APP/deploy/install.sh" "$REF"; fi
 
 # Secrets: generated once on the server, never in git.
 if [ ! -f "$ENV_FILE" ]; then
