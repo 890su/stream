@@ -35,21 +35,22 @@ test('tasks fold from their changes; the panel shows mine by default, others by 
   assert.equal(project(events).length, 1, 'task changes are not feed messages');
 });
 
-test('messages of finished tasks: collapsed the day they finish, faded two days, then hidden', async () => {
+test('a message leads to its first open task, else its latest; a task gathers untriaged follow-ups', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { doneStage } = await import('../web/taskfold.js');
+  const { taskOfMessage, taskMembers } = await import('../web/taskfold.js');
   const tasks = foldTasks([
     change('a', '2026-11-18T08:00:00', { op: 'create', title: 'A', status: 'todo', add: ['m1', 'm2'] }),
     change('a', '2026-11-18T09:00:00', { op: 'update', status: 'done' }),
     change('b', '2026-11-18T08:00:00', { op: 'create', title: 'B', status: 'todo', add: ['m2'] }),
+    change('c', '2026-11-18T10:00:00', { op: 'create', title: 'C', status: 'cancelled', add: ['m1'] }),
   ]);
   const byId = new Map(tasks.map((task: { id: string }) => [task.id, task]));
-  const at = (iso: string) => new Date(iso);
-  assert.equal(doneStage(['a'], byId, at('2026-11-18T20:00:00')), 'collapsed');
-  assert.equal(doneStage(['a'], byId, at('2026-11-20T10:00:00')), 'faded');
-  assert.equal(doneStage(['a'], byId, at('2026-11-21T10:00:00')), 'hidden');
-  assert.equal(doneStage(['a', 'b'], byId, at('2026-11-25T10:00:00')), null, 'an open task keeps the message');
-  assert.equal(doneStage([], byId, at('2026-11-25T10:00:00')), null);
+  assert.equal(taskOfMessage({ taskIds: ['a', 'b'] }, byId).id, 'b', 'the open one');
+  assert.equal(taskOfMessage({ taskIds: ['a', 'c'] }, byId).id, 'c', 'among finished: the one changed last');
+  assert.equal(taskOfMessage({ taskIds: [] }, byId), null);
+  const view = (id: string, ts: string, extra: Record<string, unknown> = {}) => ({ id, taskIds: [], event: { id, ts, payload: {} }, ...extra });
+  const views = [view('m3', '2026-11-18T11:00:00', { continues: 'm2' }), view('m1', '2026-11-18T07:00:00', { taskIds: ['a'] }), view('m2', '2026-11-18T07:30:00', { taskIds: ['a'] }), view('x', '2026-11-18T07:45:00')];
+  assert.deepEqual(taskMembers(tasks.find((task: { id: string }) => task.id === 'a'), views).map((item: { id: string }) => item.id), ['m1', 'm2', 'm3']);
   const reopened = foldTasks([
     change('a', '2026-11-18T08:00:00', { op: 'create', title: 'A', status: 'done', add: ['m1'] }),
     change('a', '2026-11-18T09:00:00', { op: 'update', status: 'todo' }),

@@ -1,10 +1,9 @@
-// Right panel «Подробности» (CONCEPT.md §5): what was chosen by a tap — a case (task) or a message. Opens only by
-// a tap (case header button, task row, task mark, history icon, chain title); a left-to-right swipe closes it.
-// While a case is open, the composer writes into it.
+// Right panel «Подробности» (CONCEPT.md §5): what was chosen by a tap — a task or a message. Opens only by
+// a tap (task plaque in a conversation, task row, task mark, history icon, chain title); a left-to-right swipe closes it.
+// While a task is open, the composer writes into it.
 import { makeTaskChange } from './shared.js';
 import { snippet, chatOf, sourceKey } from './projection.js';
-import { caseOf } from './cases.js';
-import { STATUSES } from './taskfold.js';
+import { STATUSES, taskOfMessage } from './taskfold.js';
 import { accountTitle } from './tgbubble.js';
 import { versionCard } from './versioncard.js';
 import { taskDetails } from './taskdetails.js';
@@ -67,7 +66,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
   function render() {
     if (!current) {
       // On a wide screen the column stays: a hint until something is chosen.
-      if (isWide()) { heading.textContent = 'Подробности'; body.replaceChildren(element('p', 'details-empty', 'Выберите дело, задачу или сообщение: здесь появятся его свойства, переписка и история. Касание заголовка дела, строки задачи или значка под сообщением.')); }
+      if (isWide()) { heading.textContent = 'Подробности'; body.replaceChildren(element('p', 'details-empty', 'Выберите задачу или сообщение: здесь появятся его свойства, переписка и история. Касание плашки задачи в беседе, строки задачи или значка под сообщением.')); }
       return;
     }
     if (panel.hidden) return;
@@ -75,8 +74,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
     if (current.kind === 'task') {
       const task = feed.task(current.id);
       if (!task) { close(); return; }
-      heading.textContent = 'Дело';
-      body.replaceChildren(taskDetails(task, { views: feed.caseViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change),
+      heading.textContent = 'Задача';
+      body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change),
         doneCards, fields: config.tasks?.report_fields ?? {} }));
     } else {
       const view = feed.view(current.id);
@@ -98,7 +97,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
       panel.classList.add('open');
       if (!history.state?.details) history.pushState({ details: true }, '');
     }
-    if (next.kind === 'task') composer.enterTopic({ last: () => feed.caseViews(next.id).at(-1) }, 'Сообщение в дело');
+    if (next.kind === 'task') composer.enterTopic({ last: () => feed.taskViews(next.id).at(-1) }, 'Сообщение в задачу');
     else composer.leaveTopic();
     render();
     if (!same) body.scrollTop = 0;
@@ -106,9 +105,9 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
 
   const openTask = (id) => show({ kind: 'task', id });
   const openMessage = (id) => show({ kind: 'message', id });
-  // The chain title above a message: its case if it has one, else the message itself.
+  // The chain title above a message: its first open task, else its latest task, else the message itself.
   function openFor(view) {
-    const task = caseOf(view, tasksById());
+    const task = taskOfMessage(view, tasksById());
     if (task) openTask(task.id); else openMessage(view.id);
   }
 

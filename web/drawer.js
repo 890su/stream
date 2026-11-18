@@ -1,10 +1,10 @@
-import { sourceKey, chatOf } from './projection.js';
+import { sourceKey } from './projection.js';
 import { accountTitle } from './tgbubble.js';
 import { visibleTasks } from './filters.js';
 import { isWide, onWideChange } from './layout.js';
 
 // Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
-// view changes); Лента and Дела — «Завершённые» and sources; Задачи — the saved task filters.
+// view changes); Беседы — «Завершённые»; Лента — «Завершённые» and sources; Задачи — the saved task filters.
 const DAY = 86400000;
 
 function element(tag, className, text) {
@@ -101,28 +101,21 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   window.addEventListener('pointercancel', () => { if (drag?.horizontal) show(drag.opening ? false : true); drag = null; });
   window.addEventListener('resize', () => { if (!drawer.hidden) place(); });
 
-  // Messenger chats with something in the feed, latest first; tapping one shows only its cases (chat bar).
+  // Contacts: conversations with people (not own notes), latest first. In Беседы a tap opens the conversation;
+  // in Задачи and Лента it filters by it (the bar on top removes the filter).
+  const CHANNELS = { phone: 'телефон' };
   function renderContacts() {
-    const chats = new Map();
-    for (const view of feed.views()) {
-      const chat = !view.deleted && chatOf(view.event);
-      if (!chat) continue;
-      const known = chats.get(chat.key) ?? { chat, count: 0, last: view.event.ts };
-      known.count += 1;
-      if (view.event.ts > known.last) known.last = view.event.ts;
-      if (view.event.payload?.data?.telegram) known.chat = chat; // the chat's own title beats a reply's copy
-      chats.set(chat.key, known);
-    }
-    const active = feed.chatFilter()?.key;
-    const rows = [...chats.values()].sort((a, b) => b.last.localeCompare(a.last)).map(({ chat, count, last }) => {
-      const row = element('button', `drawer-contact${active === chat.key ? ' on' : ''}`);
+    const active = feed.conversationKey();
+    const rows = feed.conversations().filter((item) => item.key !== 'me').sort((a, b) => b.last.localeCompare(a.last)).map((item) => {
+      const row = element('button', `drawer-contact${active === item.key ? ' on' : ''}`);
       row.type = 'button';
-      row.append(element('span', 'drawer-title', chat.title), element('span', 'drawer-count', `${accountTitle(chat.account)}${chat.group ? ' · группа' : ''} · ${count} · ${age(last)}`));
-      row.setAttribute('aria-pressed', String(active === chat.key));
-      row.onclick = () => { close(); onContact(chat); };
+      const channels = item.channels.map((channel) => CHANNELS[channel] ?? accountTitle(channel)).join(', ');
+      row.append(element('span', 'drawer-title', item.title), element('span', 'drawer-count', `${channels}${item.group ? ' · группа' : ''} · ${item.views.length} · ${age(item.last)}`));
+      row.setAttribute('aria-pressed', String(active === item.key));
+      row.onclick = () => { close(); onContact(item.key); };
       return row;
     });
-    contactsBox.replaceChildren(...(rows.length ? rows : [element('p', 'drawer-empty', 'Контактов пока нет: здесь появятся чаты Telegram')]));
+    contactsBox.replaceChildren(...(rows.length ? rows : [element('p', 'drawer-empty', 'Контактов пока нет: здесь появятся чаты Telegram и номера телефонов')]));
   }
 
   // Sources (CONCEPT.md §8.2): my notes, each messenger account, the phone, the system. One at a time.
@@ -133,18 +126,25 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
     for (const view of feed.views()) if (!view.deleted) { const key = sourceKey(view.event); counts.set(key, (counts.get(key) ?? 0) + 1); }
     const active = feed.sourceFilter();
     const keys = [...counts.keys()].sort((a, b) => (a === 'me' ? -1 : b === 'me' ? 1 : sourceTitle(a).localeCompare(sourceTitle(b), 'ru')));
-    // «Завершённые»: messages of tasks finished long ago come back to the feed (CONCEPT.md §2.8).
-    const done = element('button', `chip ${feed.showDone() ? 'on' : 'suggest'}`, '✓ Завершённые');
-    done.type = 'button';
-    done.setAttribute('aria-pressed', String(feed.showDone()));
-    done.onclick = async () => { await feed.setShowDone(!feed.showDone()); render(); };
-    modeBox.replaceChildren(element('h3', 'drawer-section', 'Показывать'), chipRow([done, ...(keys.length < 2 && !active ? [] : keys).map((key) => {
+    // Лента: sources too. In Беседы there are no sources: a conversation is its channel.
+    const sources = feed.mode() === 'feed' && (keys.length > 1 || active) ? keys : [];
+    modeBox.replaceChildren(element('h3', 'drawer-section', 'Показывать'), chipRow([doneChip(), ...sources.map((key) => {
       const chip = element('button', `chip ${active === key ? 'on' : 'suggest'}`, `${sourceTitle(key)} ${counts.get(key)}`);
       chip.type = 'button';
       chip.setAttribute('aria-pressed', String(active === key));
       chip.onclick = async () => { await feed.setSourceFilter(active === key ? null : key); onFilterChange(); render(); };
       return chip;
     })]));
+  }
+
+  // «Завершённые»: Беседы — finished conversations unfolded at the end of the list; Лента — messages whose tasks
+  // are all finished (CONCEPT.md §5).
+  function doneChip() {
+    const done = element('button', `chip ${feed.showDone() ? 'on' : 'suggest'}`, '✓ Завершённые');
+    done.type = 'button';
+    done.setAttribute('aria-pressed', String(feed.showDone()));
+    done.onclick = async () => { await feed.setShowDone(!feed.showDone()); render(); };
+    return done;
   }
 
   const chipRow = (chips) => { const row = element('div', 'chips'); row.append(...chips); return row; };
@@ -166,7 +166,7 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   function render() {
     renderContacts();
     if (feed.mode() === 'tasks') renderTaskFilters(); else renderSources();
-    document.querySelector('#drawer-title').textContent = { feed: 'Фильтры ленты', cases: 'Фильтры дел', tasks: 'Фильтры задач' }[feed.mode()] ?? 'Фильтры';
+    document.querySelector('#drawer-title').textContent = { feed: 'Фильтры ленты', conversations: 'Фильтры бесед', tasks: 'Фильтры задач' }[feed.mode()] ?? 'Фильтры';
     const counts = new Map();
     for (const view of feed.views()) if (!view.deleted) for (const tag of view.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     const active = new Set(feed.tagFilter());

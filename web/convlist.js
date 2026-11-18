@@ -1,0 +1,69 @@
+// The «Беседы» list (CONCEPT.md §5, §2.5): one row per conversation — title, the last message, channel badges,
+// open tasks, the state; finished conversations fold into one row «Завершённые · N» at the end.
+// rowFacts and splitDone are pure (tested in node); convRow and doneRow build the DOM.
+import { snippet } from './projection.js';
+import { isOpen } from './taskfold.js';
+
+export const STATE_LABELS = { urgent: 'срочно', mine: 'ждёт меня', theirs: 'жду ответа', quiet: '', done: '' };
+const CHANNELS = { by: 'BY', pl: 'PL', phone: 'Тел', me: 'Я' };
+const time = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
+const date = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
+
+const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many);
+export const tasksLabel = (n) => `${n} ${plural(n, 'задача', 'задачи', 'задач')}`;
+
+// What a row says: { title, snippet, mine (the last message is mine), when, tasks (open, not filed), label, channels }.
+export function rowFacts(conversation, now = new Date()) {
+  const last = conversation.views.filter((view) => !view.deleted).at(-1);
+  const at = new Date(conversation.last);
+  return {
+    title: conversation.title,
+    snippet: last ? snippet(last) : '',
+    mine: last?.event.author === 'me' && conversation.key !== 'me' && !['call', 'sms'].includes(last.event.kind),
+    when: at.toDateString() === now.toDateString() ? time.format(at) : date.format(at),
+    tasks: conversation.tasks.filter((task) => isOpen(task) && !task.filed).length,
+    label: STATE_LABELS[conversation.state] ?? '',
+    channels: conversation.channels.map((channel) => CHANNELS[channel] ?? channel),
+  };
+}
+
+// The list without finished conversations, and those folded away.
+export function splitDone(list) {
+  return { active: list.filter((item) => item.state !== 'done'), done: list.filter((item) => item.state === 'done') };
+}
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+export function convRow(conversation, { onOpen }) {
+  const facts = rowFacts(conversation);
+  const row = element('button', `conv-row ${conversation.state}`);
+  row.type = 'button';
+  row.dataset.conversation = conversation.key;
+  const head = element('span', 'conv-head');
+  head.append(element('span', 'conv-title', facts.title));
+  for (const channel of facts.channels) head.append(element('span', 'conv-channel', channel));
+  head.append(element('span', 'conv-time', facts.when));
+  const line = element('span', 'conv-line');
+  line.append(element('span', 'conv-snippet', `${facts.mine ? 'Вы: ' : ''}${facts.snippet}`));
+  if (facts.tasks) line.append(element('span', 'conv-tasks', tasksLabel(facts.tasks)));
+  if (facts.label) line.append(element('span', `conv-state ${conversation.state}`, facts.label));
+  row.append(head, line);
+  row.setAttribute('aria-label', [facts.title, facts.label, facts.tasks ? tasksLabel(facts.tasks) : '', facts.snippet].filter(Boolean).join(', '));
+  row.onclick = () => onOpen(conversation.key);
+  return row;
+}
+
+// «Завершённые · N»: a tap shows or hides the finished conversations under it.
+export function doneRow(count, { open, onToggle }) {
+  const row = element('button', `conv-done${open ? ' open' : ''}`, `${open ? '▾' : '▸'} Завершённые · ${count}`);
+  row.type = 'button';
+  row.dataset.group = 'done';
+  row.setAttribute('aria-expanded', String(open));
+  row.onclick = onToggle;
+  return row;
+}

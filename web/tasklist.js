@@ -1,7 +1,7 @@
 // The «Задачи» view in the centre (CONCEPT.md §5): one compact row per task, like a task manager. A tap opens
 // the task's details on the right. Filters (assignee, status, due, contact, tags) come from the left panel.
 import { ASSIGNEES, STATUSES, dueState } from './taskfold.js';
-import { withWhom } from './cases.js';
+import { withWhom } from './conversations.js';
 
 const day = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
 

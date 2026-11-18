@@ -12,7 +12,7 @@ Telegram bots (`src/telegram/`). Owner actions are `correction` events; tasks (=
 Telegram (a recipient chosen in the «кому» row) are events with `payload.data.outbound` that create **actions** (`src/store/actions.ts`) executed by the
 bots. The **triage** (`src/tasks/triage.ts`) batches new messages per stream after a quiet window and asks the
 planner (AI, `src/tasks/anthropic.ts`) to split them into tasks. Everything shown is a **projection** computed on
-the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre in three views, filters left, details right; new events reach all devices through SSE (`/api/live`).
+the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — centre in three views («Беседы · Задачи · Лента»), filters left, details right; new events reach all devices through SSE (`/api/live`).
 
 ## Server — `src/` (Node 24 runs TypeScript directly)
 
@@ -62,14 +62,14 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | `index.html` | markup of the single screen, dialogs and panels |
 | `styles.css` → `feed.css` → `panels.css` → `screens.css` → `wide.css` | styles, loaded in this order (cascade); `wide.css` — three columns from 1100 px |
 | `layout.js` | the wide-screen breakpoint the panels follow (docked or sliding) |
-| `app.js` | entry: wires everything, message action dispatch, «Лента · Дела · Задачи» switch |
+| `app.js` | entry: wires everything, message action dispatch, «Беседы · Задачи · Лента» switch (old saved views map to new) |
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
-| `feed.js` | the centre in three views: Лента (bursts, chain lines, folded finished tasks), Дела (case headers + messages), Задачи (task rows); filters, paging |
+| `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter; paging |
 | `tasklist.js` / `days.js` | a task row of the «Задачи» view; day pill labels |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
 | `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report; pure report parsing |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
-| `cases.js` / `caserow.js` | pure: messages → cases, order, what shows under a header; the case header |
+| `convlist.js` / `convtasks.js` | a row of the «Беседы» list (state label, channels, open tasks) and the «Завершённые · N» fold; task plaques on top of a conversation (status, executor, due) |
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
@@ -79,12 +79,12 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | `recipients.js` | «кому» side of the row: address book, chosen recipient, full list with search and pins |
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
-| `drawer.js` | left panel — filters by view: contacts and tags (shared), sources and «Завершённые» (Лента, Дела), assignee / status / due (Задачи) |
-| `taskfold.js` | pure: tasks from `task_change` (with history, roles), due state, done stages |
+| `drawer.js` | left panel — filters by view: contacts (conversations) and tags (shared), «Завершённые» (Беседы, Лента), sources (Лента), saved filters (Задачи) |
+| `taskfold.js` | pure: tasks from `task_change` (with history, roles), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter`, `visibleTasks` |
-| `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry |
-| `details.js` / `taskdetails.js` | right panel «Подробности»: a case (task: properties, actions, conversation, history) or a message (versions, cases) |
-| `chatview.js` | one messenger chat in the feed, «Не отслеживать» |
+| `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry; `withWhom` |
+| `details.js` / `taskdetails.js` | right panel «Подробности»: a task (properties, actions, messages, history) or a message (versions, tasks) |
+| `chatview.js` | the bar of an open conversation: title, «назад» to the list (Беседы) or × (filter elsewhere), reply recipient, «Не отслеживать» |
 | `system.js` | System screen: sources, connections, sends, exclusions |
 | `versioncard.js` / `picker.js` | versions of a message (left to right); link picker |
 | `shared.js` | builders of entries: message, share, correction, task change |
@@ -102,7 +102,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
-| `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding, feed of cases (`fresh_h`, `expand_last`), closing reports (`report_fields`, per-template `report`, currencies) |
+| `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», closing reports (`report_fields`, per-template `report`, currencies) |
 | `registry/conversations.json` | conversations: quiet days, urgent tags, order of states |
 | `registry/filters.json` | saved task filters: conditions over roles, status, due, report; first is the default |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |

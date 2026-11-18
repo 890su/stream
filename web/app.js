@@ -1,5 +1,5 @@
-// Stream PWA entry point: wires the centre (three views), filters on the left, details on the right, the composer,
-// and starts sync and live updates.
+// Stream PWA entry point: wires the centre («Беседы · Задачи · Лента»), filters on the left, details on the right,
+// the composer, and starts sync and live updates.
 import { getSetting } from './db.js';
 import { setupComposer } from './composer.js';
 import { setupFeed } from './feed.js';
@@ -15,7 +15,7 @@ import { setupSystem } from './system.js';
 import { setAccounts } from './tgbubble.js';
 import { setupChatView } from './chatview.js';
 import { setupDetails } from './details.js';
-import { chatOf } from './projection.js';
+import { conversationOf } from './conversations.js';
 import { reveal, conceal } from './motion.js';
 import { createDoneCards } from './donecard.js';
 import { setupQuestions } from './question.js';
@@ -26,16 +26,18 @@ let picker;
 let bulk;
 let drawer;
 let system;
-let chatView; // { open(chat), close() } — one messenger chat in the feed (CONCEPT.md §8.2)
+let chatView; // { open(key), close(), sync() } — one conversation (CONCEPT.md §2.5)
 
-// «Лента · Дела · Задачи» in the top bar (CONCEPT.md §5); the choice is remembered on this device.
+// «Беседы · Задачи · Лента» in the top bar (CONCEPT.md §5); the choice is remembered on this device. Views saved
+// by earlier versions ('cases', 'messages') map to the new ones (feed.js).
 function setupViews(feed) {
   const buttons = [...document.querySelectorAll('#views [data-view]')];
   const show = (mode) => { for (const button of buttons) button.setAttribute('aria-selected', String(button.dataset.view === mode)); };
-  let saved = 'cases';
-  try { saved = localStorage.getItem('stream.feedMode') ?? 'cases'; } catch { /* private mode */ }
+  let saved = 'conversations';
+  try { saved = localStorage.getItem('stream.feedMode') ?? 'conversations'; } catch { /* private mode */ }
   feed.setMode(saved);
   show(feed.mode());
+  try { if (saved !== feed.mode()) localStorage.setItem('stream.feedMode', feed.mode()); } catch { /* private mode */ }
   for (const button of buttons) {
     button.onclick = async () => {
       const next = button.dataset.view;
@@ -43,6 +45,7 @@ function setupViews(feed) {
       try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
       show(next);
       await feed.setMode(next);
+      chatView?.sync();
       drawer?.render();
     };
   }
@@ -101,7 +104,7 @@ function setupMessageActions(feed, composer, config) {
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
-    onContact: (chat) => chatView.open(chat),
+    onContact: (key) => chatView.open(key),
     onFilterChange: updateFilter,
   });
   setupActions({
@@ -110,7 +113,7 @@ function setupMessageActions(feed, composer, config) {
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
       else if (op === 'task') details.createFrom(view);
-      else if (op === 'chat-open') chatView.open(chatOf(view.event));
+      else if (op === 'chat-open') chatView.open(conversationOf(view.event));
       else if (op === 'system') system.open();
       else if (op === 'retry') { if (view.delivery?.action) system.retry(view.delivery.action); }
       else if (op === 'edit') composer.edit(view);
@@ -153,8 +156,8 @@ async function main() {
   const config = await response.json();
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue, limits: config, onOpenCase: (id) => details.openTask(id),
-    caseCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); composerRef?.refreshTags(); } });
+  const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
+    taskCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); chatView?.sync(); composerRef?.refreshTags(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });

@@ -18,14 +18,14 @@
 </head>
 <body>
   <header class="topbar">
-    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры: контакты, источники, метки" aria-controls="drawer">
+    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры: контакты, метки, списки" aria-controls="drawer">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
     <div class="title">
       <div id="views" class="views" role="tablist" aria-label="Что показывать">
-        <button type="button" role="tab" data-view="feed" aria-selected="false">Лента</button>
-        <button type="button" role="tab" data-view="cases" aria-selected="true">Дела</button>
+        <button type="button" role="tab" data-view="conversations" aria-selected="true">Беседы</button>
         <button type="button" role="tab" data-view="tasks" aria-selected="false">Задачи</button>
+        <button type="button" role="tab" data-view="feed" aria-selected="false">Лента</button>
       </div>
       <p id="network" role="status">подключение…</p>
     </div>
@@ -42,10 +42,13 @@
   </header>
 
   <div id="chat-bar" class="chat-bar" hidden role="status">
+    <button id="chat-back" type="button" class="icon-button" aria-label="Назад к беседам">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
     <span id="chat-title" class="chat-title"></span>
     <a id="chat-app" class="link-button" href="#">В Telegram</a>
     <button id="chat-untrack" type="button" class="link-button">Не отслеживать</button>
-    <button id="chat-close" type="button" class="icon-button" aria-label="Показать всю ленту">
+    <button id="chat-close" type="button" class="icon-button" aria-label="Снять фильтр по беседе">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
     </button>
   </div>
@@ -78,7 +81,7 @@
     <div id="details-body" class="drawer-body"></div>
   </aside>
 
-  <main id="messages" aria-label="Лента сообщений" tabindex="-1">
+  <main id="messages" aria-label="Беседы, задачи и лента" tabindex="-1">
     <div id="history-state" class="service-pill" hidden></div>
     <div id="feed-list" role="log" aria-live="polite"></div>
   </main>

@@ -132,3 +132,44 @@ test('a leading 00 is a plus; digits without a prefix stay as they are', () => {
   assert.equal(list[0].key, 'tel:+48600100200');
   assert.equal(conversationOf(phone('sms', 'in', '2026-11-18T08:00:00', '600 100 200')), 'tel:600100200');
 });
+
+test('a list row: last message, open tasks, the state in words; finished ones fold away', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { rowFacts, splitDone, tasksLabel } = await import('../web/convlist.js');
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { withWhom } = await import('../web/conversations.js');
+  const ask = tg('by', '777', '2026-11-18T09:00:00', 'когда приедете?');
+  const reply = mine('777', '2026-11-18T09:10:00', 'завтра утром');
+  const events = [ask, reply,
+    change('k1', '2026-11-18T09:05:00', { op: 'create', title: 'Выезд', status: 'todo', add: [ask.id] }),
+    change('k2', '2026-11-18T09:05:00', { op: 'create', title: 'Болтовня', status: 'done', template: 'chatter', add: [reply.id] })];
+  const [person] = run(events);
+  const facts = rowFacts(person, now);
+  assert.equal(facts.snippet, 'завтра утром');
+  assert.equal(facts.mine, true, 'my reply reads «Вы: …»');
+  assert.equal(facts.tasks, 1, 'open, not filed');
+  assert.equal(facts.label, 'ждёт меня', 'a reply filed as chatter does not answer');
+  assert.deepEqual(facts.channels, ['BY']);
+  assert.equal(rowFacts({ ...person, state: 'quiet' }, now).label, '', 'quiet has no label');
+  assert.deepEqual([1, 3, 5, 21].map(tasksLabel), ['1 задача', '3 задачи', '5 задач', '21 задача']);
+  const { active, done } = splitDone([{ state: 'mine' }, { state: 'done' }, { state: 'quiet' }]);
+  assert.deepEqual([active.length, done.length], [2, 1]);
+  assert.deepEqual(withWhom(person.views), ['Анна Тестова']);
+});
+
+test('task plaques: open tasks only, executor in words, due date', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { plaqueFacts, partyName } = await import('../web/convtasks.js');
+  const ask = tg('by', '778', '2026-11-18T09:00:00', 'нужен счёт');
+  const events = [ask,
+    change('q1', '2026-11-18T09:05:00', { op: 'create', title: 'Выставить счёт', status: 'todo', due: '2026-11-17', add: [ask.id], roles: { responsible: 'me', executors: ['tg:778'] } }),
+    change('q2', '2026-11-18T09:06:00', { op: 'create', title: 'Старое', status: 'done', add: [ask.id] })];
+  const [person] = run(events);
+  const plaques = plaqueFacts(person, now);
+  assert.deepEqual(plaques.map((item: any) => item.title), ['Выставить счёт']);
+  assert.match(plaques[0].facts, /^сделать · Анна Тестова · просрочено, до/);
+  assert.equal(plaques[0].overdue, true);
+  assert.equal(partyName('me', person), 'Я');
+  assert.equal(partyName('name:Пётр', person), 'Пётр');
+  assert.equal(partyName('tel:+48111', person), 'tel:+48111', 'unknown stays as it is');
+});

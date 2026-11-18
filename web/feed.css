@@ -152,3 +152,30 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 body.picking #feed-list .bubble { cursor: pointer; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); }
 body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
 .chip.link-chip.suggest { color: var(--link); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link) 45%, transparent); }
+
+/* Беседы (convlist.js): one row per conversation, like a messenger; finished ones folded at the end. */
+#feed-list.reads-down { margin-top: 0; }
+#messages { overflow-x: hidden; } /* entering or leaving a conversation slides sideways */
+.conv-row { align-self: stretch; display: grid; gap: 3px; margin: 3px 6px; padding: 10px 12px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); text-align: left; color: var(--bar-text); }
+.conv-row:active, .conv-row:hover { background: var(--press); }
+.conv-head, .conv-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.conv-title { flex: 0 1 auto; min-width: 0; font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-channel { flex: none; padding: 0 5px; border-radius: 6px; background: var(--chip); color: var(--chip-text); font-size: 11.5px; font-weight: 600; line-height: 18px; }
+.conv-time { flex: none; margin-left: auto; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.conv-snippet { flex: 1; min-width: 0; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-tasks { flex: none; color: var(--muted); font-size: 12.5px; }
+.conv-state { flex: none; padding: 0 7px; border-radius: 9px; font-size: 12.5px; font-weight: 600; line-height: 20px; }
+.conv-state.urgent { background: var(--danger); color: #fff; }
+.conv-state.mine { background: var(--accent-strong); color: #fff; }
+.conv-state.theirs { background: var(--chip); color: var(--chip-text); }
+.conv-row.done { opacity: .6; box-shadow: none; }
+.conv-done { align-self: stretch; text-align: left; margin: 8px 6px 4px; padding: 8px 12px; border-radius: 12px; color: var(--muted); font-size: 14px; }
+.conv-done.open { color: var(--bar-text); }
+
+/* Plaques of a conversation's tasks on top of it (convtasks.js); a tap opens the task's details. */
+.conv-plaques { align-self: stretch; display: flex; gap: 6px; margin: 6px 6px 2px; overflow-x: auto; scrollbar-width: none; }
+.conv-plaque { flex: 0 0 auto; display: grid; gap: 1px; max-width: min(80%, 320px); padding: 7px 12px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); text-align: left; color: var(--bar-text); }
+.conv-plaque-title { font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-plaque-meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-plaque.inbox .conv-plaque-title { font-style: italic; }
+.conv-plaque.overdue .conv-plaque-meta { color: var(--danger); }

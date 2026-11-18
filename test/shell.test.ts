@@ -41,6 +41,15 @@ test('every client file is versioned, so caches can never mix two builds', () =>
   assert.deepEqual([...files].sort(), [...VERSIONED].sort());
 });
 
+test('the conversation modules ship and the feed of cases is gone (P14)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const worker = list(readFileSync(new URL('../web/sw.js', import.meta.url), 'utf8'), 'VERSIONED');
+  for (const files of [VERSIONED, worker]) {
+    for (const file of ['conversations.js', 'convlist.js', 'convtasks.js', 'filters.js', 'parties.js']) assert.ok(files.includes(file), file);
+    for (const file of ['cases.js', 'caserow.js']) assert.ok(!files.includes(file), file);
+  }
+});
+
 test('page and worker are always revalidated; versioned files are immutable; old builds are gone', async () => {
   const f = await fixture();
   try {

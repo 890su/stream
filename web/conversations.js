@@ -2,6 +2,7 @@
 // and an order, all from the registry. Pure — no DOM. Views must already carry `taskIds`.
 import { chatOf } from './projection.js';
 import { isOpen, involvesMe, dueState } from './taskfold.js';
+import { phoneLabel } from './phonebubble.js';
 
 // The conversation a message belongs to: one Telegram chat across both accounts, one phone number, own notes.
 export function conversationOf(event) {
@@ -107,4 +108,15 @@ export function conversations(views, tasks, { now = new Date(), config }) {
   }
   const rank = (state) => config.states.indexOf(state);
   return list.sort((a, b) => rank(a.state) - rank(b.state) || b.last.localeCompare(a.last));
+}
+
+// With whom: chat titles and phone contacts of the messages, in order of appearance (task rows).
+export function withWhom(views) {
+  const names = [];
+  for (const view of views) {
+    const event = view.event;
+    const name = chatOf(event)?.title ?? (event.kind === 'call' || event.kind === 'sms' ? phoneLabel(event).who : null);
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return names;
 }

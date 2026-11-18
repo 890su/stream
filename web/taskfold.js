@@ -50,7 +50,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
         if (change.roles[key] !== undefined) task.roles[key] = change.roles[key] ?? (key === 'executors' || key === 'watchers' ? [] : null);
       }
     }
-    // When the task was finished: the feed folds its messages away by this age (CONCEPT.md §2.8).
+    // When the task was finished (details, history).
     if (change.status !== undefined) task.doneAt = OPEN.has(change.status) ? undefined : event.ts;
     for (const message of change.add ?? []) if (!task.messages.includes(message)) task.messages.push(message);
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
@@ -74,18 +74,6 @@ export function dueState(task, now = new Date()) {
   const day = String(task.due).slice(0, 10);
   const today = dayOf(now);
   return day === today ? 'today' : day < today ? 'overdue' : 'later';
-}
-
-const dayStart = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-
-// How the feed shows a message whose tasks are all finished: 'collapsed' on the day the last one finished,
-// 'faded' for `fadeDays` more days, then 'hidden'. null — no tasks, or one is still open.
-export function doneStage(taskIds, tasksById, now = new Date(), fadeDays = 2) {
-  const tasks = (taskIds ?? []).map((id) => tasksById.get(id)).filter(Boolean);
-  if (!tasks.length || tasks.some(isOpen)) return null;
-  const finished = Math.max(...tasks.map((task) => Date.parse(task.doneAt ?? task.updatedAt)));
-  const days = Math.round((dayStart(now) - dayStart(new Date(finished))) / 86_400_000);
-  return days <= 0 ? 'collapsed' : days <= fadeDays ? 'faded' : 'hidden';
 }
 
 // One line of a task's history: what this change did, in words.
@@ -122,4 +110,25 @@ export function tasksByMessage(tasks) {
   const map = new Map();
   for (const task of tasks) for (const message of task.messages) map.set(message, [...(map.get(message) ?? []), task.id]);
   return map;
+}
+
+const tsOf = (view) => Date.parse(view.event.ts);
+// A message the triage has not reached yet follows the message it continues or answers.
+const parentOf = (view) => view.continues ?? view.event.reply_to ?? null;
+
+// Messages of one task, oldest first: its own, and untriaged ones that continue or answer them (task details).
+export function taskMembers(task, views) {
+  const members = new Set(task.messages);
+  const result = [];
+  for (const view of [...views].sort((a, b) => tsOf(a) - tsOf(b))) {
+    if (view.deleted) continue;
+    if (members.has(view.id) || (!view.taskIds?.length && members.has(parentOf(view)))) { members.add(view.id); result.push(view); }
+  }
+  return result;
+}
+
+// The task a message leads to (details): its first open task, else the one changed last.
+export function taskOfMessage(view, tasksById) {
+  const tasks = (view.taskIds ?? []).map((id) => tasksById.get(id)).filter(Boolean);
+  return tasks.find(isOpen) ?? tasks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
 }

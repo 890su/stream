@@ -55,28 +55,8 @@
 /* The «Задачи» view in the centre: rows as cards */
 #feed-list > .task-row { align-self: stretch; margin: 3px 6px; border: 0; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); padding: 10px 12px; }
 .task-mark { font-size: 13px; padding: 0 4px; color: inherit; opacity: .8; }
-/* Messages of finished tasks (CONCEPT.md §2.8): one row per task set; faded after the finishing day */
-.done-row { align-self: stretch; text-align: left; margin: 4px 6px; padding: 8px 12px; border-radius: 12px; background: var(--panel); color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.done-row.faded { opacity: .6; }
-.done-row.open { color: var(--bar-text); }
-.done-dim { opacity: .6; }
-
-/* Feed of cases (cases.js, caserow.js): a header per case, its messages indented under it. */
-.case-head { align-self: stretch; display: flex; align-items: stretch; margin: 10px 6px 2px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
-.case-head.done { box-shadow: none; }
-.case-head.faded { opacity: .6; }
-.case-toggle { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr auto; column-gap: 8px; align-items: baseline; padding: 8px 4px 8px 12px; text-align: left; color: var(--bar-text); }
-.case-arrow { color: var(--muted); font-size: 12px; }
-.case-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.case-head.done .case-title { font-weight: 500; color: var(--muted); }
-.case-head.inbox .case-title { color: var(--accent-strong); }
-.case-time { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.case-meta { grid-column: 2 / 4; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.case-open { width: 44px; height: auto; border-radius: 0 12px 12px 0; }
-.case-open svg { width: 20px; height: 20px; }
-#feed-list > .in-case { margin-left: 14px; }
-.done-card { align-self: stretch; margin: 8px 6px 4px 20px; padding: 12px 14px; border-radius: 14px; background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--accent-strong), var(--shadow); }
-.topic-list .done-card { margin-left: 6px; }
+/* «Задача выполнена?» after a conversation's messages and in task details */
+.done-card { align-self: stretch; margin: 8px 6px 4px; padding: 12px 14px; border-radius: 14px; background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--accent-strong), var(--shadow); }
 .done-card-title { margin: 0 0 4px; font-weight: 600; font-size: 15.5px; }
 .done-card-text { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
 .done-card-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
