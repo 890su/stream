@@ -22,7 +22,7 @@ function dayLabel(date) {
   return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
 }
 
-export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenCase = () => {} }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenCase = () => {}, caseCard = () => null }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -175,6 +175,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         children.push(caseHeader(item, { shown: views.length, onOpen: () => onOpenCase(id),
           onToggle: () => toggleGroup(`case:${id}`, views.length > 0, () => caseState.set(id, { state: views.length ? 'none' : 'all', at: item.last })) }));
         for (const group of bursts(views)) renderGroup(group, item.stage === 'faded', true, `case:${id}`);
+        // «Задача выполнена?» — last in the case, whatever is folded (CONCEPT.md §2.9).
+        const card = caseCard(item.task);
+        if (card) { card.classList.add('in-case'); children.push(card); }
       }
       flush();
     }

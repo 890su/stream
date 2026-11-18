@@ -57,7 +57,9 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
       if (url.pathname === '/healthz') { json(response, 200, { ok: true }); return; }
       if (url.pathname === '/capture-config.json') {
         const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])), address_book: telegramConfig.address_book };
-        json(response, 200, { ...captureConfig, tagging: tagConfig, telegram, tasks: { done_fade_days: tasksConfig.done_fade_days, fresh_h: tasksConfig.fresh_h, expand_last: tasksConfig.expand_last } }); return;
+        json(response, 200, { ...captureConfig, tagging: tagConfig, telegram, tasks: { done_fade_days: tasksConfig.done_fade_days, fresh_h: tasksConfig.fresh_h, expand_last: tasksConfig.expand_last,
+          report_fields: tasksConfig.report_fields, report_default: tasksConfig.report_default, currencies: tasksConfig.currencies,
+          reports: Object.fromEntries(tasksConfig.templates.filter((template) => template.report).map((template) => [template.name, template.report])) } }); return;
       }
       const file = await staticFile(url.pathname);
       if (!file) throw new HttpError(404, 'Страница не найдена');

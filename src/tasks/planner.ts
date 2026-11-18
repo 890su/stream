@@ -21,6 +21,7 @@ export interface PlannedTask {
   confidence: number;
   note: string | null;
   filed: boolean; // nothing to do but file it: the task is created already done
+  done: boolean; // the messages say the work is finished: the owner is asked to close it with a report
 }
 export interface PlanOutput { tasks: PlannedTask[]; usage?: { input_tokens: number; output_tokens: number } }
 
@@ -37,7 +38,7 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'assignee', 'person', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed'],
+        required: ['task_id', 'title', 'assignee', 'person', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done'],
         properties: {
           task_id: { type: ['string', 'null'] },
           title: { type: 'string' },
@@ -49,6 +50,7 @@ export const PLAN_SCHEMA = {
           confidence: { type: 'number' },
           note: { type: ['string', 'null'] },
           filed: { type: 'boolean' },
+          done: { type: 'boolean' },
         },
       },
     },
@@ -67,6 +69,8 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
   шаблоны с filed: true: diary (самочувствие, события дня), plan (идея или доработка проекта), note
   (мысль, справка), chatter (болтовня, «ок», служебное). Несколько таких сообщений одного вида — одна задача.
 - filed: false — настоящее дело, которое кто-то должен сделать.
+- done: true — сообщения говорят, что дело сделано («готово», «сделал», «закончил», «установил, работает»).
+  Задачу это не закрывает: владельца спросят и попросят отчёт. У filed-задач done всегда false.
 - Если сообщение уточняет или продолжает открытую задачу, верни эту задачу с её task_id и id сообщения, title — как у неё.
 - Два разных дела в одном сообщении — две задачи. Несколько сообщений об одном деле — одна задача.
 - Болтовню, приветствия, «ок», служебное не превращай в дела: это filed: true с шаблоном chatter.

@@ -25,7 +25,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | **contracts/** | | |
 | `validate.ts` | Event type + JSON Schema interpreter | `JournalEvent`, `validateEvent` |
 | `correction.ts` | owner corrections: ops, link targets | `CORRECTION_OPS`, `checkCorrection*` |
-| `tagging.ts` / `phone.ts` / `telegram.ts` / `task.ts` | kind-specific payload rules | `check*` |
+| `tagging.ts` / `phone.ts` / `telegram.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry) | `check*` |
 | **server/** | | |
 | `http.ts` | auth, routing, starts bots and triage | `createApp` |
 | `events.ts` | `/api/events` POST/GET | `events` |
@@ -64,6 +64,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `app.js` | entry: wires everything, message action dispatch, «Дела» ⇄ «Сообщения» toggle |
 | `settings.js` | status line, settings dialog, service worker registration |
 | `feed.js` | renders the feed: cases (headers + messages) or messages in a row (bursts, topic lines, folded finished tasks); day pills, filters, paging |
+| `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report; pure report parsing |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `cases.js` / `caserow.js` | pure: messages → cases, order, what shows under a header; the case header |
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
@@ -91,12 +92,12 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 
 | File | What |
 |---|---|
-| `contracts/event.schema.json` | Event v1 (kinds, payload.data: call, sms, telegram, outbound, action, system, task, tagging, continuation) |
+| `contracts/event.schema.json` | Event v1 (kinds, payload.data: call, sms, telegram, outbound, action, system, task (+ proposed, report), tagging, continuation) |
 | `contracts/*.schema.json` | Action, Task, Interpretation, Normalized, Intent |
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
-| `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding, feed of cases (`fresh_h`, `expand_last`) |
+| `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding, feed of cases (`fresh_h`, `expand_last`), closing reports (`report_fields`, per-template `report`, currencies) |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere

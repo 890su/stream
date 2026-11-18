@@ -30,7 +30,7 @@ export function caseHeader(item, { shown, onToggle, onOpen }) {
   const facts = [
     withWhom(views).slice(0, 2).join(', ') || null,
     `${views.length} ${plural(views.length)}`,
-    !item.stage && task.status !== 'todo' ? STATUSES[task.status] : null,
+    task.proposed === 'done' && !item.stage ? 'готово?' : !item.stage && task.status !== 'todo' ? STATUSES[task.status] : null,
     task.assignee !== 'me' ? ASSIGNEES[task.assignee] : null,
   ].filter(Boolean);
   const meta = element('span', 'case-meta', facts.join(' · '));

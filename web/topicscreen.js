@@ -6,7 +6,7 @@ import { reveal, conceal } from './motion.js';
 
 const plural = (n) => (n % 10 === 1 && n % 100 !== 11 ? 'сообщение' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'сообщения' : 'сообщений');
 
-export function setupTopicScreen({ feed, composer, onRename, onTaskCard }) {
+export function setupTopicScreen({ feed, composer, onRename, onTaskCard, caseCard = () => null }) {
   const screen = document.querySelector('#topic-screen');
   const list = document.querySelector('#topic-list');
   let current = null; // { kind: 'topic', root } | { kind: 'case', task }
@@ -36,7 +36,8 @@ export function setupTopicScreen({ feed, composer, onRename, onTaskCard }) {
     document.querySelector('#topic-name').classList.toggle('named', head.named);
     document.querySelector('#topic-meta').textContent = head.meta;
     const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
-    list.replaceChildren(...views().map((view) => feed.bubble(view)));
+    const card = current.kind === 'case' && caseCard(feed.task(current.task));
+    list.replaceChildren(...views().map((view) => feed.bubble(view)), ...(card ? [card] : []));
     if (nearBottom) list.scrollTop = list.scrollHeight;
   }
 
@@ -66,6 +67,7 @@ export function setupTopicScreen({ feed, composer, onRename, onTaskCard }) {
     conceal(screen, 'translateX(32px)');
     document.body.classList.remove('in-topic');
     composer.leaveTopic();
+    feed.render(); // the completion card moves back to the feed
   }
 
   document.querySelector('#topic-back').onclick = () => history.back();

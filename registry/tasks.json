@@ -19,7 +19,7 @@
       "input": 0.1,
       "output": 0.5
     },
-    "processor": "triage-ai-v3"
+    "processor": "triage-ai-v4"
   },
   "assignees": [
     "me",
@@ -50,7 +50,15 @@
       "title": "Заявка: назначить исполнителя",
       "assignee": "me",
       "filed": false,
-      "instruction": "Заявка клиента: что сделать, где, когда, контакт. Исполнитель — владелец, пока не указан другой человек."
+      "instruction": "Заявка клиента: что сделать, где, когда, контакт. Исполнитель — владелец, пока не указан другой человек.",
+      "report": [
+        "started",
+        "duration_min",
+        "cost",
+        "expenses",
+        "tags",
+        "note"
+      ]
     },
     {
       "name": "money",
@@ -58,7 +66,11 @@
       "title": "Учесть деньги",
       "assignee": "ai",
       "filed": false,
-      "instruction": "Чек, расход, приход, наличка: классифицировать (сумма, валюта, категория, клиент) и записать в учёт."
+      "instruction": "Чек, расход, приход, наличка: классифицировать (сумма, валюта, категория, клиент) и записать в учёт.",
+      "report": [
+        "expenses",
+        "note"
+      ]
     },
     {
       "name": "callback",
@@ -66,7 +78,10 @@
       "title": "Перезвонить",
       "assignee": "me",
       "filed": false,
-      "instruction": "Кому и по какому поводу перезвонить."
+      "instruction": "Кому и по какому поводу перезвонить.",
+      "report": [
+        "note"
+      ]
     },
     {
       "name": "todo",
@@ -74,7 +89,11 @@
       "title": "Сделать",
       "assignee": "me",
       "filed": false,
-      "instruction": "Обычное дело владельца."
+      "instruction": "Обычное дело владельца.",
+      "report": [
+        "duration_min",
+        "note"
+      ]
     },
     {
       "name": "note",
@@ -99,5 +118,41 @@
   "unsorted": {
     "title": "Разобрать",
     "note": "разбор не дал итога для этих сообщений"
-  }
+  },
+  "report_default": [
+    "duration_min",
+    "note"
+  ],
+  "report_fields": {
+    "started": {
+      "title": "Когда начал",
+      "type": "datetime"
+    },
+    "duration_min": {
+      "title": "Сколько заняло, мин",
+      "type": "minutes"
+    },
+    "cost": {
+      "title": "Стоимость для клиента",
+      "type": "money"
+    },
+    "expenses": {
+      "title": "Затраты",
+      "type": "money"
+    },
+    "tags": {
+      "title": "Метки",
+      "type": "tags"
+    },
+    "note": {
+      "title": "Итог одной строкой",
+      "type": "text"
+    }
+  },
+  "currencies": [
+    "PLN",
+    "BYN",
+    "EUR",
+    "USD"
+  ]
 }

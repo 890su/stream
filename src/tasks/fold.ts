@@ -4,7 +4,7 @@ import type { JournalEvent } from '../contracts/validate.ts';
 
 export interface Task {
   id: string; title: string; status: string; assignee: string; person?: string; template?: string; due?: string | null;
-  messages: string[]; confidence?: number; processor?: string; created_by: string; created_at: string; updated_at: string;
+  messages: string[]; confidence?: number; processor?: string; proposed?: string | null; created_by: string; created_at: string; updated_at: string;
 }
 
 const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting']);
@@ -23,7 +23,7 @@ export function foldTasks(events: JournalEvent[]): Task[] {
       task = { id, title: change.title, status: 'todo', assignee: 'me', messages: [], created_by: event.author, created_at: event.ts, updated_at: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor'] as const) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed'] as const) {
       if (change[key] !== undefined) (task as any)[key] = change[key];
     }
     for (const message of change.add ?? []) if (!task.messages.includes(message)) task.messages.push(message);

@@ -149,7 +149,7 @@ export class Triage {
     const outcomes = [...output.tasks];
     if (missed.length) {
       outcomes.push({ task_id: null, title: tasksConfig.unsorted.title, assignee: 'me', person: null, template: null, due: null,
-        message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false });
+        message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false, done: false });
     }
     let written = 0;
     outcomes.forEach((planned, index) => {
@@ -158,12 +158,14 @@ export class Triage {
       const existing = planned.task_id && openIds.has(planned.task_id) ? planned.task_id : null;
       const taskId = existing ?? nameId(`task|${batchKey}|${index}`);
       const confidence = Math.max(0, Math.min(1, planned.confidence));
+      // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
+      const proposal = planned.done && !planned.filed ? { proposed: 'done' } : {};
       const change: Record<string, unknown> = existing
-        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor }
+        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...proposal }
         : {
           op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', assignee: planned.assignee,
           status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
-          add, confidence, processor: tasksConfig.ai.processor,
+          add, confidence, processor: tasksConfig.ai.processor, ...proposal,
           ...(planned.person ? { person: planned.person } : {}), ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
         };

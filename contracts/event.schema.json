@@ -538,6 +538,21 @@
                 "processor": {
                   "type": "string",
                   "description": "Name and version of the handler that made the change (absent for the owner)."
+                },
+                "proposed": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "done",
+                    null
+                  ],
+                  "description": "A handler thinks the work is finished and asks the owner (CONCEPT.md 2.9); null withdraws the question."
+                },
+                "report": {
+                  "type": "object",
+                  "description": "What the owner reported on closing: fields from registry/tasks.json report_fields, currency, missing (fields left empty)."
                 }
               }
             }

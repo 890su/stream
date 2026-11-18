@@ -512,3 +512,14 @@ Telegram и групп с ботом; полный справочник (П7, «
 анимация не идёт (фоновая вкладка): по таймеру. Догрузка старой истории не анимируется — держит место чтения.
 **Affected:** `CONCEPT.md` §5, `web/motion.js`, `web/feed.js`, `web/composer.js`, `web/recipients.js`,
 `web/topicscreen.js`, `web/chatview.js`, `web/bubble.js`, `web/app.js`
+
+## 2026-11-18 — «Готово» спрашивает, закрытие — с отчётом
+**What:** Разбор (`triage-ai-v4`) отмечает в ответе `done`, когда сообщения говорят «готово»; задача получает
+`proposed: done` и остаётся открытой. В деле — карточка «Задача выполнена?»: «Выполнить» → «Да» → поля отчёта
+шаблона → одно событие `task_change` со `status: done`, `proposed: null` и `report`. Поля отчёта и их типы —
+`registry/tasks.json` (`report_fields`, `report` у шаблона, `report_default`, `currencies`).
+**Why:** Решение владельца (П13): закрытая задача без времени и денег бесполезна для учёта; молча закрывать нельзя.
+**Boundary:** Event v1 расширен необязательными полями `task.proposed` и `task.report` (старые события валидны).
+Содержимое `report` проверяется по реестру (`src/contracts/task.ts`), не схемой. Вечерняя сводка `missing` — шаг 6.
+**Affected:** `CONCEPT.md` §2.9, `contracts/event.schema.json`, `registry/tasks.json`, `src/tasks/`,
+`src/contracts/task.ts`, `web/donecard.js`, `web/feed.js`, `web/topicscreen.js`

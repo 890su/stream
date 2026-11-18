@@ -20,7 +20,7 @@ export function foldTasks(events) {
       task = { id, title: change.title, status: 'todo', assignee: 'me', messages: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note']) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report']) {
       if (change[key] !== undefined) task[key] = change[key];
     }
     // When the task was finished: the feed folds its messages away by this age (CONCEPT.md §2.8).

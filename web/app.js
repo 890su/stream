@@ -18,8 +18,10 @@ import { setupChatView } from './chatview.js';
 import { setupTaskPanel } from './taskpanel.js';
 import { chatOf } from './projection.js';
 import { reveal, conceal } from './motion.js';
+import { createDoneCards } from './donecard.js';
 
 let topicScreen;
+let doneCards;
 let picker;
 let bulk;
 let drawer;
@@ -105,7 +107,7 @@ function setupMessageActions(feed, composer, config) {
     if (!title || !renaming || title === renaming.title) return;
     await composer.queue(makeCorrection(renaming.root, 'topic', { title })).catch((error) => notify(error.message));
   };
-  topicScreen = setupTopicScreen({ feed, composer, onRename: renameTopic, onTaskCard: (id) => taskPanel.open(id) });
+  topicScreen = setupTopicScreen({ feed, composer, onRename: renameTopic, onTaskCard: (id) => taskPanel.open(id), caseCard: (task) => doneCards?.card(task) });
   picker = setupPicker({ getVisible: () => feed.visible(), getChain: (id) => feed.chain(id), notify });
   const link = (view, target) => composer.queue(makeCorrection(view.id, 'link', { target })).catch((error) => notify(error.message));
   // Connect a message to any other one chosen in the picker.
@@ -171,11 +173,12 @@ async function main() {
   const config = await response.json();
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue, limits: config, onOpenCase: (id) => topicScreen.openCase(id), onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); taskPanel?.render(); composerRef?.refreshTags(); } });
+  const feed = setupFeed({ notify, onQueue, limits: config, onOpenCase: (id) => topicScreen.openCase(id), caseCard: (task) => doneCards?.card(task), onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); taskPanel?.render(); composerRef?.refreshTags(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
   composerRef = composer;
+  doneCards = createDoneCards({ config, queue: composer.queue, notify });
   setupModeToggle(feed);
   setupMessageActions(feed, composer, config);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));

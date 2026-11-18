@@ -67,4 +67,13 @@
 .case-open { width: 44px; height: auto; border-radius: 0 12px 12px 0; }
 .case-open svg { width: 20px; height: 20px; }
 #feed-list > .in-case { margin-left: 14px; }
+.done-card { align-self: stretch; margin: 8px 6px 4px 20px; padding: 12px 14px; border-radius: 14px; background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--accent-strong), var(--shadow); }
+.topic-list .done-card { margin-left: 6px; }
+.done-card-title { margin: 0 0 4px; font-weight: 600; font-size: 15.5px; }
+.done-card-text { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.done-card-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.done-card-actions .primary { min-height: 40px; padding: 0 18px; border-radius: 20px; background: var(--accent-strong); color: #fff; font-weight: 600; }
+.done-card-form { display: grid; gap: 8px; margin-bottom: 6px; }
+.done-card-field { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+.done-card-field input, .done-card-field select { min-height: 42px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; font-size: 15px; }
 .mode-toggle { flex: none; min-height: 34px; padding: 0 12px; margin-right: 2px; border-radius: 17px; background: var(--chip); color: var(--chip-text); font-size: 14px; font-weight: 600; }
