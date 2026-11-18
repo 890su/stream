@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { foldTasks, visibleTasks, tasksByMessage } from '../web/taskfold.js';
+import { foldTasks, visibleTasks, tasksByMessage, involvesMe, STATUSES } from '../web/taskfold.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { project } from '../web/projection.js';
 
@@ -89,4 +89,57 @@ test('«О каком деле?»: asked when the handler adds with alternatives
   const asked = questionOptions({ id: 'm1', taskIds: ['ta'] }, questions.get('m1'), byId);
   assert.deepEqual(asked.options.map((o: { id: string; current: boolean; open: boolean }) => [o.id, o.current, o.open]), [['ta', true, true], ['tb', false, false]]);
   assert.equal(questionOptions({ id: 'm1', taskIds: ['ta'] }, { task: 'ta', alternatives: ['gone'] }, byId), null, 'nothing to choose between');
+});
+
+// Roles (CONCEPT.md, P14). Names are made up.
+const create = (data: Record<string, unknown>, id = 't1') => change(id, '2026-11-18T08:00:00Z', { op: 'create', status: 'todo', ...data });
+
+test('old tasks get roles from assignee', () => {
+  const [task] = foldTasks([create({ title: 'Отвезти роутер', assignee: 'person', person: 'Марек' })]);
+  assert.deepEqual(task.roles.executors, ['name:Марек']);
+  assert.equal(task.roles.responsible, 'me');
+  assert.equal(task.roles.author, 'system');
+  const [ai] = foldTasks([create({ title: 'Записать', assignee: 'ai' })]);
+  assert.deepEqual(ai.roles.executors, ['ai']);
+  const [nameless] = foldTasks([create({ title: 'X', assignee: 'person' })]);
+  assert.deepEqual(nameless.roles.executors, []);
+});
+
+test('roles merge by key; null clears; assignee stays derived', () => {
+  const [task] = foldTasks([
+    create({ title: 'Проверить', roles: { responsible: 'me' } }),
+    change('t1', '2026-11-18T09:00:00Z', { op: 'update', roles: { executors: ['tg:4242'], controller: 'me' } }),
+    change('t1', '2026-11-18T10:00:00Z', { op: 'update', roles: { controller: null } }),
+  ]);
+  assert.equal(task.roles.responsible, 'me');
+  assert.deepEqual(task.roles.executors, ['tg:4242']);
+  assert.equal(task.roles.controller, null);
+  assert.equal(task.assignee, 'person');
+});
+
+test('a team task without me is not mine; review and deferred are open', () => {
+  const tasks = foldTasks([
+    create({ title: 'Чужая', status: 'review', roles: { responsible: 'tg:1', executors: ['tg:2'] } }, 'a'),
+    create({ title: 'Моя', status: 'deferred', roles: { watchers: ['me'] } }, 'b'),
+  ]);
+  const [a, b] = tasks;
+  assert.equal(involvesMe(a), false);
+  assert.equal(involvesMe(b), true);
+  assert.equal(visibleTasks(tasks, { who: 'all' }).length, 2);
+  assert.equal(STATUSES.review, 'на проверке');
+  assert.equal(STATUSES.deferred, 'отложено');
+});
+
+test('extra fields fold; filed comes from the change or the template', () => {
+  const [task, other] = foldTasks([
+    create({ title: 'Дневник', template: 'diary', waiting_for: { party: 'tg:1', since: '2026-11-18T08:00:00Z' }, plan: { duration_min: 20 }, remind_at: '2026-11-19T07:00:00Z', promise: { by: 'me', due: '2026-11-20' } }),
+    create({ title: 'Иное', template: 'other', filed: true }, 't2'),
+  ], { filedTemplates: ['diary'] });
+  assert.equal(task.filed, true);
+  assert.equal(task.waitingFor.party, 'tg:1');
+  assert.equal(task.plan.duration_min, 20);
+  assert.equal(task.remindAt, '2026-11-19T07:00:00Z');
+  assert.equal(task.promise.due, '2026-11-20');
+  assert.equal(other.filed, true);
+  assert.equal(foldTasks([create({ title: 'Z', template: 'diary' })])[0].filed, false);
 });

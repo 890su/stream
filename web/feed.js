@@ -59,7 +59,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const events = new Map((await cachedEvents()).map((event) => [event.id, event]));
     for (const entry of queued) events.set(entry.event.id, entry.event);
     const projected = project([...events.values()], new Set(pending.keys()));
-    taskList = foldTasks([...events.values()]);
+    taskList = foldTasks([...events.values()], { filedTemplates: limits.tasks?.filed_templates ?? [] });
     const byMessage = tasksByMessage(taskList);
     const tasksById = new Map(taskList.map((task) => [task.id, task]));
     const now = new Date();

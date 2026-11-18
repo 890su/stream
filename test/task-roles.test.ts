@@ -39,3 +39,23 @@ test('a task change with roles is accepted; a wrong party or role is refused', a
     assert.equal((await post(change({ op: 'update', promise: { by: 'x', due: '2026-11-20', message: randomUUID() } }))).status, 400, 'promise party');
   } finally { await f.stop(); }
 });
+
+test('server fold: roles from old fields, merge by key, derived assignee, filed templates', async () => {
+  const { foldTasks, isOpen } = await import('../src/tasks/fold.ts');
+  const at = (ts: string, data: Record<string, unknown>, author = 'me') => ({ ...change(data), ts, author });
+  const old = foldTasks([at('2026-11-18T08:00:00Z', { op: 'create', title: 'A', assignee: 'person', person: 'Марек' }) as any])[0]!;
+  assert.deepEqual(old.roles.executors, ['name:Марек']);
+  assert.equal(old.roles.responsible, 'me');
+  assert.equal(old.roles.author, 'me');
+  const task = foldTasks([
+    at('2026-11-18T08:00:00Z', { op: 'create', title: 'B', template: 'diary', roles: { responsible: 'me' }, remind_at: '2026-11-19T07:00:00Z', status: 'review' }),
+    at('2026-11-18T09:00:00Z', { op: 'update', roles: { executors: ['tg:4242'], controller: 'me' } }),
+    at('2026-11-18T10:00:00Z', { op: 'update', roles: { controller: null } }),
+  ] as any, { filedTemplates: ['diary'] })[0]!;
+  assert.deepEqual(task.roles.executors, ['tg:4242']);
+  assert.equal(task.roles.controller, null);
+  assert.equal(task.assignee, 'person');
+  assert.equal(task.filed, true);
+  assert.equal(task.remind_at, '2026-11-19T07:00:00Z');
+  assert.ok(isOpen(task));
+});

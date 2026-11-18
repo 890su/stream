@@ -1,27 +1,54 @@
 // Tasks as the fold of task_change events (CONCEPT.md §2.8); the server folds the same way (src/tasks/fold.ts).
 // Pure: no DOM, no storage — tested in node.
+import { partyOf, ROLE_KEYS } from './parties.js';
 
-const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting']);
+const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred']);
 export const isOpen = (task) => OPEN.has(task.status);
 
 export const ASSIGNEES = { me: 'Я', ai: 'ИИ', system: 'Система', person: 'Человек' };
-export const STATUSES = { inbox: 'разобрать', todo: 'сделать', doing: 'в работе', waiting: 'ждёт', done: 'готово', cancelled: 'отменено' };
+export const STATUSES = { inbox: 'разобрать', todo: 'сделать', doing: 'в работе', waiting: 'ждёт', review: 'на проверке', deferred: 'отложено', done: 'готово', cancelled: 'отменено' };
 
 const order = (a, b) => a.ts.localeCompare(b.ts) || (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
 
-export function foldTasks(events) {
+const emptyRoles = () => ({ author: null, responsible: null, executors: [], controller: null, watchers: [], counterparty: null });
+
+// A task whose changes never carried roles: who does it comes from the old `assignee` / `person` fields.
+function legacyRoles(task) {
+  const executors = task.assignee === 'person' ? (task.person ? [`name:${task.person}`] : []) : [task.assignee];
+  return { ...emptyRoles(), author: partyOf(task.createdBy), responsible: 'me', executors };
+}
+
+// The old display field, derived: the kind of the first executor.
+const kindOf = (party) => (party === 'me' || party === 'ai' || party === 'system' ? party : 'person');
+
+// I am in any role of the task.
+export const involvesMe = (task) => ROLE_KEYS.some((key) => [task.roles[key]].flat().includes('me'));
+
+// `filedTemplates` — names of templates marked `filed` in the config: such tasks are filed away, not worked on.
+export function foldTasks(events, { filedTemplates = [] } = {}) {
   const tasks = new Map();
+  const hasRoles = new Set();
+  const filedGiven = new Set();
   for (const event of events.filter((item) => item.kind === 'task_change').sort(order)) {
     const id = event.payload?.ref?.id;
     const change = event.payload?.data?.task ?? {};
     let task = tasks.get(id);
     if (!task) {
       if (change.op !== 'create') continue;
-      task = { id, title: change.title, status: 'todo', assignee: 'me', messages: [], history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
+      task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report']) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise']) {
       if (change[key] !== undefined) task[key] = change[key];
+    }
+    if (change.waiting_for !== undefined) task.waitingFor = change.waiting_for;
+    if (change.remind_at !== undefined) task.remindAt = change.remind_at;
+    if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }
+    if (change.roles) {
+      hasRoles.add(id);
+      for (const key of ROLE_KEYS) {
+        if (change.roles[key] !== undefined) task.roles[key] = change.roles[key] ?? (key === 'executors' || key === 'watchers' ? [] : null);
+      }
     }
     // When the task was finished: the feed folds its messages away by this age (CONCEPT.md §2.8).
     if (change.status !== undefined) task.doneAt = OPEN.has(change.status) ? undefined : event.ts;
@@ -29,6 +56,12 @@ export function foldTasks(events) {
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
     task.history.push({ ts: event.ts, author: event.author, change });
     task.updatedAt = event.ts;
+  }
+  for (const task of tasks.values()) {
+    if (!hasRoles.has(task.id)) task.roles = legacyRoles(task);
+    else if (!task.roles.author) task.roles.author = partyOf(task.createdBy);
+    if (task.roles.executors.length) task.assignee = kindOf(task.roles.executors[0]);
+    if (!filedGiven.has(task.id)) task.filed = !!task.template && filedTemplates.includes(task.template);
   }
   return [...tasks.values()];
 }

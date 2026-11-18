@@ -96,7 +96,7 @@ export class Triage {
   }
 
   async run(batch: JournalEvent[]): Promise<number> {
-    const tasks = foldTasks(this.#store.triage.taskEvents());
+    const tasks = foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) });
     const open = tasks.filter(isOpen).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
     // Finished cases may come back: the triage sees those closed in the last reopen_days (CONCEPT.md §2.8).
     const closedSince = new Date(Date.now() - tasksConfig.reopen_days * 86_400_000).toISOString();
