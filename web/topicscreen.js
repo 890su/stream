@@ -2,6 +2,7 @@
 // writing into it. A topic's name renames it; a case's name opens its task card. It takes the place of the
 // feed; the Android back gesture returns to the feed (history entry).
 import { STATUSES } from './taskfold.js';
+import { reveal, conceal } from './motion.js';
 
 const plural = (n) => (n % 10 === 1 && n % 100 !== 11 ? 'сообщение' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'сообщения' : 'сообщений');
 
@@ -43,7 +44,7 @@ export function setupTopicScreen({ feed, composer, onRename, onTaskCard }) {
     if (!current) history.pushState({ topic: true }, '');
     current = next;
     document.body.classList.add('in-topic');
-    screen.hidden = false;
+    reveal(screen, 'translateX(32px)');
     screen.setAttribute('aria-label', next.kind === 'case' ? 'Дело' : 'Тема');
     composer.enterTopic({ last: () => views().at(-1) }, next.kind === 'case' ? 'Сообщение в дело' : 'Сообщение в тему');
     render();
@@ -62,7 +63,7 @@ export function setupTopicScreen({ feed, composer, onRename, onTaskCard }) {
   function close() {
     if (!current) return;
     current = null;
-    screen.hidden = true;
+    conceal(screen, 'translateX(32px)');
     document.body.classList.remove('in-topic');
     composer.leaveTopic();
   }

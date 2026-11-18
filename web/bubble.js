@@ -1,4 +1,5 @@
 import { formatDuration } from './voice.js';
+import { play } from './motion.js';
 import { snippet } from './projection.js';
 import { phoneBlock, isPhoneEvent } from './phonebubble.js';
 import { messengerBlock, deliveryLine, isMessenger } from './tgbubble.js';
@@ -164,8 +165,11 @@ function textBlock(text, limits) {
   toggle.type = 'button';
   toggle.onclick = (event) => {
     event.stopPropagation();
+    // The text grows or shrinks to its new height instead of jumping.
+    const from = block.offsetHeight;
     const open = block.classList.toggle('clamped') === false;
     toggle.textContent = open ? 'Свернуть' : 'Показать полностью';
+    play(block, [{ height: `${from}px`, overflow: 'hidden' }, { height: `${block.offsetHeight}px`, overflow: 'hidden' }]);
   };
   wrap.append(block, toggle);
   return wrap;

@@ -6,6 +6,7 @@ import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
 import { foldTasks, tasksByMessage, doneStage } from './taskfold.js';
 import { feedItems, shownViews, caseMembers } from './cases.js';
 import { caseHeader } from './caserow.js';
+import { grow, shrink, reduced, play } from './motion.js';
 
 const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
 const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -43,6 +44,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   const expanded = new Set(); // folded rows of finished tasks the reader opened
   let mode = 'cases'; // 'cases' — the feed of cases, 'messages' — messages in a row (CONCEPT.md §2.9)
   const caseState = new Map(); // task id -> { state: 'all' | 'none', at } — the reader's choice under a case header
+  let groupNodes = new Map(); // 'case:<task>' | 'done:<tasks>' -> rows under that header, for smooth folding
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -57,7 +59,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     return url;
   }
 
-  async function render({ bottom = false } = {}) {
+  // `keep` — { key, top }: the header that was tapped stays where it was; `quiet` — no animation of new rows.
+  async function render({ bottom = false, keep = null, quiet = false } = {}) {
     const queued = await listEntries();
     const pending = new Map(queued.map((entry) => [entry.event.id, entry]));
     const events = new Map((await cachedEvents()).map((event) => [event.id, event]));
@@ -88,6 +91,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
 
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
     const children = [];
+    const newcomers = [];
+    groupNodes = new Map();
     const chainOf = chains(visible);
     const nextOf = new Map();
     for (const view of visible) if (view.continues && !nextOf.has(view.continues)) nextOf.set(view.continues, view.id);
@@ -99,6 +104,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       const faded = Boolean(view.archived || inArchivedTopic(view));
       const signature = bubbleSignature(view, queuedEntry, chain) + (next ?? '') + faded;
       let cached = nodes.get(view.id);
+      if (!cached && rendered) newcomers.push(view.id);
       if (!cached || cached.signature !== signature) {
         cached = { signature, node: createBubble(view, queuedEntry, { load: (reference) => load(reference, queuedEntry), notify, jump, chain, limits, next, faded }) };
         nodes.set(view.id, cached);
@@ -133,9 +139,10 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       const row = document.createElement('button');
       row.type = 'button';
       row.className = `done-row${faded ? ' faded' : ''}${open ? ' open' : ''}`;
+      row.dataset.group = `done:${item.key}`;
       row.textContent = `${open ? '▾' : '▸'} ✓ ${titles.join(' · ')} · ${item.views.length} сообщ.`;
       row.setAttribute('aria-expanded', String(open));
-      row.onclick = () => { if (open) expanded.delete(item.key); else expanded.add(item.key); render(); };
+      row.onclick = () => toggleGroup(`done:${item.key}`, open, () => { if (open) expanded.delete(item.key); else expanded.add(item.key); });
       return row;
     };
     if (mode === 'messages') for (const entry of items) {
@@ -146,7 +153,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         if (!expanded.has(entry.key)) continue;
       }
       const groups = entry.key ? bursts(entry.views) : [entry.group];
-      for (const group of groups) renderGroup(group, Boolean(entry.key) && entry.views.every((view) => view.doneStage !== 'collapsed'));
+      for (const group of groups) renderGroup(group, Boolean(entry.key) && entry.views.every((view) => view.doneStage !== 'collapsed'), false, entry.key ? `done:${entry.key}` : null);
     }
     if (mode === 'cases') renderCases();
     // Cases: a header, then fresh or chosen messages; messages without a task in between, as they are.
@@ -166,12 +173,12 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         pill(new Date(item.last));
         lastTs = item.last;
         children.push(caseHeader(item, { shown: views.length, onOpen: () => onOpenCase(id),
-          onToggle: () => { caseState.set(id, { state: views.length ? 'none' : 'all', at: item.last }); render(); } }));
-        for (const group of bursts(views)) renderGroup(group, item.stage === 'faded', true);
+          onToggle: () => toggleGroup(`case:${id}`, views.length > 0, () => caseState.set(id, { state: views.length ? 'none' : 'all', at: item.last })) }));
+        for (const group of bursts(views)) renderGroup(group, item.stage === 'faded', true, `case:${id}`);
       }
       flush();
     }
-    function renderGroup(group, dim, inCase = false) {
+    function renderGroup(group, dim, inCase = false, groupKey = null) {
       if (!inCase) pill(new Date(group[0].event.ts));
       const close = Date.parse(group[0].event.ts) - lastTs <= limits.burst_gap_min * 60000;
       lastTs = Date.parse(group.at(-1).event.ts);
@@ -185,6 +192,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       item.classList.toggle('close', inCase || (close && children.at(-1)?.className !== 'date-pill'));
       item.classList.toggle('done-dim', dim);
       item.classList.toggle('in-case', inCase);
+      if (groupKey) groupNodes.set(groupKey, [...(groupNodes.get(groupKey) ?? []), item]);
       children.push(item);
     }
     if (!visible.length) {
@@ -197,9 +205,26 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       children.push(empty);
     }
     list.replaceChildren(...children);
-    if (bottom || nearBottom || !rendered) scroller.scrollTop = scroller.scrollHeight;
+    const anchor = keep && list.querySelector(`[data-group="${CSS.escape(keep.key)}"]`);
+    if (anchor) scroller.scrollTop += anchor.getBoundingClientRect().top - keep.top;
+    else if (bottom || nearBottom || !rendered) {
+      // A new message slides in and the feed glides to it; the first paint goes straight to the bottom.
+      const fresh = !quiet && newcomers.length && newcomers.length <= 3;
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: fresh && !reduced() ? 'smooth' : 'auto' });
+    }
+    if (!quiet && newcomers.length <= 3) {
+      for (const id of newcomers) { const node = nodes.get(id)?.node; if (node) play(node, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }]); }
+    }
     rendered = true;
     onRender();
+  }
+
+  // Shows or hides the rows under a header smoothly; the header stays in place.
+  function toggleGroup(key, hiding, change) {
+    const header = list.querySelector(`[data-group="${CSS.escape(key)}"]`);
+    const keep = header ? { key, top: header.getBoundingClientRect().top } : null;
+    const apply = async () => { change(); await render({ keep, quiet: true }); if (!hiding) grow(groupNodes.get(key) ?? []); };
+    if (hiding) shrink(groupNodes.get(key) ?? [], apply); else apply();
   }
 
   // Scrolls to a message (from a reply quote) and flashes it.
@@ -240,7 +265,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const anchor = scroller.scrollHeight - scroller.scrollTop;
     try {
       await fetchPage(true);
-      await render();
+      await render({ quiet: true });
       scroller.scrollTop = scroller.scrollHeight - anchor; // keep the reading position
     } catch (error) { notify(error.message); }
     finally { loadingOlder = false; historyState.hidden = true; }

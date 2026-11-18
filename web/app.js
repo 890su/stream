@@ -17,6 +17,7 @@ import { setAccounts } from './tgbubble.js';
 import { setupChatView } from './chatview.js';
 import { setupTaskPanel } from './taskpanel.js';
 import { chatOf } from './projection.js';
+import { reveal, conceal } from './motion.js';
 
 let topicScreen;
 let picker;
@@ -65,11 +66,11 @@ function notify(message, action) {
   button.hidden = !action;
   if (action) {
     button.textContent = action.label;
-    button.onclick = () => { notice.hidden = true; action.run(); };
+    button.onclick = () => { conceal(notice); action.run(); };
   }
-  notice.hidden = false;
+  reveal(notice);
   clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => { notice.hidden = true; }, action ? 6000 : 4500);
+  noticeTimer = setTimeout(() => conceal(notice), action ? 6000 : 4500);
 }
 
 function setupMessageActions(feed, composer, config) {

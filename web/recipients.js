@@ -5,6 +5,7 @@ import { getSetting } from './db.js';
 import { makeCorrection } from './shared.js';
 import { accountTitle } from './tgbubble.js';
 import { replyWindowClosed } from './outbound.js';
+import { reveal, conceal } from './motion.js';
 
 const $ = (selector) => document.querySelector(selector);
 const CACHE = 'stream.recipients';
@@ -61,8 +62,9 @@ export function createRecipients({ config, getViews, notify, queue, onChange }) 
     button.hidden = !enabled;
     button.classList.toggle('active', Boolean(chosen));
     button.setAttribute('aria-expanded', String(shown));
-    chips.hidden = !shown || !enabled;
-    tagChips.hidden = shown && enabled;
+    // Tags and recipients swap places with a short slide.
+    if (shown && enabled) { tagChips.hidden = true; reveal(chips, 'translateX(16px)'); }
+    else { chips.hidden = true; reveal(tagChips, 'translateX(-16px)'); }
     if (!shown || !enabled) { chips.replaceChildren(); return; }
     const others = list.filter((item) => item.key !== chosen?.key).slice(0, rowSize);
     const all = document.createElement('button');
@@ -83,7 +85,7 @@ export function createRecipients({ config, getViews, notify, queue, onChange }) 
       const facts = document.createElement('small');
       facts.textContent = [accountTitle(item.account), item.group ? 'группа, пишет бот' : null, isOpen(item) ? null : 'окно 24 часа закрыто'].filter(Boolean).join(' · ');
       pick.append(name, facts);
-      pick.onclick = () => { choose(item); panel.hidden = true; };
+      pick.onclick = () => { choose(item); conceal(panel); };
       const pin = document.createElement('button');
       pin.type = 'button'; pin.className = `icon-button to-pin${item.pinned ? ' active' : ''}`; pin.innerHTML = STAR;
       pin.disabled = !item.anchor;
@@ -106,7 +108,7 @@ export function createRecipients({ config, getViews, notify, queue, onChange }) 
   function openPanel() {
     search.value = '';
     renderPanel();
-    panel.hidden = false;
+    reveal(panel);
     load().then(() => { if (!panel.hidden) renderPanel(); });
   }
 
@@ -119,7 +121,7 @@ export function createRecipients({ config, getViews, notify, queue, onChange }) 
 
   button.onclick = () => {
     shown = !shown;
-    panel.hidden = true;
+    conceal(panel);
     render();
     if (shown) load();
   };
@@ -130,8 +132,8 @@ export function createRecipients({ config, getViews, notify, queue, onChange }) 
     selected: () => chosen,
     isOpen,
     // Back to the tags: after sending, or a chat view's default recipient.
-    reset: (item = null) => { chosen = null; shown = false; panel.hidden = true; if (item) choose(item); else { render(); onChange?.(null); } },
-    enable: (on) => { enabled = on; if (!on) panel.hidden = true; render(); },
-    closePanel: () => { panel.hidden = true; },
+    reset: (item = null) => { chosen = null; shown = false; conceal(panel); if (item) choose(item); else { render(); onChange?.(null); } },
+    enable: (on) => { enabled = on; if (!on) conceal(panel); render(); },
+    closePanel: () => conceal(panel),
   };
 }

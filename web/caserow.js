@@ -22,6 +22,7 @@ export function caseHeader(item, { shown, onToggle, onOpen }) {
   const sameDay = last.toDateString() === new Date().toDateString();
   const row = element('div', `case-head${item.stage ? ` done ${item.stage}` : ''}${task.status === 'inbox' ? ' inbox' : ''}`);
   row.dataset.task = task.id;
+  row.dataset.group = `case:${task.id}`;
   const toggle = element('button', 'case-toggle');
   toggle.type = 'button';
   toggle.setAttribute('aria-expanded', String(shown > 0));

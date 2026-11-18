@@ -6,6 +6,7 @@ import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow, leadButtons } from './tagrow.js';
 import { outboundData } from './outbound.js';
 import { createRecipients } from './recipients.js';
+import { conceal, toggleHidden } from './motion.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
 
@@ -67,9 +68,10 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   function togglePanel(panel, button, open = panel.hidden) {
     recipients.closePanel();
     for (const [other, otherButton] of [[tagPanel, tagButton], [attachMenu, attachButton]]) {
-      other.hidden = true; otherButton.setAttribute('aria-expanded', 'false');
+      if (other !== panel) conceal(other);
+      otherButton.setAttribute('aria-expanded', 'false');
     }
-    panel.hidden = !open;
+    toggleHidden(panel, !open);
     button.setAttribute('aria-expanded', String(open));
   }
 
@@ -88,7 +90,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
       item.append(remove);
       return item;
     }));
-    draft.hidden = !files.length;
+    toggleHidden(draft, !files.length);
     updateAction();
   }
 
@@ -116,7 +118,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   function setMode(next) {
     const leavingEdit = mode?.type === 'edit';
     mode = next;
-    contextBar.hidden = !mode;
+    toggleHidden(contextBar, !mode);
     contextBar.classList.toggle('reply', mode?.type === 'reply');
     contextBar.classList.toggle('edit', mode?.type === 'edit');
     contextBar.classList.toggle('continue', mode?.type === 'continue');

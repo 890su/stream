@@ -1,4 +1,5 @@
 import { accountTitle } from './tgbubble.js';
+import { reveal, conceal } from './motion.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -14,14 +15,14 @@ export function setupChatView({ feed, composer, correct, notify }) {
     const app = $('#chat-app');
     app.hidden = chat.group;
     app.href = chat.group ? '#' : `tg://user?id=${chat.chat_id}`;
-    bar.hidden = false;
+    reveal(bar, 'translateY(-8px)');
     composer.chat(chat); // the chat is the default recipient; in a group the bot writes as itself
     await feed.setChatFilter(chat);
   };
   const close = async () => {
     if (!current) return;
     current = null;
-    bar.hidden = true;
+    conceal(bar, 'translateY(-8px)');
     composer.chat(null);
     await feed.setChatFilter(null);
   };

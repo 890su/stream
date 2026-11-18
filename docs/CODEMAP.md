@@ -64,6 +64,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `app.js` | entry: wires everything, message action dispatch, «Дела» ⇄ «Сообщения» toggle |
 | `settings.js` | status line, settings dialog, service worker registration |
 | `feed.js` | renders the feed: cases (headers + messages) or messages in a row (bursts, topic lines, folded finished tasks); day pills, filters, paging |
+| `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `cases.js` / `caserow.js` | pure: messages → cases, order, what shows under a header; the case header |
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
