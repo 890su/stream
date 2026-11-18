@@ -51,7 +51,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, an outcome for every message (filed = done at once, missed → «Разобрать»), budget | `Triage`, `streamOf` |
+| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), budget | `Triage`, `streamOf` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) | `anthropicPlanner` |
 | `fold.ts` | tasks as fold of `task_change` (server side) | `foldTasks`, `isOpen` |
 
@@ -66,6 +66,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
 | `feed.js` | the centre in three views: Лента (bursts, chain lines, folded finished tasks), Дела (case headers + messages), Задачи (task rows); filters, paging |
 | `tasklist.js` / `days.js` | a task row of the «Задачи» view; day pill labels |
+| `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
 | `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report; pure report parsing |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `cases.js` / `caserow.js` | pure: messages → cases, order, what shows under a header; the case header |
@@ -94,7 +95,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 
 | File | What |
 |---|---|
-| `contracts/event.schema.json` | Event v1 (kinds, payload.data: call, sms, telegram, outbound, action, system, task (+ proposed, report), tagging, continuation) |
+| `contracts/event.schema.json` | Event v1 (kinds, payload.data: call, sms, telegram, outbound, action, system, task (+ proposed, report, alternatives), tagging, continuation) |
 | `contracts/*.schema.json` | Action, Task, Interpretation, Normalized, Intent |
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |

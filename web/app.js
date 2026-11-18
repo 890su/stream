@@ -18,6 +18,7 @@ import { setupDetails } from './details.js';
 import { chatOf } from './projection.js';
 import { reveal, conceal } from './motion.js';
 import { createDoneCards } from './donecard.js';
+import { setupQuestions } from './question.js';
 
 let details; // right panel «Подробности» (CONCEPT.md §5)
 let doneCards;
@@ -160,6 +161,7 @@ async function main() {
   composerRef = composer;
   doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); } });
   setupViews(feed);
+  setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });
   setupMessageActions(feed, composer, config);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({

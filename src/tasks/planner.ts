@@ -5,13 +5,14 @@ export interface PlanMessage {
   id: string; time: string; source: string; from: string; text: string; tags: string[];
   reply_to?: string; continues?: string; in_tasks: string[];
 }
-export interface PlanTask { id: string; title: string; assignee: string; status: string; recent: string[] }
+// A task given as context: its last messages, the conversations (sources) they came from, its last activity.
+export interface PlanTask { id: string; title: string; assignee: string; status: string; recent: string[]; chats: string[]; last_at: string }
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
 // context — earlier messages of the same conversation, already triaged: to understand, not to assign.
-export interface PlanInput { now: string; templates: PlanTemplate[]; open_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
+export interface PlanInput { now: string; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
 
 export interface PlannedTask {
-  task_id: string | null; // an open task this continues, or null for a new one
+  task_id: string | null; // an open or recently closed task this continues, or null for a new one
   title: string;
   assignee: 'me' | 'ai' | 'system' | 'person';
   person: string | null;
@@ -22,6 +23,7 @@ export interface PlannedTask {
   note: string | null;
   filed: boolean; // nothing to do but file it: the task is created already done
   done: boolean; // the messages say the work is finished: the owner is asked to close it with a report
+  alternatives: string[]; // other tasks these messages may belong to: the owner is asked right on the message
 }
 export interface PlanOutput { tasks: PlannedTask[]; usage?: { input_tokens: number; output_tokens: number } }
 
@@ -38,7 +40,7 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'assignee', 'person', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done'],
+        required: ['task_id', 'title', 'assignee', 'person', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives'],
         properties: {
           task_id: { type: ['string', 'null'] },
           title: { type: 'string' },
@@ -51,6 +53,7 @@ export const PLAN_SCHEMA = {
           note: { type: ['string', 'null'] },
           filed: { type: 'boolean' },
           done: { type: 'boolean' },
+          alternatives: { type: 'array', items: { type: 'string' } },
         },
       },
     },
@@ -58,7 +61,7 @@ export const PLAN_SCHEMA = {
 } as const;
 
 export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сообщения личной ленты владельца в задачи.
-Вход: шаблоны задач, открытые задачи, context — предыдущие сообщения этой же беседы (уже разобраны, in_tasks —
+Вход: шаблоны задач, открытые задачи (open_tasks), недавно завершённые (closed_tasks), context — предыдущие сообщения этой же беседы (уже разобраны, in_tasks —
 их задачи) и messages — пачка новых сообщений (накопились, пока беседа не замолчала).
 Правила:
 - context — только чтобы понять, о чём речь и к какой задаче относится новое; id из context в ответ не включай.
@@ -72,6 +75,11 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
 - done: true — сообщения говорят, что дело сделано («готово», «сделал», «закончил», «установил, работает»).
   Задачу это не закрывает: владельца спросят и попросят отчёт. У filed-задач done всегда false.
 - Если сообщение уточняет или продолжает открытую задачу, верни эту задачу с её task_id и id сообщения, title — как у неё.
+  Дело может длиться много дней: сверяй собеседника (chats — откуда сообщения задачи), предмет и last_at.
+- Если сообщение явно продолжает задачу из closed_tasks (то же дело снова ожило: «опять не работает», «а ещё…»),
+  верни её task_id — задачу вернут в работу. Не возвращай закрытое ради похожей темы: новое дело — новая задача.
+- alternatives — id других задач (из open_tasks или closed_tasks), к которым эти сообщения тоже могут относиться,
+  до трёх, самые вероятные первыми. Только при настоящем сомнении: владельца спросят прямо на сообщении. Иначе [].
 - Два разных дела в одном сообщении — две задачи. Несколько сообщений об одном деле — одна задача.
 - Болтовню, приветствия, «ок», служебное не превращай в дела: это filed: true с шаблоном chatter.
 - Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, assignee — из шаблона.

@@ -42,8 +42,8 @@ test('a stream waits for its quiet window; streams are separate batches', async 
 test('one batch becomes several tasks; a message may belong to two; nothing is triaged twice', async () => {
   const s = setup((input) => ({
     tasks: [
-      { task_id: null, title: 'Настроить роутер у клиента', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id, input.messages[1]!.id], confidence: 0.9, note: null, filed: false, done: false },
-      { task_id: null, title: 'Записать расход на кабель', assignee: 'ai', person: null, template: 'money', due: null, message_ids: [input.messages[1]!.id], confidence: 0.4, note: null, filed: false, done: false },
+      { task_id: null, title: 'Настроить роутер у клиента', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id, input.messages[1]!.id], confidence: 0.9, note: null, filed: false, done: false, alternatives: [] },
+      { task_id: null, title: 'Записать расход на кабель', assignee: 'ai', person: null, template: 'money', due: null, message_ids: [input.messages[1]!.id], confidence: 0.4, note: null, filed: false, done: false, alternatives: [] },
     ],
     usage: { input_tokens: 1000, output_tokens: 200 },
   }));
@@ -71,9 +71,9 @@ test('a later message is added to an open task instead of a new one; «гото�
   let round = 0;
   const s = setup((input) => {
     round += 1;
-    if (round === 1) return { tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null, filed: false, done: false }] };
+    if (round === 1) return { tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null, filed: false, done: false, alternatives: [] }] };
     assert.equal(input.open_tasks.length, 1, 'open tasks are given as context');
-    return { tasks: [{ task_id: input.open_tasks[0]!.id, title: 'Перезвонить Марку', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.8, note: null, filed: false, done: true }] };
+    return { tasks: [{ task_id: input.open_tasks[0]!.id, title: 'Перезвонить Марку', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.8, note: null, filed: false, done: true, alternatives: [] }] };
   });
   try {
     const first = s.add(event({ payload: { text: 'перезвонить Марку' } }));
@@ -127,9 +127,9 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     const [mood, job, , idea] = input.messages.map((message) => message.id);
     return {
       tasks: [
-        { task_id: null, title: 'Самочувствие', assignee: 'ai', person: null, template: 'diary', due: null, message_ids: [mood!], confidence: 0.9, note: null, filed: true, done: false },
-        { task_id: null, title: 'Поменять роутер у клиента', assignee: 'me', person: null, template: null, due: null, message_ids: [job!], confidence: 0.9, note: null, filed: false, done: false },
-        { task_id: null, title: 'Идея для ленты', assignee: 'ai', person: null, template: 'plan', due: null, message_ids: [idea!], confidence: 0.3, note: null, filed: true, done: false },
+        { task_id: null, title: 'Самочувствие', assignee: 'ai', person: null, template: 'diary', due: null, message_ids: [mood!], confidence: 0.9, note: null, filed: true, done: false, alternatives: [] },
+        { task_id: null, title: 'Поменять роутер у клиента', assignee: 'me', person: null, template: null, due: null, message_ids: [job!], confidence: 0.9, note: null, filed: false, done: false, alternatives: [] },
+        { task_id: null, title: 'Идея для ленты', assignee: 'ai', person: null, template: 'plan', due: null, message_ids: [idea!], confidence: 0.3, note: null, filed: true, done: false, alternatives: [] },
       ],
     };
   });
@@ -148,14 +148,14 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v4').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v5').length, 4);
   } finally { s.cleanup(); }
 });
 
 test('a later batch of a conversation sees its earlier messages as context, other chats stay out', async () => {
   const s = setup((input) => {
-    if (!input.context.length) return { tasks: input.messages.map((message, index) => ({ task_id: null, title: `Дело ${index}`, assignee: 'me' as const, person: null, template: null, due: null, message_ids: [message.id], confidence: 0.9, note: null, filed: false, done: false })) };
-    return { tasks: [{ task_id: input.context[0]!.in_tasks[0]!, title: 'Дело 0', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null, filed: false, done: false }] };
+    if (!input.context.length) return { tasks: input.messages.map((message, index) => ({ task_id: null, title: `Дело ${index}`, assignee: 'me' as const, person: null, template: null, due: null, message_ids: [message.id], confidence: 0.9, note: null, filed: false, done: false, alternatives: [] })) };
+    return { tasks: [{ task_id: input.context[0]!.in_tasks[0]!, title: 'Дело 0', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null, filed: false, done: false, alternatives: [] }] };
   });
   try {
     const first = s.add(telegram('7001', 'нужна настройка роутера'));
@@ -168,5 +168,34 @@ test('a later batch of a conversation sees its earlier messages as context, othe
     assert.equal(call.context[0]!.in_tasks.length, 1, 'context carries its task');
     const task = s.tasks().find((item) => item.messages.includes(first.id))!;
     assert.deepEqual(task.messages, [first.id, later.id]);
+  } finally { s.cleanup(); }
+});
+
+test('a closed case comes back when a message continues it; a doubtful message carries alternatives', async () => {
+  let round = 0;
+  const s = setup((input) => {
+    round += 1;
+    const m = input.messages[0]!.id;
+    const plan = (data: Partial<PlanOutput['tasks'][number]>) => ({ tasks: [{ task_id: null, title: 'Wi-Fi у клиента', assignee: 'me' as const, person: null, template: 'todo', due: null, message_ids: [m], confidence: 0.9, note: null, filed: false, done: false, alternatives: [], ...data }] });
+    if (round === 1) return plan({});
+    if (round === 2) return plan({ title: 'Камеры у соседа' });
+    assert.equal(input.closed_tasks.length, 1, 'recently closed cases are given');
+    assert.ok(input.open_tasks[0]!.chats.length && input.open_tasks[0]!.last_at, 'a task comes with its chats and last activity');
+    return plan({ task_id: input.closed_tasks[0]!.id, alternatives: [input.open_tasks[0]!.id, 'not-a-task'] });
+  });
+  try {
+    s.add(event({ payload: { text: 'не работает Wi-Fi' } }));
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    const wifi = s.tasks()[0]!;
+    s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'task_change', payload: { ref: { type: 'task', id: wifi.id }, data: { task: { op: 'update', status: 'done' } } } });
+    s.add(event({ payload: { text: 'камеры у соседа' }, ts: '2026-11-11T10:05:00.000Z' }));
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    const later = s.add(event({ payload: { text: 'опять не работает Wi-Fi' }, ts: '2026-11-11T10:10:00.000Z' }));
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    const back = s.tasks().find((task) => task.id === wifi.id)!;
+    assert.equal(back.status, 'todo', 'the closed case is back at work');
+    assert.ok(back.messages.includes(later.id));
+    const asked = s.store.triage.taskEvents().at(-1)!.payload.data!.task as { alternatives?: string[] };
+    assert.equal(asked.alternatives?.length, 1, 'only known tasks, not the chosen one');
   } finally { s.cleanup(); }
 });

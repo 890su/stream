@@ -98,8 +98,17 @@ export class Triage {
   async run(batch: JournalEvent[]): Promise<number> {
     const tasks = foldTasks(this.#store.triage.taskEvents());
     const open = tasks.filter(isOpen).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
+    // Finished cases may come back: the triage sees those closed in the last reopen_days (CONCEPT.md §2.8).
+    const closedSince = new Date(Date.now() - tasksConfig.reopen_days * 86_400_000).toISOString();
+    const closed = tasks.filter((task) => !isOpen(task) && task.updated_at >= closedSince)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.closed_tasks_in_context);
     const taskOf = (id: string) => tasks.filter((task) => task.messages.includes(id)).map((task) => task.id);
     const snippet = (id: string) => { const event = this.#store.getEvent(id); return event ? describe(event, this.#store).text.slice(0, 160) : ''; };
+    const asContext = (task: (typeof tasks)[number]) => {
+      const events = task.messages.slice(-5).map((id) => this.#store.getEvent(id)).filter((event): event is JournalEvent => Boolean(event));
+      return { id: task.id, title: task.title, assignee: task.assignee, status: task.status, recent: task.messages.slice(-3).map(snippet),
+        chats: [...new Set(events.map(streamOf))], last_at: events.at(-1)?.ts ?? task.updated_at };
+    };
     const toMessage = (event: JournalEvent, text: string, tags: string[]): PlanMessage => {
       const continuation = event.payload.data?.continuation as { target: string; on: boolean } | undefined;
       const linked = [event.reply_to, continuation?.on ? continuation.target : undefined].filter(Boolean) as string[];
@@ -131,7 +140,8 @@ export class Triage {
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
     const input: PlanInput = {
       now: at, templates: tasksConfig.templates,
-      open_tasks: open.map((task) => ({ id: task.id, title: task.title, assignee: task.assignee, status: task.status, recent: task.messages.slice(-3).map(snippet) })),
+      open_tasks: open.map(asContext),
+      closed_tasks: closed.map(asContext),
       context,
       messages,
     };
@@ -143,29 +153,37 @@ export class Triage {
     }
     const batchIds = new Set(messages.map((message) => message.id));
     const openIds = new Set(open.map((task) => task.id));
+    const closedById = new Map(closed.map((task) => [task.id, task]));
+    const known = new Set([...openIds, ...closedById.keys()]);
+    const filedTemplates = new Set(tasksConfig.templates.filter((template) => template.filed).map((template) => template.name));
     const batchKey = createHash('sha256').update([...batchIds].sort().join(',')).digest('hex').slice(0, 16);
     const covered = new Set(output.tasks.flatMap((planned) => planned.message_ids));
     const missed = [...batchIds].filter((id) => !covered.has(id));
     const outcomes = [...output.tasks];
     if (missed.length) {
       outcomes.push({ task_id: null, title: tasksConfig.unsorted.title, assignee: 'me', person: null, template: null, due: null,
-        message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false, done: false });
+        message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false, done: false, alternatives: [] });
     }
     let written = 0;
     outcomes.forEach((planned, index) => {
       const add = planned.message_ids.filter((id) => batchIds.has(id));
       if (!add.length) return;
-      const existing = planned.task_id && openIds.has(planned.task_id) ? planned.task_id : null;
+      const existing = planned.task_id && known.has(planned.task_id) ? planned.task_id : null;
+      // A closed case the messages continue comes back to work; a filed one (diary, note) just gets the message.
+      const filedTask = existing && closedById.has(existing) && filedTemplates.has(closedById.get(existing)!.template ?? '');
+      const reopened = existing && closedById.has(existing) && !planned.filed && !filedTask ? { status: 'todo' } : {};
+      const alternatives = [...new Set(planned.alternatives ?? [])].filter((id) => known.has(id) && id !== existing).slice(0, 3);
+      const asked = alternatives.length ? { alternatives } : {};
       const taskId = existing ?? nameId(`task|${batchKey}|${index}`);
       const confidence = Math.max(0, Math.min(1, planned.confidence));
       // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
       const proposal = planned.done && !planned.filed ? { proposed: 'done' } : {};
       const change: Record<string, unknown> = existing
-        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...proposal }
+        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked }
         : {
           op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', assignee: planned.assignee,
           status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
-          add, confidence, processor: tasksConfig.ai.processor, ...proposal,
+          add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked,
           ...(planned.person ? { person: planned.person } : {}), ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
         };

@@ -14,7 +14,7 @@ test('the planner sends one structured-output request and reads the tasks', asyn
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({
       id: 'msg_1', type: 'message', role: 'assistant', model: request.model, stop_reason: 'end_turn', stop_sequence: null,
-      content: [{ type: 'text', text: JSON.stringify({ tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: ['m1'], confidence: 0.9, note: null, filed: false, done: false }] }) }],
+      content: [{ type: 'text', text: JSON.stringify({ tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: ['m1'], confidence: 0.9, note: null, filed: false, done: false, alternatives: [] }] }) }],
       usage: { input_tokens: 1200, output_tokens: 80 },
     }));
   });
@@ -22,7 +22,7 @@ test('the planner sends one structured-output request and reads the tasks', asyn
   await once(server, 'listening');
   try {
     const plan = anthropicPlanner('test-key', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-    const output = await plan({ now: '2026-11-18T10:00:00Z', templates: [], open_tasks: [], context: [], messages: [{ id: 'm1', time: '2026-11-18T09:59:00Z', source: 'me', from: 'владелец', text: 'перезвонить Марку', tags: [], in_tasks: [] }] });
+    const output = await plan({ now: '2026-11-18T10:00:00Z', templates: [], open_tasks: [], closed_tasks: [], context: [], messages: [{ id: 'm1', time: '2026-11-18T09:59:00Z', source: 'me', from: 'владелец', text: 'перезвонить Марку', tags: [], in_tasks: [] }] });
     assert.equal(output.tasks[0]!.title, 'Перезвонить Марку');
     assert.deepEqual(output.usage, { input_tokens: 1200, output_tokens: 80 });
     assert.equal(request.model, 'claude-haiku-5-5');

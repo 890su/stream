@@ -4,7 +4,7 @@ import { entryFromShare } from '/v/__BUILD__/shared.js';
 
 const BUILD = '__BUILD__';
 const CACHE = `stream-shell-${BUILD}`;
-const VERSIONED = ['app.js', 'composer.js', 'voice.js', 'bubble.js', 'feed.js', 'outbox.js', 'sync.js', 'db.js', 'shared.js', 'live.js', 'projection.js', 'actions.js', 'suggest.js', 'tagrow.js', 'versioncard.js', 'picker.js', 'select.js', 'drawer.js', 'phonebubble.js', 'tgbubble.js', 'system.js', 'chatview.js', 'taskfold.js', 'details.js', 'taskdetails.js', 'tasklist.js', 'days.js', 'layout.js', 'bulk.js', 'settings.js', 'outbound.js', 'recipients.js', 'cases.js', 'caserow.js', 'motion.js', 'donecard.js', 'styles.css', 'feed.css', 'panels.css', 'screens.css', 'wide.css'];
+const VERSIONED = ['app.js', 'composer.js', 'voice.js', 'bubble.js', 'feed.js', 'outbox.js', 'sync.js', 'db.js', 'shared.js', 'live.js', 'projection.js', 'actions.js', 'suggest.js', 'tagrow.js', 'versioncard.js', 'picker.js', 'select.js', 'drawer.js', 'phonebubble.js', 'tgbubble.js', 'system.js', 'chatview.js', 'taskfold.js', 'details.js', 'taskdetails.js', 'tasklist.js', 'days.js', 'layout.js', 'bulk.js', 'settings.js', 'outbound.js', 'recipients.js', 'cases.js', 'caserow.js', 'motion.js', 'donecard.js', 'question.js', 'styles.css', 'feed.css', 'panels.css', 'screens.css', 'wide.css'];
 const STATIC = ['/manifest.json', '/capture-config.json', '/icon-192.png', '/icon-512.png', '/fonts/inter-latin-wght-normal.woff2', '/fonts/inter-cyrillic-wght-normal.woff2'];
 const SHELL = ['/', ...STATIC, ...VERSIONED.map((file) => `/v/${BUILD}/${file}`)];
 // The page and settings come from the network when it answers, so a new version shows on the next open.

@@ -550,6 +550,14 @@
                   ],
                   "description": "A handler thinks the work is finished and asks the owner (CONCEPT.md 2.9); null withdraws the question."
                 },
+                "alternatives": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "description": "Other tasks the added messages may belong to: the owner is asked on the message (CONCEPT.md 2.8)."
+                },
                 "report": {
                   "type": "object",
                   "description": "What the owner reported on closing: fields from registry/tasks.json report_fields, currency, missing (fields left empty)."

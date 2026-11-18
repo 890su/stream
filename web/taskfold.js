@@ -80,6 +80,19 @@ export function describeChange(change) {
   return parts.join(' · ') || 'изменена';
 }
 
+// Open questions «О каком деле?» (CONCEPT.md §2.8): message id -> { task, alternatives } from the latest handler
+// change that added the message with alternatives; gone once the owner adds or removes that message anywhere.
+export function questionsByMessage(events) {
+  const questions = new Map();
+  for (const event of events.filter((item) => item.kind === 'task_change').sort(order)) {
+    const change = event.payload?.data?.task ?? {};
+    const touched = [...(change.add ?? []), ...(change.remove ?? [])];
+    if (event.author === 'me') { for (const id of touched) questions.delete(id); continue; }
+    if (change.alternatives?.length) for (const id of change.add ?? []) questions.set(id, { task: event.payload.ref.id, alternatives: change.alternatives });
+  }
+  return questions;
+}
+
 // message id -> ids of the tasks it belongs to (for the mark under a message).
 export function tasksByMessage(tasks) {
   const map = new Map();

@@ -8,6 +8,8 @@
   "max_batch": 40,
   "context_messages": 20,
   "open_tasks_in_context": 40,
+  "closed_tasks_in_context": 30,
+  "reopen_days": 30,
   "low_confidence": 0.6,
   "ai": {
     "provider": "anthropic",
@@ -19,7 +21,7 @@
       "input": 0.1,
       "output": 0.5
     },
-    "processor": "triage-ai-v4"
+    "processor": "triage-ai-v5"
   },
   "assignees": [
     "me",

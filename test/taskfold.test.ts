@@ -70,3 +70,23 @@ test('the «Задачи» view: due dates, shared filters, history in words', a
   assert.deepEqual(folded.history.map((item: { change: Record<string, unknown> }) => describeChange(item.change)), ['создана', '+1 сообщ. · похоже, готово', 'готово · вопрос снят · отчёт']);
   assert.equal(dayLabel(now, now), 'Сегодня');
 });
+
+test('«О каком деле?»: asked when the handler adds with alternatives, gone once the owner answers', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { questionsByMessage } = await import('../web/taskfold.js');
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { questionOptions } = await import('../web/question.js');
+  const events = [
+    change('ta', '2026-11-18T10:00:00Z', { op: 'create', title: 'Wi-Fi', add: ['m0'] }),
+    change('tb', '2026-11-18T10:01:00Z', { op: 'create', title: 'Камеры', status: 'done', add: ['m9'] }),
+    change('ta', '2026-11-18T11:00:00Z', { op: 'update', add: ['m1', 'm2'], alternatives: ['tb'] }),
+    change('tb', '2026-11-18T11:05:00Z', { op: 'update', add: ['m2'] }, 'me'),
+  ];
+  const questions = questionsByMessage(events);
+  assert.deepEqual([...questions.keys()], ['m1'], 'm2 is answered by the owner');
+  const tasks = foldTasks(events);
+  const byId = new Map(tasks.map((task: { id: string }) => [task.id, task]));
+  const asked = questionOptions({ id: 'm1', taskIds: ['ta'] }, questions.get('m1'), byId);
+  assert.deepEqual(asked.options.map((o: { id: string; current: boolean; open: boolean }) => [o.id, o.current, o.open]), [['ta', true, true], ['tb', false, false]]);
+  assert.equal(questionOptions({ id: 'm1', taskIds: ['ta'] }, { task: 'ta', alternatives: ['gone'] }, byId), null, 'nothing to choose between');
+});

@@ -3,7 +3,8 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
-import { foldTasks, tasksByMessage, doneStage, visibleTasks } from './taskfold.js';
+import { foldTasks, tasksByMessage, doneStage, visibleTasks, questionsByMessage } from './taskfold.js';
+import { questionOptions } from './question.js';
 import { taskRow, emptyTasks } from './tasklist.js';
 import { dayKey, dayLabel } from './days.js';
 import { feedItems, shownViews, caseMembers } from './cases.js';
@@ -62,8 +63,10 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const byMessage = tasksByMessage(taskList);
     const tasksById = new Map(taskList.map((task) => [task.id, task]));
     const now = new Date();
+    const questions = questionsByMessage([...events.values()]);
     for (const view of projected) {
       view.taskIds = byMessage.get(view.id) ?? [];
+      view.question = questionOptions(view, questions.get(view.id), tasksById);
       view.doneStage = doneStage(view.taskIds, tasksById, now, limits.tasks?.done_fade_days ?? 2);
     }
     views = new Map(projected.map((view) => [view.id, view]));
