@@ -94,23 +94,39 @@ export class Triage {
     const open = tasks.filter(isOpen).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
     const taskOf = (id: string) => tasks.filter((task) => task.messages.includes(id)).map((task) => task.id);
     const snippet = (id: string) => { const event = this.#store.getEvent(id); return event ? describe(event, this.#store).text.slice(0, 160) : ''; };
+    const toMessage = (event: JournalEvent, text: string, tags: string[]): PlanMessage => {
+      const continuation = event.payload.data?.continuation as { target: string; on: boolean } | undefined;
+      const linked = [event.reply_to, continuation?.on ? continuation.target : undefined].filter(Boolean) as string[];
+      return {
+        id: event.id, time: event.ts, source: streamOf(event), from: from(event), text, tags,
+        ...(event.reply_to ? { reply_to: event.reply_to } : {}), ...(continuation?.on ? { continues: continuation.target } : {}),
+        in_tasks: [...new Set([event.id, ...linked].flatMap(taskOf))],
+      };
+    };
     const messages: PlanMessage[] = [];
     const skipped: string[] = [];
     for (const event of batch) {
       const view = describe(event, this.#store);
       if (view.deleted || !view.text.trim()) { skipped.push(event.id); continue; }
-      const continuation = event.payload.data?.continuation as { target: string; on: boolean } | undefined;
-      messages.push({
-        id: event.id, time: event.ts, source: streamOf(event), from: from(event), text: view.text.slice(0, 2000), tags: view.tags,
-        ...(event.reply_to ? { reply_to: event.reply_to } : {}), ...(continuation?.on ? { continues: continuation.target } : {}),
-        in_tasks: [...new Set([event.reply_to, continuation?.on ? continuation.target : undefined].filter(Boolean).flatMap((id) => taskOf(id!)))],
-      });
+      messages.push(toMessage(event, view.text.slice(0, 2000), view.tags));
     }
+    // Earlier messages of this conversation: a talk with pauses longer than the quiet window is split into
+    // batches, and a batch alone may not say what it is about.
+    const stream = streamOf(batch[0]!);
+    const first = batch[0]!.received_at!;
+    const since = new Date(Date.parse(first) - tasksConfig.lookback_h * 3_600_000).toISOString();
+    const context = this.#store.triage.triaged(since)
+      .filter((event) => event.received_at! < first && streamOf(event) === stream)
+      .map((event) => ({ event, view: describe(event, this.#store) }))
+      .filter(({ view }) => !view.deleted && view.text.trim())
+      .slice(-tasksConfig.context_messages)
+      .map(({ event, view }) => toMessage(event, view.text.slice(0, 500), view.tags));
     const at = new Date().toISOString();
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
     const input: PlanInput = {
       now: at, templates: tasksConfig.templates,
       open_tasks: open.map((task) => ({ id: task.id, title: task.title, assignee: task.assignee, status: task.status, recent: task.messages.slice(-3).map(snippet) })),
+      context,
       messages,
     };
     const output = await this.#planner!(input);

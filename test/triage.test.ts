@@ -144,6 +144,25 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v2').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v3').length, 4);
+  } finally { s.cleanup(); }
+});
+
+test('a later batch of a conversation sees its earlier messages as context, other chats stay out', async () => {
+  const s = setup((input) => {
+    if (!input.context.length) return { tasks: input.messages.map((message, index) => ({ task_id: null, title: `Дело ${index}`, assignee: 'me' as const, person: null, template: null, due: null, message_ids: [message.id], confidence: 0.9, note: null, filed: false })) };
+    return { tasks: [{ task_id: input.context[0]!.in_tasks[0]!, title: 'Дело 0', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null, filed: false }] };
+  });
+  try {
+    const first = s.add(telegram('7001', 'нужна настройка роутера'));
+    s.add(telegram('7002', 'другой клиент'));
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    const later = s.add(telegram('7001', 'в пятницу после 17'));
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    const call = s.calls.at(-1)!;
+    assert.deepEqual(call.context.map((message) => message.id), [first.id], 'only this chat');
+    assert.equal(call.context[0]!.in_tasks.length, 1, 'context carries its task');
+    const task = s.tasks().find((item) => item.messages.includes(first.id))!;
+    assert.deepEqual(task.messages, [first.id, later.id]);
   } finally { s.cleanup(); }
 });

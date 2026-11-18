@@ -50,7 +50,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | quiet window per stream, batches, an outcome for every message (filed = done at once, missed → «Разобрать»), budget | `Triage`, `streamOf` |
+| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, an outcome for every message (filed = done at once, missed → «Разобрать»), budget | `Triage`, `streamOf` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) | `anthropicPlanner` |
 | `fold.ts` | tasks as fold of `task_change` (server side) | `foldTasks`, `isOpen` |
 

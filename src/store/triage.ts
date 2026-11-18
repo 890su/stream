@@ -23,6 +23,14 @@ export class TriageStore {
     return rows.map(fromRow);
   }
 
+  // Messages the triage has already looked at, received since `since`, oldest first (context for a batch).
+  triaged(since: string): JournalEvent[] {
+    const rows = this.#db.prepare(`SELECT * FROM events e WHERE e.received_at >= ? AND e.kind IN (${MESSAGE_KINDS.map(() => '?').join(',')})
+        AND e.author != 'system' AND EXISTS (SELECT 1 FROM triaged t WHERE t.event_id = e.id) ORDER BY e.received_at`)
+      .all(since, ...MESSAGE_KINDS) as unknown as Row[];
+    return rows.map(fromRow);
+  }
+
   corrections(id: string): JournalEvent[] {
     return (this.#db.prepare(`SELECT * FROM events WHERE kind = 'correction' AND json_extract(payload, '$.ref.id') = ? ORDER BY ts, received_at`)
       .all(id) as unknown as Row[]).map(fromRow);

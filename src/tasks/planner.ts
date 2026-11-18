@@ -7,7 +7,8 @@ export interface PlanMessage {
 }
 export interface PlanTask { id: string; title: string; assignee: string; status: string; recent: string[] }
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
-export interface PlanInput { now: string; templates: PlanTemplate[]; open_tasks: PlanTask[]; messages: PlanMessage[] }
+// context — earlier messages of the same conversation, already triaged: to understand, not to assign.
+export interface PlanInput { now: string; templates: PlanTemplate[]; open_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
 
 export interface PlannedTask {
   task_id: string | null; // an open task this continues, or null for a new one
@@ -55,8 +56,11 @@ export const PLAN_SCHEMA = {
 } as const;
 
 export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сообщения личной ленты владельца в задачи.
-Вход: шаблоны задач, открытые задачи и пачка новых сообщений (накопились за окно тишины).
+Вход: шаблоны задач, открытые задачи, context — предыдущие сообщения этой же беседы (уже разобраны, in_tasks —
+их задачи) и messages — пачка новых сообщений (накопились, пока беседа не замолчала).
 Правила:
+- context — только чтобы понять, о чём речь и к какой задаче относится новое; id из context в ответ не включай.
+  Новое сообщение, продолжающее разговор из context, обычно относится к задаче этого разговора (in_tasks).
 - Пачка — не одна задача. Каждое сообщение относится к одной или нескольким задачам.
 - У КАЖДОГО сообщения пачки должен быть итог: его id есть хотя бы в одной задаче ответа.
 - Если делать ничего не нужно, только разложить, верни задачу с filed: true — она сразу закрыта. Для этого

@@ -20,7 +20,7 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
       max_tokens,
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
       output_config: { effort: effort as 'low' | 'medium' | 'high', format: { type: 'json_schema', schema: PLAN_SCHEMA as unknown as Record<string, unknown> } },
-      messages: [{ role: 'user', content: `Открытые задачи и новые сообщения (JSON):\n${JSON.stringify(batch)}` }],
+      messages: [{ role: 'user', content: `Открытые задачи, предыдущие сообщения беседы (context) и новые сообщения (JSON):\n${JSON.stringify(batch)}` }],
     });
     if (response.stop_reason === 'refusal') throw new Error('модель отказалась разбирать пачку');
     if (response.stop_reason === 'max_tokens') throw new Error('ответ модели не уместился в max_tokens');
