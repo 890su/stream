@@ -159,4 +159,4 @@ dialog input { width: 100%; border: 0; border-bottom: 2px solid var(--accent); b
 @keyframes blink { 50% { opacity: .2; } }
 @keyframes pop { from { transform: scale(.6); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-@media (min-width: 720px) { #messages, .composer-area > * { padding-left: max(8px, calc(50% - 360px)); padding-right: max(8px, calc(50% - 360px)); } }
+@media (min-width: 720px) and (max-width: 1099px) { #messages, .composer-area > * { padding-left: max(8px, calc(50% - 360px)); padding-right: max(8px, calc(50% - 360px)); } }

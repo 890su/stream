@@ -1,4 +1,5 @@
-// Top-bar status line (network and outbox), the settings dialog (owner token, archive toggle, filter reset,
+// Top-bar status line (network and outbox), the settings dialog (owner token and copying it to another device,
+// archive toggle, filter reset,
 // System screen button) and the service worker registration with update handling.
 import { getSetting, setSetting } from './db.js';
 import { synchronize } from './outbox.js';
@@ -46,6 +47,13 @@ export async function setupSettings(config, feed, onToken, { notify, drawer, sys
   $('#system-button').onclick = () => { dialog.close(); system().open(); };
   const input = $('#owner-token');
   input.minLength = config.min_owner_token_length;
+  // Moving to another device (a computer): copy this device's token; it is never shown on screen.
+  const copy = $('#token-copy');
+  copy.hidden = !(await getSetting('ownerToken'));
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(await getSetting('ownerToken')); notify('Токен скопирован. На другом устройстве: ⋮ → Доступ → вставьте → «Сохранить»'); }
+    catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }
+  };
   $('#menu-button').onclick = () => dialog.showModal();
   $('#settings-close').onclick = () => dialog.close();
   $('#token-form').onsubmit = async (event) => {
@@ -56,7 +64,8 @@ export async function setupSettings(config, feed, onToken, { notify, drawer, sys
       await setSetting('ownerToken', value);
       input.value = '';
       dialog.close();
-      notify('Токен сохранён на этом телефоне');
+      copy.hidden = false;
+      notify('Токен сохранён на этом устройстве');
       onToken();
       await synchronize();
       await feed.refresh();

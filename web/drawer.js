@@ -1,6 +1,7 @@
 import { sourceKey, chatOf } from './projection.js';
 import { accountTitle } from './tgbubble.js';
 import { visibleTasks } from './taskfold.js';
+import { isWide, onWideChange } from './layout.js';
 
 // Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
 // view changes); Лента and Дела — «Завершённые» and sources; Задачи — assignee, status, due date.
@@ -35,6 +36,7 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   const isOpen = () => drawer.classList.contains('open');
 
   function show(on) {
+    if (isWide()) { render(); return; } // a column of its own on a wide screen: always open
     drawer.classList.remove('dragging'); backdrop.classList.remove('dragging');
     drawer.style.transform = ''; backdrop.style.opacity = '';
     if (on) {
@@ -51,7 +53,7 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   }
 
   function close() {
-    if (!isOpen()) return;
+    if (isWide() || !isOpen()) return;
     show(false);
     if (history.state?.drawer) history.back();
   }
@@ -63,7 +65,7 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   const START_PX = 12;
   let drag = null; // { x, y, opening, width, horizontal }
   function begin(event, opening) {
-    if (event.pointerType === 'mouse' || document.body.classList.contains('selecting') || document.body.classList.contains('picking')) return;
+    if (isWide() || event.pointerType === 'mouse' || document.body.classList.contains('selecting') || document.body.classList.contains('picking')) return;
     drag = { x: event.clientX, y: event.clientY, opening, width: drawer.offsetWidth || 300, horizontal: null };
   }
   function move(event) {
@@ -196,5 +198,12 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   document.querySelector('#drawer-close').onclick = close;
   backdrop.onclick = close;
   window.addEventListener('popstate', () => { if (isOpen() && !history.state?.drawer) show(false); });
+  const dock = (wide) => {
+    drawer.classList.remove('open', 'dragging'); drawer.style.transform = ''; backdrop.hidden = true;
+    drawer.hidden = !wide;
+    if (wide) render();
+  };
+  onWideChange(dock);
+  if (isWide()) dock(true);
   return { render: () => { if (!drawer.hidden) render(); }, close };
 }

@@ -1,0 +1,25 @@
+/* Wide screens (≥ 1100 px): three columns at once — filters, centre, details (CONCEPT.md §5). The panels stop
+ * sliding over the feed and stand beside it; the composer belongs to the centre. Loaded last. */
+@media (min-width: 1100px) {
+  body {
+    display: grid;
+    grid-template-columns: min(300px, 22vw) minmax(0, 1fr) minmax(360px, 440px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "top top top" "left bar right" "left main right" "left pick right" "left input right";
+  }
+  .topbar { grid-area: top; padding-left: calc(min(300px, 22vw) + 16px); } /* the view switch stands over the centre */
+  .chat-bar { grid-area: bar; }
+  #messages { grid-area: main; }
+  .pick-banner { grid-area: pick; }
+  .composer-area { grid-area: input; box-shadow: none; border-top: 1px solid var(--line); }
+
+  .drawer, .details-panel { position: static; width: auto; transform: none; transition: none; box-shadow: none; min-height: 0; }
+  .drawer, .drawer[hidden] { grid-area: left; grid-row: 2 / 6; display: flex; border-right: 1px solid var(--line); }
+  .details-panel, .details-panel[hidden] { grid-area: right; grid-row: 2 / 6; display: flex; border-left: 1px solid var(--line); }
+  .drawer-backdrop, #drawer-button, #drawer-close { display: none !important; }
+
+  /* The centre column reads like a chat: content no wider than ~760 px, centred in the column. */
+  #messages, .composer-area > * { padding-left: max(16px, calc(50% - 380px)); padding-right: max(16px, calc(50% - 380px)); }
+  .toast { left: calc(50% + (min(300px, 22vw) - 440px) / 2); } /* centred under the centre column */
+  .details-empty { margin: 24px 12px; color: var(--muted); font-size: 14.5px; line-height: 1.45; }
+}

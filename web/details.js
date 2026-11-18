@@ -8,6 +8,7 @@ import { STATUSES } from './taskfold.js';
 import { accountTitle } from './tgbubble.js';
 import { versionCard } from './versioncard.js';
 import { taskDetails } from './taskdetails.js';
+import { isWide, onWideChange } from './layout.js';
 
 const SWIPE_PX = 70;
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -64,7 +65,12 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
   }
 
   function render() {
-    if (!current || panel.hidden) return;
+    if (!current) {
+      // On a wide screen the column stays: a hint until something is chosen.
+      if (isWide()) { heading.textContent = 'Подробности'; body.replaceChildren(element('p', 'details-empty', 'Выберите дело, задачу или сообщение: здесь появятся его свойства, переписка и история. Касание заголовка дела, строки задачи или значка под сообщением.')); }
+      return;
+    }
+    if (panel.hidden) return;
     const scroll = body.scrollTop;
     if (current.kind === 'task') {
       const task = feed.task(current.id);
@@ -84,11 +90,14 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
   function show(next) {
     const same = current?.kind === next.kind && current?.id === next.id;
     current = next;
-    place();
-    panel.hidden = false; backdrop.hidden = false;
-    void panel.offsetWidth; // the closed position first, so the opening slides in
-    panel.classList.add('open');
-    if (!history.state?.details) history.pushState({ details: true }, '');
+    panel.hidden = false;
+    if (!isWide()) {
+      place();
+      backdrop.hidden = false;
+      void panel.offsetWidth; // the closed position first, so the opening slides in
+      panel.classList.add('open');
+      if (!history.state?.details) history.pushState({ details: true }, '');
+    }
     if (next.kind === 'task') composer.enterTopic({ last: () => feed.caseViews(next.id).at(-1) }, 'Сообщение в дело');
     else composer.leaveTopic();
     render();
@@ -104,6 +113,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
   }
 
   function hide() {
+    if (isWide()) { current = null; composer.leaveTopic(); feed.render(); render(); return; }
     if (panel.hidden) return;
     current = null;
     panel.classList.remove('open');
@@ -115,7 +125,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
 
   function close() {
     hide();
-    if (history.state?.details) history.back();
+    if (!isWide() && history.state?.details) history.back();
   }
 
   // «Сделать задачей»: a task of mine with this message; its details open to rename or reassign.
@@ -126,7 +136,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
   }
 
   let start = null;
-  panel.addEventListener('pointerdown', (event) => { start = event.pointerType === 'mouse' ? null : { x: event.clientX, y: event.clientY }; });
+  panel.addEventListener('pointerdown', (event) => { start = event.pointerType === 'mouse' || isWide() ? null : { x: event.clientX, y: event.clientY }; });
   panel.addEventListener('pointerup', (event) => {
     if (!start) return;
     const dx = event.clientX - start.x;
@@ -140,7 +150,16 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
   });
   document.querySelector('#details-close').onclick = close;
   backdrop.onclick = close;
-  window.addEventListener('popstate', () => { if (!history.state?.details) hide(); });
+  window.addEventListener('popstate', () => { if (!isWide() && !history.state?.details) hide(); });
+  // Crossing the breakpoint: a column of its own, or a panel that slides over the feed.
+  const dock = (wide) => {
+    panel.classList.remove('open'); backdrop.hidden = true;
+    if (wide) { panel.hidden = false; render(); return; }
+    if (current) { current = null; composer.leaveTopic(); }
+    panel.hidden = true;
+  };
+  onWideChange(dock);
+  if (isWide()) dock(true);
   window.addEventListener('resize', () => { if (!panel.hidden) place(); });
 
   return { render, openTask, openMessage, openFor, createFrom, close, current: () => current };

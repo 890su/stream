@@ -60,9 +60,10 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | File | Job |
 |---|---|
 | `index.html` | markup of the single screen, dialogs and panels |
-| `styles.css` → `feed.css` → `panels.css` → `screens.css` | styles, loaded in this order (cascade) |
+| `styles.css` → `feed.css` → `panels.css` → `screens.css` → `wide.css` | styles, loaded in this order (cascade); `wide.css` — three columns from 1100 px |
+| `layout.js` | the wide-screen breakpoint the panels follow (docked or sliding) |
 | `app.js` | entry: wires everything, message action dispatch, «Лента · Дела · Задачи» switch |
-| `settings.js` | status line, settings dialog, service worker registration |
+| `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
 | `feed.js` | the centre in three views: Лента (bursts, chain lines, folded finished tasks), Дела (case headers + messages), Задачи (task rows); filters, paging |
 | `tasklist.js` / `days.js` | a task row of the «Задачи» view; day pill labels |
 | `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report; pure report parsing |

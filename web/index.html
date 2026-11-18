@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/v/__BUILD__/feed.css">
   <link rel="stylesheet" href="/v/__BUILD__/panels.css">
   <link rel="stylesheet" href="/v/__BUILD__/screens.css">
+  <link rel="stylesheet" href="/v/__BUILD__/wide.css">
   <script type="module" src="/v/__BUILD__/app.js"></script>
 </head>
 <body>
@@ -223,6 +224,8 @@
       <label for="owner-token">Токен владельца</label>
       <input id="owner-token" type="password" autocomplete="off" spellcheck="false">
       <p class="hint">Токен хранится только в этом браузере. Без сети записи ждут на устройстве и уходят сами.</p>
+      <p class="hint">Другое устройство: здесь «Скопировать токен», там ⋮ → Доступ → вставить → «Сохранить». Исходный токен — <code>STREAM_OWNER_TOKEN</code> в <code>/srv/stream/.env</code> на сервере.</p>
+      <button id="token-copy" type="button" class="link-button" hidden>Скопировать токен для другого устройства</button>
       <p id="queue-count" class="hint" role="status"></p>
       <button id="system-button" type="button" class="link-button">Система: источники и отправки</button>
       <div class="dialog-actions">
