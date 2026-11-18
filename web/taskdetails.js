@@ -12,6 +12,9 @@ function element(tag, className, text) {
   return node;
 }
 
+// 09:00 local on a day, as an ISO date-time with an offset.
+const morning = (day) => new Date(`${day}T09:00:00`).toISOString();
+
 function button(className, text, onClick, label) {
   const node = element('button', className, text);
   node.type = 'button';
@@ -100,8 +103,8 @@ export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
     defer: () => {
       const input = Object.assign(document.createElement('input'), { type: 'date', className: 'details-due' });
       input.setAttribute('aria-label', 'Отложить до');
-      input.onchange = () => input.value && apply('defer', `${input.value}T09:00:00`);
-      pick('defer', [...dueChips().map((chip) => button('chip suggest', chip.label, () => apply('defer', `${chip.due}T09:00:00`))), input]);
+      input.onchange = () => input.value && apply('defer', morning(input.value));
+      pick('defer', [...dueChips().map((chip) => button('chip suggest', chip.label, () => apply('defer', morning(chip.due)))), input]);
     },
   };
   const primary = new Set(['done', 'verify', 'accept']);
