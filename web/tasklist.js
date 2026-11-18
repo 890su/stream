@@ -1,0 +1,35 @@
+// The «Задачи» view in the centre (CONCEPT.md §5): one compact row per task, like a task manager. A tap opens
+// the task's details on the right. Filters (assignee, status, due, contact, tags) come from the left panel.
+import { ASSIGNEES, STATUSES, dueState } from './taskfold.js';
+import { withWhom } from './cases.js';
+
+const day = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// `views` — the task's messages (for «с кем»); `onOpen(id)` — show its details.
+export function taskRow(task, views, { onOpen, showAssignee }) {
+  const row = element('button', `task-row ${task.status}${task.proposed === 'done' ? ' proposed' : ''}`);
+  row.type = 'button';
+  row.dataset.task = task.id;
+  const parts = [STATUSES[task.status] ?? task.status];
+  if (task.proposed === 'done') parts.push('готово?');
+  if (showAssignee || task.assignee !== 'me') parts.push(task.assignee === 'person' && task.person ? task.person : ASSIGNEES[task.assignee]);
+  const whom = withWhom(views).slice(0, 2).join(', ');
+  if (whom) parts.push(whom);
+  if (task.due) parts.push(`${dueState(task) === 'overdue' ? 'просрочено, ' : ''}до ${day.format(new Date(task.due))}`);
+  parts.push(`${task.messages.length} сообщ.`);
+  if (task.confidence !== undefined && task.confidence < 0.6) parts.push('проверьте');
+  row.append(element('span', 'task-title', task.title), element('span', 'task-meta', parts.join(' · ')));
+  row.onclick = () => onOpen(task.id);
+  return row;
+}
+
+export function emptyTasks(done, who) {
+  return element('div', 'empty', done ? 'Готовых задач под этот фильтр нет.' : who === 'me' ? 'Ваших открытых задач нет.' : 'Задач под этот фильтр нет.');
+}

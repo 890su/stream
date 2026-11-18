@@ -1,8 +1,9 @@
 import { sourceKey, chatOf } from './projection.js';
 import { accountTitle } from './tgbubble.js';
+import { visibleTasks } from './taskfold.js';
 
-// Left panel — filters of the feed (CONCEPT.md §2.9): contacts (all cases with a person), sources,
-// «Завершённые», tags. The topic list is gone: cases live in the feed itself.
+// Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
+// view changes); Лента and Дела — «Завершённые» and sources; Задачи — assignee, status, due date.
 const DAY = 86400000;
 
 function element(tag, className, text) {
@@ -22,7 +23,7 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   const backdrop = document.querySelector('#drawer-backdrop');
   const contactsBox = document.querySelector('#drawer-contacts');
   const tagsBox = document.querySelector('#drawer-tags');
-  const sourcesBox = document.querySelector('#drawer-sources');
+  const modeBox = document.querySelector('#drawer-mode');
 
   // The drawer sits between the top bar and the composer; both stay visible and usable.
   function place() {
@@ -135,18 +136,44 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
     done.type = 'button';
     done.setAttribute('aria-pressed', String(feed.showDone()));
     done.onclick = async () => { await feed.setShowDone(!feed.showDone()); render(); };
-    sourcesBox.replaceChildren(done, ...(keys.length < 2 && !active ? [] : keys).map((key) => {
+    modeBox.replaceChildren(element('h3', 'drawer-section', 'Показывать'), chipRow([done, ...(keys.length < 2 && !active ? [] : keys).map((key) => {
       const chip = element('button', `chip ${active === key ? 'on' : 'suggest'}`, `${sourceTitle(key)} ${counts.get(key)}`);
       chip.type = 'button';
       chip.setAttribute('aria-pressed', String(active === key));
       chip.onclick = async () => { await feed.setSourceFilter(active === key ? null : key); onFilterChange(); render(); };
       return chip;
+    })]));
+  }
+
+  const chipRow = (chips) => { const row = element('div', 'chips'); row.append(...chips); return row; };
+  function choice(options, value, onPick, count) {
+    return chipRow(options.map(([key, label]) => {
+      const chip = element('button', `chip ${value === key ? 'on' : 'suggest'}`, count ? `${label}${count(key) ? ` ${count(key)}` : ''}` : label);
+      chip.type = 'button';
+      chip.setAttribute('aria-pressed', String(value === key));
+      chip.onclick = async () => { await onPick(key); onFilterChange(); render(); };
+      return chip;
     }));
+  }
+
+  // The «Задачи» view: who does it, open or finished, due date (CONCEPT.md §5).
+  function renderTaskFilters() {
+    const filter = feed.taskFilter();
+    const count = (change) => visibleTasks(feed.tasks(), { ...filter, ...change }).length;
+    modeBox.replaceChildren(
+      element('h3', 'drawer-section', 'Исполнитель'),
+      choice([['me', 'Я'], ['ai', 'ИИ'], ['system', 'Система'], ['person', 'Люди'], ['all', 'Все']], filter.who, (who) => feed.setTaskFilter({ who }), (who) => count({ who })),
+      element('h3', 'drawer-section', 'Статус'),
+      choice([[false, 'Открытые'], [true, 'Готовые']], filter.done, (done) => feed.setTaskFilter({ done })),
+      element('h3', 'drawer-section', 'Срок'),
+      choice([['all', 'Любой'], ['today', 'Сегодня'], ['overdue', 'Просрочено'], ['none', 'Без срока']], filter.due, (due) => feed.setTaskFilter({ due }), (due) => (due === 'all' ? 0 : count({ due }))),
+    );
   }
 
   function render() {
     renderContacts();
-    renderSources();
+    if (feed.mode() === 'tasks') renderTaskFilters(); else renderSources();
+    document.querySelector('#drawer-title').textContent = { feed: 'Фильтры ленты', cases: 'Фильтры дел', tasks: 'Фильтры задач' }[feed.mode()] ?? 'Фильтры';
     const counts = new Map();
     for (const view of feed.views()) if (!view.deleted) for (const tag of view.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     const active = new Set(feed.tagFilter());

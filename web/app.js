@@ -1,4 +1,5 @@
-// Stream PWA entry point: wires the feed, composer, panels and screens together and starts sync and live updates.
+// Stream PWA entry point: wires the centre (three views), filters on the left, details on the right, the composer,
+// and starts sync and live updates.
 import { getSetting } from './db.js';
 import { setupComposer } from './composer.js';
 import { setupFeed } from './feed.js';
@@ -6,8 +7,6 @@ import { startSync } from './outbox.js';
 import { startLive } from './live.js';
 import { setupActions } from './actions.js';
 import { makeCorrection } from './shared.js';
-import { setupThread } from './thread.js';
-import { setupTopicScreen } from './topicscreen.js';
 import { setupPicker } from './picker.js';
 import { setupBulk } from './bulk.js';
 import { setupStatus, setupSettings, registerWorker } from './settings.js';
@@ -15,40 +14,40 @@ import { setupDrawer } from './drawer.js';
 import { setupSystem } from './system.js';
 import { setAccounts } from './tgbubble.js';
 import { setupChatView } from './chatview.js';
-import { setupTaskPanel } from './taskpanel.js';
+import { setupDetails } from './details.js';
 import { chatOf } from './projection.js';
 import { reveal, conceal } from './motion.js';
 import { createDoneCards } from './donecard.js';
 
-let topicScreen;
+let details; // right panel «Подробности» (CONCEPT.md §5)
 let doneCards;
 let picker;
 let bulk;
 let drawer;
 let system;
-let taskPanel;
 let chatView; // { open(chat), close() } — one messenger chat in the feed (CONCEPT.md §8.2)
 
-// The reset button shows how many tags filter the feed.
-// «Дела» ⇄ «Сообщения» (CONCEPT.md §2.9); the choice is remembered on this device.
-function setupModeToggle(feed) {
-  const button = $('#mode-toggle');
-  const show = (mode) => {
-    button.textContent = mode === 'messages' ? 'Сообщения' : 'Дела';
-    button.setAttribute('aria-label', mode === 'messages' ? 'Сейчас сообщения подряд. Показать дела' : 'Сейчас дела. Показать сообщения подряд');
-  };
+// «Лента · Дела · Задачи» in the top bar (CONCEPT.md §5); the choice is remembered on this device.
+function setupViews(feed) {
+  const buttons = [...document.querySelectorAll('#views [data-view]')];
+  const show = (mode) => { for (const button of buttons) button.setAttribute('aria-selected', String(button.dataset.view === mode)); };
   let saved = 'cases';
   try { saved = localStorage.getItem('stream.feedMode') ?? 'cases'; } catch { /* private mode */ }
   feed.setMode(saved);
-  show(saved);
-  button.onclick = async () => {
-    const next = feed.mode() === 'cases' ? 'messages' : 'cases';
-    try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
-    show(next);
-    await feed.setMode(next);
-  };
+  show(feed.mode());
+  for (const button of buttons) {
+    button.onclick = async () => {
+      const next = button.dataset.view;
+      if (next === feed.mode()) return;
+      try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
+      show(next);
+      await feed.setMode(next);
+      drawer?.render();
+    };
+  }
 }
 
+// The reset button shows how many tags and sources filter the centre.
 function updateFilter() {
   const count = (feedRef?.tagFilter().length ?? 0) + (feedRef?.sourceFilter() ? 1 : 0);
   $('#filter-reset').hidden = !count;
@@ -76,7 +75,6 @@ function notify(message, action) {
 }
 
 function setupMessageActions(feed, composer, config) {
-  const thread = setupThread({ getView: (id) => feed.view(id), getChain: (id) => feed.chain(id), openTopic: (id) => topicScreen.open(id) });
   // Photos are thumbnails in the feed; a tap opens them full size.
   const viewer = $('#viewer');
   $('#viewer-close').onclick = () => viewer.close();
@@ -89,25 +87,6 @@ function setupMessageActions(feed, composer, config) {
     viewer.showModal();
   });
   const correct = (view, op) => composer.queue(makeCorrection(view.id, op)).catch((error) => notify(error.message));
-  // Rename a topic by hand: a correction on its first message.
-  const topicDialog = $('#topic');
-  let renaming;
-  const renameTopic = (chain) => {
-    renaming = chain;
-    $('#topic-title').value = chain.named ? chain.title : '';
-    $('#topic-title').placeholder = chain.title;
-    $('#topic-hint').textContent = 'Без имени тема называется по первому сообщению.';
-    topicDialog.showModal();
-  };
-  $('#topic-cancel').onclick = () => topicDialog.close();
-  $('#topic-form').onsubmit = async (event) => {
-    event.preventDefault();
-    const title = $('#topic-title').value.trim();
-    topicDialog.close();
-    if (!title || !renaming || title === renaming.title) return;
-    await composer.queue(makeCorrection(renaming.root, 'topic', { title })).catch((error) => notify(error.message));
-  };
-  topicScreen = setupTopicScreen({ feed, composer, onRename: renameTopic, onTaskCard: (id) => taskPanel.open(id), caseCard: (task) => doneCards?.card(task) });
   picker = setupPicker({ getVisible: () => feed.visible(), getChain: (id) => feed.chain(id), notify });
   const link = (view, target) => composer.queue(makeCorrection(view.id, 'link', { target })).catch((error) => notify(error.message));
   // Connect a message to any other one chosen in the picker.
@@ -117,7 +96,7 @@ function setupMessageActions(feed, composer, config) {
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
   chatView = setupChatView({ feed, composer, correct, notify });
-  taskPanel = setupTaskPanel({ feed, composer, notify });
+  details = setupDetails({ feed, composer, notify, doneCards, config });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
@@ -125,16 +104,16 @@ function setupMessageActions(feed, composer, config) {
     onFilterChange: updateFilter,
   });
   setupActions({
-    list: document.body, // the feed and the topic screen share the same message actions
+    list: document.body, // the centre and the details panel share the same message actions
     getView: (id) => feed.view(id),
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
-      else if (op === 'task') taskPanel.createFrom(view);
+      else if (op === 'task') details.createFrom(view);
       else if (op === 'chat-open') chatView.open(chatOf(view.event));
       else if (op === 'system') system.open();
       else if (op === 'retry') { if (view.delivery?.action) system.retry(view.delivery.action); }
       else if (op === 'edit') composer.edit(view);
-      else if (op === 'history') thread.open(view.id);
+      else if (op === 'history') details.openMessage(view.id);
       else if (op === 'continue') composer.proceed(view);
       else if (op === 'unlink-next') {
         const next = feed.nextLinked(view.id);
@@ -145,7 +124,7 @@ function setupMessageActions(feed, composer, config) {
       else if (op === 'pick') picker.take(view);
       else if (op === 'select') bulk.enter(view);
       else if (op === 'toggle') bulk.toggle(view);
-      else if (op === 'topic-open') topicScreen.open(view.id);
+      else if (op === 'topic-open') details.openFor(view);
       else if (op === 'link') {
         if (view.continues) { await correct(view, 'unlink'); notify('Отделено от предыдущего', { label: 'Отменить', run: () => link(view, view.continues) }); return; }
         pickLink(view);
@@ -173,13 +152,14 @@ async function main() {
   const config = await response.json();
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue, limits: config, onOpenCase: (id) => topicScreen.openCase(id), caseCard: (task) => doneCards?.card(task), onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); taskPanel?.render(); composerRef?.refreshTags(); } });
+  const feed = setupFeed({ notify, onQueue, limits: config, onOpenCase: (id) => details.openTask(id),
+    caseCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); composerRef?.refreshTags(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
   composerRef = composer;
-  doneCards = createDoneCards({ config, queue: composer.queue, notify });
-  setupModeToggle(feed);
+  doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); } });
+  setupViews(feed);
   setupMessageActions(feed, composer, config);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({

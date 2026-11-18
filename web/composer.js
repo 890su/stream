@@ -26,7 +26,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   inputs.file.accept = config.mime_types.join(',');
 
   const recorder = createRecorder(config);
-  // Inside the topic screen every new message continues the topic's latest message (topicscreen.js).
+  // While a case is open in the details panel, every new message continues its latest message (details.js).
   let topic = null; // { last: () => view }
   // While messages are selected (select.js) the tag row acts on the selection: link, unlink, tags.
   let selection = null; // { link(), unlink(), toggleTag(tag), stateOf(tag) }

@@ -21,19 +21,19 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
     <div class="title">
-      <h1>Stream</h1>
+      <div id="views" class="views" role="tablist" aria-label="Что показывать">
+        <button type="button" role="tab" data-view="feed" aria-selected="false">Лента</button>
+        <button type="button" role="tab" data-view="cases" aria-selected="true">Дела</button>
+        <button type="button" role="tab" data-view="tasks" aria-selected="false">Задачи</button>
+      </div>
       <p id="network" role="status">подключение…</p>
     </div>
-    <button id="mode-toggle" type="button" class="mode-toggle" aria-label="Показать сообщения подряд">Дела</button>
     <button id="filter-reset" type="button" class="filter-reset" hidden aria-label="Сбросить фильтр по меткам">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5Z"/><path d="m16 16 5 5M21 16l-5 5"/></svg>
       <span id="filter-count"></span>
     </button>
     <button id="archive-toggle" type="button" class="icon-button" aria-pressed="false" aria-label="Показывать архив">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>
-    </button>
-    <button id="tasks-button" type="button" class="icon-button" aria-label="Задачи" aria-controls="tasks">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12.5 2.8 2.8L16.5 9"/></svg>
     </button>
     <button id="menu-button" type="button" class="icon-button" aria-label="Настройки" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
@@ -52,7 +52,7 @@
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
   <aside id="drawer" class="drawer" hidden aria-label="Фильтры">
     <header class="drawer-head">
-      <h2>Фильтры</h2>
+      <h2 id="drawer-title">Фильтры</h2>
       <button id="drawer-close" type="button" class="icon-button" aria-label="Закрыть панель">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
@@ -60,23 +60,21 @@
     <div class="drawer-body">
       <h3 class="drawer-section">Контакты</h3>
       <div id="drawer-contacts"></div>
-      <h3 class="drawer-section">Показывать</h3>
-      <div id="drawer-sources" class="chips"></div>
+      <div id="drawer-mode"></div>
       <h3 class="drawer-section">Метки</h3>
       <div id="drawer-tags" class="chips"></div>
     </div>
   </aside>
 
-  <div id="tasks-backdrop" class="drawer-backdrop" hidden></div>
-  <aside id="tasks" class="tasks-panel" hidden aria-label="Задачи">
+  <div id="details-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="details" class="details-panel" hidden aria-labelledby="details-heading">
     <header class="drawer-head">
-      <h2>Задачи</h2>
-      <button id="tasks-close" type="button" class="icon-button" aria-label="Закрыть задачи">
+      <h2 id="details-heading">Подробности</h2>
+      <button id="details-close" type="button" class="icon-button" aria-label="Закрыть подробности">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </header>
-    <div id="tasks-filters" class="chips tasks-filters"></div>
-    <div id="tasks-list" class="drawer-body"></div>
+    <div id="details-body" class="drawer-body"></div>
   </aside>
 
   <main id="messages" aria-label="Лента сообщений" tabindex="-1">
@@ -84,21 +82,6 @@
     <div id="feed-list" role="log" aria-live="polite"></div>
   </main>
 
-  <section id="topic-screen" class="topic-screen" hidden aria-label="Тема">
-    <header class="topic-head">
-      <button id="topic-back" type="button" class="icon-button" aria-label="Назад к ленте">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
-      </button>
-      <div class="topic-head-text">
-        <button id="topic-name" type="button" class="topic-name" aria-label="Переименовать тему"></button>
-        <p id="topic-meta" class="topic-meta"></p>
-      </div>
-      <button id="topic-rename" type="button" class="icon-button" aria-label="Переименовать тему">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
-      </button>
-    </header>
-    <div id="topic-list" class="topic-list"></div>
-  </section>
 
   <div id="pick-banner" class="pick-banner" hidden role="status">
     <span>Выберите сообщение для связи</span>
@@ -232,28 +215,7 @@
     </button>
   </dialog>
 
-  <dialog id="topic" aria-labelledby="topic-heading">
-    <form id="topic-form" method="dialog">
-      <h2 id="topic-heading">Тема</h2>
-      <label for="topic-title">Название</label>
-      <input id="topic-title" type="text" maxlength="80" autocomplete="off" enterkeyhint="done">
-      <p id="topic-hint" class="hint"></p>
-      <div class="dialog-actions">
-        <button id="topic-cancel" type="button" class="link-button">Отмена</button>
-        <button type="submit" class="primary">Сохранить</button>
-      </div>
-    </form>
-  </dialog>
 
-  <dialog id="thread" class="thread" aria-labelledby="thread-title">
-    <header class="thread-head">
-      <h2 id="thread-title">История сообщения</h2>
-      <button id="thread-close" type="button" class="icon-button" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      </button>
-    </header>
-    <div id="thread-list" class="thread-list"></div>
-  </dialog>
 
   <dialog id="settings" aria-labelledby="settings-title">
     <form id="token-form" method="dialog">

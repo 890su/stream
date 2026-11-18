@@ -49,3 +49,24 @@ test('messages of finished tasks: collapsed the day they finish, faded two days,
   ]);
   assert.equal(reopened[0].doneAt, undefined, 'reopening clears the finish time');
 });
+
+test('the «Задачи» view: due dates, shared filters, history in words', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { dueState, describeChange } = await import('../web/taskfold.js');
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { dayLabel } = await import('../web/days.js');
+  const now = new Date(2026, 10, 18, 12);
+  const task = (id: string, due: string | null, assignee = 'me') => ({ id, title: id, status: 'todo', assignee, messages: [id], due, updatedAt: `2026-11-18T10:0${id.charCodeAt(0) % 10}:00Z` });
+  const tasks = [task('a', '2026-11-18'), task('b', '2026-11-10'), task('c', null), task('d', '2026-12-01', 'ai')];
+  assert.deepEqual(tasks.map((t) => dueState(t, now)), ['today', 'overdue', 'none', 'later']);
+  assert.deepEqual(visibleTasks(tasks, { due: 'overdue', now }).map((t: { id: string }) => t.id), ['b']);
+  assert.deepEqual(visibleTasks(tasks, { who: 'all', matches: (t: { id: string }) => t.id !== 'a', now }).map((t: { id: string }) => t.id), ['c', 'b', 'd'], 'newest change first');
+  const events = [
+    change('t9', '2026-11-18T10:00:00Z', { op: 'create', title: 'Камеры', assignee: 'me', status: 'todo', add: ['m1'] }),
+    change('t9', '2026-11-18T11:00:00Z', { op: 'update', proposed: 'done', add: ['m2'] }),
+    change('t9', '2026-11-18T12:00:00Z', { op: 'update', status: 'done', proposed: null, report: { duration_min: 30, missing: [] } }, 'me'),
+  ];
+  const [folded] = foldTasks(events);
+  assert.deepEqual(folded.history.map((item: { change: Record<string, unknown> }) => describeChange(item.change)), ['создана', '+1 сообщ. · похоже, готово', 'готово · вопрос снят · отчёт']);
+  assert.equal(dayLabel(now, now), 'Сегодня');
+});

@@ -44,8 +44,7 @@ svg .fill, svg circle:only-child { fill: currentColor; stroke: none; }
   padding: max(6px, env(safe-area-inset-top)) 6px 6px 16px; min-height: 56px; position: relative; z-index: 2;
 }
 .title { flex: 1; min-width: 0; }
-.title h1 { margin: 0; font-size: 17px; font-weight: 600; }
-#network { margin: 1px 0 0; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#network { margin: 1px 0 0 12px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #network.online { color: var(--link); }
 .icon-button { flex: none; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
 .icon-button:active, .icon-button[aria-expanded="true"] { background: var(--press); }

@@ -1,26 +1,17 @@
-// The feed: cases (CONCEPT.md §2.9) or messages in a row (bursts, topics, day pills, folded finished tasks), filters,
-// paging and live updates.
+// The centre of the screen (CONCEPT.md §5) in three views: Лента (messages in a row: bursts, chains, day pills,
+// folded finished tasks), Дела (cases, §2.9) and Задачи (a task list); filters, paging and live updates.
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
-import { foldTasks, tasksByMessage, doneStage } from './taskfold.js';
+import { foldTasks, tasksByMessage, doneStage, visibleTasks } from './taskfold.js';
+import { taskRow, emptyTasks } from './tasklist.js';
+import { dayKey, dayLabel } from './days.js';
 import { feedItems, shownViews, caseMembers } from './cases.js';
 import { caseHeader } from './caserow.js';
 import { grow, shrink, reduced, play } from './motion.js';
 
-const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
-const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
 const NEAR_BOTTOM = 120;
 const NEAR_TOP = 160;
-
-function dayKey(date) { return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`; }
-function dayLabel(date) {
-  const today = new Date();
-  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
-  if (dayKey(date) === dayKey(today)) return 'Сегодня';
-  if (dayKey(date) === dayKey(yesterday)) return 'Вчера';
-  return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
-}
 
 export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenCase = () => {}, caseCard = () => null }) {
   const scroller = document.querySelector('#messages');
@@ -42,7 +33,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   let showDone = false; // messages of long-finished tasks are hidden unless this is on (drawer.js)
   const expanded = new Set(); // folded rows of finished tasks the reader opened
-  let mode = 'cases'; // 'cases' — the feed of cases, 'messages' — messages in a row (CONCEPT.md §2.9)
+  let mode = 'cases'; // 'feed' — messages in a row, 'cases' — the feed of cases, 'tasks' — the task list (CONCEPT.md §5)
+  let taskFilter = { who: 'me', done: false, due: 'all' }; // the «Задачи» view's own filters (drawer.js)
   const caseState = new Map(); // task id -> { state: 'all' | 'none', at } — the reader's choice under a case header
   let groupNodes = new Map(); // 'case:<task>' | 'done:<tasks>' -> rows under that header, for smooth folding
 
@@ -60,7 +52,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   }
 
   // `keep` — { key, top }: the header that was tapped stays where it was; `quiet` — no animation of new rows.
-  async function render({ bottom = false, keep = null, quiet = false } = {}) {
+  async function render({ bottom = false, keep = null, quiet = false, top = false } = {}) {
     const queued = await listEntries();
     const pending = new Map(queued.map((entry) => [entry.event.id, entry]));
     const events = new Map((await cachedEvents()).map((event) => [event.id, event]));
@@ -145,7 +137,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       row.onclick = () => toggleGroup(`done:${item.key}`, open, () => { if (open) expanded.delete(item.key); else expanded.add(item.key); });
       return row;
     };
-    if (mode === 'messages') for (const entry of items) {
+    if (mode === 'feed') for (const entry of items) {
       if (entry.key) {
         pill(new Date(entry.views[0].event.ts));
         lastTs = Date.parse(entry.views.at(-1).event.ts);
@@ -156,6 +148,19 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       for (const group of groups) renderGroup(group, Boolean(entry.key) && entry.views.every((view) => view.doneStage !== 'collapsed'), false, entry.key ? `done:${entry.key}` : null);
     }
     if (mode === 'cases') renderCases();
+    if (mode === 'tasks') renderTasks();
+    // Tasks: one row each; contact and tags match a task through any of its messages.
+    function renderTasks() {
+      const matches = (task) => (!chatFilter && !tagFilter.size) || task.messages.some((id) => {
+        const view = views.get(id);
+        return view && !view.deleted && (!chatFilter || chatOf(view.event)?.key === chatFilter.key) && tagged(view);
+      });
+      const shownTasks = visibleTasks(taskList, { ...taskFilter, matches, now });
+      for (const task of shownTasks) {
+        children.push(taskRow(task, task.messages.map((id) => views.get(id)).filter(Boolean), { onOpen: onOpenCase, showAssignee: taskFilter.who === 'all' }));
+      }
+      if (!shownTasks.length) children.push(emptyTasks(taskFilter.done, taskFilter.who));
+    }
     // Cases: a header, then fresh or chosen messages; messages without a task in between, as they are.
     function renderCases() {
       const now = Date.now();
@@ -198,7 +203,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       if (groupKey) groupNodes.set(groupKey, [...(groupNodes.get(groupKey) ?? []), item]);
       children.push(item);
     }
-    if (!visible.length) {
+    if (!visible.length && mode !== 'tasks') {
       const empty = document.createElement('div');
       empty.className = 'empty';
       empty.textContent = chatFilter || sourceFilter || tagFilter.size ? 'Под фильтр ничего не подходит.'
@@ -210,6 +215,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     list.replaceChildren(...children);
     const anchor = keep && list.querySelector(`[data-group="${CSS.escape(keep.key)}"]`);
     if (anchor) scroller.scrollTop += anchor.getBoundingClientRect().top - keep.top;
+    else if (mode === 'tasks') { if (top) scroller.scrollTop = 0; } // the task list reads from the top
     else if (bottom || nearBottom || !rendered) {
       // A new message slides in and the feed glides to it; the first paint goes straight to the bottom.
       const fresh = !quiet && newcomers.length && newcomers.length <= 3;
@@ -293,11 +299,15 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   function setShowDone(value) { showDone = value; return render(); }
   function setSourceFilter(key) { sourceFilter = key || null; return render({ bottom: true }); }
   function setChatFilter(chat) { chatFilter = chat || null; return render({ bottom: true }); }
-  function setMode(next) { mode = next === 'messages' ? 'messages' : 'cases'; return render({ bottom: true }); }
-  // Messages of one case, oldest first, for the case screen (topicscreen.js).
+  function setMode(next) {
+    mode = ['feed', 'cases', 'tasks'].includes(next) ? next : next === 'messages' ? 'feed' : 'cases';
+    return render({ bottom: mode !== 'tasks', top: mode === 'tasks', quiet: true });
+  }
+  function setTaskFilter(change) { taskFilter = { ...taskFilter, ...change }; return render({ top: true }); }
+  // Messages of one case, oldest first, for its details (details.js).
   const caseViews = (taskId) => { const task = taskList.find((item) => item.id === taskId); return task ? caseMembers(task, viewList) : []; };
 
-  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, caseViews,
+  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, caseViews, setTaskFilter, taskFilter: () => taskFilter,
     task: (id) => taskList.find((task) => task.id === id),
     setSourceFilter, sourceFilter: () => sourceFilter, setChatFilter, chatFilter: () => chatFilter, tasks: () => taskList,
     setShowDone, showDone: () => showDone,

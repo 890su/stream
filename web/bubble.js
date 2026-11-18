@@ -53,12 +53,12 @@ function meta(view, queued, extraClass = '', hasHistory = false) {
     mark.setAttribute('aria-label', view.taskIds.length > 1 ? `В ${view.taskIds.length} задачах` : 'В задаче');
     box.append(mark);
   }
-  // A small link instead of the word "edited": opens versions and related messages (thread.js).
+  // A small link instead of the word "edited": opens the message's details (details.js).
   if (hasHistory) {
     const link = element('button', 'history-link');
     link.type = 'button';
     link.innerHTML = ICONS.history;
-    link.setAttribute('aria-label', view.edited ? 'Изменено. Открыть историю' : 'Открыть связанные сообщения');
+    link.setAttribute('aria-label', view.edited ? 'Изменено. Подробности и версии' : 'Подробности сообщения');
     link.dataset.history = '';
     box.append(link);
   }

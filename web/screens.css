@@ -19,33 +19,41 @@
 .dialog-stack .link-button { min-height: 44px; }
 #system-button { display: block; margin: 4px 0 0; min-height: 44px; color: var(--link); }
 
-/* Right panel «Задачи» (CONCEPT.md §2.8): mirrors the left drawer */
-.tasks-panel {
-  position: fixed; right: 0; top: var(--drawer-top, 0); bottom: var(--drawer-bottom, 0); z-index: 21; width: min(92vw, 400px);
+/* Right panel «Подробности» (details.js, CONCEPT.md §5): mirrors the left drawer */
+.details-panel {
+  position: fixed; right: 0; top: var(--drawer-top, 0); bottom: var(--drawer-bottom, 0); z-index: 21; width: min(94vw, 440px);
   display: flex; flex-direction: column; background: var(--panel); color: var(--bar-text); box-shadow: -4px 0 24px rgba(0, 0, 0, .25);
-  transform: translateX(100%); transition: transform .22s ease-out; touch-action: pan-y;
+  transform: translateX(100%); transition: transform .22s cubic-bezier(.2, 0, 0, 1); touch-action: pan-y;
 }
-.tasks-panel.open { transform: none; }
-.tasks-panel[hidden] { display: none; }
-.tasks-filters { padding: 0 12px 8px; flex-wrap: wrap; }
-.tasks-done { margin-left: auto; }
+.details-panel.open { transform: none; }
+.details-panel[hidden] { display: none; }
+.details-title { display: block; width: 100%; text-align: left; margin: 4px 0 2px; padding: 4px; font-size: 18px; font-weight: 600; line-height: 1.3; border-radius: 8px; color: var(--bar-text); }
+.details-title:active, .details-title:hover { background: var(--press); }
+.details-rename { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+.details-rename input, .details-due { flex: 1; min-height: 42px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; }
+.details-due { margin: 0 4px; }
+.details-meta { margin: 0 4px 6px; font-size: 13px; color: var(--muted); }
+.details-fact { font-size: 14px; padding: 3px 4px; }
+.details-fact.muted { color: var(--muted); }
+.details-talk { display: flex; flex-direction: column; gap: 6px; padding: 6px 0; background: var(--chat); border-radius: 12px; }
+.details-message { position: relative; display: flex; flex-direction: column; padding: 0 6px; }
+.details-message > .bubble { max-width: 88%; }
+.details-unlink { position: absolute; top: -4px; right: 0; width: 32px; height: 32px; font-size: 18px; background: var(--panel); box-shadow: var(--shadow); }
+.details-history { padding-bottom: 8px; }
+.details-messagecard .thread-card { margin: 4px 0 8px; }
+.details-panel .done-card { margin: 8px 0; }
+.task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 4px 0; }
+.task-actions .primary { min-height: 40px; padding: 0 18px; border-radius: 20px; background: var(--accent-strong); color: #fff; font-weight: 600; }
+.task-assignees { padding: 0 4px; }
 .task-row { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); border-radius: 0; }
 .task-row:active, .task-row:hover { background: var(--press); }
 .task-title { font-size: 15.5px; line-height: 1.3; }
 .task-row.inbox .task-title { font-style: italic; }
+.task-row.proposed .task-title { color: var(--accent-strong); }
 .task-row.done .task-title, .task-row.cancelled .task-title { opacity: .55; text-decoration: line-through; }
 .task-meta { font-size: 13px; color: var(--muted); }
-.task-card { padding: 4px 4px 12px; }
-.task-back { padding: 0 4px; min-height: 40px; }
-.task-card-title { margin: 6px 4px 4px; font-size: 17px; line-height: 1.3; }
-.task-card-meta { margin: 0 4px 6px; font-size: 13px; color: var(--muted); }
-.task-assignees { padding: 0 4px; }
-.task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 12px 4px 0; }
-.task-message-line { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
-.task-message { flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; padding: 8px 4px; }
-.task-message-text { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.task-message-time { font-size: 12.5px; color: var(--muted); }
-.task-unlink { width: 40px; height: 40px; font-size: 20px; }
+/* The «Задачи» view in the centre: rows as cards */
+#feed-list > .task-row { align-self: stretch; margin: 3px 6px; border: 0; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); padding: 10px 12px; }
 .task-mark { font-size: 13px; padding: 0 4px; color: inherit; opacity: .8; }
 /* Messages of finished tasks (CONCEPT.md §2.8): one row per task set; faded after the finishing day */
 .done-row { align-self: stretch; text-align: left; margin: 4px 6px; padding: 8px 12px; border-radius: 12px; background: var(--panel); color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -76,4 +84,6 @@
 .done-card-form { display: grid; gap: 8px; margin-bottom: 6px; }
 .done-card-field { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
 .done-card-field input, .done-card-field select { min-height: 42px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; font-size: 15px; }
-.mode-toggle { flex: none; min-height: 34px; padding: 0 12px; margin-right: 2px; border-radius: 17px; background: var(--chip); color: var(--chip-text); font-size: 14px; font-weight: 600; }
+.views { display: inline-flex; padding: 2px; border-radius: 18px; background: var(--chip); max-width: 100%; }
+.views button { min-height: 32px; padding: 0 11px; border-radius: 16px; color: var(--chip-text); font-size: 14px; font-weight: 600; white-space: nowrap; transition: background-color .18s ease-out, color .18s ease-out; }
+.views button[aria-selected="true"] { background: var(--accent-strong); color: #fff; }

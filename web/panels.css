@@ -1,22 +1,5 @@
-/* Panels: topic screen, bottom sheets, selection bar, left drawer, phone and Telegram blocks.
+/* Panels: bottom sheets, selection bar, left drawer, phone and Telegram blocks.
  * Loaded after feed.css. */
-/* Topic screen: takes the place of the feed; the composer stays at the bottom. */
-body.in-topic .topbar, body.in-topic #messages { display: none; }
-.topic-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.topic-head {
-  flex: none; display: flex; align-items: center; gap: 2px; background: var(--bar); box-shadow: var(--shadow);
-  padding: max(4px, env(safe-area-inset-top)) 4px 4px; min-height: 56px; position: relative; z-index: 2;
-}
-.topic-head-text { flex: 1; min-width: 0; }
-.topic-name { display: block; max-width: 100%; font-size: 17px; font-weight: 500; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--bar-text); }
-.topic-name.named { font-weight: 600; }
-.topic-meta { margin: 1px 0 0; font-size: 13.5px; color: var(--muted); }
-.topic-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 10px 8px 6px; display: flex; flex-direction: column; gap: 6px; }
-.topic-list > .bubble:first-child { margin-top: auto; }
-
-.thread-topic { display: flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 6px; color: var(--link); font-size: 15px; text-align: left; border-radius: 10px; }
-.thread-topic:active { background: var(--press); }
-.thread-topic-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Bottom sheet (picker) and the "choose in the feed" banner */
 dialog.sheet { width: min(100vw, 560px); max-width: 100vw; max-height: 82dvh; margin: auto auto 0; padding: 0 0 env(safe-area-inset-bottom); border-radius: 16px 16px 0 0; display: none; flex-direction: column; }
