@@ -2,7 +2,7 @@
 import { createServer } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import type { JournalStore } from '../store/store.ts';
-import { captureConfig, tagConfig, telegramConfig, tasksConfig, conversationsConfig } from '../config.ts';
+import { captureConfig, tagConfig, telegramConfig, tasksConfig, conversationsConfig, filtersConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json } from './body.ts';
 import { events } from './events.ts';
@@ -57,7 +57,7 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
       if (url.pathname === '/healthz') { json(response, 200, { ok: true }); return; }
       if (url.pathname === '/capture-config.json') {
         const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])), address_book: telegramConfig.address_book };
-        json(response, 200, { ...captureConfig, tagging: tagConfig, conversations: conversationsConfig, telegram, tasks: { done_fade_days: tasksConfig.done_fade_days, filed_templates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name), fresh_h: tasksConfig.fresh_h, expand_last: tasksConfig.expand_last,
+        json(response, 200, { ...captureConfig, tagging: tagConfig, conversations: conversationsConfig, filters: filtersConfig.filters, telegram, tasks: { done_fade_days: tasksConfig.done_fade_days, filed_templates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name), fresh_h: tasksConfig.fresh_h, expand_last: tasksConfig.expand_last,
           report_fields: tasksConfig.report_fields, report_default: tasksConfig.report_default, currencies: tasksConfig.currencies,
           reports: Object.fromEntries(tasksConfig.templates.filter((template) => template.report).map((template) => [template.name, template.report])) } }); return;
       }

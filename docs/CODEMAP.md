@@ -19,7 +19,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | File | Job | Key exports |
 |---|---|---|
 | `main.ts` | entry: `.env`, store, HTTP, bots, triage | — |
-| `config.ts` | registry files loaded at start | `captureConfig`, `tagConfig`, `telegramConfig`, `tasksConfig`, `conversationsConfig` |
+| `config.ts` | registry files loaded at start | `captureConfig`, `tagConfig`, `telegramConfig`, `tasksConfig`, `conversationsConfig`, `filtersConfig` |
 | `ids.ts` | name-based UUIDs (idempotent ids) | `nameId` |
 | `backup.ts` | nightly copy of DB and media | — |
 | **contracts/** | | |
@@ -80,7 +80,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
 | `drawer.js` | left panel — filters by view: contacts and tags (shared), sources and «Завершённые» (Лента, Дела), assignee / status / due (Задачи) |
-| `taskfold.js` | pure: tasks from `task_change` (with history), list filters (assignee, status, due, shared), done stages |
+| `taskfold.js` | pure: tasks from `task_change` (with history, roles), due state, done stages |
+| `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter`, `visibleTasks` |
 | `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry |
 | `details.js` / `taskdetails.js` | right panel «Подробности»: a case (task: properties, actions, conversation, history) or a message (versions, cases) |
 | `chatview.js` | one messenger chat in the feed, «Не отслеживать» |
@@ -103,6 +104,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/cases.js`) — centre i
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding, feed of cases (`fresh_h`, `expand_last`), closing reports (`report_fields`, per-template `report`, currencies) |
 | `registry/conversations.json` | conversations: quiet days, urgent tags, order of states |
+| `registry/filters.json` | saved task filters: conditions over roles, status, due, report; first is the default |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere

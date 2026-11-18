@@ -3,7 +3,8 @@
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
-import { foldTasks, tasksByMessage, doneStage, visibleTasks, questionsByMessage } from './taskfold.js';
+import { foldTasks, tasksByMessage, doneStage, questionsByMessage } from './taskfold.js';
+import { visibleTasks } from './filters.js';
 import { questionOptions } from './question.js';
 import { taskRow, emptyTasks } from './tasklist.js';
 import { dayKey, dayLabel } from './days.js';
@@ -35,7 +36,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let showDone = false; // messages of long-finished tasks are hidden unless this is on (drawer.js)
   const expanded = new Set(); // folded rows of finished tasks the reader opened
   let mode = 'cases'; // 'feed' — messages in a row, 'cases' — the feed of cases, 'tasks' — the task list (CONCEPT.md §5)
-  let taskFilter = { who: 'me', done: false, due: 'all' }; // the «Задачи» view's own filters (drawer.js)
+  const taskFilters = limits.filters?.length ? limits.filters : [{ id: 'all', title: 'Все', all: [] }]; // saved filters (registry/filters.json)
+  let taskFilterId = (() => { try { return localStorage.getItem('stream.taskFilter'); } catch { return null; } })();
+  const taskFilter = () => taskFilters.find((item) => item.id === taskFilterId) ?? taskFilters[0]; // the first one is the default
   const caseState = new Map(); // task id -> { state: 'all' | 'none', at } — the reader's choice under a case header
   let groupNodes = new Map(); // 'case:<task>' | 'done:<tasks>' -> rows under that header, for smooth folding
 
@@ -152,17 +155,13 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     }
     if (mode === 'cases') renderCases();
     if (mode === 'tasks') renderTasks();
-    // Tasks: one row each; contact and tags match a task through any of its messages.
+    // Tasks: one row each.
     function renderTasks() {
-      const matches = (task) => (!chatFilter && !tagFilter.size) || task.messages.some((id) => {
-        const view = views.get(id);
-        return view && !view.deleted && (!chatFilter || chatOf(view.event)?.key === chatFilter.key) && tagged(view);
-      });
-      const shownTasks = visibleTasks(taskList, { ...taskFilter, matches, now });
+      const shownTasks = visibleTasks(taskList, { filter: taskFilter(), matches: taskMatches(), now });
       for (const task of shownTasks) {
-        children.push(taskRow(task, task.messages.map((id) => views.get(id)).filter(Boolean), { onOpen: onOpenCase, showAssignee: taskFilter.who === 'all' }));
+        children.push(taskRow(task, task.messages.map((id) => views.get(id)).filter(Boolean), { onOpen: onOpenCase, showAssignee: taskFilter().id !== taskFilters[0].id }));
       }
-      if (!shownTasks.length) children.push(emptyTasks(taskFilter.done, taskFilter.who));
+      if (!shownTasks.length) children.push(emptyTasks(taskFilter()));
     }
     // Cases: a header, then fresh or chosen messages; messages without a task in between, as they are.
     function renderCases() {
@@ -306,11 +305,20 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     mode = ['feed', 'cases', 'tasks'].includes(next) ? next : next === 'messages' ? 'feed' : 'cases';
     return render({ bottom: mode !== 'tasks', top: mode === 'tasks', quiet: true });
   }
-  function setTaskFilter(change) { taskFilter = { ...taskFilter, ...change }; return render({ top: true }); }
+  // Contact and tag filters match a task through any of its messages.
+  const taskMatches = () => (task) => (!chatFilter && !tagFilter.size) || task.messages.some((id) => {
+    const view = views.get(id);
+    return view && !view.deleted && (!chatFilter || chatOf(view.event)?.key === chatFilter.key) && [...tagFilter].every((tag) => view.tags.includes(tag));
+  });
+  function setTaskFilter(id) {
+    taskFilterId = id;
+    try { localStorage.setItem('stream.taskFilter', id); } catch { /* storage may be blocked */ }
+    return render({ top: true });
+  }
   // Messages of one case, oldest first, for its details (details.js).
   const caseViews = (taskId) => { const task = taskList.find((item) => item.id === taskId); return task ? caseMembers(task, viewList) : []; };
 
-  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, caseViews, setTaskFilter, taskFilter: () => taskFilter,
+  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, caseViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),
     setSourceFilter, sourceFilter: () => sourceFilter, setChatFilter, chatFilter: () => chatFilter, tasks: () => taskList,
     setShowDone, showDone: () => showDone,

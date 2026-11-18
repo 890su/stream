@@ -30,6 +30,6 @@ export function taskRow(task, views, { onOpen, showAssignee }) {
   return row;
 }
 
-export function emptyTasks(done, who) {
-  return element('div', 'empty', done ? 'Готовых задач под этот фильтр нет.' : who === 'me' ? 'Ваших открытых задач нет.' : 'Задач под этот фильтр нет.');
+export function emptyTasks(filter) {
+  return element('div', 'empty', `Задач в списке «${filter.title}» нет.`);
 }

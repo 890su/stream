@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { foldTasks, visibleTasks, tasksByMessage, involvesMe, STATUSES } from '../web/taskfold.js';
+import { foldTasks, tasksByMessage, involvesMe, STATUSES } from '../web/taskfold.js';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
+import { visibleTasks } from '../web/filters.js';
+import { filtersConfig } from '../src/config.ts';
+
+const byId = (id: string) => filtersConfig.filters.find((filter) => filter.id === id);
+const anyTask = { all: [] };
+const openOnly = { all: [{ field: 'status', op: 'in', value: ['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred'] }] };
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { project } from '../web/projection.js';
 
@@ -21,9 +28,9 @@ test('tasks fold from their changes; the panel shows mine by default, others by 
   const tasks = foldTasks(events);
   assert.equal(tasks.length, 2, 'an update without a creation is ignored');
   assert.deepEqual(tasks.find((t: { id: string }) => t.id === 't1').messages, ['m1', 'm3']);
-  assert.deepEqual(visibleTasks(tasks).map((t: { id: string }) => t.id), ['t1']);
-  assert.deepEqual(visibleTasks(tasks, { who: 'all' }).map((t: { id: string }) => t.id), ['t1', 't2'], 'inbox goes last');
-  assert.deepEqual(visibleTasks(tasks, { who: 'me', done: true }), []);
+  assert.deepEqual(visibleTasks(tasks, { filter: byId('mine') }).map((t: { id: string }) => t.id), ['t1']);
+  assert.deepEqual(visibleTasks(tasks, { filter: anyTask }).map((t: { id: string }) => t.id), ['t1', 't2'], 'inbox goes last');
+  assert.deepEqual(visibleTasks(tasks, { filter: byId('done') }), []);
   assert.deepEqual(tasksByMessage(tasks).get('m2'), ['t2']);
   assert.equal(project(events).length, 1, 'task changes are not feed messages');
 });
@@ -59,8 +66,8 @@ test('the «Задачи» view: due dates, shared filters, history in words', a
   const task = (id: string, due: string | null, assignee = 'me') => ({ id, title: id, status: 'todo', assignee, messages: [id], due, updatedAt: `2026-11-18T10:0${id.charCodeAt(0) % 10}:00Z` });
   const tasks = [task('a', '2026-11-18'), task('b', '2026-11-10'), task('c', null), task('d', '2026-12-01', 'ai')];
   assert.deepEqual(tasks.map((t) => dueState(t, now)), ['today', 'overdue', 'none', 'later']);
-  assert.deepEqual(visibleTasks(tasks, { due: 'overdue', now }).map((t: { id: string }) => t.id), ['b']);
-  assert.deepEqual(visibleTasks(tasks, { who: 'all', matches: (t: { id: string }) => t.id !== 'a', now }).map((t: { id: string }) => t.id), ['c', 'b', 'd'], 'newest change first');
+  assert.deepEqual(visibleTasks(tasks, { filter: { all: [{ field: 'due', op: 'eq', value: 'overdue' }] }, now }).map((t: { id: string }) => t.id), ['b']);
+  assert.deepEqual(visibleTasks(tasks, { filter: anyTask, matches: (t: { id: string }) => t.id !== 'a', now }).map((t: { id: string }) => t.id), ['c', 'b', 'd'], 'newest change first');
   const events = [
     change('t9', '2026-11-18T10:00:00Z', { op: 'create', title: 'Камеры', assignee: 'me', status: 'todo', add: ['m1'] }),
     change('t9', '2026-11-18T11:00:00Z', { op: 'update', proposed: 'done', add: ['m2'] }),
@@ -125,7 +132,7 @@ test('a team task without me is not mine; review and deferred are open', () => {
   const [a, b] = tasks;
   assert.equal(involvesMe(a), false);
   assert.equal(involvesMe(b), true);
-  assert.equal(visibleTasks(tasks, { who: 'all' }).length, 2);
+  assert.equal(visibleTasks(tasks, { filter: openOnly }).length, 2);
   assert.equal(STATUSES.review, 'на проверке');
   assert.equal(STATUSES.deferred, 'отложено');
 });

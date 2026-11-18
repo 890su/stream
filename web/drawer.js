@@ -1,10 +1,10 @@
 import { sourceKey, chatOf } from './projection.js';
 import { accountTitle } from './tgbubble.js';
-import { visibleTasks } from './taskfold.js';
+import { visibleTasks } from './filters.js';
 import { isWide, onWideChange } from './layout.js';
 
 // Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
-// view changes); Лента and Дела — «Завершённые» and sources; Задачи — assignee, status, due date.
+// view changes); Лента and Дела — «Завершённые» and sources; Задачи — the saved task filters.
 const DAY = 86400000;
 
 function element(tag, className, text) {
@@ -148,28 +148,19 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   }
 
   const chipRow = (chips) => { const row = element('div', 'chips'); row.append(...chips); return row; };
-  function choice(options, value, onPick, count) {
-    return chipRow(options.map(([key, label]) => {
-      const chip = element('button', `chip ${value === key ? 'on' : 'suggest'}`, count ? `${label}${count(key) ? ` ${count(key)}` : ''}` : label);
-      chip.type = 'button';
-      chip.setAttribute('aria-pressed', String(value === key));
-      chip.onclick = async () => { await onPick(key); onFilterChange(); render(); };
-      return chip;
-    }));
-  }
-
-  // The «Задачи» view: who does it, open or finished, due date (CONCEPT.md §5).
+  // The «Задачи» view: the saved filters of registry/filters.json with their task counts (CONCEPT.md §5).
   function renderTaskFilters() {
-    const filter = feed.taskFilter();
-    const count = (change) => visibleTasks(feed.tasks(), { ...filter, ...change }).length;
-    modeBox.replaceChildren(
-      element('h3', 'drawer-section', 'Исполнитель'),
-      choice([['me', 'Я'], ['ai', 'ИИ'], ['system', 'Система'], ['person', 'Люди'], ['all', 'Все']], filter.who, (who) => feed.setTaskFilter({ who }), (who) => count({ who })),
-      element('h3', 'drawer-section', 'Статус'),
-      choice([[false, 'Открытые'], [true, 'Готовые']], filter.done, (done) => feed.setTaskFilter({ done })),
-      element('h3', 'drawer-section', 'Срок'),
-      choice([['all', 'Любой'], ['today', 'Сегодня'], ['overdue', 'Просрочено'], ['none', 'Без срока']], filter.due, (due) => feed.setTaskFilter({ due }), (due) => (due === 'all' ? 0 : count({ due }))),
-    );
+    const current = feed.taskFilter();
+    const matches = feed.taskMatches();
+    const rows = feed.taskFilters().map((filter) => {
+      const row = element('button', `drawer-contact${filter.id === current.id ? ' on' : ''}`);
+      row.type = 'button';
+      row.append(element('span', 'drawer-title', filter.title), element('span', 'drawer-count', String(visibleTasks(feed.tasks(), { filter, matches }).length)));
+      row.setAttribute('aria-pressed', String(filter.id === current.id));
+      row.onclick = async () => { await feed.setTaskFilter(filter.id); onFilterChange(); render(); };
+      return row;
+    });
+    modeBox.replaceChildren(element('h3', 'drawer-section', 'Списки'), ...rows);
   }
 
   function render() {

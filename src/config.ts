@@ -36,3 +36,9 @@ export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.js
 export const conversationsConfig = JSON.parse(readFileSync(new URL('../registry/conversations.json', import.meta.url), 'utf8')) as {
   version: number; quiet_days: number; urgent_tags: string[]; states: string[];
 };
+
+// Saved task filters (P14): conditions over folded tasks; the first one is the default (web/filters.js).
+type FilterCondition = { field: string; op: string; value?: unknown } | { all: FilterCondition[] } | { any: FilterCondition[] };
+export const filtersConfig = JSON.parse(readFileSync(new URL('../registry/filters.json', import.meta.url), 'utf8')) as {
+  version: number; filters: Array<{ id: string; title: string; all?: FilterCondition[]; any?: FilterCondition[]; order?: 'updated' | 'due' }>;
+};

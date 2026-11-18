@@ -76,15 +76,6 @@ export function dueState(task, now = new Date()) {
   return day === today ? 'today' : day < today ? 'overdue' : 'later';
 }
 
-// The «Задачи» list: `who` — 'me' | 'ai' | 'system' | 'person' | 'all'; `done` — finished instead of open;
-// `due` — 'all' | 'today' | 'overdue' | 'none'; `matches(task)` — the shared filters (contact, tags).
-export function visibleTasks(tasks, { who = 'me', done = false, due = 'all', matches = () => true, now = new Date() } = {}) {
-  return tasks
-    .filter((task) => (who === 'all' || task.assignee === who) && (done ? !isOpen(task) : isOpen(task))
-      && (due === 'all' || dueState(task, now) === due) && matches(task))
-    .sort((a, b) => (a.status === 'inbox') - (b.status === 'inbox') || b.updatedAt.localeCompare(a.updatedAt));
-}
-
 const dayStart = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
 // How the feed shows a message whose tasks are all finished: 'collapsed' on the day the last one finished,
