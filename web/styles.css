@@ -82,10 +82,12 @@ svg .fill, svg circle:only-child { fill: currentColor; stroke: none; }
 .photo-meta { position: absolute; right: 8px; bottom: 7px; margin: 0; float: none; background: rgba(0, 0, 0, .4); color: #fff; padding: 1px 6px; border-radius: 10px; top: auto; }
 .bubble.has-text .photo-meta, .bubble.has-tags .photo-meta { position: static; background: none; color: var(--bubble-meta); float: right; margin: 6px 4px 0 10px; }
 .error-text { color: var(--danger); font-size: 13.5px; margin-top: 4px; }
-.photo { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 9px; cursor: zoom-in; background: color-mix(in srgb, var(--bubble-meta) 18%, transparent); }
+.photo { display: block; width: 100%; height: 100%; min-height: 0; object-fit: cover; border-radius: 9px; cursor: zoom-in; background: color-mix(in srgb, var(--bubble-meta) 18%, transparent); }
 /* Thumbnails, not full-screen photos: one photo is a preview, several form a grid; a tap opens the viewer. */
-.gallery { display: grid; gap: 3px; width: min(260px, 100%); }
-.gallery.count-1 { height: 200px; }
+.gallery { display: grid; gap: 3px; width: 260px; max-width: 100%; }
+.gallery.count-1 { height: 200px; grid-template-rows: minmax(0, 1fr); } /* the row must not grow to the picture's own height */
+/* A portrait photo gets a portrait frame instead of a landscape crop (class set on load, bubble.js). */
+.gallery.count-1.portrait { height: 300px; width: 225px; }
 .gallery.count-2, .gallery.count-3, .gallery.count-4 { grid-template-columns: 1fr 1fr; grid-auto-rows: 120px; }
 .gallery.count-3 .photo:first-child { grid-row: span 2; }
 .voice { display: flex; align-items: center; gap: 10px; min-width: 210px; padding: 2px 0; }

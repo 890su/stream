@@ -131,6 +131,8 @@ function photo(reference, load, notify, view) {
   image.decoding = 'async';
   load(reference).then((url) => { image.src = url; }).catch((error) => { image.alt = 'Фото недоступно'; notify(error.message); });
   image.dataset.viewer = ''; // a tap opens the full-size viewer (app.js)
+  // A single portrait photo gets a taller, narrower frame (styles.css).
+  image.addEventListener('load', () => { if (image.naturalHeight > image.naturalWidth * 1.1) image.parentElement?.classList.add('portrait'); }, { once: true });
   image.alt = view?.text ? `Фото: ${snippet(view)}` : 'Фото';
   return image;
 }
