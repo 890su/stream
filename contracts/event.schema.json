@@ -488,7 +488,9 @@
                     "doing",
                     "waiting",
                     "done",
-                    "cancelled"
+                    "cancelled",
+                    "review",
+                    "deferred"
                   ]
                 },
                 "assignee": {
@@ -561,6 +563,143 @@
                 "report": {
                   "type": "object",
                   "description": "What the owner reported on closing: fields from registry/tasks.json report_fields, currency, missing (fields left empty)."
+                },
+                "roles": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Parties by role (P14): author, responsible, controller, counterparty - one party or null; executors, watchers - lists.",
+                  "properties": {
+                    "author": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                    },
+                    "responsible": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                    },
+                    "executors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      }
+                    },
+                    "controller": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                    },
+                    "watchers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      }
+                    },
+                    "counterparty": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                    }
+                  }
+                },
+                "waiting_for": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": false,
+                  "required": [
+                    "party",
+                    "since"
+                  ],
+                  "description": "Who the task waits for, since when, until when.",
+                  "properties": {
+                    "party": {
+                      "type": "string",
+                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                    },
+                    "since": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "until": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "plan": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": false,
+                  "required": [
+                    "start",
+                    "duration_min"
+                  ],
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "duration_min": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "remind_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "promise": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": false,
+                  "required": [
+                    "by",
+                    "due",
+                    "message"
+                  ],
+                  "description": "A promise by a party: who, by when (date or date-time), the message it was made in.",
+                  "properties": {
+                    "by": {
+                      "type": "string",
+                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                    },
+                    "due": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:[Tt].+)?$"
+                    },
+                    "message": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "filed": {
+                  "type": "boolean",
+                  "description": "The task is filed away (hidden from lists, not closed)."
                 }
               }
             }

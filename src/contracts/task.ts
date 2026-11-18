@@ -1,6 +1,7 @@
 import { HttpError } from '../server/errors.ts';
 import { tasksConfig } from '../config.ts';
 import { isDateTime } from './validate.ts';
+import { ROLE_KEYS, isParty } from '../tasks/parties.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Task changes (CONCEPT.md §2.8): `task_change` events name their task in payload.ref and carry
@@ -15,6 +16,21 @@ export function checkTask(event: JournalEvent): void {
   if (task.op === 'create' && !task.title?.trim()) throw new HttpError(400, 'У новой задачи нет названия');
   const report = (task as { report?: Record<string, unknown> }).report;
   if (report !== undefined) checkReport(report);
+  const extra = task as { roles?: Record<string, unknown>; waiting_for?: { party: string } | null; promise?: { by: string } | null };
+  if (extra.roles) checkRoles(extra.roles);
+  if (extra.waiting_for && !isParty(extra.waiting_for.party)) throw new HttpError(400, 'Задача ждёт неизвестную сторону');
+  if (extra.promise && !isParty(extra.promise.by)) throw new HttpError(400, 'Обещание дано неизвестной стороной');
+}
+
+// Roles of a task (P14): only ROLE_KEYS; every value is a party (lists for executors and watchers) or null.
+function checkRoles(roles: Record<string, unknown>): void {
+  const fail = (reason: string): never => { throw new HttpError(400, `Роли задачи: ${reason}`); };
+  for (const [key, value] of Object.entries(roles)) {
+    if (!(ROLE_KEYS as readonly string[]).includes(key)) fail(`нет роли ${key}`);
+    const many = key === 'executors' || key === 'watchers';
+    const ok = many ? Array.isArray(value) && value.every(isParty) : value === null || isParty(value);
+    if (!ok) fail(`роль ${key} заполнена неверно`);
+  }
 }
 
 // A closing report (CONCEPT.md §2.9): only fields declared in registry/tasks.json, each of its type.
