@@ -67,7 +67,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter; paging |
 | `tasklist.js` / `days.js` | a task row of the «Задачи» view; day pill labels |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
-| `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report; pure report parsing |
+| `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report (also «Проверил» on a task in review); pure report parsing |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `convlist.js` / `convtasks.js` | a row of the «Беседы» list (state label, channels, open tasks) and the «Завершённые · N» fold; task plaques on top of a conversation (status, executor, due) |
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
@@ -83,7 +83,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `taskfold.js` | pure: tasks from `task_change` (with history, roles), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter`, `visibleTasks` |
 | `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry; `conversationKeys` (an own note joins the conversation it continues or answers); `withWhom` |
-| `details.js` / `taskdetails.js` | right panel «Подробности»: a task (properties, actions, messages, history) or a message (versions, tasks) |
+| `details.js` / `taskdetails.js` | right panel «Подробности»: a task (roles, one-tap actions, due chips, messages, history) or a message (versions, tasks) |
+| `taskactions.js` | pure: actions a task offers by status and roles (`actionsFor`), the change of each (`changeFor`; `'report'` = the done card), due chips, party names, delegate options |
 | `chatview.js` | the bar of an open conversation: title, «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «Не отслеживать» |
 | `system.js` | System screen: sources, connections, sends, exclusions |
 | `versioncard.js` / `picker.js` | versions of a message (left to right); link picker |

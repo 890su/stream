@@ -1,6 +1,7 @@
-// Details of a case (task) in the right panel (CONCEPT.md §5): name, status and actions, assignee, due date,
+// Details of a case (task) in the right panel (CONCEPT.md §5): name, status and one-tap actions, roles, due date,
 // the triage's note, the closing report, «Задача выполнена?», the whole conversation and the history of changes.
-import { ASSIGNEES, STATUSES, isOpen, describeChange } from './taskfold.js';
+import { STATUSES, describeChange } from './taskfold.js';
+import { actionsFor, actionLabel, changeFor, dueChips, partyName, delegateOptions } from './taskactions.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -50,6 +51,18 @@ function reportBlock(report, fields) {
   return box;
 }
 
+// Roles as lines: only the filled ones.
+function rolesBlock(task, views) {
+  const box = element('div', 'details-roles');
+  const { roles } = task;
+  const lines = [['Ответственный', [roles.responsible]], ['Исполнитель', roles.executors], ['Контролёр', [roles.controller]], ['Постановщик', [roles.author]], ['Ждём', [task.waitingFor?.party]]];
+  for (const [label, parties] of lines) {
+    const names = parties.filter(Boolean).map((party) => partyName(party, views));
+    if (names.length) box.append(element('div', 'details-fact', `${label} · ${names.join(', ')}`));
+  }
+  return box;
+}
+
 // `ctx`: { views (the case's messages), bubble(view), save(change), doneCards, fields (report fields) }.
 export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
   const box = element('div', 'details-task');
@@ -60,26 +73,53 @@ export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
   const card = doneCards.card(task);
   if (card) box.append(card);
 
+  box.append(rolesBlock(task, views));
   const actions = element('div', 'task-actions');
-  if (isOpen(task)) {
-    actions.append(button('primary', 'Готово', () => doneCards.start(task)));
-    if (task.status === 'inbox') actions.append(button('link-button', 'Принять', () => save({ op: 'update', status: 'todo' })));
-    actions.append(button('link-button', 'Отменить', () => save({ op: 'update', status: 'cancelled' })));
-  } else actions.append(button('link-button', 'Вернуть в работу', () => save({ op: 'update', status: 'todo' })));
-  box.append(actions);
-
-  const assignees = element('div', 'chips task-assignees');
-  for (const [key, label] of Object.entries(ASSIGNEES)) {
-    const chip = button(`chip ${task.assignee === key ? 'on' : 'suggest'}`, label, () => save({ op: 'update', assignee: key }));
-    chip.setAttribute('aria-pressed', String(task.assignee === key));
-    assignees.append(chip);
+  const choice = element('div', 'task-choice');
+  box.append(actions, choice);
+  const apply = (action, arg) => {
+    const change = changeFor(action, task, arg);
+    if (change === 'report') doneCards.start(task);
+    else if (change) save({ op: 'update', ...change });
+  };
+  const pick = (action, options) => {
+    choice.replaceChildren(element('p', 'picker-section', actionLabel(action)), ...options);
+    choice.querySelector('button, input')?.focus({ preventScroll: true });
+  };
+  const partyButtons = (action, others) => [
+    ...delegateOptions(views).map(({ party, name }) => button('chip suggest', name, () => apply(action, party))),
+    ...(others ? [button('chip suggest', 'ИИ', () => apply(action, 'ai'))] : []),
+    button('chip suggest', 'Другой…', () => {
+      const name = (window.prompt('Кто? Имя или телефон') ?? '').trim();
+      if (name) apply(action, /^\+\d+$/.test(name) ? `tel:${name}` : `name:${name}`);
+    }),
+  ];
+  const ask = {
+    delegate: () => pick('delegate', partyButtons('delegate', true)),
+    wait: () => pick('wait', partyButtons('wait', false)),
+    defer: () => {
+      const input = Object.assign(document.createElement('input'), { type: 'date', className: 'details-due' });
+      input.setAttribute('aria-label', 'Отложить до');
+      input.onchange = () => input.value && apply('defer', `${input.value}T09:00:00`);
+      pick('defer', [...dueChips().map((chip) => button('chip suggest', chip.label, () => apply('defer', `${chip.due}T09:00:00`))), input]);
+    },
+  };
+  const primary = new Set(['done', 'verify', 'accept']);
+  for (const action of actionsFor(task)) {
+    actions.append(button(primary.has(action) ? 'primary' : 'link-button', actionLabel(action), () => (ask[action] ? ask[action]() : apply(action))));
   }
-  box.append(element('p', 'picker-section', 'Исполнитель'), assignees);
 
   const due = Object.assign(document.createElement('input'), { type: 'date', value: task.due ? String(task.due).slice(0, 10) : '', className: 'details-due' });
   due.setAttribute('aria-label', 'Срок');
   due.onchange = () => save({ op: 'update', due: due.value || null });
-  box.append(element('p', 'picker-section', 'Срок'), due);
+  const chips = element('div', 'chips task-due');
+  for (const chip of dueChips()) {
+    const on = String(task.due ?? '').slice(0, 10) === chip.due;
+    const node = button(`chip ${on ? 'on' : 'suggest'}`, chip.label, () => save({ op: 'update', due: chip.due }));
+    node.setAttribute('aria-pressed', String(on));
+    chips.append(node);
+  }
+  box.append(element('p', 'picker-section', 'Срок'), chips, due);
 
   if (task.report) box.append(element('p', 'picker-section', 'Отчёт'), reportBlock(task.report, fields));
 

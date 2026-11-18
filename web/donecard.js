@@ -136,14 +136,14 @@ export function createDoneCards({ config, queue, notify, onChange = () => {} }) 
   // redraws keeps what was typed.
   function card(task) {
     let entry = cards.get(task.id);
-    const open = ['inbox', 'todo', 'doing', 'waiting'].includes(task.status);
+    const open = ['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred'].includes(task.status);
     if (!open || (task.proposed !== 'done' && !entry?.manual)) { cards.delete(task.id); return null; }
     entry ??= create(task, 'ask', false);
     entry.task = task;
     return entry.node;
   }
 
-  // «Готово» by the owner: straight to «Отметить выполненной?», then the report.
+  // «Готово» by the owner, or «Проверил» on a task in review (closing ends with `done` + report): straight to «Отметить выполненной?», then the report.
   function start(task) {
     cards.delete(task.id);
     create(task, 'confirm', true);
