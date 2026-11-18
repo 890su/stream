@@ -5,16 +5,31 @@ import { reveal, conceal } from './motion.js';
 const $ = (selector) => document.querySelector(selector);
 
 // One conversation (CONCEPT.md §2.5, §5): the bar on top with its title. In Беседы it is the conversation screen
-// («назад» returns to the list); in Задачи and Лента it is the contact filter (× removes it). The composer's
-// recipient is the conversation's reply chat; a phone number or own notes have none — a note to self.
-// «Не отслеживать» for Telegram conversations.
+// («назад» or the system back returns to the list); in Задачи and Лента it is the contact filter (× removes it).
+// The composer's recipient is the conversation's reply chat. Without one (a phone number, a chat with only my
+// messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
+// plain notes. «Не отслеживать» for Telegram conversations.
 export function setupChatView({ feed, composer, correct, notify }) {
   const bar = $('#chat-bar');
   let key = null;
+  let applied = null; // the reply chat this view put into the composer
+  const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
+
+  // The composer follows the conversation: its reply chat once known (unless another recipient was chosen), else
+  // a continuation of its last message. The details panel's task topic wins while it is open.
+  function steer() {
+    const conversation = feed.conversation();
+    const reply = conversation?.reply ?? null;
+    if (reply && !applied && !composer.recipient()) { composer.chat(reply); applied = reply; }
+    const wanted = Boolean(key && key !== 'me' && !reply && conversation);
+    if (wanted && !composer.topic()) composer.enterTopic(topic, 'Сообщение в беседу');
+    else if (!wanted && composer.topic() === topic) composer.leaveTopic();
+  }
+
   // The bar follows the view: «назад» in Беседы, × elsewhere.
   const sync = () => {
-    const conversation = feed.conversation();
     if (!key) return;
+    const conversation = feed.conversation();
     const inList = feed.mode() === 'conversations';
     $('#chat-back').hidden = !inList;
     $('#chat-close').hidden = inList;
@@ -26,24 +41,42 @@ export function setupChatView({ feed, composer, correct, notify }) {
     app.hidden = !chat || chat.group;
     app.href = chat && !chat.group ? `tg://user?id=${chat.chat_id}` : '#';
     $('#chat-untrack').hidden = !key.startsWith('tg:');
+    steer();
   };
+
+  // The drawer closes by going back in history; a new entry pushed before that back lands would be popped by it.
+  const settled = () => new Promise((resolve) => {
+    if (!history.state?.drawer) { resolve(); return; }
+    const done = () => { window.removeEventListener('popstate', done); clearTimeout(timer); resolve(); };
+    const timer = setTimeout(done, 400);
+    window.addEventListener('popstate', done);
+  });
+
   const open = async (next) => {
     if (!next) return;
+    await settled();
+    // One history entry per stay in conversations: the system back returns to the list.
+    if (!history.state?.conversation) history.pushState({ conversation: true }, '');
+    if (next !== key) { applied = null; composer.chat(null); }
     key = next;
     await feed.openConversation(next);
     reveal(bar, 'translateY(-8px)');
-    composer.chat(feed.conversation()?.reply ?? null); // in a group the bot writes as itself
     sync();
   };
   const close = async () => {
     if (!key) return;
     key = null;
+    applied = null;
     conceal(bar, 'translateY(-8px)');
     composer.chat(null);
+    if (composer.topic() === topic) composer.leaveTopic();
     await feed.openConversation(null);
   };
-  $('#chat-close').onclick = close;
-  $('#chat-back').onclick = close;
+  // «назад», ×, the selected «Беседы» tab: through history when the entry is ours, so the system back stays in step.
+  const leave = () => { if (history.state?.conversation) history.back(); else close(); };
+  window.addEventListener('popstate', () => { if (key && !history.state?.conversation) close(); });
+  $('#chat-close').onclick = leave;
+  $('#chat-back').onclick = leave;
   // «Не отслеживать»: Stream stops writing this chat; what is already written may go to the archive.
   const dialog = $('#untrack');
   $('#chat-untrack').onclick = () => {
@@ -60,8 +93,8 @@ export function setupChatView({ feed, composer, correct, notify }) {
     if (!anchors.length) { notify('В этом чате нет сообщений, по которым его можно отключить'); return; }
     for (const anchor of anchors) await correct(anchor, 'untrack');
     if (choice === 'archive') await Promise.all(conversation.views.filter((view) => !view.archived).map((view) => correct(view, 'archive')));
-    await close();
+    leave();
     notify(`«${conversation.title}» больше не отслеживается`, { label: 'Отменить', run: () => Promise.all(anchors.map((anchor) => correct(anchor, 'track'))) });
   });
-  return { open, close, sync, key: () => key };
+  return { open, close, leave, sync, key: () => key };
 }

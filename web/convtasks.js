@@ -1,5 +1,5 @@
-// Plaques of a conversation's tasks on top of the conversation (CONCEPT.md §2.5): status, executor, due date.
-// A tap opens the task's details on the right. partyName and plaqueFacts are pure (tested in node).
+// Plaques of a conversation's tasks on top of the conversation (CONCEPT.md §2.5), one line each and stuck to the
+// top while the conversation scrolls (feed.css): status, executor, due date. A tap opens the task's details on the right. partyName and plaqueFacts are pure (tested in node).
 import { isOpen, STATUSES, dueState } from './taskfold.js';
 import { PARTY_LABELS } from './parties.js';
 import { chatOf } from './projection.js';

@@ -9,7 +9,7 @@ import { visibleTasks } from './filters.js';
 import { questionOptions } from './question.js';
 import { taskRow, emptyTasks } from './tasklist.js';
 import { dayKey, dayLabel } from './days.js';
-import { conversations, conversationOf } from './conversations.js';
+import { conversations, conversationKeys } from './conversations.js';
 import { convRow, doneRow, splitDone } from './convlist.js';
 import { convTasks } from './convtasks.js';
 import { grow, shrink, reduced, play } from './motion.js';
@@ -39,6 +39,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let conversationKey = null; // the open conversation (Беседы) or the contact filter (Задачи, Лента) — chatview.js
   let current = null; // that conversation as of the last render
   let convList = []; // all conversations, ordered by state
+  let convKeys = new Map(); // message id -> conversation key (conversations.js)
   let listTop = 0; // where the list was when a conversation opened: «назад» returns there
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
@@ -89,10 +90,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const kept = live.filter((view) => showArchive || (!view.archived && !inArchivedTopic(view)));
     const tagged = (view) => [...tagFilter].every((tag) => view.tags.includes(tag));
     const inSource = (view) => !sourceFilter || sourceKey(view.event) === sourceFilter;
-    const inConversation = (view) => !conversationKey || conversationOf(view.event) === conversationKey;
+    convKeys = conversationKeys(live);
+    const inConversation = (view) => !conversationKey || convKeys.get(view.id) === conversationKey;
     // Лента: messages whose tasks are all finished only with «Завершённые» (CONCEPT.md §5).
     const finished = (view) => view.taskIds.length > 0 && view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' }));
-    convList = conversations(kept, taskList, { now, config: limits.conversations ?? DEFAULT_CONVERSATIONS });
+    convList = conversations(kept, taskList, { now, config: limits.conversations ?? DEFAULT_CONVERSATIONS, keys: convKeys });
     current = conversationKey ? convList.find((item) => item.key === conversationKey) ?? null : null;
     const inside = mode === 'conversations' && Boolean(conversationKey);
     const visible = inside ? kept.filter(inConversation)
@@ -287,7 +289,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   // Contact and tag filters match a task through any of its messages.
   const taskMatches = () => (task) => (!conversationKey && !tagFilter.size) || task.messages.some((id) => {
     const view = views.get(id);
-    return view && !view.deleted && (!conversationKey || conversationOf(view.event) === conversationKey) && [...tagFilter].every((tag) => view.tags.includes(tag));
+    return view && !view.deleted && (!conversationKey || convKeys.get(id) === conversationKey) && [...tagFilter].every((tag) => view.tags.includes(tag));
   });
   function setTaskFilter(id) {
     taskFilterId = id;

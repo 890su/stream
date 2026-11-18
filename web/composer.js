@@ -299,6 +299,8 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     // A reply to a messenger message opens «кому» with its chat chosen; other recipients can be chosen instead.
     reply: (view) => { setMode({ type: 'reply', view }); const chat = chatOf(view.event); if (chat) recipients.choose(chat); },
     chat: (chat) => { chatDefault = chat; recipients.reset(chat); },
+    recipient: () => recipients.selected(),
+    topic: () => topic,
     proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),
     enterTopic: (state, placeholder = 'Сообщение в тему') => { topic = state; resetTags(tagRow.active()); text.placeholder = placeholder; },

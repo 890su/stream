@@ -69,7 +69,9 @@ export function conversationState(conversation, { now = new Date(), config }) {
     if (parent && isMine(parent)) return true;
     return (view.taskIds ?? []).some((id) => { const task = taskOf.get(id); return task && involvesMe(task); });
   };
-  const candidates = views.filter((view) => directionOf(view.event) !== 'unknown' && meaningful(view) && matters(view));
+  // An own note pulled into a chat or a number (a call description, a reply not sent) is not an answer.
+  const note = (view) => conversation.key !== 'me' && conversationOf(view.event) === 'me';
+  const candidates = views.filter((view) => directionOf(view.event) !== 'unknown' && !note(view) && meaningful(view) && matters(view));
   const last = candidates.reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);
 
   if (conversation.key !== 'me') {
@@ -81,12 +83,38 @@ export function conversationState(conversation, { now = new Date(), config }) {
   return open.length || age < config.quiet_days ? 'quiet' : 'done';
 }
 
-// All conversations, ordered by `config.states`, newest first inside a state.
-export function conversations(views, tasks, { now = new Date(), config }) {
+// message id -> conversation key. An own note that continues or answers a message joins that message's
+// conversation (a call description, a reply written without a recipient), through chains of such notes.
+export function conversationKeys(views) {
+  const byId = new Map(views.map((view) => [view.id, view]));
+  const keys = new Map();
+  const resolve = (view) => {
+    if (keys.has(view.id)) return keys.get(view.id);
+    const seen = new Set();
+    let current = view;
+    let key = conversationOf(current.event);
+    while (key === 'me' && !seen.has(current.id)) {
+      seen.add(current.id);
+      const parent = byId.get(current.continues ?? current.event.reply_to);
+      if (!parent) break;
+      const parentKey = keys.get(parent.id) ?? conversationOf(parent.event);
+      if (parentKey && parentKey !== 'me') { key = parentKey; break; }
+      current = parent;
+    }
+    keys.set(view.id, key);
+    return key;
+  };
+  for (const view of views) resolve(view);
+  return keys;
+}
+
+// All conversations, ordered by `config.states`, newest first inside a state. `keys` — conversationKeys of a wider
+// set of views (the feed passes all live ones, so a note keeps its conversation when its parent is archived).
+export function conversations(views, tasks, { now = new Date(), config, keys = conversationKeys(views) }) {
   const groups = new Map();
   for (const view of views) {
     if (view.deleted) continue;
-    const key = conversationOf(view.event);
+    const key = keys.get(view.id);
     if (!key) continue;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(view);
@@ -96,10 +124,11 @@ export function conversations(views, tasks, { now = new Date(), config }) {
   for (const [key, group] of groups) {
     const sorted = [...group].sort((a, b) => a.event.ts.localeCompare(b.event.ts));
     const latest = sorted.at(-1);
+    const own = sorted.filter((view) => conversationOf(view.event) === key).at(-1) ?? latest; // carries the channel's data
     const ids = new Set(sorted.flatMap((view) => view.taskIds ?? []));
     const incoming = sorted.filter(incomingChat).at(-1);
     const conversation = {
-      key, title: titleOf(latest, key), group: sorted.some((view) => chatOf(view.event)?.group),
+      key, title: titleOf(own, key), group: sorted.some((view) => chatOf(view.event)?.group),
       channels: [...new Set(sorted.map((view) => channelOf(view.event, key)).filter(Boolean))],
       views: sorted, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
       reply: incoming ? chatOf(incoming.event) : null,

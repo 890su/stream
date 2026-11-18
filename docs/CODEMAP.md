@@ -82,9 +82,9 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `drawer.js` | left panel — filters by view: contacts (conversations) and tags (shared), «Завершённые» (Беседы, Лента), sources (Лента), saved filters (Задачи) |
 | `taskfold.js` | pure: tasks from `task_change` (with history, roles), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter`, `visibleTasks` |
-| `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry; `withWhom` |
+| `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry; `conversationKeys` (an own note joins the conversation it continues or answers); `withWhom` |
 | `details.js` / `taskdetails.js` | right panel «Подробности»: a task (properties, actions, messages, history) or a message (versions, tasks) |
-| `chatview.js` | the bar of an open conversation: title, «назад» to the list (Беседы) or × (filter elsewhere), reply recipient, «Не отслеживать» |
+| `chatview.js` | the bar of an open conversation: title, «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «Не отслеживать» |
 | `system.js` | System screen: sources, connections, sends, exclusions |
 | `versioncard.js` / `picker.js` | versions of a message (left to right); link picker |
 | `shared.js` | builders of entries: message, share, correction, task change |

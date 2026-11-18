@@ -41,19 +41,21 @@ function setupViews(feed) {
   for (const button of buttons) {
     button.onclick = async () => {
       const next = button.dataset.view;
-      if (next === feed.mode()) return;
+      // The selected «Беседы» tab inside a conversation goes back to the list.
+      if (next === feed.mode()) { if (next === 'conversations' && chatView?.key()) chatView.leave(); return; }
       try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
       show(next);
       await feed.setMode(next);
       chatView?.sync();
+      updateFilter();
       drawer?.render();
     };
   }
 }
 
-// The reset button shows how many tags and sources filter the centre.
+// The reset button shows how many tags (and, in the Лента, sources) filter the centre.
 function updateFilter() {
-  const count = (feedRef?.tagFilter().length ?? 0) + (feedRef?.sourceFilter() ? 1 : 0);
+  const count = (feedRef?.tagFilter().length ?? 0) + (feedRef?.mode() === 'feed' && feedRef?.sourceFilter() ? 1 : 0);
   $('#filter-reset').hidden = !count;
   $('#filter-count').textContent = count ? String(count) : '';
 }

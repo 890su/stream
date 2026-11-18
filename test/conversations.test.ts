@@ -173,3 +173,22 @@ test('task plaques: open tasks only, executor in words, due date', async () => {
   assert.equal(partyName('name:Пётр', person), 'Пётр');
   assert.equal(partyName('tel:+48111', person), 'tel:+48111', 'unknown stays as it is');
 });
+
+test('own notes that continue or answer a message join its conversation, through chains', () => {
+  const call = phone('call', 'in', '2026-11-18T09:00:00', '+48 600 300 400');
+  const note = (ts: string, extra: Record<string, unknown>, target?: string) => ({ id: `n${++n}`, schema_version: 1, source: 'app', author: 'me', ts, kind: 'text',
+    payload: { text: 'заметка', data: target ? { continuation: { on: true, target } } : {} }, ...extra });
+  const describe = note('2026-11-18T09:10:00', {}, call.id); // «Описать» continues the call
+  const more = note('2026-11-18T09:12:00', {}, describe.id);
+  const ask = tg('pl', '880', '2026-11-18T10:00:00', 'можно счёт?');
+  const answer = note('2026-11-18T10:05:00', { reply_to: ask.id });
+  const plain = note('2026-11-18T10:30:00', {});
+  const { views, tasks } = build([call, describe, more, ask, answer, plain]);
+  const list = conversations(views, tasks, { now, config });
+  const byKey = new Map<string, any>(list.map((item: any) => [item.key, item]));
+  assert.deepEqual(byKey.get('tel:+48600300400').views.map((view: any) => view.id), [call.id, describe.id, more.id], 'the description and its follow-up stay with the call');
+  assert.equal(byKey.get('tel:+48600300400').title, '+48600300400', 'the title comes from the call, not the note');
+  assert.equal(byKey.get('tel:+48600300400').state, 'mine', 'a description is not an answer to the caller');
+  assert.deepEqual(byKey.get('tg:880').views.map((view: any) => view.id), [ask.id, answer.id], 'a reply without a recipient stays in the chat');
+  assert.deepEqual(byKey.get('me').views.map((view: any) => view.id), [plain.id]);
+});

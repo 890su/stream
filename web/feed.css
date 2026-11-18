@@ -172,10 +172,12 @@ body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix
 .conv-done { align-self: stretch; text-align: left; margin: 8px 6px 4px; padding: 8px 12px; border-radius: 12px; color: var(--muted); font-size: 14px; }
 .conv-done.open { color: var(--bar-text); }
 
-/* Plaques of a conversation's tasks on top of it (convtasks.js); a tap opens the task's details. */
-.conv-plaques { align-self: stretch; display: flex; gap: 6px; margin: 6px 6px 2px; overflow-x: auto; scrollbar-width: none; }
-.conv-plaque { flex: 0 0 auto; display: grid; gap: 1px; max-width: min(80%, 320px); padding: 7px 12px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); text-align: left; color: var(--bar-text); }
-.conv-plaque-title { font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-plaque-meta { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Plaques of a conversation's tasks (convtasks.js): one line per task, stuck to the top of a long conversation;
+   a tap opens the task's details. More than three scroll inside. */
+.conv-plaques { position: sticky; top: -8px; z-index: 3; align-self: stretch; display: grid; gap: 2px; max-height: calc(3 * 36px + 20px); overflow-y: auto; margin: -8px -8px 4px; padding: 12px 8px 6px; background: var(--chat); box-shadow: 0 1px 0 var(--line); scrollbar-width: none; }
+.conv-plaque { display: flex; align-items: baseline; gap: 8px; min-width: 0; min-height: 34px; padding: 6px 12px; border-radius: 10px; background: var(--panel); text-align: left; color: var(--bar-text); }
+.conv-plaque:active, .conv-plaque:hover { background: var(--press); }
+.conv-plaque-title { flex: 0 1 auto; min-width: 0; font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-plaque-meta { flex: 1 1 0; min-width: 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-plaque.inbox .conv-plaque-title { font-style: italic; }
 .conv-plaque.overdue .conv-plaque-meta { color: var(--danger); }
