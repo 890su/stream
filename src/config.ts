@@ -26,5 +26,6 @@ export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.js
   version: number; quiet_s: number; lookback_h: number; done_fade_days: number; max_batch: number; open_tasks_in_context: number; low_confidence: number;
   ai: { provider: string; model: string; effort: string; max_tokens: number; monthly_budget_usd: number; price_per_mtok: { input: number; output: number }; processor: string };
   assignees: string[];
-  templates: Array<{ name: string; tag: string; title: string; assignee: string; instruction: string }>;
+  templates: Array<{ name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }>;
+  unsorted: { title: string; note: string };
 };

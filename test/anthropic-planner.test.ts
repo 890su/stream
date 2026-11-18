@@ -14,7 +14,7 @@ test('the planner sends one structured-output request and reads the tasks', asyn
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({
       id: 'msg_1', type: 'message', role: 'assistant', model: request.model, stop_reason: 'end_turn', stop_sequence: null,
-      content: [{ type: 'text', text: JSON.stringify({ tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: ['m1'], confidence: 0.9, note: null }] }) }],
+      content: [{ type: 'text', text: JSON.stringify({ tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: ['m1'], confidence: 0.9, note: null, filed: false }] }) }],
       usage: { input_tokens: 1200, output_tokens: 80 },
     }));
   });

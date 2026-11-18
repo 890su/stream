@@ -11,6 +11,9 @@ import type { PlanInput, PlanMessage, Planner } from './planner.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
 // notes), then go together to the planner, which splits them into new tasks and additions to open ones.
+// Every message gets an outcome (§2.8 «Разобрать — тоже задача»): an open task, an addition to one, or a task
+// created already done because it only had to be filed (diary, plan, note, chatter). A message the planner
+// left out becomes «Разобрать» for the owner, so nothing is dropped silently.
 
 export const TRIAGE_SOURCE = 'ai_triage';
 
@@ -119,8 +122,15 @@ export class Triage {
     const batchIds = new Set(messages.map((message) => message.id));
     const openIds = new Set(open.map((task) => task.id));
     const batchKey = createHash('sha256').update([...batchIds].sort().join(',')).digest('hex').slice(0, 16);
+    const covered = new Set(output.tasks.flatMap((planned) => planned.message_ids));
+    const missed = [...batchIds].filter((id) => !covered.has(id));
+    const outcomes = [...output.tasks];
+    if (missed.length) {
+      outcomes.push({ task_id: null, title: tasksConfig.unsorted.title, assignee: 'me', person: null, template: null, due: null,
+        message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false });
+    }
     let written = 0;
-    output.tasks.forEach((planned, index) => {
+    outcomes.forEach((planned, index) => {
       const add = planned.message_ids.filter((id) => batchIds.has(id));
       if (!add.length) return;
       const existing = planned.task_id && openIds.has(planned.task_id) ? planned.task_id : null;
@@ -130,7 +140,8 @@ export class Triage {
         ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor }
         : {
           op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', assignee: planned.assignee,
-          status: confidence < tasksConfig.low_confidence ? 'inbox' : 'todo', add, confidence, processor: tasksConfig.ai.processor,
+          status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
+          add, confidence, processor: tasksConfig.ai.processor,
           ...(planned.person ? { person: planned.person } : {}), ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
         };

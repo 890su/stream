@@ -10,8 +10,8 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
   const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) });
   const { model, effort, max_tokens } = tasksConfig.ai;
   // Stable part first, so it can be cached: instructions and the task templates.
-  const system = `${PLAN_INSTRUCTIONS}\n\nШаблоны задач (name, метка, исполнитель, что сделать):\n${tasksConfig.templates
-    .map((template) => `- ${template.name} ${template.tag} → ${template.assignee}: ${template.title}. ${template.instruction}`).join('\n')}`;
+  const system = `${PLAN_INSTRUCTIONS}\n\nШаблоны задач (name, метка, исполнитель, filed, что сделать):\n${tasksConfig.templates
+    .map((template) => `- ${template.name} ${template.tag ?? '(без метки)'} → ${template.assignee}${template.filed ? ', filed: true' : ''}: ${template.title}. ${template.instruction}`).join('\n')}`;
 
   return async (input: PlanInput): Promise<PlanOutput> => {
     const { templates, ...batch } = input;

@@ -50,7 +50,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | quiet window per stream, batches, writing task changes, budget | `Triage`, `streamOf` |
+| `triage.ts` | quiet window per stream, batches, an outcome for every message (filed = done at once, missed → «Разобрать»), budget | `Triage`, `streamOf` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) | `anthropicPlanner` |
 | `fold.ts` | tasks as fold of `task_change` (server side) | `foldTasks`, `isOpen` |
 
@@ -92,7 +92,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window |
-| `registry/tasks.json` | triage: quiet window, AI model and budget, task templates, done folding |
+| `registry/tasks.json` | triage: quiet window, AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere

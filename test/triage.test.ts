@@ -39,8 +39,8 @@ test('a stream waits for its quiet window; streams are separate batches', async 
 test('one batch becomes several tasks; a message may belong to two; nothing is triaged twice', async () => {
   const s = setup((input) => ({
     tasks: [
-      { task_id: null, title: 'Настроить роутер у клиента', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id, input.messages[1]!.id], confidence: 0.9, note: null },
-      { task_id: null, title: 'Записать расход на кабель', assignee: 'ai', person: null, template: 'money', due: null, message_ids: [input.messages[1]!.id], confidence: 0.4, note: null },
+      { task_id: null, title: 'Настроить роутер у клиента', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id, input.messages[1]!.id], confidence: 0.9, note: null, filed: false },
+      { task_id: null, title: 'Записать расход на кабель', assignee: 'ai', person: null, template: 'money', due: null, message_ids: [input.messages[1]!.id], confidence: 0.4, note: null, filed: false },
     ],
     usage: { input_tokens: 1000, output_tokens: 200 },
   }));
@@ -68,9 +68,9 @@ test('a later message is added to an open task instead of a new one', async () =
   let round = 0;
   const s = setup((input) => {
     round += 1;
-    if (round === 1) return { tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null }] };
+    if (round === 1) return { tasks: [{ task_id: null, title: 'Перезвонить Марку', assignee: 'me', person: null, template: 'callback', due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null, filed: false }] };
     assert.equal(input.open_tasks.length, 1, 'open tasks are given as context');
-    return { tasks: [{ task_id: input.open_tasks[0]!.id, title: 'Перезвонить Марку', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.8, note: null }] };
+    return { tasks: [{ task_id: input.open_tasks[0]!.id, title: 'Перезвонить Марку', assignee: 'me', person: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.8, note: null, filed: false }] };
   });
   try {
     const first = s.add(event({ payload: { text: 'перезвонить Марку' } }));
@@ -116,4 +116,34 @@ test('task changes from the owner go through /api/events with the task contract'
     assert.equal(tasks[0]!.status, 'done');
     assert.deepEqual(tasks[0]!.messages, [message.id]);
   } finally { await f.stop(); }
+});
+
+test('every message gets an outcome: filed ones are done at once, a missed one becomes «Разобрать» for me', async () => {
+  const s = setup((input) => {
+    const [mood, job, , idea] = input.messages.map((message) => message.id);
+    return {
+      tasks: [
+        { task_id: null, title: 'Самочувствие', assignee: 'ai', person: null, template: 'diary', due: null, message_ids: [mood!], confidence: 0.9, note: null, filed: true },
+        { task_id: null, title: 'Поменять роутер у клиента', assignee: 'me', person: null, template: null, due: null, message_ids: [job!], confidence: 0.9, note: null, filed: false },
+        { task_id: null, title: 'Идея для ленты', assignee: 'ai', person: null, template: 'plan', due: null, message_ids: [idea!], confidence: 0.3, note: null, filed: true },
+      ],
+    };
+  });
+  try {
+    s.add(event({ payload: { text: 'выспался, энергия 4 из 5' } }));
+    s.add(event({ payload: { text: 'клиенту поменять роутер в пятницу' } }));
+    const ok = s.add(event({ payload: { text: 'ок' } }));
+    s.add(event({ payload: { text: 'в ленте нужен поиск по дате' } }));
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    const byTitle = new Map(s.tasks().map((task) => [task.title, task]));
+    assert.equal(byTitle.get('Самочувствие')!.status, 'done', 'filed — closed at once');
+    assert.equal(byTitle.get('Самочувствие')!.template, 'diary');
+    assert.equal(byTitle.get('Поменять роутер у клиента')!.status, 'todo');
+    assert.equal(byTitle.get('Идея для ленты')!.status, 'inbox', 'low confidence is not closed');
+    const unsorted = byTitle.get('Разобрать')!;
+    assert.deepEqual(unsorted.messages, [ok.id]);
+    assert.equal(unsorted.assignee, 'me');
+    assert.equal(unsorted.status, 'inbox');
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v2').length, 4);
+  } finally { s.cleanup(); }
 });
