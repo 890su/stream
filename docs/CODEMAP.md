@@ -92,7 +92,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window |
-| `registry/tasks.json` | triage: quiet window, AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding |
+| `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere

@@ -10,6 +10,7 @@ import type { JournalEvent } from '../src/contracts/validate.ts';
 
 // Task triage (CONCEPT.md §2.8) with a scripted planner instead of AI. Texts are made up.
 const QUIET = 60_000;
+const CHAT_QUIET = 180_000;
 const telegram = (chat: string, text: string): JournalEvent => event({
   source: 'telegram', author: `contact:tg:by:${chat}`, payload: { text, data: { telegram: { account: 'by', chat_id: chat, chat_type: 'private', chat_title: 'Клиент', message_id: Math.floor(Math.random() * 1e6) + 1, sent_at: '2026-11-17T10:00:00.000Z' } } },
 });
@@ -29,7 +30,9 @@ test('a stream waits for its quiet window; streams are separate batches', async 
     const mine = s.add(event({ payload: { text: 'купить кабель' } }));
     s.add(telegram('7001', 'нужна настройка роутера'));
     assert.equal(s.triage.ready(Date.now()).length, 0, 'nothing before the quiet window');
-    const batches = s.triage.ready(Date.now() + QUIET + 1000);
+    const early = s.triage.ready(Date.now() + QUIET + 1000);
+    assert.deepEqual(early.map((batch) => streamOf(batch[0]!)), ['me'], 'a chat waits longer than my notes');
+    const batches = s.triage.ready(Date.now() + CHAT_QUIET + 1000);
     assert.equal(batches.length, 2);
     assert.deepEqual(batches.map((batch) => streamOf(batch[0]!)).sort(), ['me', 'tg|by|7001']);
     assert.equal(batches.find((batch) => batch[0]!.id === mine.id)!.length, 1);
@@ -156,9 +159,9 @@ test('a later batch of a conversation sees its earlier messages as context, othe
   try {
     const first = s.add(telegram('7001', 'нужна настройка роутера'));
     s.add(telegram('7002', 'другой клиент'));
-    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     const later = s.add(telegram('7001', 'в пятницу после 17'));
-    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     const call = s.calls.at(-1)!;
     assert.deepEqual(call.context.map((message) => message.id), [first.id], 'only this chat');
     assert.equal(call.context[0]!.in_tasks.length, 1, 'context carries its task');

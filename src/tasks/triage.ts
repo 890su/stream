@@ -28,6 +28,11 @@ export function streamOf(event: JournalEvent): string {
   return 'me';
 }
 
+// Quiet window of a stream in seconds: by its kind (`tg`, `phone`, `me`), else the default.
+export function quietOf(stream: string): number {
+  return tasksConfig.quiet_s_by_stream[stream.split('|')[0]!] ?? tasksConfig.quiet_s;
+}
+
 function describe(event: JournalEvent, store: JournalStore): { text: string; tags: string[]; deleted: boolean } {
   let text = event.payload.text ?? '';
   let tags = event.payload.tags ?? [];
@@ -71,7 +76,7 @@ export class Triage {
 
   #health(state: SourceState, detail: string | null) {
     const month = new Date().toISOString().slice(0, 7);
-    const info = { model: tasksConfig.ai.model, spent_usd: Number(this.#store.triage.spent(month).toFixed(4)), budget_usd: tasksConfig.ai.monthly_budget_usd, quiet_s: tasksConfig.quiet_s };
+    const info = { model: tasksConfig.ai.model, spent_usd: Number(this.#store.triage.spent(month).toFixed(4)), budget_usd: tasksConfig.ai.monthly_budget_usd, quiet_s: tasksConfig.quiet_s, quiet_s_by_stream: tasksConfig.quiet_s_by_stream };
     const previous = this.#store.status.pulse(TRIAGE_SOURCE, state, detail, info, new Date().toISOString());
     stateChanged(this.#store, this.#live, TRIAGE_SOURCE, state, previous, detail);
   }
@@ -84,8 +89,9 @@ export class Triage {
       const key = streamOf(event);
       streams.set(key, [...(streams.get(key) ?? []), event]);
     }
-    return [...streams.values()]
-      .filter((events) => now - Date.parse(events.at(-1)!.received_at!) >= tasksConfig.quiet_s * 1000)
+    return [...streams.entries()]
+      .filter(([stream, events]) => now - Date.parse(events.at(-1)!.received_at!) >= quietOf(stream) * 1000)
+      .map(([, events]) => events)
       .map((events) => events.slice(0, tasksConfig.max_batch));
   }
 
