@@ -25,7 +25,7 @@ export function chatOf(event) {
   }
   if (data.outbound) {
     const account = data.outbound.connector.replace(/^telegram_/, '');
-    return { key: `${account}|${data.outbound.chat_id}`, account, chat_id: data.outbound.chat_id, title: data.outbound.chat_title || 'Чат', group: false };
+    return { key: `${account}|${data.outbound.chat_id}`, account, chat_id: data.outbound.chat_id, title: data.outbound.chat_title || 'Чат', group: data.outbound.chat_id.startsWith('-') };
   }
   return null;
 }

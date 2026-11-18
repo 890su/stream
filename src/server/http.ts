@@ -47,6 +47,7 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
           return await system(request, response, url.pathname.slice('/api/'.length), store, live, bots);
         }
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
+        if (url.pathname === '/api/recipients' && request.method === 'GET') { json(response, 200, { recipients: store.recipients.list() }); return; }
         if (url.pathname === '/api/events') return await events(request, response, url, store, live);
         if (url.pathname.startsWith('/api/media/')) return await media(request, response, url.pathname.slice('/api/media/'.length), store);
         if (url.pathname === '/share-target') return await share(request, response, store, live);
@@ -55,7 +56,7 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
       if (request.method !== 'GET') throw new HttpError(405, 'Метод не поддерживается');
       if (url.pathname === '/healthz') { json(response, 200, { ok: true }); return; }
       if (url.pathname === '/capture-config.json') {
-        const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])) };
+        const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])), address_book: telegramConfig.address_book };
         json(response, 200, { ...captureConfig, tagging: tagConfig, telegram, tasks: { done_fade_days: tasksConfig.done_fade_days } }); return;
       }
       const file = await staticFile(url.pathname);

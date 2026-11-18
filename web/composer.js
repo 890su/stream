@@ -1,17 +1,17 @@
-// The composer: text, voice, files, tags and modes (reply, edit, continue, reply to Telegram) of the next message.
+// The composer: text, voice, files, tags, recipient (recipients.js) and modes (reply, edit, continue) of the next message.
 import { makeEntry, makeCorrection } from './shared.js';
-import { snippet } from './projection.js';
+import { snippet, chatOf } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow, leadButtons } from './tagrow.js';
-import { accountTitle } from './tgbubble.js';
-import { replyWindowClosed, outboundData } from './outbound.js';
+import { outboundData } from './outbound.js';
+import { createRecipients } from './recipients.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent, getViews, onPickRequest, onChatClose }) {
+export function setupComposer(config, { notify, onSent, getViews, onPickRequest }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
@@ -39,19 +39,21 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     override: () => selection && { click: (tag) => selection.toggleTag(tag), stateOf: (tag) => selection.stateOf(tag) },
     onChange: (on) => tagButton.classList.toggle('active', on.length > 0),
   });
+  // «кому»: no recipient — a note to myself (CONCEPT.md §2.9).
+  const recipients = createRecipients({ config, getViews, notify, queue: (entry) => queue(entry), onChange: () => updateAction() });
   let files = [];
   let pendingVoice; // a finished recording that could not be queued yet
   let pressedAt = 0;
   let locked = false;
   let busy = false;
-  let mode = null; // null, or { type: 'reply' | 'edit' | 'continue', view }, or { type: 'outbound', chat, view? }
-  // While one messenger chat is shown (chat bar), the composer writes to that chat by default (CONCEPT.md §8.2).
+  let mode = null; // null, or { type: 'reply' | 'edit' | 'continue', view }
+  // While one messenger chat is shown (chat bar), that chat is the default recipient (CONCEPT.md §8.2).
   let chatDefault = null;
 
   const hasDraft = () => Boolean(text.value.trim() || files.length);
 
   function updateAction() {
-    const send = hasDraft() || recorder.active() || pendingVoice || mode?.type === 'edit' || mode?.type === 'outbound';
+    const send = hasDraft() || recorder.active() || pendingVoice || mode?.type === 'edit' || Boolean(recipients.selected());
     action.dataset.mode = send ? 'send' : 'voice';
     action.setAttribute('aria-label', recorder.active() ? 'Отправить голосовое' : send ? 'Отправить' : 'Голосовое сообщение');
     action.classList.toggle('recording', recorder.active());
@@ -63,6 +65,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
   }
 
   function togglePanel(panel, button, open = panel.hidden) {
+    recipients.closePanel();
     for (const [other, otherButton] of [[tagPanel, tagButton], [attachMenu, attachButton]]) {
       other.hidden = true; otherButton.setAttribute('aria-expanded', 'false');
     }
@@ -117,19 +120,13 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     contextBar.classList.toggle('reply', mode?.type === 'reply');
     contextBar.classList.toggle('edit', mode?.type === 'edit');
     contextBar.classList.toggle('continue', mode?.type === 'continue');
-    contextBar.classList.toggle('outbound', mode?.type === 'outbound');
-    // Photos and files are not edited; replies to Telegram are text only for now.
-    attachButton.hidden = mode?.type === 'edit' || mode?.type === 'outbound';
-    contextBar.classList.toggle('closed', mode?.type === 'outbound' && windowClosed(mode.chat));
-    if (mode?.type === 'outbound') {
-      $('#context-title').textContent = `→ ${accountTitle(mode.chat.account)}`;
-      $('#context-snippet').textContent = windowClosed(mode.chat) ? `${mode.chat.title}: окно 24 часа закрыто — ответьте в Telegram`
-        : mode.view ? `${mode.chat.title}: ${snippet(mode.view)}` : mode.chat.title;
-    } else if (mode) {
+    // Photos and files are not edited; an edit is not sent anywhere.
+    attachButton.hidden = mode?.type === 'edit';
+    recipients.enable(mode?.type !== 'edit');
+    if (mode) {
       $('#context-title').textContent = { edit: 'Редактирование', reply: 'Ответ', continue: 'Продолжение' }[mode.type];
       $('#context-snippet').textContent = snippet(mode.view);
     }
-    if (mode?.type === 'outbound') files = [];
     if (mode?.type === 'edit') {
       text.value = mode.view.text; files = [];
       resetTags(mode.view.tags);
@@ -139,14 +136,21 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     updateAction();
   }
 
-  const windowClosed = (chat) => replyWindowClosed(chat, getViews());
-
-  async function sendOutbound() {
+  // Sending to a recipient is the confirmation (class C, CONCEPT.md §8.2): text only, a personal chat within 24 hours.
+  async function sendOutbound(chat) {
     const message = text.value.trim();
-    if (!message) { notify('Напишите текст ответа: в Telegram уходит только текст'); return; }
-    await queue(await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), outbound: outboundData(mode.chat, mode.view, config), replyTo: mode.view?.id }));
+    if (files.length) { notify('В Telegram уходит только текст: уберите вложения или адресата'); return; }
+    if (!message) { notify('Напишите текст: в Telegram уходит только текст'); return; }
+    if (!recipients.isOpen(chat)) {
+      notify(`«${chat.title}»: окно 24 часа закрыто — ответьте в Telegram`, { label: 'Открыть', run: () => { location.href = `tg://user?id=${chat.chat_id}`; } });
+      return;
+    }
+    const view = mode?.type === 'reply' ? mode.view : undefined;
+    await queue(await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
+      outbound: outboundData(chat, view, config), replyTo: view?.id }));
     text.value = '';
-    setMode(chatDefault ? { type: 'outbound', chat: chatDefault } : null);
+    if (mode) setMode(null);
+    recipients.reset(chatDefault);
     autosize(); resetTags(); togglePanel(tagPanel, tagButton, false);
   }
 
@@ -169,9 +173,10 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
       finally { busy = false; updateAction(); }
       return;
     }
-    if (mode?.type === 'outbound') {
+    const chat = recipients.selected();
+    if (chat) {
       busy = true;
-      try { await sendOutbound(); } catch (error) { notify(`Ответ не сохранён. ${error.message}`); }
+      try { await sendOutbound(chat); } catch (error) { notify(`Сообщение не сохранено. ${error.message}`); }
       finally { busy = false; updateAction(); }
       return;
     }
@@ -253,12 +258,14 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     }
   });
   $('#rec-cancel').onclick = () => finishRecording(false);
-  // In a chat view × on the chat line closes the chat; × on a reply returns to writing into the chat.
-  $('#context-cancel').onclick = () => {
-    if (mode?.type === 'outbound' && !mode.view && chatDefault) onChatClose?.();
-    else setMode(chatDefault ? { type: 'outbound', chat: chatDefault } : null);
+  // Cancelling a reply to a chat also takes back the recipient the reply chose.
+  const cancelMode = () => {
+    const replied = mode?.type === 'reply' && chatOf(mode.view.event);
+    setMode(null);
+    if (replied && recipients.selected()?.key === replied.key) recipients.reset(chatDefault);
   };
-  text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) setMode(null); });
+  $('#context-cancel').onclick = cancelMode;
+  text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) cancelMode(); });
 
   text.addEventListener('input', () => { autosize(); updateAction(); tagRow.update(text.value); });
   $('#new-tag-form').addEventListener('submit', (event) => {
@@ -286,9 +293,10 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest,
     refreshTags: () => tagRow.update(text.value),
     selectionTags: (state) => { selection = state; tagRow.update(selection ? '' : text.value); },
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
-    reply: (view) => setMode({ type: 'reply', view }),
-    outbound: (chat, view) => setMode({ type: 'outbound', chat, view }),
-    chat: (chat) => { chatDefault = chat; setMode(chat ? { type: 'outbound', chat } : null); },
+    loadRecipients: () => recipients.load(),
+    // A reply to a messenger message opens «кому» with its chat chosen; other recipients can be chosen instead.
+    reply: (view) => { setMode({ type: 'reply', view }); const chat = chatOf(view.event); if (chat) recipients.choose(chat); },
+    chat: (chat) => { chatDefault = chat; recipients.reset(chat); },
     proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),
     enterTopic: (state) => { topic = state; resetTags(tagRow.active()); text.placeholder = 'Сообщение в тему'; },

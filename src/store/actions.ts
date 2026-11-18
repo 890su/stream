@@ -5,7 +5,7 @@ import { HttpError } from '../server/errors.ts';
 
 // Actions (contracts/action.schema.json, CONCEPT.md §3.1). For now only replies to messengers:
 // an owner's text with payload.data.outbound becomes an approved class C `send_message` —
-// pressing «Отправить» in the explicit reply mode is the confirmation (CONCEPT.md §8.2).
+// sending with a recipient chosen in the «кому» row is the confirmation (CONCEPT.md §2.9, §8.2).
 
 export type ActionStatus = 'proposed' | 'approved' | 'running' | 'done' | 'failed' | 'rejected';
 export interface Action {

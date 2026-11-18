@@ -19,6 +19,7 @@ export const telegramConfig = JSON.parse(readFileSync(new URL('../registry/teleg
   version: number;
   accounts: Record<string, { title: string; connector: string; sphere: string; timezone: string }>;
   media_max_bytes: number; silent_after_s: number; reply_window_h: number;
+  address_book: { frequent_days: number; row_size: number };
 };
 
 // Task triage (CONCEPT.md §2.8): quiet window, AI model and budget, task templates.

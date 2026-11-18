@@ -16,5 +16,9 @@
   },
   "media_max_bytes": 20971520,
   "silent_after_s": 300,
-  "reply_window_h": 24
+  "reply_window_h": 24,
+  "address_book": {
+    "frequent_days": 30,
+    "row_size": 8
+  }
 }

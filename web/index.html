@@ -127,8 +127,6 @@
   <div id="action-panel" class="action-panel" hidden role="menu" aria-label="Действия с сообщением">
     <button type="button" role="menuitem" data-op="reply" aria-label="Ответить">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6"/><path d="M4.5 12H14a6 6 0 0 1 6 6v1"/></svg><span>Ответить</span></button>
-    <button type="button" role="menuitem" data-op="tg-reply" aria-label="Ответить в Telegram" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4 3.5 10.6l5.6 2 2.2 6.9 3.1-3.9 4.6 3.4L20.5 4Z"/><path d="m9.1 12.6 7.4-5.1"/></svg><span>В Telegram</span></button>
     <button type="button" role="menuitem" data-op="edit" aria-label="Изменить">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg><span>Изменить</span></button>
     <button type="button" role="menuitem" data-op="task" aria-label="Сделать задачей">
@@ -153,6 +151,11 @@
         <button type="submit" class="link-button">Добавить</button>
       </form>
     </div>
+    <div id="to-panel" class="panel to-panel" hidden aria-label="Кому отправить">
+      <label class="visually-hidden" for="to-search">Найти адресата</label>
+      <input id="to-search" type="search" placeholder="Кому: имя чата или группы" autocomplete="off" enterkeyhint="search">
+      <div id="to-list" class="to-list"></div>
+    </div>
     <div id="attach-menu" class="panel attach-menu" hidden aria-label="Прикрепить">
       <button type="button" data-attach="camera"><span class="round">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5 7.6 6.5H5A2.5 2.5 0 0 0 2.5 9v8.5A2.5 2.5 0 0 0 5 20h14a2.5 2.5 0 0 0 2.5-2.5V9A2.5 2.5 0 0 0 19 6.5h-2.6L15 4.5H9Z"/><circle cx="12" cy="13" r="3.6"/></svg>
@@ -167,7 +170,6 @@
     <div id="context-bar" class="context-bar" hidden>
       <svg id="context-icon-reply" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6 4 12l6 6"/><path d="M4.5 12H14a6 6 0 0 1 6 6v1"/></svg>
       <svg id="context-icon-continue" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4v8a4 4 0 0 0 4 4h9"/><path d="m15 12 4 4-4 4"/></svg>
-      <svg id="context-icon-outbound" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4 3.5 10.6l5.6 2 2.2 6.9 3.1-3.9 4.6 3.4L20.5 4Z"/><path d="m9.1 12.6 7.4-5.1"/></svg>
       <svg id="context-icon-edit" class="context-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
       <div class="context-text"><span id="context-title"></span><span id="context-snippet"></span></div>
       <button id="context-cancel" type="button" class="icon-button" aria-label="Отменить">
@@ -177,11 +179,17 @@
     <div id="draft" class="draft" hidden>
       <div id="draft-files" class="draft-files"></div>
     </div>
-    <div id="tag-row" class="tag-row" role="group" aria-label="Метки сообщения: касание включает или выключает" hidden></div>
-    <form id="composer" class="composer" autocomplete="off">
-      <button id="tag-button" type="button" class="icon-button" aria-label="Метки" aria-expanded="false">
+    <div id="tag-row" class="tag-row">
+      <button id="tag-button" type="button" class="chip round-chip row-end" aria-label="Все метки" aria-expanded="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3.5 7.5 20.5M16.5 3.5l-2 17M4 8.5h16.5M3.5 15.5H20"/></svg>
       </button>
+      <div id="tag-chips" class="row-chips" role="group" aria-label="Метки сообщения: касание включает или выключает"></div>
+      <div id="to-chips" class="row-chips" role="group" aria-label="Кому отправить: без адресата — заметка себе" hidden></div>
+      <button id="to-button" type="button" class="chip round-chip row-end" aria-label="Кому отправить" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4 3.5 10.6l5.6 2 2.2 6.9 3.1-3.9 4.6 3.4L20.5 4Z"/><path d="m9.1 12.6 7.4-5.1"/></svg>
+      </button>
+    </div>
+    <form id="composer" class="composer" autocomplete="off">
       <div id="recording-bar" class="recording-bar" hidden>
         <span class="rec-dot" aria-hidden="true"></span>
         <span id="rec-time" class="rec-time">0:00</span>

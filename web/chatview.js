@@ -2,7 +2,7 @@ import { accountTitle } from './tgbubble.js';
 
 const $ = (selector) => document.querySelector(selector);
 
-// One messenger chat in the feed: the chat bar on top, replies from the composer go to that chat.
+// One messenger chat in the feed: the chat bar on top, the chat is the composer's default recipient.
 export function setupChatView({ feed, composer, correct, notify }) {
   const bar = $('#chat-bar');
   let current = null;
@@ -15,7 +15,7 @@ export function setupChatView({ feed, composer, correct, notify }) {
     app.hidden = chat.group;
     app.href = chat.group ? '#' : `tg://user?id=${chat.chat_id}`;
     bar.hidden = false;
-    composer.chat(chat.group ? null : chat); // replies go only to personal chats
+    composer.chat(chat); // the chat is the default recipient; in a group the bot writes as itself
     await feed.setChatFilter(chat);
   };
   const close = async () => {

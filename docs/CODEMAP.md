@@ -9,7 +9,7 @@
 Every input becomes an **event** in an append-only journal (`src/store/store.ts`, SQLite). Sources write events:
 the PWA (`/api/events`, outbox on the device), the share target, the Android companion (`/api/phone/*`) and the
 Telegram bots (`src/telegram/`). Owner actions are `correction` events; tasks are `task_change` events; replies to
-Telegram are events with `payload.data.outbound` that create **actions** (`src/store/actions.ts`) executed by the
+Telegram (a recipient chosen in the «кому» row) are events with `payload.data.outbound` that create **actions** (`src/store/actions.ts`) executed by the
 bots. The **triage** (`src/tasks/triage.ts`) batches new messages per stream after a quiet window and asks the
 planner (AI, `src/tasks/anthropic.ts`) to split them into tasks. Everything shown is a **projection** computed on
 the device (`web/projection.js`, `web/taskfold.js`); new events reach all devices through SSE (`/api/live`).
@@ -43,9 +43,10 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `status.ts` | pulse / state of sources (System screen) | `StatusStore` |
 | `telegram.ts` | exclusions, forward origin, albums, 24 h window | `TelegramQueries` |
 | `connections.ts` | bot connections, owner trust, groups | `ConnectionStore` |
+| `recipients.ts` | address book of the «кому» row: chats, bot groups, pins, frequency, 24 h window (`/api/recipients`) | `RecipientQueries` |
 | `triage.ts` | pending messages, task events, AI spending | `TriageStore` |
 | **telegram/** (§8.2) | | |
-| `bot.ts` | one account bot: `getUpdates` loop, update handling, sending replies, health | `TelegramBot`, `sendError` |
+| `bot.ts` | one account bot: `getUpdates` loop, update handling, sending (personal chats via business connection, groups as the bot), health | `TelegramBot`, `sendError` |
 | `convert.ts` | Bot API message → ingest item (files, forwards, service text) | `toItem` |
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
 | **tasks/** (§2.8) | | |
@@ -66,9 +67,10 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
-| `composer.js` | input: text, voice, files, tags, modes (reply, edit, continue, → Telegram) |
+| `composer.js` | input: text, voice, files, tags, recipient, modes (reply, edit, continue) |
 | `outbound.js` | pure: Telegram reply data, 24 h window |
-| `tagrow.js` / `suggest.js` | tag row above the input; tag suggestions |
+| `tagrow.js` / `suggest.js` | tag side of the row above the input; tag suggestions |
+| `recipients.js` | «кому» side of the row: address book, chosen recipient, full list with search and pins |
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
 | `drawer.js` | left panel: topics, sources, «Завершённые», tags |
@@ -91,7 +93,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `contracts/*.schema.json` | Action, Task, Interpretation, Normalized, Intent |
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |
-| `registry/telegram.json` | Telegram accounts, file limit, reply window |
+| `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 

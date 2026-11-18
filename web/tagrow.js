@@ -3,10 +3,10 @@ import { suggestTags, tagStats, typedTags, normalizeTag } from './suggest.js';
 const SPARK = '<svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 13.8 10.2 20.5 12 13.8 13.8 12 20.5 10.2 13.8 3.5 12 10.2 10.2Z"/></svg>';
 const TAG = /^#[\p{L}0-9_-]+$/u;
 
-// The tag row above the composer: suggested (off), switched on by the owner, switched on automatically.
+// The tag side of the row above the composer (the «кому» side — recipients.js): suggested (off), switched on by the owner, switched on automatically.
 // Remembers what the owner did with suggestions, which is saved with the message as payload.data.tagging.
 export function createTagRow({ dictionary, getViews, onChange, lead = () => [], override = () => null }) {
-  const row = document.querySelector('#tag-row');
+  const row = document.querySelector('#tag-chips');
   const options = document.querySelector('#tag-options');
   const owner = new Set(); // switched on by the owner (row, full list or new tag)
   const auto = new Set(); // switched on by the suggester and still on
@@ -66,11 +66,9 @@ export function createTagRow({ dictionary, getViews, onChange, lead = () => [], 
     if (other) { // a selection: every frequent tag, lit when all selected messages carry it
       const all = suggestions.map((item) => item.tag);
       row.replaceChildren(...lead(), ...all.map((tag) => chip(tag, other.stateOf(tag) ? 'on' : 'suggest')));
-      row.hidden = false;
       return;
     }
     row.replaceChildren(...lead(), ...on.map((tag) => chip(tag, autoOn.has(tag) ? 'auto' : 'on')), ...shown.map((tag) => chip(tag, 'suggest')));
-    row.hidden = !row.childElementCount;
     // Full list behind the # button: dictionary and every tag used before.
     const all = [...new Set([...dictionary.tags.map((entry) => normalizeTag(entry.tag)), ...currentStats().keys(), ...on])].sort((a, b) => a.localeCompare(b, 'ru'));
     options.replaceChildren(...all.map((tag) => chip(tag, on.includes(tag) ? (autoOn.has(tag) ? 'auto' : 'on') : 'suggest')));

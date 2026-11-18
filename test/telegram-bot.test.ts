@@ -148,7 +148,7 @@ test('groups: read when the owner added the bot, also before confirming the conn
   } finally { await stop(); }
 });
 
-test('a reply from the feed goes through the business connection once; groups and the 24-hour window are refused', async () => {
+test('a reply goes through the business connection once; a group gets it from the bot; groups of strangers and the 24-hour window are refused', async () => {
   const { telegram, f, trust, post, stop } = await setup();
   try {
     telegram.push(connection(OWNER, 'Владелец'));
@@ -171,17 +171,24 @@ test('a reply from the feed goes through the business connection once; groups an
     await until(() => f.store.getEvent(tgId(CLIENT, 41)), 'next message');
     assert.equal(f.store.getEvent(tgId(CLIENT, 500)), undefined);
 
-    const group = reply(GROUP, 'в группу');
+    const stranger = reply(-100600, 'в чужую группу');
+    await post(stranger);
+    const refused = await until(() => f.store.actions.recent(10).find((a) => a.source_event === stranger.id && a.status === 'failed'), 'group refused');
+    assert.match(refused.error!, /в этой группе/);
+
+    telegram.push({ my_chat_member: { chat: { id: GROUP, type: 'supergroup', title: 'Офис' }, from: person(OWNER, 'x'), date: now(), old_chat_member: { status: 'left' }, new_chat_member: { status: 'member' } } });
+    await until(() => f.store.connections.groupAllowed('by', String(GROUP)), 'group allowed');
+    const group = reply(GROUP, 'Заявка: 4 камеры');
     await post(group);
-    const refused = await until(() => f.store.actions.recent(10).find((a) => a.source_event === group.id && a.status === 'failed'), 'group refused');
-    assert.match(refused.error!, /В группе/);
+    await until(() => f.store.actions.recent(10).find((a) => a.source_event === group.id && a.status === 'done'), 'group sent');
+    assert.deepEqual(telegram.calls.filter((c) => c.method === 'sendMessage').at(-1)!.params, { chat_id: GROUP, text: 'Заявка: 4 камеры' }, 'the bot writes as itself, no business connection');
 
     telegram.failSend.push('Bad Request: BUSINESS_PEER_USAGE_MISSING');
     const late = reply(CLIENT, 'поздно');
     await post(late);
     const closed = await until(() => f.store.actions.recent(10).find((a) => a.source_event === late.id && a.status === 'failed'), 'window closed');
     assert.match(closed.error!, /24 часа/);
-    assert.equal(telegram.calls.filter((c) => c.method === 'sendMessage').length, 2, 'group reply never reached Telegram');
+    assert.equal(telegram.calls.filter((c) => c.method === 'sendMessage').length, 3, 'a group of a stranger never reached Telegram');
   } finally { await stop(); }
 });
 

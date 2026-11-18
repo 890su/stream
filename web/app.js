@@ -114,7 +114,6 @@ function setupMessageActions(feed, composer, config) {
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
       else if (op === 'task') taskPanel.createFrom(view);
-      else if (op === 'tg-reply') composer.outbound(chatOf(view.event), view);
       else if (op === 'chat-open') chatView.open(chatOf(view.event));
       else if (op === 'system') system.open();
       else if (op === 'retry') { if (view.delivery?.action) system.retry(view.delivery.action); }
@@ -160,7 +159,7 @@ async function main() {
   const onQueue = setupStatus();
   const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); taskPanel?.render(); composerRef?.refreshTags(); } });
   feedRef = feed;
-  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(), onChatClose: () => chatView.close(),
+  const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
   composerRef = composer;
   setupMessageActions(feed, composer, config);
@@ -175,6 +174,7 @@ async function main() {
   startSync(config, notify);
   await feed.refresh();
   composer.refreshTags(); // frequent tags are known once the feed is loaded
+  composer.loadRecipients();
   // Fallback only: while the live stream is up, new messages arrive without polling.
   setInterval(() => { if (!document.hidden && !live.connected()) feed.refresh(); }, config.feed_refresh_ms);
 

@@ -14,6 +14,7 @@ import { ActionStore } from './actions.ts';
 import { StatusStore } from './status.ts';
 import { TelegramQueries } from './telegram.ts';
 import { ConnectionStore } from './connections.ts';
+import { RecipientQueries } from './recipients.ts';
 import { TriageStore } from './triage.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
@@ -42,6 +43,7 @@ export class JournalStore {
   readonly status: StatusStore;
   readonly telegram: TelegramQueries;
   readonly connections: ConnectionStore;
+  readonly recipients: RecipientQueries;
   readonly triage: TriageStore;
 
   constructor(directory: string) {
@@ -54,6 +56,7 @@ export class JournalStore {
     this.status = new StatusStore(this.#db);
     this.telegram = new TelegramQueries(this.#db);
     this.connections = new ConnectionStore(this.#db);
+    this.recipients = new RecipientQueries(this.#db, this.connections, this.telegram);
     this.triage = new TriageStore(this.#db);
   }
 

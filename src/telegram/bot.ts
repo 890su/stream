@@ -8,7 +8,8 @@ import { ingest, markDeleted } from './ingest.ts';
 import { toItem, type Files } from './convert.ts';
 
 // One account bot (CONCEPT.md §8.2): reads its updates (business chats of the connected account and groups it
-// was added to) and sends the owner's replies through the business connection. Runs inside the server.
+// was added to) and sends the owner's messages: to personal chats through the business connection, to groups as
+// itself. Runs inside the server.
 
 const UPDATES = ['business_connection', 'business_message', 'edited_business_message', 'deleted_business_messages', 'message', 'edited_message', 'my_chat_member'];
 const WINDOW_MS = telegramConfig.reply_window_h * 3_600_000;
@@ -161,15 +162,18 @@ export class TelegramBot {
       console.log(`Telegram ${this.account}: reply ${action.id} failed — ${error}${cause instanceof Error ? ` (${cause.message})` : ''}`);
       return actionChanged(this.#store, this.#live, this.#store.actions.finish(action.id, this.connector, 'failed', null, error).action);
     };
+    // In a group the bot is a member and writes as itself (CONCEPT.md §8.2); a personal chat goes through the
+    // business connection, from the account, within 24 hours of the client's last message.
+    const group = params.chat_id.startsWith('-');
     const connection = this.#store.connections.active(this.account);
-    if (params.chat_id.startsWith('-')) { fail('В группе ответ из ленты не отправляется: бот писал бы от своего имени — ответьте в Telegram'); return true; }
-    if (!connection) { fail('Бот не подключён к аккаунту — экран «Система»'); return true; }
+    if (group && !this.#store.connections.groupAllowed(this.account, params.chat_id)) { fail('Бота нет в этой группе или его добавили не вы — экран «Система»'); return true; }
+    if (!group && !connection) { fail('Бот не подключён к аккаунту — экран «Система»'); return true; }
     const last = this.#store.telegram.lastIncomingAt(this.account, params.chat_id);
-    if (!last || Date.now() - Date.parse(last) > WINDOW_MS) { fail('Окно 24 часа закрыто: клиент давно не писал — ответьте в Telegram'); return true; }
+    if (!group && (!last || Date.now() - Date.parse(last) > WINDOW_MS)) { fail('Окно 24 часа закрыто: клиент давно не писал — ответьте в Telegram'); return true; }
     let sent: { message_id: number };
     try {
       sent = await this.call('sendMessage', {
-        business_connection_id: connection.id, chat_id: Number(params.chat_id), text: params.text,
+        ...(group ? {} : { business_connection_id: connection!.id }), chat_id: Number(params.chat_id), text: params.text,
         ...(params.reply_to_message_id ? { reply_parameters: { message_id: params.reply_to_message_id, allow_sending_without_reply: true } } : {}),
       }, 30_000);
     } catch (error) {
