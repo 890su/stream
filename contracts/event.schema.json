@@ -574,20 +574,20 @@
                         "string",
                         "null"
                       ],
-                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                     },
                     "responsible": {
                       "type": [
                         "string",
                         "null"
                       ],
-                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                     },
                     "executors": {
                       "type": "array",
                       "items": {
                         "type": "string",
-                        "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                        "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                       }
                     },
                     "controller": {
@@ -595,13 +595,13 @@
                         "string",
                         "null"
                       ],
-                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                     },
                     "watchers": {
                       "type": "array",
                       "items": {
                         "type": "string",
-                        "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                        "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                       }
                     },
                     "counterparty": {
@@ -609,7 +609,7 @@
                         "string",
                         "null"
                       ],
-                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                     }
                   }
                 },
@@ -627,7 +627,7 @@
                   "properties": {
                     "party": {
                       "type": "string",
-                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                     },
                     "since": {
                       "type": "string",
@@ -685,7 +685,7 @@
                   "properties": {
                     "by": {
                       "type": "string",
-                      "pattern": "^(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:.+)$"
+                      "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                     },
                     "due": {
                       "type": "string",

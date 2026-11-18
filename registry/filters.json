@@ -12,10 +12,12 @@
     ] },
     { "id": "new", "title": "Новые", "all": [
       { "field": "status", "op": "eq", "value": "inbox" },
+      { "field": "filed", "op": "eq", "value": false },
       { "field": "involves_me", "op": "eq", "value": true }
     ] },
     { "id": "control", "title": "На контроле", "all": [
       { "field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"] },
+      { "field": "filed", "op": "eq", "value": false },
       { "field": "role.controller", "op": "eq", "value": "me" },
       { "field": "role.executors", "op": "excludes", "value": "me" }
     ] },

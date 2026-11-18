@@ -1,6 +1,6 @@
 // One-tap actions of a task card (P14): which actions a task offers by status and roles, the task change each
 // one makes, due-date chips, and the parties a task can be handed to. Pure: no DOM — tested in node.
-import { partyOf, PARTY_LABELS } from './parties.js';
+import { partyOfEvent, partyName } from './parties.js';
 
 const ACTION_LABELS = { accept: 'Принять', delegate: 'Поручить…', defer: 'Отложить…', wait: 'Жду…', done: 'Готово', verify: 'Проверил', reopen: 'Вернуть в работу', cancel: 'Отменить' };
 export const actionLabel = (action) => ACTION_LABELS[action] ?? action;
@@ -44,32 +44,12 @@ export function dueChips(now = new Date()) {
   return [{ label: 'сегодня', due: at(0) }, { label: 'завтра', due: at(1) }, { label: 'на неделе', due: at(toFriday) }];
 }
 
-const telegramOf = (view) => view.event?.payload?.data?.telegram;
-
-// A party's name: the label, else the name in the task's conversations, else the number or the text.
-export function partyName(party, views = []) {
-  if (PARTY_LABELS[party]) return PARTY_LABELS[party];
-  if (party.startsWith('name:')) return party.slice(5);
-  if (party.startsWith('tel:')) {
-    const number = party.slice(4);
-    for (const view of views) {
-      const data = view.event?.payload?.data?.call ?? view.event?.payload?.data?.sms;
-      if (data?.number === number && data.name?.trim()) return data.name.trim();
-    }
-    return number;
-  }
-  for (const view of views) {
-    const telegram = telegramOf(view);
-    if (telegram && partyOf(view.event.author) === party) return telegram.from_name || telegram.chat_title || party;
-  }
-  return party;
-}
-
-// Who a task can be handed to from its conversations: the authors of its messages (not me), without repeats.
+// Who a task can be handed to (or waited for) from its conversations: the authors of its messages — callers of
+// incoming calls and SMS too — not me, without repeats.
 export function delegateOptions(views) {
   const seen = new Map();
   for (const view of views) {
-    const party = partyOf(view.event.author);
+    const party = partyOfEvent(view.event);
     if (party !== 'me' && !seen.has(party)) seen.set(party, { party, name: partyName(party, views) });
   }
   return [...seen.values()];

@@ -1,7 +1,7 @@
 // «О каком деле?» right under a message (CONCEPT.md §2.8): the triage was not sure which case the message
 // belongs to. Options: the case it went to (✓), other likely ones, «Новое дело». The owner's tap moves the
 // message (a closed case comes back to work) or confirms it; the answer is the owner's task_change.
-import { makeTaskChange } from './shared.js';
+import { makeTaskChange, ownTask } from './shared.js';
 import { snippet } from './projection.js';
 import { isOpen } from './taskfold.js';
 
@@ -50,7 +50,7 @@ export function setupQuestions({ getView, getTask, queue, notify }) {
     try {
       if (target === chosen) { await save(chosen, { op: 'update', add: [view.id] }); return; } // confirmed
       if (target === 'new') {
-        await save(crypto.randomUUID(), { op: 'create', title: snippet(view).slice(0, 120), assignee: 'me', status: 'todo', add: [view.id] });
+        await save(crypto.randomUUID(), ownTask(snippet(view).slice(0, 120), view.id));
       } else {
         const task = getTask(target);
         await save(target, { op: 'update', add: [view.id], ...(task && !isOpen(task) ? { status: 'todo' } : {}) });

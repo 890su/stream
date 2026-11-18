@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { actionsFor, changeFor, dueChips, partyName, delegateOptions } from '../web/taskactions.js';
+import { actionsFor, changeFor, dueChips, delegateOptions } from '../web/taskactions.js';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
+import { partyName } from '../web/parties.js';
 
 // One-tap task actions by status and roles (P14). Names and numbers are made up.
 const roles = (executors: string[] = []) => ({ author: 'me', responsible: 'me', executors, controller: null, watchers: [], counterparty: null });

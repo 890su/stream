@@ -53,7 +53,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
 | `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), budget | `Triage`, `streamOf` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) | `anthropicPlanner` |
-| `fold.ts` | tasks as fold of `task_change` (server side) | `foldTasks`, `isOpen` |
+| `fold.ts` | tasks as fold of `task_change` (server side); old tasks get roles from `assignee` | `foldTasks`, `isOpen` |
+| `parties.ts` | parties and roles: pattern, author → party, incoming call / SMS → caller, phone number form, default controller (client copy `web/parties.js`) | `isParty`, `partyOf`, `partyOfEvent`, `phoneNumber`, `defaultController` |
 
 ## Client — `web/` (plain ES modules, no bundler; new module → `VERSIONED` in `src/server/static.ts` and `web/sw.js`)
 
@@ -65,7 +66,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `app.js` | entry: wires everything, message action dispatch, «Беседы · Задачи · Лента» switch (old saved views map to new) |
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter; paging |
-| `tasklist.js` / `days.js` | a task row of the «Задачи» view; day pill labels |
+| `tasklist.js` / `days.js` | a task row of the «Задачи» view (who does it — in every list but «Мои»); day pill labels |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
 | `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report (also «Проверил» on a task in review); pure report parsing |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
@@ -84,11 +85,12 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter`, `visibleTasks` |
 | `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry; `conversationKeys` (an own note joins the conversation it continues or answers); `withWhom` |
 | `details.js` / `taskdetails.js` | right panel «Подробности»: a task (roles, one-tap actions, due chips, messages, history) or a message (versions, tasks) |
-| `taskactions.js` | pure: actions a task offers by status and roles (`actionsFor`), the change of each (`changeFor`; `'report'` = the done card), due chips, party names, delegate options |
+| `taskactions.js` | pure: actions a task offers by status and roles (`actionsFor`), the change of each (`changeFor`; `'report'` = the done card), due chips, delegate and «Жду…» options (callers included) |
+| `parties.js` | pure: parties and roles (mirror of `src/tasks/parties.ts`) and `partyName` — a party in words for rows, plaques and details |
 | `chatview.js` | the bar of an open conversation: title, «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «Не отслеживать» |
 | `system.js` | System screen: sources, connections, sends, exclusions |
 | `versioncard.js` / `picker.js` | versions of a message (left to right); link picker |
-| `shared.js` | builders of entries: message, share, correction, task change |
+| `shared.js` | builders of entries: message, share, correction, task change, the owner's own task (`ownTask`) |
 | `outbox.js` / `sync.js` / `db.js` | device queue, sending, IndexedDB |
 | `live.js` | SSE client with reconnect |
 | `voice.js` | voice recorder |

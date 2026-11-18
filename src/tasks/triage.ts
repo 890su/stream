@@ -7,7 +7,7 @@ import { tasksConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { stateChanged } from '../server/system.ts';
 import { foldTasks, isOpen } from './fold.ts';
-import { isParty, partyOf } from './parties.ts';
+import { defaultController, isParty, partyOf, partyOfEvent } from './parties.ts';
 import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
@@ -54,6 +54,11 @@ function describe(event: JournalEvent, store: JournalStore): { text: string; tag
 }
 
 function from(event: JournalEvent): string {
+  // The phone companion stores every call and SMS as mine; an incoming one is from the caller.
+  if (partyOfEvent(event) !== partyOf(event.author)) {
+    const phone = (event.payload.data?.call ?? event.payload.data?.sms) as { name?: string; number?: string } | undefined;
+    return phone?.name?.trim() || phone?.number || 'скрытый номер';
+  }
   if (event.author === 'me') return 'владелец';
   const telegram = event.payload.data?.telegram as { from_name?: string; chat_title?: string } | undefined;
   return telegram?.from_name || telegram?.chat_title || event.author;
@@ -114,7 +119,7 @@ export class Triage {
       const continuation = event.payload.data?.continuation as { target: string; on: boolean } | undefined;
       const linked = [event.reply_to, continuation?.on ? continuation.target : undefined].filter(Boolean) as string[];
       return {
-        id: event.id, time: event.ts, source: streamOf(event), from: from(event), party: partyOf(event.author), text, tags,
+        id: event.id, time: event.ts, source: streamOf(event), from: from(event), party: partyOfEvent(event), text, tags,
         ...(event.reply_to ? { reply_to: event.reply_to } : {}), ...(continuation?.on ? { continues: continuation.target } : {}),
         in_tasks: [...new Set([event.id, ...linked].flatMap(taskOf))],
       };
@@ -175,10 +180,9 @@ export class Triage {
       const executors = template?.filed ? [template.assignee] : [...new Set(planned.executors.filter(valid))];
       const responsible = template?.filed ? 'me' : valid(planned.responsible) ? planned.responsible : 'me';
       const author = valid(planned.author) ? planned.author : partyOfMessage.get(add[0]!);
-      return {
-        ...(author ? { author } : {}), responsible, executors,
-        ...(responsible === 'me' && executors.length && !executors.includes('me') ? { controller: 'me' } : {}),
-      };
+      // Work I hand to others, or ask someone else to answer for, is under my control («На контроле»).
+      const controller = defaultController({ author, responsible, executors });
+      return { ...(author ? { author } : {}), responsible, executors, ...(controller ? { controller } : {}) };
     };
     let written = 0;
     outcomes.forEach((planned, index) => {

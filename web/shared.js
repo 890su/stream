@@ -37,6 +37,11 @@ export function makeTaskChange(taskId, task) {
   };
 }
 
+// «Сделать задачей» / «Новое дело» by the owner: a task of mine from one message (P14 roles, no old `assignee`).
+export function ownTask(title, messageId) {
+  return { op: 'create', title, roles: { author: 'me', responsible: 'me', executors: ['me'] }, status: 'todo', add: [messageId] };
+}
+
 // An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4).
 export function makeCorrection(targetId, op, { text, tags = [], target, title } = {}) {
   return {

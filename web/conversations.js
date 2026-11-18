@@ -3,6 +3,7 @@
 import { chatOf } from './projection.js';
 import { isOpen, involvesMe, dueState } from './taskfold.js';
 import { phoneLabel } from './phonebubble.js';
+import { phoneNumber } from './parties.js';
 
 // The conversation a message belongs to: one Telegram chat across both accounts, one phone number, own notes.
 export function conversationOf(event) {
@@ -11,7 +12,7 @@ export function conversationOf(event) {
   const chat = data.telegram?.chat_id ?? data.outbound?.chat_id;
   if (chat !== undefined && chat !== null) return `tg:${chat}`;
   if (event?.kind === 'call' || event?.kind === 'sms') {
-    const number = String((event.kind === 'call' ? data.call?.number : data.sms?.number) ?? '').replace(/[^+\d]/g, '').replace(/^00/, '+');
+    const number = phoneNumber(event.kind === 'call' ? data.call?.number : data.sms?.number);
     return number ? `tel:${number}` : null;
   }
   if (event?.author === 'me' && (event.source === 'app' || event.source === 'share')) return 'me';
@@ -54,8 +55,10 @@ export function conversationState(conversation, { now = new Date(), config }) {
   const taskOf = new Map(conversation.tasks.map((task) => [task.id, task]));
   const open = conversation.tasks.filter((task) => isOpen(task) && !task.filed);
   const mineOpen = open.filter(involvesMe);
+  // An urgent tag counts while its message is untriaged or in an open task: done with, it no longer burns.
+  const live = (view) => !view.taskIds?.length || view.taskIds.some((id) => { const task = taskOf.get(id); return task && isOpen(task); });
   if (mineOpen.some((task) => ['today', 'overdue'].includes(dueState(task, now)))
-    || views.some((view) => view.tags?.some((tag) => config.urgent_tags.includes(tag)))) return 'urgent';
+    || views.some((view) => view.tags?.some((tag) => config.urgent_tags.includes(tag)) && live(view))) return 'urgent';
 
   // A message is meaningful unless it belongs only to filed tasks; untriaged is meaningful.
   const meaningful = (view) => {

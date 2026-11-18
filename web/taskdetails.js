@@ -1,7 +1,8 @@
 // Details of a case (task) in the right panel (CONCEPT.md §5): name, status and one-tap actions, roles, due date,
 // the triage's note, the closing report, «Задача выполнена?», the whole conversation and the history of changes.
 import { STATUSES, describeChange } from './taskfold.js';
-import { actionsFor, actionLabel, changeFor, dueChips, partyName, delegateOptions } from './taskactions.js';
+import { actionsFor, actionLabel, changeFor, dueChips, delegateOptions } from './taskactions.js';
+import { partyName } from './parties.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -94,7 +95,7 @@ export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
     ...(others ? [button('chip suggest', 'ИИ', () => apply(action, 'ai'))] : []),
     button('chip suggest', 'Другой…', () => {
       const name = (window.prompt('Кто? Имя или телефон') ?? '').trim();
-      if (name) apply(action, /^\+\d+$/.test(name) ? `tel:${name}` : `name:${name}`);
+      if (name) apply(action, /^\+\d+$/.test(name) ? `tel:${name}` : `name:${name.slice(0, 115)}`);
     }),
   ];
   const ask = {

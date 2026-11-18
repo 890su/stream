@@ -159,7 +159,9 @@ test('a list row: last message, open tasks, the state in words; finished ones fo
 
 test('task plaques: open tasks only, executor in words, due date', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { plaqueFacts, partyName } = await import('../web/convtasks.js');
+  const { plaqueFacts } = await import('../web/convtasks.js');
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { partyName } = await import('../web/parties.js');
   const ask = tg('by', '778', '2026-11-18T09:00:00', 'нужен счёт');
   const events = [ask,
     change('q1', '2026-11-18T09:05:00', { op: 'create', title: 'Выставить счёт', status: 'todo', due: '2026-11-17', add: [ask.id], roles: { responsible: 'me', executors: ['tg:778'] } }),
@@ -169,9 +171,9 @@ test('task plaques: open tasks only, executor in words, due date', async () => {
   assert.deepEqual(plaques.map((item: any) => item.title), ['Выставить счёт']);
   assert.match(plaques[0].facts, /^сделать · Анна Тестова · просрочено, до/);
   assert.equal(plaques[0].overdue, true);
-  assert.equal(partyName('me', person), 'Я');
-  assert.equal(partyName('name:Пётр', person), 'Пётр');
-  assert.equal(partyName('tel:+48111', person), 'tel:+48111', 'unknown stays as it is');
+  assert.equal(partyName('me', person.views), 'Я');
+  assert.equal(partyName('name:Пётр', person.views), 'Пётр');
+  assert.equal(partyName('tel:+48111', person.views), '+48111', 'an unknown number as it is');
 });
 
 test('own notes that continue or answer a message join its conversation, through chains', () => {
@@ -191,4 +193,14 @@ test('own notes that continue or answer a message join its conversation, through
   assert.equal(byKey.get('tel:+48600300400').state, 'mine', 'a description is not an answer to the caller');
   assert.deepEqual(byKey.get('tg:880').views.map((view: any) => view.id), [ask.id, answer.id], 'a reply without a recipient stays in the chat');
   assert.deepEqual(byKey.get('me').views.map((view: any) => view.id), [plain.id]);
+});
+
+test('an urgent tag counts while its message is untriaged or in an open task', () => {
+  const hot = tg('by', '504', '2026-11-18T09:00:00', 'течёт', { tags: ['#срочно'] });
+  const reply = mine('504', '2026-11-18T09:10:00', 'еду');
+  assert.equal(run([hot, reply])[0].state, 'urgent', 'untriaged');
+  const open = change('h1', '2026-11-18T09:05:00', { op: 'create', title: 'Течь', status: 'todo', add: [hot.id], roles: { responsible: 'me', executors: ['tg:504'], controller: 'me' } });
+  assert.equal(run([hot, reply, open])[0].state, 'urgent', 'in an open task');
+  const closed = change('h1', '2026-11-18T09:20:00', { op: 'update', status: 'done' });
+  assert.equal(run([hot, reply, open, closed])[0].state, 'theirs', 'its task is done');
 });

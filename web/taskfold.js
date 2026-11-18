@@ -1,6 +1,6 @@
 // Tasks as the fold of task_change events (CONCEPT.md §2.8); the server folds the same way (src/tasks/fold.ts).
 // Pure: no DOM, no storage — tested in node.
-import { partyOf, ROLE_KEYS } from './parties.js';
+import { defaultController, partyOf, ROLE_KEYS } from './parties.js';
 
 const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred']);
 export const isOpen = (task) => OPEN.has(task.status);
@@ -12,10 +12,12 @@ const order = (a, b) => a.ts.localeCompare(b.ts) || (a.received_at ?? '￿').loc
 
 const emptyRoles = () => ({ author: null, responsible: null, executors: [], controller: null, watchers: [], counterparty: null });
 
-// A task whose changes never carried roles: who does it comes from the old `assignee` / `person` fields.
+// A task whose changes never carried roles: who does it comes from the old `assignee` / `person` fields. I am
+// responsible; work handed to someone else (a person, AI, the system) is under my control («На контроле»).
 function legacyRoles(task) {
   const executors = task.assignee === 'person' ? (task.person ? [`name:${task.person}`] : []) : [task.assignee];
-  return { ...emptyRoles(), author: partyOf(task.createdBy), responsible: 'me', executors };
+  const roles = { ...emptyRoles(), author: partyOf(task.createdBy), responsible: 'me', executors };
+  return { ...roles, controller: defaultController(roles) };
 }
 
 // The old display field, derived: the kind of the first executor.
@@ -45,6 +47,8 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     if (change.remind_at !== undefined) task.remindAt = change.remind_at;
     if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }
     if (change.roles) {
+      // The first roles change of an old task merges into its old roles, not into empty ones.
+      if (!hasRoles.has(id) && change.op !== 'create') task.roles = legacyRoles(task);
       hasRoles.add(id);
       for (const key of ROLE_KEYS) {
         if (change.roles[key] !== undefined) task.roles[key] = change.roles[key] ?? (key === 'executors' || key === 'watchers' ? [] : null);

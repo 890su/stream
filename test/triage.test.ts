@@ -251,3 +251,23 @@ test('a filed template gets its executor from the registry; the fallback task ha
     assert.deepEqual(lastChange(s, 'Разобрать').roles, { author: 'me', responsible: 'me', executors: [] });
   } finally { s.cleanup(); }
 });
+
+test('an incoming SMS is the caller\'s: party tel:, from by name; a tel: responsible from the AI is kept', async () => {
+  const s = setup((input) => ({ tasks: [planned({ title: 'Перезвонить', responsible: 'tel:+48600100200', executors: [], author: input.messages[0]!.party, message_ids: [input.messages[0]!.id] })] }));
+  try {
+    s.add(event({ source: 'android_phone', kind: 'sms', payload: { text: 'перезвоните', data: { sms: { direction: 'in', number: '+48 600 100 200', name: 'Ян Тестовый', sent_at: '2026-11-18T09:00:00.000Z' } } } }));
+    for (const batch of s.triage.ready(Date.now() + 3_600_000)) await s.triage.run(batch);
+    assert.equal(s.calls[0]!.messages[0]!.party, 'tel:+48600100200');
+    assert.equal(s.calls[0]!.messages[0]!.from, 'Ян Тестовый');
+    assert.deepEqual(lastChange(s, 'Перезвонить').roles, { author: 'tel:+48600100200', responsible: 'tel:+48600100200', executors: [] });
+  } finally { s.cleanup(); }
+});
+
+test('what I ask someone else to answer for is under my control', async () => {
+  const s = setup((input) => ({ tasks: [planned({ title: 'Счёт от Паши', responsible: 'tg:10', executors: [], author: 'me', message_ids: [input.messages[0]!.id] })] }));
+  try {
+    s.add(telegram('10', 'пришли счёт'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.deepEqual(lastChange(s, 'Счёт от Паши').roles, { author: 'me', responsible: 'tg:10', executors: [], controller: 'me' });
+  } finally { s.cleanup(); }
+});
