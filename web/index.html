@@ -17,13 +17,14 @@
 </head>
 <body>
   <header class="topbar">
-    <button id="drawer-button" type="button" class="icon-button" aria-label="Темы и метки" aria-controls="drawer">
+    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры: контакты, источники, метки" aria-controls="drawer">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
     <div class="title">
       <h1>Stream</h1>
       <p id="network" role="status">подключение…</p>
     </div>
+    <button id="mode-toggle" type="button" class="mode-toggle" aria-label="Показать сообщения подряд">Дела</button>
     <button id="filter-reset" type="button" class="filter-reset" hidden aria-label="Сбросить фильтр по меткам">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5Z"/><path d="m16 16 5 5M21 16l-5 5"/></svg>
       <span id="filter-count"></span>
@@ -49,15 +50,16 @@
   </div>
 
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
-  <aside id="drawer" class="drawer" hidden aria-label="Темы и метки">
+  <aside id="drawer" class="drawer" hidden aria-label="Фильтры">
     <header class="drawer-head">
-      <h2>Темы</h2>
+      <h2>Фильтры</h2>
       <button id="drawer-close" type="button" class="icon-button" aria-label="Закрыть панель">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </header>
     <div class="drawer-body">
-      <div id="drawer-topics"></div>
+      <h3 class="drawer-section">Контакты</h3>
+      <div id="drawer-contacts"></div>
       <h3 class="drawer-section">Показывать</h3>
       <div id="drawer-sources" class="chips"></div>
       <h3 class="drawer-section">Метки</h3>

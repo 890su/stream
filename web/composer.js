@@ -299,7 +299,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     chat: (chat) => { chatDefault = chat; recipients.reset(chat); },
     proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),
-    enterTopic: (state) => { topic = state; resetTags(tagRow.active()); text.placeholder = 'Сообщение в тему'; },
+    enterTopic: (state, placeholder = 'Сообщение в тему') => { topic = state; resetTags(tagRow.active()); text.placeholder = placeholder; },
     leaveTopic: () => { topic = null; resetTags(tagRow.active()); text.placeholder = 'Сообщение'; },
     queue,
     record: () => { locked = true; return startRecording(); },

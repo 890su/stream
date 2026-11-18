@@ -61,9 +61,10 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 |---|---|
 | `index.html` | markup of the single screen, dialogs and panels |
 | `styles.css` → `feed.css` → `panels.css` → `screens.css` | styles, loaded in this order (cascade) |
-| `app.js` | entry: wires everything, message action dispatch |
+| `app.js` | entry: wires everything, message action dispatch, «Дела» ⇄ «Сообщения» toggle |
 | `settings.js` | status line, settings dialog, service worker registration |
-| `feed.js` | renders the feed: bursts, topic lines, day pills, filters, folded finished tasks, paging |
+| `feed.js` | renders the feed: cases (headers + messages) or messages in a row (bursts, topic lines, folded finished tasks); day pills, filters, paging |
+| `cases.js` / `caserow.js` | pure: messages → cases, order, what shows under a header; the case header |
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
@@ -73,12 +74,12 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `recipients.js` | «кому» side of the row: address book, chosen recipient, full list with search and pins |
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
-| `drawer.js` | left panel: topics, sources, «Завершённые», tags |
+| `drawer.js` | left panel — filters: contacts (chats), sources, «Завершённые», tags |
 | `taskfold.js` | pure: tasks from `task_change`, filters, done stages |
 | `taskpanel.js` | right panel «Задачи»: list, filters, task card |
 | `chatview.js` | one messenger chat in the feed, «Не отслеживать» |
 | `system.js` | System screen: sources, connections, sends, exclusions |
-| `topicscreen.js` / `thread.js` / `picker.js` | topic screen; history window; link picker |
+| `topicscreen.js` / `thread.js` / `picker.js` | topic or case screen; history window; link picker |
 | `shared.js` | builders of entries: message, share, correction, task change |
 | `outbox.js` / `sync.js` / `db.js` | device queue, sending, IndexedDB |
 | `live.js` | SSE client with reconnect |
@@ -94,7 +95,7 @@ the device (`web/projection.js`, `web/taskfold.js`); new events reach all device
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
-| `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding |
+| `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», done folding, feed of cases (`fresh_h`, `expand_last`) |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere

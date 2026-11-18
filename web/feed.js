@@ -1,8 +1,11 @@
-// The feed: renders projected messages (bursts, topics, day pills, folded finished tasks), filters, paging and live updates.
+// The feed: cases (CONCEPT.md §2.9) or messages in a row (bursts, topics, day pills, folded finished tasks), filters,
+// paging and live updates.
 import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey, chatOf } from './projection.js';
 import { foldTasks, tasksByMessage, doneStage } from './taskfold.js';
+import { feedItems, shownViews, caseMembers } from './cases.js';
+import { caseHeader } from './caserow.js';
 
 const dayFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long' });
 const dayFormatYear = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -18,20 +21,7 @@ function dayLabel(date) {
   return (date.getFullYear() === today.getFullYear() ? dayFormat : dayFormatYear).format(date);
 }
 
-// Topics for the drawer: title, first and last message, size, last activity, archived.
-function topicsOf(views, allChains) {
-  const byRoot = new Map();
-  for (const view of views) {
-    const chain = allChains.get(view.id);
-    if (!chain) continue;
-    const topic = byRoot.get(chain.root) ?? { root: chain.root, title: chain.title, named: chain.named, archived: chain.archived, ids: chain.ids, first: view, last: view };
-    if (Date.parse(view.event.ts) > Date.parse(topic.last.event.ts)) topic.last = view;
-    byRoot.set(chain.root, topic);
-  }
-  return [...byRoot.values()].sort((a, b) => Date.parse(b.last.event.ts) - Date.parse(a.last.event.ts));
-}
-
-export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenCase = () => {} }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -48,10 +38,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   let tagFilter = new Set(); // feed shows messages carrying every selected tag (drawer.js)
   let sourceFilter = null; // 'me' | 'telegram:by' | 'phone' | 'system'… (drawer.js)
   let chatFilter = null; // one messenger chat { key, account, chat_id, title } (app.js, chat bar)
-  let topicList = []; // all topics, for the drawer
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   let showDone = false; // messages of long-finished tasks are hidden unless this is on (drawer.js)
   const expanded = new Set(); // folded rows of finished tasks the reader opened
+  let mode = 'cases'; // 'cases' — the feed of cases, 'messages' — messages in a row (CONCEPT.md §2.9)
+  const caseState = new Map(); // task id -> { state: 'all' | 'none', at } — the reader's choice under a case header
 
   async function load(reference, queued) {
     if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
@@ -93,7 +84,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     const shown = (view) => showDone || view.doneStage !== 'hidden';
     const visible = live.filter((view) => (showArchive || (!view.archived && !inArchivedTopic(view))) && tagged(view) && inSource(view) && inChat(view) && shown(view));
     visibleList = visible;
-    topicList = topicsOf(live, allChains);
     onQueue({ total: queued.length, failed: queued.filter((entry) => entry.error).length });
 
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
@@ -117,6 +107,14 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
     };
     let lastDay;
     let lastTs = 0;
+    const pill = (date) => {
+      if (dayKey(date) === lastDay) return;
+      lastDay = dayKey(date);
+      const node = document.createElement('div');
+      node.className = 'date-pill';
+      node.textContent = dayLabel(date);
+      children.push(node);
+    };
     // A message and its continuations share one bubble; each keeps its own actions and history.
     // Messages close in time only stand closer together (time alone is not a connection).
     // Messages whose tasks are all finished fold into one row per task set (CONCEPT.md §2.8).
@@ -140,16 +138,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
       row.onclick = () => { if (open) expanded.delete(item.key); else expanded.add(item.key); render(); };
       return row;
     };
-    for (const entry of items) {
+    if (mode === 'messages') for (const entry of items) {
       if (entry.key) {
-        const date = new Date(entry.views[0].event.ts);
-        if (dayKey(date) !== lastDay) {
-          lastDay = dayKey(date);
-          const pill = document.createElement('div');
-          pill.className = 'date-pill';
-          pill.textContent = dayLabel(date);
-          children.push(pill);
-        }
+        pill(new Date(entry.views[0].event.ts));
         lastTs = Date.parse(entry.views.at(-1).event.ts);
         children.push(foldRow(entry));
         if (!expanded.has(entry.key)) continue;
@@ -157,15 +148,31 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
       const groups = entry.key ? bursts(entry.views) : [entry.group];
       for (const group of groups) renderGroup(group, Boolean(entry.key) && entry.views.every((view) => view.doneStage !== 'collapsed'));
     }
-    function renderGroup(group, dim) {
-      const date = new Date(group[0].event.ts);
-      if (dayKey(date) !== lastDay) {
-        lastDay = dayKey(date);
-        const pill = document.createElement('div');
-        pill.className = 'date-pill';
-        pill.textContent = dayLabel(date);
-        children.push(pill);
+    if (mode === 'cases') renderCases();
+    // Cases: a header, then fresh or chosen messages; messages without a task in between, as they are.
+    function renderCases() {
+      const now = Date.now();
+      const options = { now, freshH: limits.tasks?.fresh_h ?? 6, expandLast: limits.tasks?.expand_last ?? 10 };
+      let run = [];
+      const flush = () => { for (const group of bursts(run)) renderGroup(group, false); run = []; };
+      for (const item of feedItems(visible, tasksById, { now: new Date(now), fadeDays: limits.tasks?.done_fade_days ?? 2, showDone })) {
+        if (item.kind === 'message') { run.push(item.view); continue; }
+        flush();
+        const id = item.task.id;
+        const chosen = caseState.get(id);
+        // «Hide» lasts until the case gets a new message.
+        const state = chosen?.state === 'none' && item.last > chosen.at ? undefined : chosen?.state;
+        const views = shownViews(item, state, options);
+        pill(new Date(item.last));
+        lastTs = item.last;
+        children.push(caseHeader(item, { shown: views.length, onOpen: () => onOpenCase(id),
+          onToggle: () => { caseState.set(id, { state: views.length ? 'none' : 'all', at: item.last }); render(); } }));
+        for (const group of bursts(views)) renderGroup(group, item.stage === 'faded', true);
       }
+      flush();
+    }
+    function renderGroup(group, dim, inCase = false) {
+      if (!inCase) pill(new Date(group[0].event.ts));
       const close = Date.parse(group[0].event.ts) - lastTs <= limits.burst_gap_min * 60000;
       lastTs = Date.parse(group.at(-1).event.ts);
       let item;
@@ -175,8 +182,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
         item.className = 'burst';
         item.append(...group.map((view, index) => node(view, index === 0)));
       }
-      item.classList.toggle('close', close && children.at(-1)?.className !== 'date-pill');
+      item.classList.toggle('close', inCase || (close && children.at(-1)?.className !== 'date-pill'));
       item.classList.toggle('done-dim', dim);
+      item.classList.toggle('in-case', inCase);
       children.push(item);
     }
     if (!visible.length) {
@@ -257,8 +265,12 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {} }) {
   function setShowDone(value) { showDone = value; return render(); }
   function setSourceFilter(key) { sourceFilter = key || null; return render({ bottom: true }); }
   function setChatFilter(chat) { chatFilter = chat || null; return render({ bottom: true }); }
+  function setMode(next) { mode = next === 'messages' ? 'messages' : 'cases'; return render({ bottom: true }); }
+  // Messages of one case, oldest first, for the case screen (topicscreen.js).
+  const caseViews = (taskId) => { const task = taskList.find((item) => item.id === taskId); return task ? caseMembers(task, viewList) : []; };
 
-  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], topics: () => topicList,
+  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, caseViews,
+    task: (id) => taskList.find((task) => task.id === id),
     setSourceFilter, sourceFilter: () => sourceFilter, setChatFilter, chatFilter: () => chatFilter, tasks: () => taskList,
     setShowDone, showDone: () => showDone,
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),

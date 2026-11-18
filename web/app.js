@@ -27,6 +27,25 @@ let taskPanel;
 let chatView; // { open(chat), close() } — one messenger chat in the feed (CONCEPT.md §8.2)
 
 // The reset button shows how many tags filter the feed.
+// «Дела» ⇄ «Сообщения» (CONCEPT.md §2.9); the choice is remembered on this device.
+function setupModeToggle(feed) {
+  const button = $('#mode-toggle');
+  const show = (mode) => {
+    button.textContent = mode === 'messages' ? 'Сообщения' : 'Дела';
+    button.setAttribute('aria-label', mode === 'messages' ? 'Сейчас сообщения подряд. Показать дела' : 'Сейчас дела. Показать сообщения подряд');
+  };
+  let saved = 'cases';
+  try { saved = localStorage.getItem('stream.feedMode') ?? 'cases'; } catch { /* private mode */ }
+  feed.setMode(saved);
+  show(saved);
+  button.onclick = async () => {
+    const next = feed.mode() === 'cases' ? 'messages' : 'cases';
+    try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
+    show(next);
+    await feed.setMode(next);
+  };
+}
+
 function updateFilter() {
   const count = (feedRef?.tagFilter().length ?? 0) + (feedRef?.sourceFilter() ? 1 : 0);
   $('#filter-reset').hidden = !count;
@@ -85,7 +104,7 @@ function setupMessageActions(feed, composer, config) {
     if (!title || !renaming || title === renaming.title) return;
     await composer.queue(makeCorrection(renaming.root, 'topic', { title })).catch((error) => notify(error.message));
   };
-  topicScreen = setupTopicScreen({ feed, composer, onRename: renameTopic });
+  topicScreen = setupTopicScreen({ feed, composer, onRename: renameTopic, onTaskCard: (id) => taskPanel.open(id) });
   picker = setupPicker({ getVisible: () => feed.visible(), getChain: (id) => feed.chain(id), notify });
   const link = (view, target) => composer.queue(makeCorrection(view.id, 'link', { target })).catch((error) => notify(error.message));
   // Connect a message to any other one chosen in the picker.
@@ -99,13 +118,7 @@ function setupMessageActions(feed, composer, config) {
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
-    onJump: (id) => feed.jump(id),
-    onArchiveTopic: async (topic) => {
-      const root = feed.view(topic.root);
-      const op = topic.archived ? 'topic_unarchive' : 'topic_archive';
-      await correct(root, op);
-      notify(topic.archived ? 'Тема возвращена из архива' : 'Тема в архиве', { label: 'Отменить', run: () => correct(root, topic.archived ? 'topic_archive' : 'topic_unarchive') });
-    },
+    onContact: (chat) => chatView.open(chat),
     onFilterChange: updateFilter,
   });
   setupActions({
@@ -157,11 +170,12 @@ async function main() {
   const config = await response.json();
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
-  const feed = setupFeed({ notify, onQueue, limits: config, onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); taskPanel?.render(); composerRef?.refreshTags(); } });
+  const feed = setupFeed({ notify, onQueue, limits: config, onOpenCase: (id) => topicScreen.openCase(id), onRender: () => { topicScreen?.render(); bulk?.repaint(); drawer?.render(); taskPanel?.render(); composerRef?.refreshTags(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
   composerRef = composer;
+  setupModeToggle(feed);
   setupMessageActions(feed, composer, config);
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({
