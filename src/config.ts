@@ -31,3 +31,8 @@ export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.js
   report_default: string[]; report_fields: Record<string, { title: string; type: 'datetime' | 'minutes' | 'money' | 'tags' | 'text' }>; currencies: string[];
   unsorted: { title: string; note: string };
 };
+
+// Conversations (CONCEPT.md, P14): quiet period, urgent tags, order of states in the list.
+export const conversationsConfig = JSON.parse(readFileSync(new URL('../registry/conversations.json', import.meta.url), 'utf8')) as {
+  version: number; quiet_days: number; urgent_tags: string[]; states: string[];
+};

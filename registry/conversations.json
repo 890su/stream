@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "quiet_days": 7,
+  "urgent_tags": ["#срочно"],
+  "states": ["urgent", "mine", "theirs", "quiet", "done"]
+}
