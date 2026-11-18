@@ -7,7 +7,8 @@ import { tasksConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { stateChanged } from '../server/system.ts';
 import { foldTasks, isOpen } from './fold.ts';
-import type { PlanInput, PlanMessage, Planner } from './planner.ts';
+import { isParty, partyOf } from './parties.ts';
+import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
 // notes), then go together to the planner, which splits them into new tasks and additions to open ones.
@@ -106,14 +107,14 @@ export class Triage {
     const snippet = (id: string) => { const event = this.#store.getEvent(id); return event ? describe(event, this.#store).text.slice(0, 160) : ''; };
     const asContext = (task: (typeof tasks)[number]) => {
       const events = task.messages.slice(-5).map((id) => this.#store.getEvent(id)).filter((event): event is JournalEvent => Boolean(event));
-      return { id: task.id, title: task.title, assignee: task.assignee, status: task.status, recent: task.messages.slice(-3).map(snippet),
+      return { id: task.id, title: task.title, assignee: task.assignee, roles: task.roles, status: task.status, recent: task.messages.slice(-3).map(snippet),
         chats: [...new Set(events.map(streamOf))], last_at: events.at(-1)?.ts ?? task.updated_at };
     };
     const toMessage = (event: JournalEvent, text: string, tags: string[]): PlanMessage => {
       const continuation = event.payload.data?.continuation as { target: string; on: boolean } | undefined;
       const linked = [event.reply_to, continuation?.on ? continuation.target : undefined].filter(Boolean) as string[];
       return {
-        id: event.id, time: event.ts, source: streamOf(event), from: from(event), text, tags,
+        id: event.id, time: event.ts, source: streamOf(event), from: from(event), party: partyOf(event.author), text, tags,
         ...(event.reply_to ? { reply_to: event.reply_to } : {}), ...(continuation?.on ? { continues: continuation.target } : {}),
         in_tasks: [...new Set([event.id, ...linked].flatMap(taskOf))],
       };
@@ -161,9 +162,24 @@ export class Triage {
     const missed = [...batchIds].filter((id) => !covered.has(id));
     const outcomes = [...output.tasks];
     if (missed.length) {
-      outcomes.push({ task_id: null, title: tasksConfig.unsorted.title, assignee: 'me', person: null, template: null, due: null,
+      outcomes.push({ task_id: null, title: tasksConfig.unsorted.title, responsible: 'me', executors: [], author: null, template: null, due: null,
         message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false, done: false, alternatives: [] });
     }
+    // Parties the planner may name: the owner, AI, the system and everyone who wrote in this batch or its context;
+    // a `name:` party is a person without an account and passes. Anything else is made up and dropped.
+    const allowed = new Set(['me', 'ai', 'system', ...messages.map((message) => message.party), ...context.map((message) => message.party)]);
+    const valid = (party: unknown): party is string => isParty(party) && (allowed.has(party) || party.startsWith('name:'));
+    const partyOfMessage = new Map([...messages, ...context].map((message) => [message.id, message.party]));
+    const rolesOf = (planned: PlannedTask, add: string[]) => {
+      const template = tasksConfig.templates.find((item) => item.name === planned.template);
+      const executors = template?.filed ? [template.assignee] : [...new Set(planned.executors.filter(valid))];
+      const responsible = template?.filed ? 'me' : valid(planned.responsible) ? planned.responsible : 'me';
+      const author = valid(planned.author) ? planned.author : partyOfMessage.get(add[0]!);
+      return {
+        ...(author ? { author } : {}), responsible, executors,
+        ...(responsible === 'me' && executors.length && !executors.includes('me') ? { controller: 'me' } : {}),
+      };
+    };
     let written = 0;
     outcomes.forEach((planned, index) => {
       const add = planned.message_ids.filter((id) => batchIds.has(id));
@@ -181,10 +197,10 @@ export class Triage {
       const change: Record<string, unknown> = existing
         ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked }
         : {
-          op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', assignee: planned.assignee,
+          op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles: rolesOf(planned, add),
           status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
           add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked,
-          ...(planned.person ? { person: planned.person } : {}), ...(planned.template ? { template: planned.template } : {}),
+          ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
         };
       try {

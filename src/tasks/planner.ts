@@ -2,11 +2,11 @@
 // tasks in, a list of tasks out. The provider (AI now, scripts later) is a setting, not a code path.
 
 export interface PlanMessage {
-  id: string; time: string; source: string; from: string; text: string; tags: string[];
+  id: string; time: string; source: string; from: string; party: string; text: string; tags: string[];
   reply_to?: string; continues?: string; in_tasks: string[];
 }
 // A task given as context: its last messages, the conversations (sources) they came from, its last activity.
-export interface PlanTask { id: string; title: string; assignee: string; status: string; recent: string[]; chats: string[]; last_at: string }
+export interface PlanTask { id: string; title: string; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string }
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
 // context — earlier messages of the same conversation, already triaged: to understand, not to assign.
 export interface PlanInput { now: string; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
@@ -14,8 +14,9 @@ export interface PlanInput { now: string; templates: PlanTemplate[]; open_tasks:
 export interface PlannedTask {
   task_id: string | null; // an open or recently closed task this continues, or null for a new one
   title: string;
-  assignee: 'me' | 'ai' | 'system' | 'person';
-  person: string | null;
+  responsible: string; // a party: who answers for the result
+  executors: string[]; // parties: who does it (may be empty)
+  author: string | null; // a party: who asked
   template: string | null;
   due: string | null;
   message_ids: string[];
@@ -40,12 +41,13 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'assignee', 'person', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives'],
         properties: {
           task_id: { type: ['string', 'null'] },
           title: { type: 'string' },
-          assignee: { type: 'string', enum: ['me', 'ai', 'system', 'person'] },
-          person: { type: ['string', 'null'] },
+          responsible: { type: 'string' },
+          executors: { type: 'array', items: { type: 'string' } },
+          author: { type: ['string', 'null'] },
           template: { type: ['string', 'null'] },
           due: { type: ['string', 'null'] },
           message_ids: { type: 'array', items: { type: 'string' } },
@@ -82,9 +84,12 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
   до трёх, самые вероятные первыми. Только при настоящем сомнении: владельца спросят прямо на сообщении. Иначе [].
 - Два разных дела в одном сообщении — две задачи. Несколько сообщений об одном деле — одна задача.
 - Болтовню, приветствия, «ок», служебное не превращай в дела: это filed: true с шаблоном chatter.
-- Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, assignee — из шаблона.
+- Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, executors — из шаблона.
 - title — коротко и по делу, по-русски, в повелительном наклонении («Перезвонить Марку про роутер»).
-- assignee: me — делает владелец; ai — ИИ может сделать сам; system — скрипт или коннектор; person — другой человек (person — кто).
+- responsible — кто отвечает за итог: me, если просят владельца или он сам взялся; иначе — сторона того, кого просят
+  (party из messages). executors — кто делает (может быть пусто, пока никто не взялся); ai / system — для шаблонов ИИ и
+  системы. author — сторона того, кто попросил. Задачи заводятся и там, где владельца нет: клиент просит напарника,
+  напарник — другого напарника; тогда me не ставится ни в одну роль.
 - due — дата ISO, только если она прямо следует из текста; иначе null.
 - confidence от 0 до 1 — насколько ты уверен в задаче и её составе.
 - Не придумывай фактов, которых нет в сообщениях.`;
