@@ -8,7 +8,7 @@
 
 Every input becomes an **event** in an append-only journal (`src/store/store.ts`, SQLite). Sources write events:
 the PWA (`/api/events`, outbox on the device), the share target, the Android companion (`/api/phone/*`) and the
-Telegram bots (`src/telegram/`). Owner actions are `correction` events; tasks (= cases = topics) are `task_change` events; replies to
+Telegram bots (`src/telegram/`). Owner actions are `correction` events; tasks (with roles: owner, executors, controller, author, watchers, counterparty) are `task_change` events; replies to
 Telegram (a recipient chosen in the «кому» row) are events with `payload.data.outbound` that create **actions** (`src/store/actions.ts`) executed by the
 bots. The **triage** (`src/tasks/triage.ts`) batches new messages per stream after a quiet window and asks the
 planner (AI, `src/tasks/anthropic.ts`) to split them into tasks. Everything shown is a **projection** computed on
