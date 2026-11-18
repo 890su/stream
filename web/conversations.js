@@ -10,7 +10,7 @@ export function conversationOf(event) {
   const chat = data.telegram?.chat_id ?? data.outbound?.chat_id;
   if (chat !== undefined && chat !== null) return `tg:${chat}`;
   if (event?.kind === 'call' || event?.kind === 'sms') {
-    const number = String((event.kind === 'call' ? data.call?.number : data.sms?.number) ?? '').replace(/[^+\d]/g, '');
+    const number = String((event.kind === 'call' ? data.call?.number : data.sms?.number) ?? '').replace(/[^+\d]/g, '').replace(/^00/, '+');
     return number ? `tel:${number}` : null;
   }
   if (event?.author === 'me' && (event.source === 'app' || event.source === 'share')) return 'me';
@@ -33,8 +33,18 @@ const titleOf = (view, key) => {
   return chatOf(event)?.title ?? 'Чат';
 };
 
-const isMine = (view) => view.event.author === 'me';
-const incomingChat = (view) => !isMine(view) && view.event.payload?.data?.telegram;
+// Who spoke last: 'out' (me), 'in' (them), 'unknown'. Phone events are all stored as `me`; their direction decides.
+function directionOf(event) {
+  if (event.kind === 'call' || event.kind === 'sms') {
+    const direction = (event.kind === 'call' ? event.payload?.data?.call : event.payload?.data?.sms)?.direction;
+    if (direction === 'out') return 'out';
+    return ['in', 'missed', 'rejected'].includes(direction) ? 'in' : 'unknown';
+  }
+  return event.author === 'me' ? 'out' : 'in';
+}
+const isMine = (view) => directionOf(view.event) === 'out';
+const isIncoming = (view) => directionOf(view.event) === 'in';
+const incomingChat = (view) => isIncoming(view) && view.event.payload?.data?.telegram;
 
 // 'urgent' | 'mine' | 'theirs' | 'quiet' | 'done' — `conversation` needs views, tasks, last, key, group.
 export function conversationState(conversation, { now = new Date(), config }) {
@@ -53,16 +63,16 @@ export function conversationState(conversation, { now = new Date(), config }) {
   };
   // In a group, someone else's message matters to me only when it answers mine or is in a task where I have a role.
   const matters = (view) => {
-    if (isMine(view) || !conversation.group) return true;
+    if (directionOf(view.event) !== 'in' || !conversation.group) return true;
     const parent = view.event.reply_to && byId.get(view.event.reply_to);
     if (parent && isMine(parent)) return true;
     return (view.taskIds ?? []).some((id) => { const task = taskOf.get(id); return task && involvesMe(task); });
   };
-  const candidates = views.filter((view) => meaningful(view) && matters(view));
+  const candidates = views.filter((view) => directionOf(view.event) !== 'unknown' && meaningful(view) && matters(view));
   const last = candidates.reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);
 
   if (conversation.key !== 'me') {
-    if ((last && !isMine(last)) || mineOpen.some((task) => task.status === 'inbox' || task.status === 'review')) return 'mine';
+    if ((last && isIncoming(last)) || mineOpen.some((task) => task.status === 'inbox' || task.status === 'review')) return 'mine';
     if ((last && isMine(last)) || open.some((task) => task.status === 'waiting')
       || open.some((task) => task.roles.controller === 'me' && task.roles.executors.length && !task.roles.executors.includes('me'))) return 'theirs';
   }

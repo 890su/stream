@@ -113,3 +113,22 @@ test('a busy group waits for me only when it answers me or is in my task', () =>
   const task = [my, chatter, change('g1', '2026-11-18T09:05:00', { op: 'create', title: 'Моё', status: 'todo', add: [chatter.id], roles: { responsible: 'me', executors: ['me'] } })];
   assert.equal(run(task)[0].state, 'mine');
 });
+
+const phone = (kind: 'sms' | 'call', direction: string, ts: string, number = '+48 600 100 200') => ({
+  id: `p${++n}`, schema_version: 1, source: 'android_phone', author: 'me', ts, kind, payload: { text: kind === 'sms' ? 'текст' : undefined, data: { [kind]: { number, direction } } },
+});
+
+test('phone events are all authored by me: direction decides who spoke last', () => {
+  assert.equal(run([phone('sms', 'in', '2026-11-18T09:00:00')])[0].state, 'mine');
+  assert.equal(run([phone('sms', 'out', '2026-11-18T08:00:00'), phone('call', 'missed', '2026-11-18T09:00:00')])[0].state, 'mine', 'a missed call waits for me');
+  assert.equal(run([phone('call', 'rejected', '2026-11-18T08:00:00')])[0].state, 'mine');
+  assert.equal(run([phone('sms', 'in', '2026-11-18T08:00:00'), phone('sms', 'out', '2026-11-18T09:00:00')])[0].state, 'theirs');
+  assert.equal(run([phone('sms', 'out', '2026-11-18T08:00:00'), phone('call', 'unknown', '2026-11-18T09:00:00')])[0].state, 'theirs', 'unknown is neither');
+});
+
+test('a leading 00 is a plus; digits without a prefix stay as they are', () => {
+  const list = run([phone('sms', 'in', '2026-11-18T08:00:00', '0048 600 100 200'), phone('call', 'in', '2026-11-18T09:00:00', '+48600100200')]);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].key, 'tel:+48600100200');
+  assert.equal(conversationOf(phone('sms', 'in', '2026-11-18T08:00:00', '600 100 200')), 'tel:600100200');
+});
