@@ -166,14 +166,16 @@ request and the job given to a partner).
 | quiet | none of the above, with open tasks or messages younger than `quiet_days` |
 | done | all linked tasks closed and no unanswered incoming for `quiet_days` |
 
-- Order: urgent → mine → theirs (newest first inside) → quiet → done (folded).
+- Order: urgent → mine → theirs (newest first inside) → quiet → done (folded «Завершённые · N») → archived (folded
+  «Архив · N»; unfolded by a tap or by «Архив» in the top bar).
 - «ждёт меня» uses the triage outcome, not just the last message: an incoming "ok, thanks" filed as «без дела»
   waits for nothing. In a group a message waits for me only when addressed to me or part of my task. My reply in
   any channel of the conversation is an answer.
-- **«Отвечено»** (2026-11-19): the owner can mark a conversation answered even when the last message is not
-  theirs — a `correction` with `op: answered` on its latest message (`unanswered` undoes it). Messages up to that
-  one, and tasks of the conversation with no message after it, no longer make it «ждёт меня» or «жду ответа»; a
-  new message after the mark brings the state back. Urgency by due date stays.
+- **Archive of a conversation** (2026-11-19): a swipe left moves a conversation to the archive even when the last
+  message is not mine — a `correction` with `op: answered` on its latest message (`unanswered` takes it back; the op
+  names stay from the first version). Messages up to that one, and tasks of the conversation with no message after
+  it, no longer make it «ждёт меня» or «жду ответа». A new message after the mark (theirs or mine) brings the
+  conversation back from the archive by itself. Its tasks stay in «Задачи» as they are.
 - Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
   reply goes through the chosen channel (the input row, §2.9); each message shows to whom, where and when.
 
@@ -469,7 +471,7 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
   its conversations in those states (a tap opens the first of them, or its first conversation).
 - **«Беседы»** — the conversation list by state (§2.5): urgent → mine → theirs → quiet → done. A row: title, last
   message, channel badge, open tasks count, state. A tap opens the conversation: messages and its task plaques on
-  top; the input writes into it. Default view. **Swipes on a row:** right-to-left — «Отвечено» (§2.5); left-to-right —
+  top; the input writes into it. Default view. **Swipes on a row:** right-to-left — to the archive (§2.5); left-to-right —
   open the conversation's task (the most urgent open one) or, if it has none, make a task from its latest message
   and open it. Each with «Вернуть» in the toast.
 - **«Задачи»** — a compact list of rows chosen by a saved filter. On top — chips of the main lists with counts:

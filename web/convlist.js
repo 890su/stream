@@ -1,6 +1,7 @@
 // The «Беседы» list (CONCEPT.md §5, §2.5): one row per conversation — title, the last message, channel badges,
 // open tasks, the state; finished conversations fold into one row «Завершённые · N» at the end.
-// rowFacts and splitDone are pure (tested in node); convRow and doneRow build the DOM.
+// archived ones fold into «Архив · N» after them. rowFacts and splitDone are pure (tested in node); convRow and
+// foldRow build the DOM.
 import { snippet } from './projection.js';
 import { isOpen } from './taskfold.js';
 
@@ -27,9 +28,10 @@ export function rowFacts(conversation, now = new Date()) {
   };
 }
 
-// The list without finished conversations, and those folded away.
+// The list without finished and archived conversations, and those folded away.
 export function splitDone(list) {
-  return { active: list.filter((item) => item.state !== 'done'), done: list.filter((item) => item.state === 'done') };
+  const kept = list.filter((item) => !item.archived);
+  return { active: kept.filter((item) => item.state !== 'done'), done: kept.filter((item) => item.state === 'done'), archived: list.filter((item) => item.archived) };
 }
 
 function element(tag, className, text) {
@@ -55,15 +57,16 @@ export function convRow(conversation, { onOpen, decorate }) {
   row.append(head, line);
   row.setAttribute('aria-label', [facts.title, facts.label, facts.tasks ? tasksLabel(facts.tasks) : '', facts.snippet].filter(Boolean).join(', '));
   row.onclick = () => onOpen(conversation.key);
-  decorate?.(row, conversation); // swipes: «Отвечено» and the task (convquick.js)
+  decorate?.(row, conversation); // swipes: to the archive and the task (convquick.js)
   return row;
 }
 
-// «Завершённые · N»: a tap shows or hides the finished conversations under it.
-export function doneRow(count, { open, onToggle }) {
-  const row = element('button', `conv-done${open ? ' open' : ''}`, `${open ? '▾' : '▸'} Завершённые · ${count}`);
+// «Завершённые · N» / «Архив · N»: a tap shows or hides the conversations under it.
+const FOLDS = { done: 'Завершённые', archived: 'Архив' };
+export function foldRow(key, count, { open, onToggle }) {
+  const row = element('button', `conv-done ${key}${open ? ' open' : ''}`, `${open ? '▾' : '▸'} ${FOLDS[key]} · ${count}`);
   row.type = 'button';
-  row.dataset.group = 'done';
+  row.dataset.group = key;
   row.setAttribute('aria-expanded', String(open));
   row.onclick = onToggle;
   return row;

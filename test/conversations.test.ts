@@ -152,7 +152,8 @@ test('a list row: last message, open tasks, the state in words; finished ones fo
   assert.deepEqual(facts.channels, ['BY']);
   assert.equal(rowFacts({ ...person, state: 'quiet' }, now).label, '', 'quiet has no label');
   assert.deepEqual([1, 3, 5, 21].map(tasksLabel), ['1 задача', '3 задачи', '5 задач', '21 задача']);
-  const { active, done } = splitDone([{ state: 'mine' }, { state: 'done' }, { state: 'quiet' }]);
+  const { active, done, archived } = splitDone([{ state: 'mine' }, { state: 'done' }, { state: 'quiet' }, { state: 'quiet', archived: true }, { state: 'done', archived: true }]);
+  assert.equal(archived.length, 2, 'archived ones leave both the list and «Завершённые»');
   assert.deepEqual([active.length, done.length], [2, 1]);
   assert.deepEqual(withWhom(person.views), ['Анна Тестова']);
 });
@@ -209,7 +210,7 @@ const answered = (target: string, ts: string, op = 'answered') => ({
   id: `a${++n}`, schema_version: 1, source: 'app', author: 'me', ts, kind: 'correction', payload: { ref: { type: 'event', id: target }, data: { op } },
 });
 
-test('«Отвечено» on the latest message stops a conversation waiting for me; a newer message brings it back', () => {
+test('the archive mark on the latest message stops a conversation waiting for me; a newer message brings it back', () => {
   const ask = tg('by', '501', '2026-11-18T09:00:00', 'можно сегодня?');
   const task = change('t1', '2026-11-18T09:05:00', { op: 'create', title: 'ответить', status: 'inbox', roles: { author: 'tg:501', responsible: 'me', executors: [] }, add: [ask.id] });
   assert.equal(run([ask, task])[0].state, 'mine');
@@ -219,8 +220,18 @@ test('«Отвечено» on the latest message stops a conversation waiting fo
   assert.equal(run([...marked, tg('by', '501', '2026-11-18T10:00:00', 'алло?')])[0].state, 'mine');
 });
 
-test('«Отвечено» does not take away urgency by a due date', () => {
+test('the archive mark does not take away urgency by a due date', () => {
   const ask = tg('by', '501', '2026-11-18T09:00:00', 'срочно счёт');
   const task = change('t1', '2026-11-18T09:05:00', { op: 'create', title: 'счёт', status: 'todo', due: '2026-11-18', roles: { author: 'tg:501', responsible: 'me', executors: ['me'] }, add: [ask.id] });
   assert.equal(run([ask, task, answered(ask.id, '2026-11-18T09:30:00')])[0].state, 'urgent');
+});
+
+test('a conversation is archived until a newer message, theirs or mine', () => {
+  const ask = tg('by', '501', '2026-11-18T09:00:00', 'вопрос');
+  const marked = [ask, answered(ask.id, '2026-11-18T09:30:00')];
+  assert.equal(run([ask])[0].archived, false);
+  assert.equal(run(marked)[0].archived, true);
+  assert.equal(run([...marked, answered(ask.id, '2026-11-18T09:40:00', 'unanswered')])[0].archived, false);
+  assert.equal(run([...marked, tg('by', '501', '2026-11-18T10:00:00', 'ещё')])[0].archived, false);
+  assert.equal(run([...marked, mine('501', '2026-11-18T10:00:00', 'отвечу')])[0].archived, false);
 });

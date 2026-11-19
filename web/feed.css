@@ -187,7 +187,7 @@ body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix
 .conv-row:active, .conv-row:hover { background: var(--press); }
 .conv-row { touch-action: pan-y; transition: transform .18s ease-out, background-color .12s ease-out; }
 .conv-row.swiping { transition: none; }
-.conv-row[data-swipe="answered"].armed { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); }
+.conv-row[data-swipe="archive"].armed { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); }
 .conv-row[data-swipe="task"].armed { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }
 .conv-head, .conv-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .conv-title { flex: 0 1 auto; min-width: 0; font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -1,6 +1,7 @@
-// Swipes on a «Беседы» row (CONCEPT.md §5, 2026-11-19): right-to-left — «Отвечено» (a correction on the latest
-// message; «Вернуть» takes it back); left-to-right — the conversation's task: the most urgent open one, or a new
-// task of mine from its latest incoming message («Вернуть» cancels it). pickTask and the message choices are pure.
+// Swipes on a «Беседы» row (CONCEPT.md §5, 2026-11-19): right-to-left — to the archive (the `answered` correction
+// on the latest message; «Вернуть» takes it back, a new message brings it back too); left-to-right — the
+// conversation's task: the most urgent open one, or a new task of mine from its latest incoming message («Вернуть»
+// cancels it). pickTask and the message choices are pure.
 import { swipe } from './swipe.js';
 import { makeCorrection, makeTaskChange, ownTask } from './shared.js';
 import { isOpen, dueState } from './taskfold.js';
@@ -9,7 +10,7 @@ import { directionOf } from './conversations.js';
 
 const live = (conversation) => conversation.views.filter((view) => !view.deleted);
 
-// The message «Отвечено» is put on: the latest one of the conversation.
+// The message the archive mark is put on: the latest one of the conversation.
 export const anchorOf = (conversation) => live(conversation).at(-1) ?? null;
 
 // The message a new task starts from: the latest incoming one, else the latest.
@@ -28,11 +29,11 @@ export function pickTask(conversation, now = new Date()) {
 export function createConvQuick({ queue, notify, openTask }) {
   const fail = (error) => notify(error.message);
 
-  function answered(conversation) {
+  function archive(conversation) {
     const anchor = anchorOf(conversation);
     if (!anchor) return;
     queue(makeCorrection(anchor.id, 'answered'))
-      .then(() => notify(`Отвечено: «${conversation.title}»`, { label: 'Вернуть', run: () => queue(makeCorrection(anchor.id, 'unanswered')).catch(fail) }))
+      .then(() => notify(`В архиве: «${conversation.title}»`, { label: 'Вернуть', run: () => queue(makeCorrection(anchor.id, 'unanswered')).catch(fail) }))
       .catch(fail);
   }
 
@@ -48,7 +49,7 @@ export function createConvQuick({ queue, notify, openTask }) {
   }
 
   // Adds both swipes to a conversation row.
-  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'answered', onRight: () => task(conversation), onLeft: () => answered(conversation) });
+  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'archive', onRight: () => task(conversation), onLeft: () => archive(conversation) });
 
   return { decorate };
 }

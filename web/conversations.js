@@ -48,6 +48,16 @@ const isMine = (view) => directionOf(view.event) === 'out';
 const isIncoming = (view) => directionOf(view.event) === 'in';
 const incomingChat = (view) => isIncoming(view) && view.event.payload?.data?.telegram;
 
+// The latest message with the archive mark (`answered`, CONCEPT.md §2.5), or null.
+const archiveMark = (views) => views.filter((view) => view.answered).reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);
+
+// In the archive: marked, and nothing came after the mark (a new message, theirs or mine, brings it back).
+export function isArchived(conversation) {
+  const views = conversation.views.filter((view) => !view.deleted);
+  const mark = archiveMark(views);
+  return Boolean(mark) && !views.some((view) => view.event.ts > mark.event.ts);
+}
+
 // 'urgent' | 'mine' | 'theirs' | 'quiet' | 'done' — `conversation` needs views, tasks, last, key, group.
 export function conversationState(conversation, { now = new Date(), config }) {
   const views = conversation.views.filter((view) => !view.deleted);
@@ -74,8 +84,8 @@ export function conversationState(conversation, { now = new Date(), config }) {
   };
   // An own note pulled into a chat or a number (a call description, a reply not sent) is not an answer.
   const note = (view) => conversation.key !== 'me' && conversationOf(view.event) === 'me';
-  // «Отвечено» (CONCEPT.md §2.5): messages up to the marked one, and tasks with no message after it, wait for nobody.
-  const mark = views.filter((view) => view.answered).reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);
+  // The archive mark (CONCEPT.md §2.5): messages up to the marked one, and tasks with no message after it, wait for nobody.
+  const mark = archiveMark(views);
   const after = (view) => !mark || view.event.ts > mark.event.ts;
   const fresh = (task) => !mark || views.some((view) => after(view) && task.messages?.includes(view.id));
   const candidates = views.filter((view) => after(view) && directionOf(view.event) !== 'unknown' && !note(view) && meaningful(view) && matters(view));
@@ -140,7 +150,7 @@ export function conversations(views, tasks, { now = new Date(), config, keys = c
       views: sorted, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
       reply: incoming ? chatOf(incoming.event) : null,
     };
-    list.push({ ...conversation, state: conversationState(conversation, { now, config }) });
+    list.push({ ...conversation, state: conversationState(conversation, { now, config }), archived: isArchived(conversation) });
   }
   const rank = (state) => config.states.indexOf(state);
   return list.sort((a, b) => rank(a.state) - rank(b.state) || b.last.localeCompare(a.last));

@@ -11,7 +11,7 @@ import { questionOptions } from './question.js';
 import { taskRow, emptyTasks, sectionsOf, sectionHeader, listChips, listCount, groupsOf, GROUPINGS } from './tasklist.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
-import { convRow, doneRow, splitDone } from './convlist.js';
+import { convRow, foldRow, splitDone } from './convlist.js';
 import { convTasks } from './convtasks.js';
 import { grow, shrink, reduced, play } from './motion.js';
 
@@ -40,6 +40,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let listTop = 0; // where the list was when a conversation opened: «назад» returns there
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   const openSections = new Set(); // Задачи: folded sections («Дальше») the owner unfolded
+  let showArchivedConversations = false; // Беседы: the «Архив · N» fold unfolded
   let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
   let mode = 'conversations';
   const taskFilters = limits.filters?.length ? limits.filters : [{ id: 'all', title: 'Все', all: [] }]; // saved filters (registry/filters.json)
@@ -172,15 +173,17 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       }
       if (!shownTasks.length) children.push(emptyTasks(filter));
     } else if (mode === 'conversations' && !inside) {
-      // The list (CONCEPT.md §5): by state; finished ones folded into one row at the end.
-      const { active, done } = splitDone(convList.filter((item) => item.views.some(tagged)));
-      for (const item of active) children.push(convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key), decorate: convQuick?.decorate }));
-      if (done.length) {
-        children.push(doneRow(done.length, { open: showDone, onToggle: () => toggleGroup('done', showDone, () => { showDone = !showDone; }) }));
-        if (showDone) groupNodes.set('done', done.map((item) => convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key), decorate: convQuick?.decorate })));
-        children.push(...(groupNodes.get('done') ?? []));
+      // The list (CONCEPT.md §5): by state; finished, then archived ones folded at the end («Архив» on top unfolds it).
+      const { active, done, archived } = splitDone(convList.filter((item) => item.views.some(tagged)));
+      const rowOf = (item) => convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key), decorate: convQuick?.decorate });
+      for (const item of active) children.push(rowOf(item));
+      for (const [key, list, open, flip] of [['done', done, showDone, () => { showDone = !showDone; }], ['archived', archived, showArchivedConversations || showArchive, () => { showArchivedConversations = !showArchivedConversations; }]]) {
+        if (!list.length) continue;
+        children.push(foldRow(key, list.length, { open, onToggle: () => toggleGroup(key, open, flip) }));
+        if (open) groupNodes.set(key, list.map(rowOf));
+        children.push(...(groupNodes.get(key) ?? []));
       }
-      if (!active.length && !done.length) empty(filtered ? 'Под фильтр ничего не подходит.' : 'Здесь появятся беседы: чаты Telegram, звонки и SMS, ваши заметки.');
+      if (!active.length && !done.length && !archived.length) empty(filtered ? 'Под фильтр ничего не подходит.' : 'Здесь появятся беседы: чаты Telegram, звонки и SMS, ваши заметки.');
     } else {
       // One conversation (its task plaques on top) or the Лента: messages in a row.
       const plaques = inside && current ? convTasks(current, { onOpen: onOpenTask, quick }) : null;
