@@ -97,7 +97,7 @@ export function actionBar(task, ctx) {
     }))),
   };
   for (const action of barActions(task, ctx)) {
-    const node = button(`task-bar-button ${action.id}`, '', handlers[action.id], action.label);
+    const node = button(`task-bar-button act-${action.id}`, '', handlers[action.id], action.label);
     node.append(element('span', 'task-bar-icon', action.icon), element('span', 'task-bar-label', action.label));
     icons.append(node);
   }

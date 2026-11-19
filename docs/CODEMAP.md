@@ -83,6 +83,9 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `projects.js` | pure: projects from `project_change` (`foldProjects`), tree with counts, scope, sections of a project, next actions (`markNext` sets `task.next`, `task.projectTitle`) |
 | `projectview.js` / `projectpanel.js` | one project's header (kind, status, «Нет следующего шага», «Изменить») and section heads with «+»; the project tree in the left panel and «Проект» in task details |
 | `checklist.js` | the checklist in task details: tick, add, «Отдельной задачей», «В дело…» (this task as an item of another) |
+| `taskbar.js` | one action bar for a task: ✓ Готово · ▶ В работу · 🕒 Когда · 👤 Поручить · 💬 Ответить · ⋯ Ещё with a second level (`barActions`, `moreActions`, `actionBar`, `personForm`) |
+| `tasksheet.js` | the sheet a long press (right click) on a task row opens: title + action bar; `barContext` for the card too |
+| `taskcard.js` | the top of the task card (`headline`, `nextStep`, `contactLinks` — call and map) and folding sections remembered on the device (`section`) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows): follow, arm, act; not a tap |
 | `convquick.js` | swipes on a «Беседы» row: left — to the archive (`answered` correction), right — its most urgent task or a new one (`pickTask`, `anchorOf`, `sourceOf`) |

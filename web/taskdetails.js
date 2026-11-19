@@ -1,13 +1,14 @@
-// Details of a task in the right panel (CONCEPT.md §5, 2026-11-19), action first: name, status, «Задача
-// выполнена?», one-tap actions (with «Вернуть»), due date; then roles in one folded line, the triage's note, the
-// report («Заполнить отчёт» while fields are missing), the whole conversation and the folded history of changes.
+// The task card in the right panel (task card design §4): the title, «контрагент · срок · статус», «дальше», «Задача
+// выполнена?», a call and a map; then folding sections — checklist, conversation (the last three), details (project,
+// counterparty, roles, origin), report, history; the action bar (taskbar.js) always at the bottom.
 import { STATUSES, describeChange } from './taskfold.js';
-import { actionsFor, actionLabel, changeFor, dueChips, delegateOptions } from './taskactions.js';
 import { partyName } from './parties.js';
 import { checklistBlock } from './checklist.js';
 import { projectLine } from './projectpanel.js';
 import { counterpartyLine } from './counterpartyline.js';
-import { holding } from './holdrender.js';
+import { personOf } from './contacts.js';
+import { actionBar } from './taskbar.js';
+import { headline, nextStep, contactLinks, section } from './taskcard.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -17,9 +18,6 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-
-// 09:00 local on a day, as an ISO date-time with an offset.
-const morning = (day) => new Date(`${day}T09:00:00`).toISOString();
 
 function button(className, text, onClick, label) {
   const node = element('button', className, text);
@@ -75,114 +73,85 @@ function rolesBlock(task, views) {
 
 export { personParty } from './parties.js'; // moved: the action bar types people in too (taskbar.js)
 
-function personForm(onPick) {
-  const form = element('form', 'details-rename');
-  const input = Object.assign(document.createElement('input'), { maxLength: 115, enterKeyHint: 'done', placeholder: 'Имя или телефон' });
-  input.setAttribute('aria-label', 'Кто: имя или телефон');
-  form.append(input, button('link-button', 'Готово', () => form.requestSubmit()));
-  form.onsubmit = (event) => {
-    event.preventDefault();
-    const party = personParty(input.value);
-    if (party) onPick(party);
-  };
-  return form;
-}
-
-const MESSAGES = { done: 'Готово', verify: 'Проверено', accept: 'Принято', delegate: 'Поручено', defer: 'Отложено', wait: 'Ждём', reopen: 'Снова в работе', cancel: 'Отменено' };
-
 // `ctx`: { views (the task's messages), bubble(view), save(change), saveTo(id, change), others (open tasks), notify,
-// doneCards, quick (taskquick.js), reportKeys, fields }.
-export function taskDetails(task, { views, bubble, save, saveTo, others, notify, projects = [], doneCards, quick, reportKeys = [], fields, directory = null }) {
+// doneCards, projects, reportKeys, fields, directory (contacts), bar (the action bar's context, tasksheet.js barContext) }.
+export function taskDetails(task, { views, bubble, save, saveTo, others, notify, projects = [], doneCards, fields, directory = null, bar = null, now = new Date() }) {
   const box = element('div', 'details-task');
+  // The top: what it is, with whom, when, the state, what next — the five seconds (task manager spec §2).
   box.append(titleBlock(task, save));
-  const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
-  box.append(element('p', 'details-meta', `${STATUSES[task.status] ?? task.status} · ${origin} · ${clock.format(new Date(task.createdAt))}`));
+  const line = headline(task, now);
+  if (line.length) box.append(element('p', 'card-headline', line.join(' · ')));
+  const next = nextStep(task);
+  if (next) box.append(element('p', 'card-next', `дальше: ${next}`));
   const card = doneCards.card(task);
   if (card) box.append(card);
 
-  // A change with «Вернуть» in the toast (taskquick.js).
-  const act = (change, message) => (quick ? quick.act(task, change, message) : save({ op: 'update', ...change }));
-  const actions = element('div', 'task-actions');
-  const choice = element('div', 'task-choice');
-  box.append(actions, choice);
-  const apply = (action, arg) => {
-    const change = changeFor(action, task, arg, new Date(), reportKeys);
-    holding(choice, false);
-    if (change) act(change, `${MESSAGES[action] ?? actionLabel(action)}: «${task.title}»`);
-  };
-  const pick = (action, options) => {
-    choice.replaceChildren(element('p', 'picker-section', actionLabel(action)), ...options);
-    holding(choice);
-    choice.querySelector('button, input')?.focus({ preventScroll: true });
-  };
-  const partyButtons = (action, others) => [
-    ...delegateOptions(views).map(({ party, name }) => button('chip suggest', name, () => apply(action, party))),
-    ...(others ? [button('chip suggest', 'ИИ', () => apply(action, 'ai'))] : []),
-    button('chip suggest', 'Другой…', () => pick(action, [personForm((party) => apply(action, party))])),
-  ];
-  const ask = {
-    delegate: () => pick('delegate', partyButtons('delegate', true)),
-    wait: () => pick('wait', partyButtons('wait', false)),
-    defer: () => {
-      const input = Object.assign(document.createElement('input'), { type: 'date', className: 'details-due' });
-      input.setAttribute('aria-label', 'Отложить до');
-      input.onchange = () => input.value && apply('defer', morning(input.value));
-      pick('defer', [...dueChips().map((chip) => button('chip suggest', chip.label, () => apply('defer', morning(chip.due)))), input]);
-    },
-  };
-  const primary = new Set(['done', 'verify']);
-  for (const action of actionsFor(task)) {
-    const kind = primary.has(action) ? 'primary' : action === 'cancel' ? 'link-button muted' : 'link-button';
-    actions.append(button(kind, actionLabel(action), () => (ask[action] ? ask[action]() : apply(action))));
-  }
-
-  if (!['done', 'cancelled'].includes(task.status)) {
-    const due = Object.assign(document.createElement('input'), { type: 'date', value: task.due ? String(task.due).slice(0, 10) : '', className: 'details-due' });
-    due.setAttribute('aria-label', 'Срок');
-    due.onchange = () => act({ due: due.value || null }, due.value ? 'Срок изменён' : 'Срок снят');
-    const chips = element('div', 'chips task-due');
-    for (const chip of dueChips()) {
-      const on = String(task.due ?? '').slice(0, 10) === chip.due;
-      const node = button(`chip ${on ? 'on' : 'suggest'}`, chip.label, () => act({ due: chip.due }, `Срок «${chip.label}»`));
-      node.setAttribute('aria-pressed', String(on));
-      chips.append(node);
+  // A call and a map in one tap: the author from the directory, the counterparty's address.
+  if (directory) {
+    const person = task.roles?.author ? personOf(task.roles.author, directory.people) : null;
+    const counterparty = task.counterparty ? directory.counterparties.find((item) => item.id === task.counterparty) : null;
+    const links = contactLinks({ person, counterparty });
+    if (links.length) {
+      const contacts = element('div', 'card-contacts');
+      for (const link of links) {
+        const node = Object.assign(document.createElement('a'), { className: `chip suggest card-contact ${link.kind}`, href: link.href, textContent: `${link.kind === 'tel' ? '📞' : '📍'} ${link.text}` });
+        if (link.kind === 'map') { node.target = '_blank'; node.rel = 'noopener'; }
+        contacts.append(node);
+      }
+      box.append(contacts);
     }
-    chips.append(due);
-    box.append(element('p', 'picker-section', 'Срок'), chips);
   }
 
-  box.append(projectLine(task, { projects, save })); // CONCEPT.md §2.11
-  if (directory && !task.filed) box.append(counterpartyLine(task, { ...directory, save })); // contacts design §6
+  // A checklist with items is shown as it is (it has its own head); an empty one waits in «Подробности».
   const checklist = checklistBlock(task, { save, saveTo, others, notify });
-  if (checklist) box.append(checklist);
+  if (checklist && task.items?.length) box.append(checklist);
 
-  const roles = rolesBlock(task, views);
-  if (roles) box.append(roles);
-  if (task.note) box.append(element('p', 'details-meta', task.note));
-
-  // A report belongs to a closed task; a task taken back into work («Вернуть») keeps it in the journal only.
-  if (task.report && task.status === 'done') box.append(element('p', 'picker-section', 'Отчёт'), reportBlock(task.report, fields));
-  if (task.status === 'done' && task.report?.missing?.length && !card) box.append(button('link-button', 'Заполнить отчёт', () => doneCards.start(task)));
-
-  box.append(element('p', 'picker-section', `Переписка · ${views.length}`));
+  // The conversation: the last three, «Показать все» for the rest.
   const talk = element('div', 'details-talk');
-  for (const view of views) {
-    const line = element('div', 'details-message');
-    line.append(bubble(view));
-    if (task.messages.includes(view.id)) {
-      line.append(button('icon-button details-unlink', '×', (event) => { event.stopPropagation(); save({ op: 'update', remove: [view.id] }); }, 'Убрать сообщение из задачи'));
-    }
-    talk.append(line);
+  const message = (view) => {
+    const item = element('div', 'details-message');
+    item.append(bubble(view));
+    if (task.messages.includes(view.id)) item.append(button('icon-button details-unlink', '×', (event) => { event.stopPropagation(); save({ op: 'update', remove: [view.id] }); }, 'Убрать сообщение из задачи'));
+    return item;
+  };
+  talk.append(...views.slice(-3).map(message));
+  if (views.length > 3) {
+    const more = button('link-button', `Показать все · ${views.length}`, () => { more.remove(); talk.replaceChildren(...views.map(message)); });
+    talk.prepend(more);
   }
   if (!views.length) talk.append(element('p', 'drawer-empty', 'Сообщений нет'));
-  box.append(talk);
+  box.append(section('talk', `Переписка · ${views.length}`, [talk], { open: true }));
 
-  const history = element('details', 'details-history');
-  history.append(element('summary', 'picker-section', `История · ${task.history?.length ?? 0}`));
-  for (const item of [...(task.history ?? [])].reverse()) {
-    const who = item.author === 'me' ? 'вы' : item.change?.processor ? 'разбор' : 'система';
-    history.append(element('div', 'details-fact', `${clock.format(new Date(item.ts))} · ${who} · ${describeChange(item.change ?? {})}`));
+  // Details: project, counterparty, roles, how it was made; open while the triage asks something here.
+  const asks = (!task.project && task.project_options?.length) || (!task.counterparty && (task.counterparty_options?.length || task.counterparty_hint));
+  const more = [projectLine(task, { projects, save })];
+  if (checklist && !task.items?.length) more.push(checklist);
+  if (directory && !task.filed) more.push(counterpartyLine(task, { ...directory, save }));
+  const roles = rolesBlock(task, views);
+  if (roles) more.push(roles);
+  const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
+  more.push(element('p', 'details-meta', `${origin} · ${clock.format(new Date(task.createdAt))}`));
+  if (task.note) more.push(element('p', 'details-meta', task.note));
+  box.append(section('more', 'Подробности', more, { force: asks ? true : null }));
+
+  // A report belongs to a closed task; a task taken back into work («Вернуть») keeps it in the journal only.
+  if (task.report && task.status === 'done') {
+    const report = [reportBlock(task.report, fields)];
+    if (task.report.missing?.length && !card) report.push(button('link-button', 'Заполнить отчёт', () => doneCards.start(task)));
+    box.append(section('report', 'Отчёт', report, { open: true }));
   }
-  box.append(history);
+
+  const history = [...(task.history ?? [])].reverse().map((item) => {
+    const who = item.author === 'me' ? 'вы' : item.change?.processor ? 'разбор' : 'система';
+    return element('div', 'details-fact', `${clock.format(new Date(item.ts))} · ${who} · ${describeChange(item.change ?? {})}`);
+  });
+  box.append(section('history', `История · ${history.length}`, history));
+
+  // The same six icons as the long-press sheet, always at the bottom (task card design §3).
+  if (bar) {
+    const foot = element('div', 'card-bar');
+    foot.append(actionBar(task, bar));
+    box.append(foot);
+  }
   return box;
 }

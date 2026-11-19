@@ -4,6 +4,7 @@
 import { makeTaskChange, makeCorrection, makePersonChange, makeCounterpartyChange, ownTask } from './shared.js';
 import { inChat } from './actions.js';
 import { personCard } from './personcard.js';
+import { barContext } from './tasksheet.js';
 import { counterpartyCard } from './counterpartycard.js';
 import { reportKeys } from './donecard.js';
 import { snippet, chatOf, sourceKey } from './projection.js';
@@ -25,7 +26,7 @@ function element(tag, className, text) {
   return node;
 }
 
-export function setupDetails({ feed, composer, notify, doneCards, config, quick, onRender = () => {} }) {
+export function setupDetails({ feed, composer, notify, doneCards, config, quick, onRender = () => {}, openConversation = () => {} }) {
   const panel = document.querySelector('#details');
   const backdrop = document.querySelector('#details-backdrop');
   const body = document.querySelector('#details-body');
@@ -93,7 +94,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       const mine = new Set(feed.conversations().filter((item) => item.tasks.some((other) => other.id === task.id)).flatMap((item) => item.tasks.map((other) => other.id)));
       const others = [...feed.tasks()].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || b.updatedAt.localeCompare(a.updatedAt));
       body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save, others, notify, projects: feed.projects(),
-        doneCards, quick, reportKeys: reportKeys(task, config.tasks ?? {}), fields: config.tasks?.report_fields ?? {}, directory: directory() }));
+        doneCards, fields: config.tasks?.report_fields ?? {}, directory: directory(),
+        bar: quick ? barContext(task, { feed, quick, openConversation }) : null }));
     } else if (current.kind === 'person' || current.kind === 'counterparty') {
       // The directory's cards (contacts design §6).
       const dir = directory();
