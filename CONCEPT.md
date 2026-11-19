@@ -1,743 +1,672 @@
 ---
 project_id: stream
-status: draft
+status: active
 updated: 2026-11-19
 ---
 
-# Stream — концепция
+# Stream — concept
 
-> **Действует; обновлена 2026-11-19 (задачи: действие в строке, «Сегодня», готово без отчёта).** Стек, сервер и связь с iCRM решены (`decisions.md`). Разделы уточняются
-> по ходу шагов: сначала правка здесь, потом код. Полная проработка с источниками:
+> Source of truth for the idea, the model and the steps: change it first, then code. Decisions with reasons —
+> `decisions.md`; open work — `PLAN.md`. Full original study with sources:
 > https://claude.ai/artifact/2C1D9sLkW141UWgmN5Zco5
+>
+> **Language.** This document is in English for agents. **All communication with the owner is in Russian**:
+> chat replies, questions, summaries, reports and every UI text. Words in «» are the exact Russian UI labels —
+> keep them as they are. Code, identifiers and commit messages are in English.
 
-## Коротко
+## Summary
 
-**Суть.** Одна лента, куда всё падает как есть: голос, текст, фото, «Поделиться», Telegram BY и PL, звонки и
-SMS. Система сама превращает поток в задачи, расходы, заявки и заметки. Владелец не ведёт списки — он отвечает,
-отмечает «Готово» и поправляет ошибки разбора.
+- **What.** One feed where everything lands as is: voice, text, photos, «Поделиться», Telegram BY and PL, calls
+  and SMS. The system turns the stream into tasks, expenses, requests and notes. The owner keeps no lists: they
+  answer, tap «Готово» and correct the triage.
+- **Model.** An append-only event journal; recomputable layers over it: normalization → interpretation → tasks
+  and actions. Every task leads back to its source message. Edits, archive, delete and status changes are events too.
+- **Screen.** «Беседы» — who I talk to and who owes whom an answer; «Задачи» — what to do («Сегодня»,
+  «Разобрать», «Жду», «Контроль»). The message feed is a technical view from the menu. Input is one row at the bottom.
+- **How it works.** New messages are triaged in batches after a pause (AI now, scripts later): into a new task,
+  an open task or «без дела». Nothing goes out unless the owner sends it. Stream owns the tasks; Google, Planfix,
+  Todoist are mirrors.
+- **How it grows.** Four extension points — source, intent, connector, automation; rules are data in `registry/`,
+  not conditions in code. Every step ends in something used tomorrow; the next one comes after a week of use.
 
-**Модель.** Неизменяемый журнал событий; над ним пересчитываемые слои: нормализация → интерпретация → задачи и
-действия. Любая задача ведёт к исходному сообщению. Правка, архив, удаление, смена статуса — тоже события.
+## 1. Why
 
-**Экран.** «Беседы» — с кем переписка и кто кому должен ответить; «Задачи» — что сделать: «Сегодня», «Разобрать»,
-«Жду», «Контроль». Лента всех сообщений — технический вид из меню. Ввод — одна строка внизу с метками и адресатом.
+The owner is disorganized by nature: postpones, piles up unfinished work, keeps no lists or reports, loses goals
+and drops projects. The system does not try to change that. It takes the stream as is and itself turns it into
+tasks, expenses, requests, summaries and reports.
 
-**Как работает.** Новые сообщения разбираются пачками после паузы (сейчас ИИ, потом скрипты): каждое — в новую
-задачу, в открытую или «без дела». Наружу уходит только то, что владелец отправил сам. Хозяин задач — Stream;
-Google, Планфикс, Todoist — зеркала.
+The main risk is not technical: the system becoming one more project built instead of real work. So every step
+ends in something the owner uses the next day (§7).
 
-**Как растёт.** Через четыре точки расширения — источник, цель, коннектор, автоматизация; правила — данные в
-`registry/`, а не условия в коде. Каждый шаг — то, чем пользуются завтра; следующий — после недели использования.
+## 2. Model: a journal and layers over it
 
-**Сейчас** (2026-11-19): работают шаг 1, звонки и SMS, Telegram, задачи с ролями. Дальше — голос в текст (шаг 2)
-и разбор по целям (шаг 3).
+The system is an append-only event journal. Conversations, tasks, expenses and replies are derived from it and
+can be recomputed.
 
-## 1. Зачем
-
-Владелец неорганизован по природе: откладывает, копит незавершённые дела, не ведёт списки и отчёты, теряет
-цель и бросает проекты. Система не пытается его переделать. Она принимает поток как есть — голос, текст, фото,
-пересланное — и сама превращает его в задачи, расходы, заявки, сводки и отчёты.
-
-Главный риск — не техника, а то, что система станет ещё одним проектом, который строится вместо работы.
-Поэтому каждый шаг заканчивается тем, чем пользуются завтра (§7).
-
-## 2. Модель: журнал и слои над ним
-
-Система — журнал событий, который только дополняется. Беседы, задачи, расходы и ответы выводятся из него и
-могут быть пересчитаны заново.
-
-| Слой | Что хранит | Меняется? | Пример |
+| Layer | Holds | Changes? | Example |
 |---|---|---|---|
-| **Событие** | Исходник как есть: текст, голос, фото, входящее письмо, ответ бота. Источник, автор, время | Никогда | Голосовое «заплатил 120 злотых за кабель для Анны» |
-| **Нормализация** | Расшифровка, текст с фото, найденные суммы, даты, люди | Пересчитывается новой версией обработчика | Текст, 120 PLN, «Анна» |
-| **Интерпретация** | Задачи, цель, поля, теги, уверенность | Новая версия при исправлении, старая остаётся | Цель «расход», категория «материалы», клиент «Анна», 0,86 |
-| **Задача** | Проекция событий о задаче: статус, срок, приоритет | Состояние = свёртка событий | «Купить кабель», срок пятница |
-| **Действие** | Что и куда отправить, класс риска, статус, внешняя ссылка | Только статус | «Записать расход»: выполнено |
-| **Беседа** | Чат с людьми по каналу; состояние «срочно / ждёт меня / жду их / тихо / завершено» (§2.5) | Вычисляется из журнала | Переписка с клиентом А в Telegram BY |
+| **Event** | the source as is: text, voice, photo, incoming mail, bot reply; source, author, time | never | voice note "paid 120 zł for a cable for Anna" |
+| **Normalization** | transcript, text from photos, amounts, dates, people | recomputed by a new processor version | text, 120 PLN, "Anna" |
+| **Interpretation** | tasks, intent, fields, tags, confidence | a new version on correction; the old one stays | intent "expense", category "materials", client "Anna", 0.86 |
+| **Task** | projection of task events: status, due, roles | state = fold of events | "Buy the cable", due Friday |
+| **Action** | what to send where, risk class, status, external ref | status only | "Record expense": done |
+| **Conversation** | a chat by channel with its state (§2.5) | computed from the journal | chat with client A in Telegram BY |
 
-Всё, что делает система, — тоже событие в ленте: уточняющий вопрос, результат действия, напоминание,
-предложение аналитика. Отдельного служебного канала нет. Любой отчёт — фильтр по ленте.
+Everything the system does is an event in the same journal too: a clarifying question, an action result, a
+reminder, an analyst proposal. There is no separate service channel; any report is a filter over the journal.
 
-### 2.1 Четыре точки расширения
+### 2.1 Four extension points
 
-Развитие идёт только через них; ядро не трогается.
+Growth goes only through these; the core stays untouched.
 
-- **Источник** — откуда приходят события: ввод в приложении, «Поделиться», почта, Telegram, уведомления
-  Android, система. Умеет одно: записать событие.
-- **Цель (intent)** — тип намерения со схемой полей: задача, расход, заявка, заметка, запрос оферты. Описана
-  данными в `registry/intents/`: схема, инструкция для ИИ, примеры, пороги, действие по умолчанию.
-- **Коннектор** — куда уходит действие: Todoist, TickTick, Планфикс, iCRM, почта, Google. Получает готовое
-  действие, ленту не читает.
-- **Автоматизация** — сценарий «условие по ленте → новое событие или действие». Например: через два дня после
-  «выполнено» — черновик «всё работает?».
+- **Source** — where events come from: the app, «Поделиться», Telegram, the phone companion, mail, the system.
+  It only writes events.
+- **Intent** — a kind of intention with a field schema (task, expense, request, note, offer request), described
+  as data in `registry/intents/`: schema, AI instruction, examples, thresholds, default action.
+- **Connector** — where an action goes: Todoist, TickTick, Planfix, iCRM, mail, Google. Gets a ready action, never
+  reads the feed.
+- **Automation** — "condition over the feed → new event or action", e.g. two days after «выполнено» a draft
+  "is everything working?".
 
-### 2.2 Метки (метка = поле)
+### 2.2 Tags (tag = field)
 
-Метка и поле — одно понятие (решение 2026-11-11). Метка бывает трёх видов:
+A tag and a field are one concept (2026-11-11). Three kinds:
 
-| Вид | Пример | Что несёт |
+| Kind | Example | Carries |
 |---|---|---|
-| Простая | `#идея`, `#naserwis` | только признак |
-| С переменными | `#расход` → сумма, валюта, клиент | значения полей из `registry/fields.yaml`; при разборе заполняются и уходят в коннектор. Цель из `registry/intents/` — это метка с переменными |
-| Ссылка на проект или задачу | `#stream`, `#марек-wifi` | принадлежность к проекту или задаче (§2.8) |
+| Plain | `#идея` | a mark only |
+| With variables | `#расход` → amount, currency, client | field values from `registry/fields.yaml`, filled by triage and sent to connectors; an intent is a tag with variables |
+| Link to a project or task | `#stream` | belonging to a project or task (§2.8) |
 
-Словарь меток — данные в `registry/tags.json`: метка, связанная цель, слова-признаки. Новую простую метку
-владелец создаёт сам, набрав `#слово`. ИИ не придумывает переменные на ходу: он предлагает, владелец
-принимает, поле попадает в словарь.
+The dictionary is data in `registry/tags.json`: tag, intent, cue words. The owner creates a plain tag by typing
+`#word`. AI never invents variables on the fly: it proposes, the owner accepts, the field enters the dictionary.
 
-**Подсказка меток при вводе.** Над строкой ввода — строка меток с горизонтальной прокруткой: предложенные
-неактивны, включённые подсвечены, включённые автоматически отмечены отдельно. Подбор — по частоте
-употребления (считается из журнала, отдельно не хранится), по набираемому тексту и словам-признакам из
-словаря. При уверенности выше порога (`registry/tags.json`, сейчас 0,8) метка включается сама; выключить — одно
-касание. Меток «по умолчанию» нет ни в одной панели: всегда частота плюс набираемый текст.
+**Suggestions while typing.** The row above the input shows suggested tags (off), switched-on tags (lit) and
+automatically switched-on tags (marked; one tap turns them off). Ranking: usage frequency (computed from the
+journal, not stored), the typed text and cue words. Above the threshold (`registry/tags.json`, now 0.8) a tag
+switches on by itself. No tag is "default" anywhere.
 
-**Обратная связь — данные для разбора.** В событии сохраняется (`payload.data.tagging`): какие метки были
-предложены, какие включились сами, какие владелец включил и какие снял из автоматических, и версия
-подсказчика. Это размеченные примеры для шага 3 и `golden/`: снятая автоматическая метка — сигнал ошибки
-классификации, включённая владельцем — пропуск.
+**Feedback is training data.** The event keeps `payload.data.tagging`: what was suggested, switched on
+automatically, switched on by the owner and switched off by the owner, plus the suggester version. A removed
+automatic tag is a classification error, an owner-added one is a miss — examples for step 3 and `golden/`.
 
-### 2.3 Задачи внутри системы
+### 2.3 Tasks inside the system
 
-Задача — не отдельная база, а проекция ленты; с 2026-11-17 — главная сущность (§2.8). Создание, смена статуса,
-перенос срока — события в журнале; список задач — запрос к ним. Задачи из голосового, из письма клиента и из
-автоматизации лежат в одном списке, и каждая ведёт к исходнику. Задача и беседа — разные сущности, связанные
-сообщениями (§2.5).
+A task is a projection of the journal, and since 2026-11-17 the main entity (§2.8). Creation and every change
+are `task_change` events; a task list is a query over them. Tasks from voice, client mail and automations share
+one list, and each leads to its source. A task and a conversation are different entities linked by messages (§2.5).
 
-**Хозяин задач — Stream** (решение 2026-11-18, вариант А). Задачи живут в журнале; Google Задачи, Google
-Календарь и Планфикс (позже — Todoist, TickTick) — коннекторы-зеркала. Изменения оттуда возвращаются событиями
-`task_change` с автором-коннектором; при правке одного поля с двух сторон побеждает более поздняя, проигравшее
-значение остаётся в истории задачи; удаление там — вопрос владельцу, а не удаление здесь. Какие задачи куда
-уходят — сохранённые фильтры (§5), данные, а не код.
+**Stream owns the tasks** (2026-11-18, option A). Google Tasks, Google Calendar and Planfix (later Todoist,
+TickTick) are mirror connectors. Changes made there return as `task_change` authored by the connector; when one
+field changes on both sides, the later wins and the loser stays in the task history; a deletion there becomes a
+question to the owner, not a deletion here. Which tasks go where is decided by saved filters (§5) — data.
 
-| Входит сразу | Позже | Не делаем |
+- **Now:** title, source messages, roles (§2.8), statuses, due, plan, reminder, promise.
+- **Later:** recurring tasks, boards on the same filters, subtasks, time tracking, weekly report.
+- **Not doing:** collaboration inside the app (partners act through the task bot), own attachments (links to events only).
+
+Before adding a task feature, check whether a mirror or a registry process (§2.10) already covers it.
+
+### 2.4 Reply, edit, archive, delete
+
+The journal is immutable, so every owner action on a message is a **new event**; the feed shows the result and
+the source can always be opened.
+
+| Action | Written to the journal | Shown in the feed |
 |---|---|---|
-| Название, ссылки на исходные сообщения | Повторяющиеся задачи, канбан-доски (на тех же фильтрах) | Совместная работа напарников в самом приложении (только бот) |
-| Роли: ответственный, исполнители, контролёр, наблюдатели, постановщик, контрагент (§2.8) | Подзадачи | |
-| Статусы: inbox, todo, doing, waiting, review, done, deferred, cancelled | Оценка и учёт времени | Свои вложения (только ссылки на события) |
-| Срок, план, напоминание, обещание | Отчёт по выполненному за неделю | |
+| Reply | a new message with `reply_to` | quote of the source above the reply; the reply stays in its conversation and tasks |
+| Edit | `kind: correction`, `payload.ref` → source, `data.op: edit`, new `text` and `tags` | new text, «изменено»; older versions in the history |
+| Archive / unarchive | `correction`, `op: archive` / `unarchive` | hidden from the feed, visible with «Архив» on |
+| Delete / restore | `correction`, `op: delete` / `restore` | gone everywhere; can be undone for a few seconds |
 
-Правило против разрастания: прежде чем добавить функцию задач, проверить, не закрывает ли её зеркало или процесс
-из реестра (§2.10).
+- Only a plain message can be edited, not another correction. Media are not edited — only text and tags.
+- Of several corrections the latest by time wins.
+- «Удалить» withdraws, it does not erase: the source stays in the journal and backups. Erasing personal data on
+  request is a separate decision when needed.
+- Corrections travel through the same device queue and live stream as messages.
 
-### 2.4 Ответ, правка, архив, удаление
+**How a correction reaches triage, tasks, connectors and automations** (from step 3; now only the journal):
 
-Журнал неизменяем, поэтому любое действие владельца над сообщением — **новое событие**, а лента показывает
-итог. Исходник всегда можно открыть.
-
-| Действие | Что пишется в журнал | Что видно в ленте |
-|---|---|---|
-| Ответить | новое сообщение с `reply_to` = id исходного | цитата исходного над ответом; ответ остаётся в его беседе и задачах |
-| Изменить | `kind: correction`, `payload.ref` → исходное, `data.op: edit`, новый `text` и `tags` | новый текст и пометка «изменено»; прежние версии — в истории |
-| В архив / вернуть | `correction`, `data.op: archive` / `unarchive` | сообщение скрыто из ленты, видно в режиме «Архив» |
-| Удалить / отменить | `correction`, `data.op: delete` / `restore` | сообщение исчезает отовсюду; несколько секунд можно отменить |
-
-Правила:
-- Правка относится только к обычному сообщению, не к другой правке. Медиа не правятся — только текст и метки.
-- Из нескольких правок действует последняя по времени.
-- «Удалить» — отзыв, а не стирание: исходник остаётся в журнале и в копиях. Стирание персональных данных по
-  требованию — отдельное решение (`decisions.md`, «Основа»), когда понадобится.
-- Правки идут через ту же очередь на телефоне и тот же поток на другие устройства, что и сообщения.
-
-**Как правка доходит до разбора, задач, коннекторов и автоматизаций** (с шага 3; сейчас — только журнал):
-
-| Что уже произошло | Изменить | Удалить | В архив |
+| Already happened | Edit | Delete | Archive |
 |---|---|---|---|
-| Интерпретация | новая версия по новому тексту (`supersedes`) | помечается отозванной | без изменений |
-| Действие класса A ещё не выполнено | пересобирается из новой версии | отменяется (`rejected`) | без изменений |
-| Действие класса A выполнено (задача, расход) | компенсирующее действие коннектора: обновить запись | компенсирующее действие: отменить запись (задача → `cancelled`, расход → сторно) | без изменений |
-| Действие класса B — черновик наружу | черновик готовится заново и снова ждёт «да» | черновик отменяется | без изменений |
-| Действие класса C уже ушло наружу | не отменяется; в ленте вопрос «Отправлено до правки. Отправить исправление?» | не отменяется; вопрос «Отправлено клиенту. Что сделать?» | без изменений |
-| Автоматизация по расписанию | при срабатывании читает **текущую** проекцию, а не снимок | отменяется, если исходник отозван | срабатывает как обычно |
+| Interpretation | new version from the new text (`supersedes`) | marked withdrawn | no change |
+| Class A action not yet done | rebuilt from the new version | cancelled (`rejected`) | no change |
+| Class A action done (task, expense) | compensating connector action: update | compensating action: cancel (task → `cancelled`, expense → reversal) | no change |
+| Class B draft | prepared again, waits for «да» | cancelled | no change |
+| Class C already sent out | not undone; question «Отправлено до правки. Отправить исправление?» | not undone; question «Отправлено клиенту. Что сделать?» | no change |
+| Scheduled automation | reads the **current** projection when it fires | cancelled if the source is withdrawn | fires as usual |
 
-- Для каждой операции коннектор объявляет в `registry/connectors.yaml`, чем она отменяется или обновляется
-  (`undo`, `update`) либо что она необратима (`irreversible: true`). Данные, не код.
-- Компенсирующее действие получает ключ идемпотентности из пары «id правки + id исходного действия»: повтор
-  правки не шлёт второе исправление.
-- Задача, созданная из сообщения, живёт своими событиями `task_change`: архив сообщения задачу не трогает,
-  удаление сообщения предлагает отменить задачу, но не отменяет её молча, если в ней уже есть свои изменения.
+- Each connector operation declares in `registry/connectors.yaml` how it is undone or updated (`undo`, `update`)
+  or that it is `irreversible: true`.
+- A compensating action's idempotency key is "correction id + original action id": a repeated edit never sends a
+  second fix.
+- A task made from a message lives by its own events: archiving the message does not touch it; deleting the
+  message proposes to cancel the task but never cancels silently if the task has its own changes.
 
-### 2.5 Беседы и задачи (решение 2026-11-18, П14; заменяет «тема = дело»)
+### 2.5 Conversations and tasks (2026-11-18, P14)
 
-**Беседа и задача — разные сущности.** Беседа — чат с людьми; задача — то, что нужно сделать. Их связывают
-сообщения: задача ссылается на сообщения (`add` / `remove`), беседы задачи — это беседы её сообщений. В одной
-беседе бывает несколько задач; одна задача может охватывать несколько бесед (заявка клиента и поручение
-напарнику). Прежнее «тема = дело = задача» отменено: сводить их в одну сущность неверно.
+**A conversation and a task are different entities.** A conversation is a chat with people; a task is something
+to do. Messages link them: a task references messages (`add` / `remove`), and a task's conversations are those of
+its messages. One conversation can hold several tasks; one task can span several conversations (a client's
+request and the job given to a partner).
 
-**Беседа** — проекция журнала, своих событий у неё нет.
-- Ключ — канал: личный чат или группа Telegram (по аккаунту), номер телефона (звонки и SMS), чат с ботом задач,
-  своя беседа «Я» (заметки себе, команды ИИ). Беседы одного человека из разных каналов склеиваются, когда есть
-  справочник контактов (П7); раньше — по telegram user id.
-- Участники беседы — люди без ролей; роли есть у задач (§2.8).
-- **Состояние беседы** вычисляется; пороги — данные (`registry/conversations.json`):
+**Conversation** — a projection of the journal with no events of its own.
+- Key — the channel: a personal chat or group in Telegram (per account), a phone number (calls and SMS), the
+  task-bot chat, the owner's own «Я» (notes, AI commands). One person's conversations merge across channels once
+  the contact directory exists (P7); before that — by Telegram user id.
+- Participants have no roles; roles belong to tasks (§2.8).
+- **State** is computed; thresholds are data (`registry/conversations.json`):
 
-| Состояние | Когда |
+| State | When |
 |---|---|
-| срочно | у связанной открытой задачи срок сегодня или просрочен, или метка срочности |
-| ждёт меня | последнее сообщение входящее и без ответа, или связанная задача требует моего действия (новая, мне на проверку) |
-| жду их | последнее сообщение моё, или связанная задача ждёт кого-то из участников |
-| тихо | ничего из выше, есть открытые задачи или переписка моложе `quiet_days` |
-| завершено | все связанные задачи закрыты, входящих без ответа `quiet_days` дней нет |
+| urgent («срочно») | a linked open task is due today or overdue, or an urgency tag |
+| mine («ждёт меня») | the last meaningful message is incoming and unanswered, or a linked task needs my action (new, review) |
+| theirs («жду ответа») | the last message is mine, or a linked task waits for a participant |
+| quiet | none of the above, with open tasks or messages younger than `quiet_days` |
+| done | all linked tasks closed and no unanswered incoming for `quiet_days` |
 
-- Порядок списка: срочно → ждёт меня → жду их (внутри — от свежих к старым) → тихо → завершено (свёрнуто).
-- «Ждёт меня» считается по итогу разбора, а не по последнему сообщению: входящее, разложенное как «без дела»
-  («ок», «спасибо»), ответа не ждёт. В группе беседа ждёт меня, только если обращаются ко мне или сообщение
-  относится к моей задаче. Мой ответ в любом канале беседы — ответ.
-- Внутри беседы — переписка всех её каналов; сверху плашки связанных задач (статус, исполнитель, срок). Ответ
-  уходит выбранным каналом (строка «кому», §2.9); у каждого сообщения видно, кому, куда и когда.
+- Order: urgent → mine → theirs (newest first inside) → quiet → done (folded).
+- «ждёт меня» uses the triage outcome, not just the last message: an incoming "ok, thanks" filed as «без дела»
+  waits for nothing. In a group a message waits for me only when addressed to me or part of my task. My reply in
+  any channel of the conversation is an answer.
+- Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
+  reply goes through the chosen channel (the «кому» row, §2.9); each message shows to whom, where and when.
 
-**Связи сообщений** (решение 2026-11-14) — подсказка разбору, от надёжных к догадкам:
-1. явные сигналы владельца: «продолжить» у сообщения, «связать…» в строке ввода и выбор в беседе, «Связать» /
-   «Отделить» в панели действий (правки `link` / `unlink`), ответ;
-2. признаки в тексте, без ИИ: общий телефон, адрес, клиент, проект; слова-продолжения;
-3. разбор ИИ с учётом открытых задач.
+**Message links** (2026-11-14) — hints for triage, from reliable to guessed:
+1. explicit owner signals: «продолжить» on a message, «связать…» while typing, «Связать» / «Отделить»
+   (`link` / `unlink` corrections), a reply;
+2. cues in text without AI: shared phone, address, client, project; continuation words;
+3. AI triage aware of open tasks.
 
-Связь владельца сильнее автоматики; автоматическая связь — пересчитываемый слой с версией обработчика. Два дела
-в одном сообщении дают две задачи (§2.8); исходник неизменен.
+An owner link beats automation; an automatic link is a recomputable layer with a processor version. Time alone is
+not a link. Two matters in one message give two tasks (§2.8); the source stays unchanged.
 
-**Контрагенты и контакты** — со справочником. Устройство справочника (отдельная база, связь многие ко многим с
-должностями, контактные данные со сменой владельца, синхронизация с Google) — к обсуждению, `decisions.md`. До
-П7 «человек» — минимальная запись (имя, telegram user id, номер) из бота задач и чатов Telegram; П7 её
-расширит. Привязка по содержанию:
-- один подходящий кандидат — привязывается; два-три — предлагаются на выбор;
-- неоднозначно или не найдено — записывается как сказано: имя или номер телефона; неизвестный номер заводит
-  нового человека.
+**Counterparties and contacts** — with a directory. Its structure (a separate store, many-to-many with job
+titles, contact details whose owner can change, Google sync) is open (`decisions.md`, P7). Until P7 a "person" is
+a minimal record (name, Telegram user id, number) from chats and the task bot. Matching by content: one
+candidate — linked; two or three — offered to choose; ambiguous or not found — stored as said (name or number);
+an unknown number creates a new person.
 
-### 2.6 Блоки полей
+### 2.6 Field blocks
 
-Метка с переменными (§2.2) собирается из **блоков полей** — данных в реестре, а не кода:
+A tag with variables (§2.2) is assembled from **field blocks** — registry data, not code:
 
-| Блок | Поля | Откуда берутся значения |
+| Block | Fields | Values come from |
 |---|---|---|
-| Поездка | откуда, куда, вид транспорта, начало, длительность, расстояние | время сообщений («выезжаю», «приехал»), слова («на машине»), привычка, позже — карты |
-| Работа | начало, конец, длительность, удалённо или выезд | время «приехал» → «закончил» |
-| Оплата | сумма, форма, счёт, предоплата / оплачено / долг | текст; недостающее — вопрос в вечерней сводке |
-| Позиции покупки | список: что, сколько, цена | фото чека (шаг 2); вручную — по желанию |
-| Заправка | литры, цена за литр, сумма, пробег | фото чека; пробег — вопрос, если давно не вводился |
-| Самочувствие | настроение, энергия (1–5) | шкалы одним касанием при метке дневника |
+| Trip | from, to, transport, start, duration, distance | message times ("leaving", "arrived"), words ("by car"), habits, later maps |
+| Work | start, end, duration, remote or on site | "arrived" → "finished" |
+| Payment | amount, form, account, prepaid / paid / debt | text; missing — evening summary |
+| Purchase items | list: what, how many, price | receipt photo (step 2) |
+| Fuel | litres, price per litre, amount, mileage | receipt photo; mileage asked if not entered for long |
+| Wellbeing | mood, energy (1–5) | one-tap scales with a diary tag |
 
-- Пример: «выездная заявка» = поездка + работа + оплата + поездка обратно.
-- Владелец форм не заполняет. Значения берутся из текста, времени сообщений, привычек и справочников;
-  недостающее собирается одним списком в вечерней сводке, а не вопросом сразу.
-- Новый блок — по правилу трёх: после того как ситуация трижды встретилась в ленте.
-- Деньги — минимум: доход со статусом «оплачено / долг» и счётом; «кто мне должен» — фильтр. Без
-  бухгалтерии с двойной записью.
+- Example: an on-site request = trip + work + payment + trip back.
+- The owner fills no forms: values come from text, message times, habits and directories; whatever is missing is
+  collected in one list in the evening summary, not asked on the spot.
+- A new block only by the rule of three. Money stays minimal: income with «оплачено / долг» and an account;
+  "who owes me" is a filter. No double-entry bookkeeping.
 
-### 2.7 Обработка, переобработка и версии сообщения (решение 2026-11-14)
+### 2.7 Processing, reprocessing and message versions (2026-11-14)
 
-Исходник неизменен; всё остальное — слои с именем и версией обработчика. Новое правило — новая версия
-обработчика, поэтому старые сообщения можно прогнать заново.
+The source never changes; everything else is a layer named and versioned by its processor, so old messages can be
+run through a new rule.
 
-| Слой | Что делает |
+| Layer | Does |
 |---|---|
-| Чистый текст | исправление опечаток диктовки, пунктуация, форматирование; единый вид телефонов, сумм, дат |
-| Сущности | минуты, километры, суммы с валютой, телефоны, относительные даты |
-| Классификация | вид записи, метки, поля |
-| Связи | беседа и задачи, продолжение какого сообщения, контрагент и контакт |
+| Clean text | dictation typos, punctuation, formatting; one form for phones, amounts, dates |
+| Entities | minutes, kilometres, amounts with currency, phones, relative dates |
+| Classification | kind of record, tags, fields |
+| Links | conversation and tasks, what it continues, counterparty and contact |
 
-**Запуск — три способа, один механизм:**
-- автоматически: при смене правила или версии обработчика фоновая задача пересчитывает сообщения со старой
-  версией слоя; бесплатные слои — вся лента, слои с ИИ — новые и недавние, в пределах лимита трат;
-- по одному: «Обработать заново» в панели действий сообщения;
-- пачкой: «Обработать всё показанное» в панели фильтров, с числом сообщений и оценкой цены до запуска.
+**Three ways to run, one mechanism:** automatically when a rule or processor version changes (free layers — the
+whole feed; AI layers — new and recent messages within the spending limit); one message — «Обработать заново» in
+its actions; a batch — «Обработать всё показанное» in the filters, with a count and cost estimate first.
 
-**Правила:**
-- правки владельца сильнее автоматики: переобработка их не перезаписывает, расхождение приходит предложением;
-- ничего не меняется молча: после пачки — служебная запись в ленте «переобработано N, изменилось M» с
-  возможностью отката;
-- исправление текста не меняет смысл: суммы, имена и телефоны правятся только по формату;
-- сделанное по старому разбору обновляется по правилам §2.4;
-- новое правило сначала проходит эталонный набор; стало хуже — массовая переобработка не запускается.
+- Owner edits beat automation: reprocessing never overwrites them, a disagreement comes as a proposal.
+- Nothing changes silently: a batch ends with a service entry "reprocessed N, changed M" with rollback.
+- Text cleanup never changes meaning: amounts, names and phones change only in format.
+- What was done from an old interpretation is updated by §2.4.
+- A new rule first passes the golden set; if it got worse, no mass reprocessing.
 
-**Что видно в ленте.** Лента показывает **обработанное** сообщение, а не исходник. У сообщения с историей или
-связями есть значок истории. Он открывает подробности сообщения справа (§5): редакции листаются влево и
-вправо, крайняя левая — исходник; у каждой версии видно, что это и когда; рядом — задачи сообщения. В самой
-ленте смахивание по сообщению не используется: касание — панель действий, долгое нажатие — выделение,
-смахивание слева направо — левая панель (§5). «Связанные» — цепочка ответов и сообщения общих задач (§2.5).
+**In the feed** a message is shown **processed**, not raw. A message with history or links has a history icon; it
+opens the message details on the right (§5): versions swipe left and right down to the source (each says what it
+is and when), next to the message's tasks. No swipe on a message in the feed: tap — action panel, long press —
+selection, swipe left-to-right — left panel (§5). "Linked" means the reply chain and messages of shared tasks.
 
-### 2.8 Задачи — главная сущность; разбор пачками (решение 2026-11-17)
+### 2.8 Tasks — the main entity; batch triage (2026-11-17)
 
-Сообщение — сырьё, задача — то, ради чего оно пришло. Всё, что нужно сделать с сообщениями, становится
-задачей, а лента — её исходниками. Задача — проекция журнала (§2.3): создание и каждое изменение — события
-`task_change`.
+A message is raw material; the task is why it came. Everything to be done with messages becomes a task, and the
+feed holds its sources. Creation and every change are `task_change` events (§2.3).
 
-**У задачи:** название, роли, статус, сроки, шаблон (что сделать — данные в реестре), исходные сообщения (много
-ко многим), уверенность разбора и кто её создал (разбор с версией обработчика или владелец).
+**A task has** a title, roles, a status, dates, a template (what to do — registry data), source messages (many to
+many), triage confidence and its creator (triage with processor version, or the owner).
 
-**Стороны.** Ссылка на сторону: `me`, `ai`, `system`, `tg:<user id>` (человек в Telegram), `tel:<+цифры>`
-(человек по номеру), `group:tg:<chat id>` (команда — группа Telegram), `name:<как назвали>` (человек, известный
-только по имени, до справочника П7). Один пользователь Telegram — одна сторона во всех аккаунтах (BY, PL) и в
-боте задач: id у него один. П7 сведёт `tg:`, `tel:` и `name:` одного человека в одну запись.
+**Parties:** `me`, `ai`, `system`, `tg:<user id>`, `tel:<+digits>`, `group:tg:<chat id>` (a Telegram group as a
+team), `name:<as said>` (known by name only, until P7). One Telegram user is one party across BY, PL and the task
+bot. P7 will merge `tg:`, `tel:` and `name:` of one person.
 
-**Роли** — у задачи, не у беседы; все необязательны, кроме ответственного:
+**Roles** — all optional except the responsible:
 
-| Роль | Кто | По умолчанию |
+| Role | Who | Default |
 |---|---|---|
-| постановщик | кто попросил | автор сообщения, из которого задача; моё обещание — я |
-| ответственный | кто отвечает за итог | я, если задача пришла ко мне; иначе — кого просят в переписке |
-| исполнители | кто делает (несколько) | пусто, пока не принято или не поручено |
-| контролёр | кто проверяет | ответственный, если исполнитель — не он; я — если я поручил другому (постановщик — я, ответственный — не я) |
-| наблюдатели | кто в курсе | участники беседы, кому я переслал |
-| контрагент | организация | организация постановщика (с П7) или выбор из списка |
+| author | who asked | author of the source message; my own promise — me |
+| responsible | answers for the result | me if the task came to me; otherwise whom the chat asks |
+| executors | who does it (several) | empty until accepted or delegated |
+| controller | who checks | the responsible if the executor is someone else; me if I delegated (author me, responsible not me) |
+| watchers | who is informed | conversation participants I forwarded to |
+| counterparty | organization | the author's organization (P7) or chosen |
 
-Исполнитель — сторона любого вида: я, ИИ (правка текста, классификация, поля), система (скрипт или коннектор:
-дневник, учёт, план), человек (через бота, с ожиданием «принял»).
+An executor can be any party: me, AI (text fixes, classification, fields), the system (a script or connector:
+diary, accounting, plan), a person (through the bot, waiting for «принял»).
 
-**Задачи без меня** (решение владельца 2026-11-18). Разбор заводит задачи из всех отслеживаемых чатов, и там, где
-меня нет ни в одной роли: клиент просит напарника, напарник — другого напарника. Ответственный и исполнитель — те,
-кто в переписке, я — наблюдатель. Такие задачи видны фильтром «Команда», не попадают в «Мои», не делают беседу
-«ждёт меня» и не шлют мне напоминаний.
+**Tasks without me** (2026-11-18). Triage creates tasks in every tracked chat, also where I have no role (a client
+asks a partner, a partner asks another). Responsible and executor are the people in the chat, I am a watcher. Such
+tasks are in the «Команда» filter only: not in my lists, they do not make a conversation «ждёт меня» and send me
+no reminders.
 
-**Статусы:** `inbox` (новая, ждёт решения) → `todo` (принята) → `doing` → `waiting` (жду кого-то или чего-то;
-`waiting_for` — сторона и срок) → `review` (исполнитель отчитался, ждёт проверки) → `done`; отдельно `deferred`
-(отложена до даты) и `cancelled`. «Учтено» — не статус, а фильтр: `done` и в отчёте нет пропусков.
+**Statuses:** `inbox` (new, needs a decision) → `todo` (accepted) → `doing` → `waiting` (`waiting_for`: party and
+date) → `review` (an executor reported, waits for checking) → `done`; plus `deferred` (until a date) and
+`cancelled`. «Учтено» is a filter, not a status: `done` with no gaps in the report.
 
-**Даты:** `due` (срок, дата или дата-время), `plan` (начало и длительность — для Календаря), `remind_at`.
-**Обещание:** `promise` — кто обещал, к какому сроку, сообщение-цитата. «Сделаю завтра» — задача мне со сроком;
-чужое «скину адрес вечером» — задача `waiting`, `waiting_for` = этот человек. **Внешние копии:** `external_refs` —
-id в Google и Планфиксе, с версией сверки. Старые события `task_change` (с одним исполнителем) читаются дальше.
+**Dates:** `due` (date or date-time), `plan` (start and duration — for Calendar), `remind_at`. **Promise:** who
+promised what by when, with the quoted message. "I'll do it tomorrow" — a task for me with a due date; someone's
+"I'll send the address tonight" — a `waiting` task with `waiting_for` = that person. **External copies:**
+`external_refs` — ids in Google and Planfix with a sync version. Old single-assignee `task_change` events are still read.
 
-**Переходы одним касанием** (в Stream и в боте):
+**One-tap transitions** (in Stream and in the bot):
 
-| Действие | Что меняется |
+| Action | Change |
 |---|---|
-| Принять | исполнитель — я, `todo` |
-| Поручить… | исполнитель — человек, команда или ИИ, контролёр — я; черновик поручения уходит после «да» |
-| Принял (исполнитель) | `todo` у исполнителя |
-| Отложить до… | `deferred`, `remind_at` = дата |
-| Жду… | `waiting`, `waiting_for` |
-| Готово (в любом открытом статусе, и у новой задачи) / Проверил | сразу `done`; поля отчёта шаблона — в `report.missing`, их спросит вечерняя сводка (§2.9) |
-| Готово (исполнитель сообщил через бота, этап 3) | `review`, мне задача на проверку |
-| Срок | сегодня / завтра / на неделе / дата |
+| «Принять» | executor me, `todo` |
+| «Поручить…» | executor a person, team or AI; controller me; the assignment message goes out after «да» |
+| «Принял» (executor) | `todo` for the executor |
+| «Отложить до…» | `deferred`, `remind_at` |
+| «Жду…» | `waiting`, `waiting_for` |
+| «Готово» (any open status, a new task too) / «Проверил» | `done` at once; report fields of the template go to `report.missing` for the evening summary (§2.9) |
+| «Готово» reported by an executor via the bot (stage 3) | `review`, a check task for me |
+| Due | today / tomorrow / this week / a date |
 
-**Действие там, где задача видна** (решение 2026-11-19). У строки задачи и у плашки задачи в беседе — круглая
-отметка слева: касание — «Готово». Смахивание вправо — тоже «Готово», влево — «Когда?»: сегодня, завтра, на неделе,
-дата (срок). Касание самой строки — подробности. После каждого действия — уведомление с «Вернуть» на несколько
-секунд: отмена — новое событие `task_change`, возвращающее прежние значения. Смахивание от самого левого края экрана
-по-прежнему открывает левую панель.
+**Act where the task is seen** (2026-11-19). Task rows and task plaques in a conversation have a round mark on the
+left: tap — «Готово». Swipe right — «Готово» too; swipe left — «Когда?» (today, tomorrow, this week, a date). A tap
+on the row opens details. Every action shows a toast with «Вернуть» for a few seconds; undo is a new `task_change`
+restoring the previous values. A swipe from the very left screen edge still opens the left panel. The same
+actions work as text or voice in «Я»: "move the call to Anna to Friday".
 
-Те же действия — текстом и голосом в беседе «Я»: «перенеси звонок Анне на пятницу».
+**Batch triage.** After a message the triage waits for a quiet window (`registry/tasks.json`: `quiet_s`, now 60 s;
+`quiet_s_by_stream` for chats, now 180 s) counted from the last message of that conversation; each new message
+restarts it. Then everything new is triaged together, with up to `context_messages` (now 20) earlier messages of
+the same conversation from the last day as context. **A batch is a window, not one task:** each message goes to
+zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
+two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
+script). Its outcome: close at once by filing it (wellbeing → diary, a system idea → the project plan, "ok" and
+chatter → «без дела»), attach to an open task, or create a task for me, the system or a person. A message without a
+triage outcome is untriaged. Owner corrections (move to another task, merge, cancel) are events and golden examples.
 
-**Разбор пачками.** После сообщения выжидается окно тишины (`registry/tasks.json`: `quiet_s`, сейчас 60 с; для
-чатов — `quiet_s_by_stream`, сейчас 180 с: в переписке ответы догоняют медленнее) —
-время на уточнения следом; окно отсчитывается от последнего сообщения беседы (чата, телефона, своих заметок),
-каждое новое сообщение начинает его заново. Затем разбирается всё новое вместе, а предыдущие сообщения той же
-беседы за сутки (`context_messages`, сейчас 20) идут в разбор как контекст: беседа с паузами больше окна
-делится на пачки, и одна пачка без начала разговора непонятна. **Пачка — окно для разбора, а не одна задача:**
-каждое сообщение пачки относится к нулю, одной или нескольким задачам, в том числе к уже открытым (уточнение
-старой задачи); два дела в одном сообщении дают две задачи. **Разобрать — тоже задача** (решение 2026-11-18):
-у каждого нового сообщения есть задача по умолчанию «разобрать» (исполнитель — ИИ, позже скрипт). Итог разбора:
-сразу закрыть, разложив куда нужно (самочувствие — в дневник, идея по системе — в план проекта, «ок» и болтовня — «без дела»), присоединить к
-открытой задаче или завести задачу мне, системе, человеку. Сообщение без итога разбора — не разобрано.
-Владелец исправляет — переносит сообщение в другую задачу, объединяет, отменяет; правки — события
-и примеры для `golden/`.
+**Which task a message belongs to** (2026-11-18). Triage sees all open tasks (latest changed,
+`open_tasks_in_context`) with their last messages, chats and last activity, plus tasks closed or cancelled within
+`reopen_days` (now 30).
+- A message that clearly continues a closed task reopens it (`todo`) and joins it; filed tasks (diary, note,
+  «без дела») are not reopened, the message just joins.
+- Several likely tasks: the message goes to the most likely one, and under it appears «О каком деле?» with the
+  chosen one (✓), up to three alternatives and «Новое дело». A tap moves the message (a closed task reopens);
+  tapping the chosen one confirms. The answer is a task event and a golden example.
 
-**К какой задаче сообщение** (решение 2026-11-18). Задача живёт сколько угодно дней: разбор видит все открытые
-задачи (последние изменённые, `open_tasks_in_context`) с их последними сообщениями, чатами и временем последней
-активности, а также завершённые и отменённые задачи за `reopen_days` дней (`registry/tasks.json`, сейчас 30).
-- Сообщение явно продолжает завершённую задачу — разбор возвращает её в работу (статус `todo`) и добавляет
-  сообщение; разложенное (дневник, заметка, «без дела») не возвращается, сообщение просто добавляется к ней.
-- Несколько вероятных задач — сообщение уходит в самую вероятную, а прямо под сообщением появляется вопрос «О каком
-  деле?» с кнопками: выбранное (✓), другие варианты (до трёх), «Новое дело». Касание переносит сообщение (задача
-  из завершённых возвращается в работу), выбор выбранного — подтверждает. После ответа вопрос исчезает; ответ —
-  событие задачи и пример для `golden/`.
+**AI now, scripts later.** The AI does all triage for now (`registry/tasks.json`: model, spending limit, templates
+with instructions). A repeated scenario (rule of three, §9) gets its own script; then AI is called only for unclear
+cases: no tags, low confidence, several candidate tasks. The same applies to tags and message links.
 
-**ИИ сейчас, скрипты потом.** Пока разбор целиком делает ИИ (`registry/tasks.json`: модель, лимит трат,
-шаблоны с инструкциями). Повторяемый сценарий (правило трёх, §9) получает свой скрипт-обработчик — тогда ИИ
-зовётся только в спорных случаях: без меток, низкая уверенность, несколько возможных задач. Так же — для
-меток и связей сообщений.
+**Filed outcomes stay tasks** with `filed`: they do not affect conversation state and are excluded from default
+filters, processes and mirrors.
 
-**Итоги разбора остаются задачами.** Разложенное (дневник, план, заметка, «без дела») — задачи с признаком
-`filed`: они не влияют на состояние беседы и не попадают в фильтры по умолчанию, процессы и зеркала.
+**Task list** — the «Задачи» view (§5): saved filter «Сегодня» by default; a tap opens task details on the right.
+«Сделать задачей» is in the message action panel.
 
-**Список задач** — вид «Задачи» в центре экрана (§5): по умолчанию сохранённый фильтр «Сегодня» и другие
-системные фильтры; касание задачи — её подробности в правой панели. «Сделать задачей» — в панели действий
-сообщения.
+### 2.9 Recipients; closing a task (2026-11-18)
 
-### 2.9 Адресаты, закрытие задачи (решение 2026-11-18)
+**The row above the input has two sides:**
+- left: `#` (the full tag window), the link icon, then suggested or switched-on tags;
+- right: «кому» — a tap slides contacts in from the right, tags hide under `#`;
+- replying to a chat message opens the row with that contact already chosen; others can be added (forward,
+  share). Nobody chosen — a note to myself, nothing goes out;
+- each recipient is its own send (class C) with a status under the reply. For now one recipient per message:
+  tapping another replaces it;
+- a personal chat accepts text only and only within the 24-hour window (§8.2): such a recipient is struck out,
+  and sending offers «Открыть» the chat in Telegram.
 
-**Строка над вводом — две роли** (заменяет кнопку меток слева от поля ввода):
-- слева `#` — всё окно меток; дальше значок связи и подобранные или уже включённые метки;
-- справа «кому» — касание раскрывает строку влево контактами, метки прячутся под `#`;
-- ответ на сообщение из чата открывает строку сразу с контактами, собеседник уже выбран; можно добавить
-  других — переслать или поделиться. Никто не выбран — заметка себе, наружу ничего не уходит;
-- каждый адресат — своя отправка (класс C) со статусом под ответом. Отдельного действия «В Telegram» нет.
-  Пока у сообщения один адресат: касание другого заменяет выбранного; несколько сразу — позже;
-- в личный чат — только текст и только в окне 24 часа (§8.2): такой адресат в строке зачёркнут, отправка к
-  нему предлагает «Открыть» чат в Telegram.
+**Address book** — the start of P7: contacts and groups one can write to (personal Telegram chats, groups with the
+bot; later phones and mail). The «кому» row shows the most frequent (from the journal, `address_book.frequent_days`
+in `registry/telegram.json`) and pinned ones. A group is a recipient too, e.g. the partners' work group for new
+requests. Untracked chats and foreign groups are not in it. Pin — the star in the full list («Все…» with search);
+pinning is a `pin` / `unpin` correction on a message of that chat.
 
-**Адресная книга** — начало П7. Контакты и группы, куда можно писать: личные чаты Telegram, группы с ботом,
-позже телефоны и почта. В строке «кому» — самые частые (частота из журнала) и закреплённые владельцем. Группа —
-тоже адресат: например, рабочая группа напарников, куда уходят заявки. Книга — проекция: чаты из журнала, группы,
-где бот участник, частота за `address_book.frequent_days` дней (`registry/telegram.json`); отключённые «Не
-отслеживать» и чужие группы в неё не попадают. Закрепить — звёздочка в полном списке («Все…» в конце строки,
-с поиском); закрепление — правка `pin` / `unpin` у сообщения этого чата, как «Не отслеживать».
+**Closing — one tap, report later** (2026-11-19). «Готово» closes at once; no report form on closing — it
+punished the owner for doing the work. Report fields required by the template go to `report.missing`: such tasks
+are in «Не учтено» and the evening summary.
+- When triage sees "done" about a task it does not close it silently: it sets `proposed: done` («готово?» on the
+  plaque and row), and task details and its last message show «Задача выполнена?» with «Да» (closes like
+  «Готово») and «Ещё нет» (drops the question).
+- «Заполнить отчёт» in a closed task with gaps: fields from the template (`report_fields`, the template's `report`,
+  else `report_default`): start, duration (90, 1:30, 1,5 ч), price, costs with currency, tags, a one-line result.
+  Empty fields stay in `missing`. Prefilling from text and message times — with step 3.
 
-**Закрытие задачи — одним касанием, отчёт потом** (решение 2026-11-19, заменяет «закрытие с отчётом»). «Готово»
-закрывает задачу сразу; форма отчёта при закрытии не показывается — она наказывала за сделанное. Поля отчёта, которых
-требует шаблон, записываются в `report.missing`: такие задачи видны фильтром «Не учтено» и уходят в вечернюю сводку.
-- Разбор, увидев «готово» по задаче, не закрывает её молча: ставит `proposed: done` (на плашке и в строке — «готово?»),
-  и в подробностях задачи и под её последним сообщением появляется карточка «Задача выполнена?» с «Да» (закрыть, как
-  «Готово») и «Ещё нет» (снять вопрос).
-- «Заполнить отчёт» — в подробностях закрытой задачи с пропусками: поля из шаблона (`registry/tasks.json`:
-  `report_fields`, у шаблона — `report`, иначе `report_default`): когда начал, сколько заняло (90, 1:30, 1,5 ч),
-  стоимость, затраты с валютой, метки, итог одной строкой. Пустые поля остаются в `missing`. Подсказка значений из
-  текста и времени сообщений — с шагом 3.
+### 2.10 Processes, task bot, mirrors (P14 stages 3–7)
 
-### 2.10 Процессы, бот задач, зеркала (этапы 3–7 П14)
-
-Последующие этапы — отдельные планы, по одному, после недели использования предыдущего; здесь только их место в
-модели. **Процессы** — правила-данные (`registry/processes.json`): фильтр задач + таймер от поля + действие
-(напомнить мне, спросить меня с черновиком людям, поднять беседу, в сводку), с защитой от спама (частота,
-дневной лимит, тихие часы); людям без «да» ничего не уходит. **Бот задач** — отдельный бот: владелец получает
-напоминания и вопросы с кнопками, напарники — поручения с «Принять» / «Не могу» и отчётом. **Зеркала** — Google
-Задачи, Календарь, Планфикс (§2.3). Подробности, этапы и открытые вопросы:
+Later stages, one at a time after a week of using the previous one; details and open questions in
 `docs/plans/2026-11-18-p14-conversations-tasks-design.md`.
+- **Processes** — rules as data (`registry/processes.json`): a task filter + a timer from a field + an action
+  (remind me, ask me with a draft to people, raise the conversation, add to the summary), with spam protection
+  (frequency, daily limit, quiet hours). Nothing goes to people without «да».
+- **Task bot** — a separate bot: the owner gets reminders and questions with buttons; partners get assignments
+  with «Принять» / «Не могу» and a report.
+- **Mirrors** — Google Tasks, Calendar, Planfix (§2.3).
 
-## 3. Конвейер обработки
+## 3. Pipeline
 
-Сообщение сначала сохраняется, потом обрабатывается: если ИИ недоступен или ошибся, ничего не теряется.
+A message is saved first and processed after: if AI is down or wrong, nothing is lost.
 
-1. **Приём.** Событие записано, владелец видит «принято». Без ИИ, мгновенно.
-2. **Нормализация.** Голос → текст, фото → текст, найдены суммы, даты, имена.
-3. **Задача.** Ответ остаётся с задачей исходного. Иначе ИИ ищет подходящую среди открытых задач (время подряд —
-   подсказка) или заводит новую; два дела в одном сообщении дают две задачи (§2.8).
-4. **Цель и поля.** Один вызов `interpret()` возвращает Interpretation по схеме.
-5. **Решение.** По уверенности и классу риска: выполнить, предложить или спросить.
-6. **Исполнение.** Коннектор выполняет действие; результат со ссылкой возвращается в ленту событием.
-7. **Исправление.** Правка владельца — новое событие и новая версия интерпретации. Правки копятся как примеры
-   для этой цели.
+1. **Intake.** The event is written, the owner sees «принято». No AI, instant.
+2. **Normalization.** Voice → text, photo → text; amounts, dates, names found.
+3. **Task.** A reply stays with its source's task. Otherwise triage finds a matching open task (time is a hint)
+   or creates one; two matters give two tasks (§2.8).
+4. **Intent and fields.** One `interpret()` call returns an Interpretation by schema.
+5. **Decision.** By confidence and risk class: do, propose or ask.
+6. **Execution.** A connector runs the action; the result with a link returns to the journal as an event.
+7. **Correction.** An owner edit is a new event and a new interpretation version; edits accumulate as examples.
 
-### 3.1 Уверенность и класс риска
+### 3.1 Confidence and risk class
 
-| Класс | Примеры | Высокая (≥0,85) | Средняя (0,6–0,85) | Низкая (<0,6) |
+| Class | Examples | High (≥0.85) | Medium (0.6–0.85) | Low (<0.6) |
 |---|---|---|---|---|
-| **A.** Внутреннее, обратимое | тег, связь с задачей, запись расхода, задача | выполнить | выполнить с пометкой «проверь» | уточняющий вопрос |
-| **B.** Черновик наружу | ответ клиенту, проект оферты | готовится, ждёт «да» | готовится, ждёт «да» | уточняющий вопрос |
-| **C.** Необратимое наружу | отправка клиенту, ответ на отзыв, счёт | только после подтверждения | только после подтверждения | не готовится |
+| **A.** Internal, reversible | tag, task link, expense record, task | do | do, marked «проверь» | ask |
+| **B.** Draft going out | reply to a client, offer draft | prepare, wait for «да» | prepare, wait for «да» | ask |
+| **C.** Irreversible, outside | send to a client, review reply, invoice | only after confirmation | only after confirmation | not prepared |
 
-Число, которое называет сама модель, откалибровано плохо. Настоящая уверенность по цели — доля разборов,
-принятых без правок. Класс C переходит в автоматический режим только для шаблонных сообщений и только после
-20 подтверждений подряд без правок.
+The model's own number is poorly calibrated. Real confidence per intent is the share of interpretations accepted
+without edits. Class C becomes automatic only for template messages and only after 20 confirmations in a row
+without edits.
 
-### 3.2 Уточняющие вопросы
+### 3.2 Clarifying questions
 
-Один вопрос за раз, с кнопками, внутри беседы. Нет ответа за сутки — вопрос уходит в вечернюю сводку, событие
-остаётся заметкой. Обработка ничего не блокирует.
+One question at a time, with buttons, inside the conversation. No answer within a day — the question moves to the
+evening summary and the event stays a note. Processing never blocks on it.
 
-### 3.3 Стартовые цели
+### 3.3 Starting intents
 
-MVP: задача, расход, заявка, заметка, «не определено». Далее: доход, идея, напоминание, запрос документа,
-команда ассистенту. «Не определено» — законная цель; её доля — главный показатель того, чего не хватает.
+MVP: task, expense, request, note, «не определено». Later: income, idea, reminder, document request, assistant
+command. «Не определено» is a legitimate intent; its share is the main signal of what is missing.
 
-## 4. Контракты
+## 4. Contracts
 
-Шесть схем JSON с версиями в `contracts/`. Модули общаются только через них. Ломающее изменение — новая
-версия схемы и запись в `decisions.md`.
+Versioned JSON Schemas in `contracts/`; modules talk only through them. A breaking change needs a new schema
+version and a `decisions.md` entry.
 
-| Контракт | Кто пишет | Кто читает | Обязательные поля |
+| Contract | Written by | Read by | Required fields |
 |---|---|---|---|
-| Event | источники | конвейер, лента | id, source, author, ts, kind, payload, reply_to |
-| Normalized | конвейер | конвейер, лента | event_id, text, entities, processor, version |
-| Interpretation | конвейер через ИИ, владелец | лента, диспетчер | event_id, topic_id, intent, fields, tags, confidence, version |
-| Task | диспетчер, владелец | лента, коннекторы | id, topic_id, title, status, due, priority, remind_at, source_event_id, external_refs |
-| Action | диспетчер, автоматизации | коннекторы | id, connector, operation, params, risk_class, status, idempotency_key, external_ref |
-| Intent | владелец, через реестр | конвейер | name, schema, instruction, examples, thresholds, default_action |
+| Event | sources | pipeline, client | id, source, author, ts, kind, payload, reply_to |
+| Normalized | pipeline | pipeline, client | event_id, text, entities, processor, version |
+| Interpretation | pipeline via AI, owner | client, dispatcher | event_id, topic_id, intent, fields, tags, confidence, version |
+| Task | dispatcher, owner | client, connectors | id, topic_id, title, status, due, priority, remind_at, source_event_id, external_refs |
+| Action | dispatcher, automations | connectors | id, connector, operation, params, risk_class, status, idempotency_key, external_ref |
+| Intent | owner via the registry | pipeline | name, schema, instruction, examples, thresholds, default_action |
 
-## 5. Интерфейс: своё приложение
+Today tasks live as `task_change` events in Event v1 (`payload.data.task`: roles, status, dates, `proposed`,
+`report`, `alternatives`). `topic_id` in Interpretation and Task v1 is legacy from the "topics" model; both schemas
+are to be brought to §2.5 / §2.8 with step 3 (new versions).
 
-Ввод, лента и задачи — в одном приложении. Сначала PWA, установленное на Android; позже тот же код в нативной
-оболочке получает доступ к уведомлениям и звонкам (§8). Telegram для ввода не используется; он — источник
-переписки двух аккаунтов (§8.2).
+## 5. Interface: our own app
 
-**Один экран: центр, фильтры слева, подробности справа** (решение 2026-11-18). У каждой части одна работа:
+Input, feed and tasks live in one app: a PWA installed on Android; later the same code in a native shell for
+notifications and calls (§8). Telegram is not an input channel; it is a source of the two accounts' chats (§8.2).
 
-| Где | Вопрос | Что там |
+**One screen: centre, filters left, details right** (2026-11-18):
+
+| Where | Question | What |
 |---|---|---|
-| Центр | что я смотрю | **Беседы · Задачи** — переключатель в верхней строке; техническая **Лента** — в меню ⋮ |
-| Слева | как сузить | фильтры, свои для каждого вида (☰ или смахивание слева направо) |
-| Справа | что это такое | подробности того, что выбрано касанием: задачи, беседы или сообщения |
-| Внизу | что сказать | строка ввода, всегда на месте; над ней — строка меток и адресатов (§2.9) |
+| Centre | what am I looking at | «Беседы · Задачи» switch in the top bar; the technical «Лента» from the ⋮ menu |
+| Left | how to narrow it | filters per view (☰ or a swipe left-to-right) |
+| Right | what is this | details of what was tapped: a task, a conversation or a message |
+| Bottom | what to say | the input row, always there; above it the tags and recipients row (§2.9) |
 
-**Беседа и задача — разные сущности** (решение 2026-11-18, §2.5): беседа — чат, задача — то, что нужно сделать; связывают их
-сообщения. Тема как отдельная сущность в интерфейсе не нужна.
+- **«Беседы»** — the conversation list by state (§2.5): urgent → mine → theirs → quiet → done. A row: title, last
+  message, channel badge, open tasks count, state. A tap opens the conversation: messages and its task plaques on
+  top; the input writes into it. Default view.
+- **«Задачи»** — a compact list of rows chosen by a saved filter. On top — chips of the main lists with counts:
+  «Сегодня · Разобрать · Жду · Контроль · Ещё…» (`pinned` in `registry/filters.json`); «Ещё…» opens all lists on the
+  left. Default «Сегодня»: my open tasks in sections «Просрочено · Сегодня · Проверить · Разобрать · Дальше»
+  (`sections`, data; «Дальше» folded). Waiting — in «Жду», delegated — in «Контроль»; a deferred task is hidden until
+  its date and returns by itself. A row: the «Готово» mark, title, with whom and what; due on the right.
+- **«Лента»** — all messages in a row like a chat, newest at the bottom; for analysis and history (filters by tags,
+  sources, people, dates; later an AI analyst selection, §9). Opened from ⋮ → «Лента сообщений» (2026-11-19);
+  back — «Беседы» or «Задачи». The chosen view (Беседы or Задачи) is remembered per device; Лента is not.
 
-- **Беседы** — список бесед, как в Telegram, по состоянию: срочно → ждёт меня → жду их → тихо → завершено (§2.5).
-  В строке: название, последнее сообщение, значок канала, число открытых задач, состояние. Касание открывает
-  беседу: переписка и плашки её задач сверху; строка ввода пишет в беседу. Вид по умолчанию.
-- **Задачи** — компактный список строками, как в менеджере задач, выбранный сохранённым фильтром (ниже). Сверху —
-  строка чипов главных списков с числом задач: **Сегодня · Разобрать · Жду · Контроль · Ещё…** (`pinned` в
-  `registry/filters.json`); выбранный список всегда виден, «Ещё…» открывает все списки слева. По умолчанию —
-  «Сегодня»: мои открытые задачи разделами «Просрочено · Сегодня · Проверить · Разобрать · Дальше» (разделы — данные,
-  `sections` фильтра; «Дальше» свёрнут). Ожидание — в «Жду», поручённое — в «Контроль»; отложенная задача скрыта до
-  своей даты и потом возвращается сама. В строке: отметка «Готово», название, с кем и что; справа — срок
-  («сегодня», «завтра», «просрочено»).
-- **Лента** — все сообщения подряд, как в чате, новое внизу; технический вид для анализа и истории: фильтры по
-  меткам, источникам, людям и датам, позже — выборка для ИИ-аналитика (§9). В верхней строке её нет (решение
-  2026-11-19): открывается из меню ⋮ → «Лента сообщений»; назад — «Беседы» или «Задачи».
-- Выбранный вид (Беседы или Задачи) запоминается на устройстве; Лента — нет.
+**Saved task filters are data**: conditions over task fields and conversation state (field, operator, value;
+and / or). System filters in `registry/filters.json`: «Сегодня», «Разобрать», «Жду» (waiting on people, involves
+me), «Контроль» (I control, someone else executes, open), «Все мои», «Просрочено», «На проверке», «Команда» (tasks
+without me), «Не учтено», «Готовые». The owner saves own ones from the left panel as events. Lists, a future board,
+the morning three, process rules and mirrors all select tasks with the same filters.
 
-**Сохранённые фильтры задач — данные.** Фильтр — набор условий по полям задачи и состоянию беседы: поле,
-операция, значение; «и» / «или». Системные — `registry/filters.json`: «Сегодня», «Разобрать» (новые),
-«Жду» (жду от людей, касается меня), «Контроль» (контролёр — я, исполнитель — не я, открыта), «Все мои», «Просрочено»,
-«На проверке», «Команда» (задачи без меня), «Не учтено», «Готовые». Свои владелец сохраняет из левой панели — событием. Список задач, будущий канбан,
-утренние три дела, правила процессов и зеркала выбирают задачи одними и теми же фильтрами.
+**Left panel.** Shared across views and kept on switching: contacts and tags (with counts; selected tags filter —
+a message must carry all, a task through at least one message). Per view: Беседы — state, channel,
+«Завершённые»; Задачи — saved filters, role, status, due; Лента — sources, «Завершённые» (messages of finished
+tasks, hidden by default). Projects become a filter with project link tags (P3). While a filter is on, the top bar
+shows a reset button. **«Архив»** in the top bar works for all views (archived messages paler), off by default.
+The panel sits between the top bar and the input row; opened by ☰ or a swipe left-to-right, closed by the
+opposite swipe.
 
-**Фильтры слева.** Общие для всех видов и сохраняются при переключении: контакты (все беседы и сообщения с
-человеком) и метки. Свои: Беседы — состояние, канал, «Завершённые» (беседы, где всё закрыто; свёрнуты; архивные сообщения — при включённом «Архиве»); Задачи — сохранённые фильтры, роль, статус,
-срок; Лента — источники, «Завершённые» (сообщения только завершённых задач; по умолчанию скрыты). Проекты — фильтр, когда появятся метки-ссылки на проекты (П3).
+**Right panel** opens only on a tap: a task plaque, a task row, the task or history icon under a message, the
+title over a message. A swipe left-to-right closes it.
+- **Task:** title (tap — rename), status and actions (§2.8, «Готово» closes at once, §2.9; «Отменить»,
+  «Вернуть»), due next to the actions, roles in one folded line, triage note and confidence, report, «Задача
+  выполнена?», the task's messages (× removes from the task), its conversations, change history.
+- **Message:** versions down to the source, tags, where from and when, its tasks (tap — task details) or
+  «Сделать задачей». Under a message, when triage is unsure — «О каком деле?» (§2.8).
+- On a phone the panels slide over the list between the top bar and the input row. From 1100 px all three are
+  visible as columns (with a hint while nothing is selected).
 
-**Подробности справа** — открываются только касанием: плашка задачи в беседе, строка задачи, значок задачи и
-значок истории под сообщением, название над сообщением. Смахивание слева направо по панели закрывает её.
-- **Задача:** название (касание — переименовать), статус и действия (§2.8: «Принять», «Поручить…», «Отложить»,
-  «Жду…», «Готово» — сразу, §2.9; «Отменить», «Вернуть»), срок рядом с действиями, роли одной строкой,  заметка разбора и уверенность, отчёт,
-  карточка «Задача выполнена?», сообщения задачи (× — убрать из задачи), её беседы, история изменений.
-- **Сообщение:** версии до исходника (листаются), метки, откуда и когда, в каких задачах (касание — подробности
-  задачи) или «Сделать задачей». Под сообщением, если разбор сомневается, — вопрос «О каком деле?» (§2.8).
-- На телефоне панели выезжают поверх списка между верхней строкой и строкой ввода. На широком экране (от 1100 px)
-  все три видны сразу колонками: фильтры, центр со строкой ввода, подробности (пока ничего не выбрано — подсказка).
+**Input.** Right of the field — the paper clip (photo, file) and the voice button, which becomes «Отправить» once
+text or a file is there. Tags chosen in the row are saved in the event (`payload.tags`) as a hint for triage. One
+feed for all devices: what is written on the phone appears on the computer at once and back. A new device connects
+with the owner token: on the old one ⋮ → Доступ → «Скопировать токен», on the new one paste and «Сохранить»; the
+token is never shown on screen.
 
-Справа от поля ввода — скрепка (фото, файл) и кнопка голоса, которая становится кнопкой «Отправить», как только
-набран текст или приложен файл. Отдельных экранов «записать» и «лента» нет. Метки, выбранные кнопкой,
-сохраняются в событии (`payload.tags`) как подсказка для разбора; словарь меток — данные в `registry/tags.json`
-(§2.2). Лента одна на все устройства: написанное на телефоне сразу появляется на компьютере и наоборот, без
-перезагрузки. Новое устройство подключается токеном владельца: на старом ⋮ → Доступ → «Скопировать токен», на
-новом — вставить и «Сохранить»; на экран токен не выводится.
+**Input faster than a messenger:** at most two taps from unlock to recording. A home-screen shortcut opens voice
+recording; «Поделиться» from any app sends text, a link or a screenshot; offline, the record stays on the phone and
+goes later (the phone makes the event id, so a resend never duplicates). Later in the native shell: a widget and a
+quick-settings tile.
 
-**Без рывков** (решение 2026-11-18): всё, что разворачивается, сворачивается, появляется или уходит, — плавно:
-плашки задач в беседе, строки списков и свёрнутые «Завершённые» беседы растут и сжимаются плавно; панели, строка
-«кому», подробности, уведомления — с коротким переходом; новое сообщение въезжает снизу. Системная настройка «уменьшить движение»
-отключает анимацию.
+**Message actions** (2026-11-14). A short tap opens the action panel (reply, edit, link, copy, archive, delete);
+on a computer also «⋯» and right click. A long press (or Ctrl/Shift+click) starts selection: further taps add
+messages, and instead of the input a bar for the selection appears (link, tag, copy, archive, delete); «Назад» or ×
+ends it. In selection the tag row acts on all selected: «привязать», «отвязать», and tags (a tap adds the tag to all;
+if all have it — removes).
 
-**Ввод быстрее мессенджера:** от разблокировки до записи — не больше двух касаний.
+**Link picker** — one window for «связать…» while typing, «Связать» in the action panel and a single selection:
+search, open tasks, recent messages and «Выбрать в ленте» (a banner shows the mode, «Назад» cancels).
 
-- Ярлык на рабочем столе открывает сразу запись голоса.
-- «Поделиться» из любого приложения отправляет текст, ссылку или скриншот в ленту.
-- Без сети запись сохраняется на телефоне и уходит позже. Идентификатор события создаёт телефон, поэтому
-  повторная отправка не создаёт дубль.
-- Позже, в нативной оболочке: виджет и плитка в шторке.
+**Messages** (2026-11-14):
+- Only linked messages share one bubble with thin dividers: a continuation right under what it continues; each
+  part keeps its own time, actions and history.
+- A **chain line** over a linked message: on the first — «N ниже ›»; on the others — «‹ N выше · N ниже ›», the last
+  without «›». Arrows go to the neighbour in the chain; a tap opens task details of that message (or the message's
+  own details). It shows links, not topics.
+- Under a message on the left, icons without labels: «продолжить»; «отвязать» if the next message is linked to
+  this one; «связать». On the right — time and the history icon.
+- Long text is cut with «Показать полностью»; photos are thumbnails, a tap opens full screen.
 
-**Действия над сообщением (решение 2026-11-14):** короткое касание открывает всплывающую панель действий
-(ответить, изменить, связать, копировать, в архив, удалить); на компьютере также «⋯» и правая кнопка.
-Долгое нажатие (или Ctrl/Shift+клик) выделяет сообщение: дальше касания отмечают ещё, а вместо строки ввода
-внизу — панель для выбранных: связать, метка, копировать, в архив, удалить. «Назад» или ×
-снимают выделение.
+**No jumps** (2026-11-18): everything that expands, collapses, appears or leaves does so smoothly (task plaques,
+list rows, folded «Завершённые», panels, the «кому» row, details, toasts; a new message slides in from below). The
+system "reduce motion" setting turns animation off.
 
-**Выбор связи** — одно окно для «связать…» при вводе, «Связать» в панели действий и одиночного выделения:
-поиск, открытые задачи, последние сообщения и «Выбрать в ленте» (плашка режима, «Назад» отменяет). Экран темы и
-отдельное окно истории сообщения заменены подробностями справа (решение 2026-11-18).
+**«Система» screen** (2026-11-17) — the record of everything that works without the owner, instead of a separate
+automation tool: sources, connectors and automations, each with a state (working / silent / error / needs login),
+the last signal and event, queue, errors per day, and a log of runs and actions with results. Telegram bots and
+the companion send a pulse; a lost pulse or login is a service message in the feed, and so is its return. Source
+exclusions («Не отслеживать») and their return are here too. The pulse is current state in its own table, not the
+journal; only state transitions go to the journal.
 
-**Вид сообщений (решение 2026-11-14):**
-- Одним пузырём с тонкими разделителями показываются только связанные сообщения: продолжение сразу под тем,
-  что оно продолжает. У каждой части своё время, действия и история.
-- **Строка цепочки** над связанным сообщением (продолжение, ответ, «связать»): у первого — «N ниже ›»; у
-  остальных — «‹ N выше · N ниже ›», у последнего без «›». Стрелки — к соседнему сообщению цепочки; касание —
-  подробности задачи этого сообщения (или самого сообщения, если задачи нет). Это не тема, а видимость связей.
-- **Под сообщением слева** значки без подписи: «продолжить»; «отвязать» — если следующее сообщение привязано к
-  этому; «связать» — выбрать, с чем связать. Справа — время и значок истории (подробности сообщения).
-- Длинный текст — под катом; фото — миниатюры, касание — на весь экран.
+## 6. AI
 
-**Строка меток** начинается с `#` (всё окно меток) и значка связи в кружке (связать новое сообщение — окно
-выбора); справа — «кому» (§2.9). Подсказки
-«продолжение» нет: продолжают кнопкой на сообщении. При выделении строка меток действует на все выбранные:
-«привязать», «отвязать» и метки (касание добавляет метку всем; если она уже у всех — снимает). В нижней панели
-выделения — копировать, в архив, удалить.
+Everything behind one interface `interpret(event, context) → Interpretation`; the provider is a setting.
 
-**Левая панель** (☰ или смахивание по ленте слева направо; обратно — смахивание справа налево) встаёт
-между верхней строкой и строкой ввода, не закрывая их; её фильтры зависят от вида (см. «Фильтры слева» выше).
-Метки — с количеством; выбранные фильтруют (сообщение должно нести все выбранные, задача — хотя бы одним
-сообщением). Пока фильтр включён, в верхней строке — кнопка сброса.
-**Архив** включается в верхней строке и действует на все виды: архивные сообщения показываются бледнее. По
-умолчанию выключен.
+- **Stream** (each event, triage): a cheap API model with a spending limit (~$10/month) — now Claude Haiku 5.5.
+  Estimate: 100 events/day ≈ $2–5/month; voice transcription ≈ $0.005/min.
+- **Heavy work** (weekly analysis, offer drafts, code): the owner's subscriptions through headless CLIs
+  (`claude -p`, `codex exec`, `grok -p`) — for the owner only, never shared.
+- Before sending clients' messages to a free tier of any provider, check its data-use terms.
 
-**Экран «Система»** (решение 2026-11-17) — учёт всего, что работает без владельца, вместо отдельного
-инструмента автоматизаций. Список источников, коннекторов и автоматизаций; у каждого — состояние (работает /
-молчит / ошибка / нужен вход), когда был последний сигнал и последнее событие, очередь, ошибки за сутки;
-журнал прогонов и действий с результатом. Боты Telegram и компаньон присылают пульс; пропал пульс или вход — служебное
-сообщение в ленте, вернулся — тоже. Здесь же исключения источников («не отслеживать») и их возврат. Пульс —
-текущее состояние в отдельной таблице, не журнал; в журнал — только переходы состояния.
+## 7. Steps
 
-**Что показывает приложение:**
-
-- Беседы по состоянию и хронология ленты для анализа (§5).
-- Фильтр по тегам и полям: «расходы за октябрь», «заявки без ответа», «всё по клиенту Анна».
-- Любой элемент раскрывается до исходника: голосовое, расшифровка, разбор ИИ, действие.
-- Задачи: сохранённые фильтры «Сегодня», «Разобрать», «Жду», «Контроль» и др. (§5). Утренние три дела выбираются здесь же.
-- Кнопки «верно», «исправить», «ответить в беседе».
-
-## 6. ИИ
-
-Всё за одним интерфейсом `interpret(event, context) → Interpretation`; провайдер — настройка.
-
-- **Поток** (разбор каждого события): дешёвая модель по API с лимитом трат ~$10/мес — Claude Haiku или Gemini
-  Flash-Lite. Оценка: 100 событий/день ≈ $2–5/мес. Расшифровка голоса — около $0.005/мин.
-- **Тяжёлое** (недельный анализ, черновики оферт, код): подписки владельца через безголовые CLI —
-  `claude -p`, `codex exec`, `grok -p`. Только для себя, не раздавать доступ.
-- **Kimi** — только для кода: ключи Kimi Code рассчитаны на инструменты программирования.
-- Перед отправкой переписки клиентов в бесплатный уровень любого провайдера проверить условия использования данных.
-
-## 7. Шаги
-
-Каждый шаг заканчивается тем, чем можно пользоваться. Следующий — после недели использования.
+Each step ends in something usable; the next one comes after a week of use.
 
 ### MVP
 
-| # | Шаг | Готово, когда |
+| # | Step | Done when |
 |---|---|---|
-| 0 | Репозиторий-конституция, эталонный набор | контракты и реестр есть; в `golden/` 50 реальных сообщений |
-| 1 | Журнал и быстрый ввод | PWA на телефоне; голос, текст, фото, «Поделиться», офлайн-очередь; ничего не теряется |
-| 2 | Нормализация | голос и фото превращаются в текст |
-| 3 | Разбор | цель, поля, теги, уверенность; ≥80% эталонного набора без правок |
-| 4 | Лента | беседы, задачи, фильтры, «верно» / «исправить» |
-| 5 | Задачи | проекция из ленты, три вида, напоминания Web Push |
-| 6 | Ритуалы | утренние три дела, вечерняя сводка |
+| 0 | Constitution repo, golden set | contracts and registry exist; 50 real messages in `golden/` |
+| 1 | Journal and fast input | PWA on the phone; voice, text, photo, «Поделиться», offline queue; nothing is lost |
+| 2 | Normalization | voice and photos become text |
+| 3 | Interpretation | intent, fields, tags, confidence; ≥80% of the golden set without edits |
+| 4 | Feed | conversations, tasks, filters, «верно» / «исправить» |
+| 5 | Tasks | projection from the feed, views, Web Push reminders |
+| 6 | Rituals | morning three, evening summary |
 
-Не входит в MVP: внешние менеджеры задач, Планфикс, iCRM, переписка с клиентами, оферты, отзывы, компаньон
-на Android.
+Pulled ahead of the plan because the owner needed them: phone calls and SMS (§8.1), Telegram BY and PL (§8.2),
+tasks with roles and AI triage (§2.8). Still outside the MVP: external task managers, Planfix, iCRM, offers, reviews.
 
-### После MVP (порядок — по пользе для naserwis.pl)
+### After the MVP (order by value for naserwis.pl)
 
-| # | Этап | Точка расширения |
+| # | Stage | Extension point |
 |---|---|---|
-| 1 | Финансы из ленты: лог расходов и доходов, выгрузка за месяц | автоматизация + отчёт |
-| 2 | Заявки и клиенты в CRM: отдельный коннектор iCRM или Планфикс (REST API — только платный тариф; `silent=true`) | коннектор |
-| 3 | Telegram: боты аккаунтов BY и PL, ответ из ленты (§8.2) — раньше, первым из мессенджеров | источник + коннектор |
-| 4 | Проверка после заявки: через 2 дня после «выполнено» — «всё работает?», затем просьба об отзыве | автоматизация, класс B |
-| 5 | Почта: Gmail API или IMAP | источник + коннектор |
-| 6 | Оферты по запросу: шаблоны и прайс в реестре, черновик из беседы с клиентом | цель + коннектор документов |
-| 7 | Отзывы Google: доступ к API по заявке, профиль ≥60 дней; запасной путь — письма-уведомления | источник + коннектор |
-| 8 | Компаньон на Android (§8); звонки и SMS — раньше, отдельным приложением (§8.1) | источник |
+| 1 | Finance from the feed: expense and income log, monthly export | automation + report |
+| 2 | Requests and clients in a CRM: iCRM or Planfix connector (Planfix REST API — paid plan only; `silent=true`) | connector |
+| 3 | Check after a job: two days after «выполнено» — "is everything working?", then a review request | automation, class B |
+| 4 | Mail: Gmail API or IMAP | source + connector |
+| 5 | Offers on request: templates and prices in the registry, a draft from the client conversation | intent + document connector |
+| 6 | Google reviews: API by application, profile ≥60 days; fallback — notification mails | source + connector |
+| 7 | More messengers: WhatsApp BY / PL, Viber, IP telephony — like §8.2 | source + connector |
+| 8 | Android companion: reading notifications (§8) | source |
 
-## 8. Телефон: компаньон на Android
+## 8. Phone: Android companion
 
-| Возможность | Как |
+| Capability | How |
 |---|---|
-| Видеть пуш-уведомления всех приложений | служба чтения уведомлений; доступ включается вручную |
-| Ответить в мессенджере на пришедшее | кнопка «Ответить» в уведомлении |
-| Журнал звонков и SMS, вопрос «что это было?» после звонка | разрешения на журнал вызовов и SMS, уведомление с ответом (§8.1) |
-| Запись разговора | обычно недоступна сторонним приложениям; надиктовать итог |
+| See push notifications of all apps | notification listener; access enabled by hand |
+| Reply in a messenger from a notification | the notification's «Ответить» |
+| Call log and SMS, "what was it?" after a call | call log and SMS permissions, a notification with a reply field (§8.1) |
+| Recording a call | usually unavailable to third-party apps; dictate the outcome |
 
-Ограничения: с Android 15 уведомления с одноразовыми кодами скрыты от таких приложений; приложению не из
-магазина нужно вручную «Разрешить ограниченные настройки»; исключить из экономии батареи. В Google Play не
-публиковать — личный инструмент. Переписка людей — их персональные данные: хранить только отслеживаемые
-чаты, лишнее отключается «Не отслеживать» (§8.2).
+Limits: since Android 15 notifications with one-time codes are hidden from such apps; an app outside the store
+needs «Разрешить ограниченные настройки» by hand; exclude it from battery saving. Never published on Google Play —
+a personal tool. Other people's messages are their personal data: store only tracked chats, the rest is turned off
+with «Не отслеживать» (§8.2).
 
-### 8.1 Звонки и SMS в журнале (решения 2026-11-17)
+### 8.1 Calls and SMS in the journal (2026-11-17)
 
-Каждый входящий, исходящий и пропущенный звонок и каждое SMS — событие в ленте; после разговора владелец
-описывает, о чём был звонок и чем закончился. Само веб-приложение этого не видит (браузер не даёт доступа к
-журналу вызовов и SMS), поэтому события приходят отдельным источником `android_phone` из компаньона.
+Every incoming, outgoing and missed call and every SMS is an event; after a call the owner describes what it was
+about and how it ended. The PWA cannot see the call log or SMS, so events come from a separate source
+`android_phone`.
 
-- **Звонок** — `kind: call`: направление (входящий, исходящий, пропущенный, отклонённый), номер, имя из
-  контактов телефона, начало и длительность. Что телефон не отдал, остаётся пустым, событие всё равно пишется.
-- **SMS** — `kind: sms`: направление (входящее, отправленное), номер, имя, время; текст SMS — `payload.text`,
-  поэтому метки, связи и разбор работают как с обычным сообщением. Только классические SMS: чаты RCS и MMS
-  стороннему приложению не видны. Отправители с буквенным именем (банки, доставка, сервисы — коды и
-  оповещения) по умолчанию не сохраняются; свои исключения — в настройках компаньона.
-- **Описание звонка** — обычное сообщение-продолжение звонка (связь `continuation`): связывается со звонком, попадает в беседу звонка и её задачи, на
-  шаге 3 разбирается в задачи и заявки, как любой текст. Звонок без описания — пункт вечерней сводки (шаг 6).
-- **В ленте** звонок — пузырь «📞 Входящий · 4 мин · имя или номер» с кнопкой «Описать» (ввод продолжения
-  этого звонка); SMS — пузырь «✉ Входящее SMS · имя или номер» с текстом. Чужой текст SMS не правится.
-- **Сразу после разговора** телефон показывает уведомление «О чём был звонок?» с полем ответа; ответ уходит
-  описанием. Можно не отвечать — звонок останется в ленте. После SMS уведомления нет: текст уже есть.
-- **Приём на сервере** — свои адреса `/api/phone/*` с отдельным токеном телефона, который умеет только
-  записывать звонки, SMS и описания. Идентификатор сервер строит из номера, времени (и текста SMS): повтор с
-  телефона не создаёт дубль.
-- Номер связывается с контактом справочника позже (П7). Номера, имена и тексты SMS — персональные данные:
-  только в базе, не в git.
+- **Call** — `kind: call`: direction (incoming, outgoing, missed, rejected), number, name from the phone's
+  contacts, start and duration. What the phone did not give stays empty; the event is still written.
+- **SMS** — `kind: sms`: direction (in, sent), number, name, time; the text is `payload.text`, so tags, links and
+  triage work as for any message. Classic SMS only (RCS chats and MMS are invisible to third-party apps). Senders
+  with a letter name (banks, delivery, services — codes and alerts) are not saved by default; exceptions are set
+  in the companion.
+- **Call note** — an ordinary continuation message of the call (`continuation`): it joins the call's conversation
+  and tasks and is triaged like any text. A call without a note is an evening-summary item (step 6).
+- **In the feed** a call is a bubble «📞 Входящий · 4 мин · name or number» with «Описать»; an SMS — «✉ Входящее SMS
+  · name or number» with the text. Someone else's SMS text is never edited.
+- **Right after a call** the phone shows «О чём был звонок?» with a reply field; the answer goes in as the note.
+  No notification after an SMS — the text is already there.
+- **Server intake** — `/api/phone/*` with a separate phone token that can only write calls, SMS and notes. The id
+  is built from number, time (and SMS text): a resend never duplicates.
+- A number is linked to a directory contact later (P7). Numbers, names and SMS texts are personal data: database
+  only, never git.
 
-**Компаньон «Stream · телефон»** — отдельное маленькое приложение на Kotlin, Stream остаётся PWA. После
-звонка и при входящем SMS сверяет журнал вызовов и SMS, отправляет новое (без сети — очередь), после
-разговора показывает уведомление с ответом; раз в 15 минут сверяет снова — так доходят отправленные SMS и всё,
-что пропущено. Своего экрана почти нет: адрес сервера, токен телефона, разрешения, исключения SMS. Код рассчитан
-на перенос в общую оболочку Stream (TWA), если понадобится один значок; туда же позже — чтение уведомлений
-(§8). Проба через Tasker / MacroDroid отменена.
+**Companion «Stream · телефон»** — a small separate Kotlin app; Stream stays a PWA. After a call and on an incoming
+SMS it checks the call log and SMS, sends what is new (offline — a queue), shows the after-call notification, and
+re-checks every 15 minutes (so sent SMS and anything missed still arrive). Almost no screen of its own: server
+address, phone token, permissions, SMS exceptions. Built to move into a shared Stream shell (TWA) if one icon is
+needed; notification reading goes there later (§8).
 
-### 8.2 Telegram: переписка двух аккаунтов в ленте (решения 2026-11-17)
+### 8.2 Telegram: two accounts' chats in the feed (2026-11-17)
 
-Владелец ведёт два аккаунта Telegram: беларуский (работа BY) и польский (работа PL). В них клиенты и заявки,
-компаньоны (лично и в группах), поставщики и подрядчики, которым уходит неподходящая работа, а также жена,
-друзья и знакомые. Всё нужное должно оказаться в ленте, а ответ — уйти из ленты в тот же чат с того же аккаунта.
+The owner has two Telegram accounts: BY (work in Belarus) and PL (work in Poland). They hold clients and requests,
+partners (personal and in groups), suppliers and subcontractors who get unsuitable jobs, and also family, friends
+and acquaintances. Everything relevant must reach the feed, and a reply must go from the feed to the same chat from
+the same account.
 
-**Как подключается — официально, ботами** (решение 2026-11-17, вместо входа «ещё одним устройством»). На каждый
-аккаунт — свой бот: «Stream BY» и «Stream PL». Владелец подключает бота к аккаунту в самом Telegram:
-«Настройки → Telegram для бизнеса → Чат-боты» (Premium не нужен). Сервер Stream сам читает обновления обоих
-ботов и отправляет через них ответы — отдельных процессов и входа на сервере нет; токены ботов — секреты в
-`.env`. Подключить бота может любой, кто знает его имя, поэтому **чужое подключение не работает**, пока
-владелец не подтвердит его на экране «Система».
+**Connected officially, through bots** (instead of a login "as one more device"). Each account has its bot —
+«Stream BY» and «Stream PL». The owner connects it in Telegram: «Настройки → Telegram для бизнеса → Чат-боты»
+(no Premium needed). The Stream server reads both bots' updates and sends replies through them — no extra
+processes or logins; bot tokens are secrets in `.env`. Anyone who knows a bot's name could connect it, so **a
+foreign connection does nothing** until the owner confirms it on the «Система» screen.
 
-**Что отслеживается:**
-
-| Чат | Как попадает в ленту | Как убрать |
+| Chat | How it reaches the feed | How to drop it |
 |---|---|---|
-| Личный чат с человеком | через подключение бота к аккаунту; какие чаты доступны боту — выбирается в Telegram (все / выбранные, исключения) | «Не отслеживать» в Stream; вернуть — экран «Система» |
-| Группа | бот этого аккаунта добавлен в группу участником (виден в ней как «Stream BY / PL») | удалить бота из группы или «Не отслеживать» |
-| Канал, «Избранное», служебный чат Telegram | никогда | — |
+| Personal chat | via the bot connection; which chats the bot sees is chosen in Telegram (all / selected, exceptions) | «Не отслеживать» in Stream; undo on «Система» |
+| Group | the account's bot added as a member (visible as «Stream BY / PL») | remove the bot or «Не отслеживать» |
+| Channel, Saved Messages, Telegram service chat | never | — |
 
-- **«Не отслеживать» и «В архив» — разное.** Архив прячет одно сообщение, но оно хранится и разбирается.
-  «Не отслеживать» — Stream больше не пишет этот чат: нет ни хранения, ни трат на разбор. Уже записанное
-  остаётся в журнале; при отключении Stream предлагает отправить его в архив.
-- **Истории нет.** Бот видит сообщения только с момента подключения (или добавления в группу); старую
-  переписку Telegram боту не отдаёт. После простоя сервера до суток пропущенное доходит: Telegram хранит
-  обновления бота.
+- **«Не отслеживать» ≠ «В архив».** Archive hides one message but keeps and triages it. «Не отслеживать» stops
+  writing that chat: no storage, no triage cost. What was written stays in the journal; Stream offers to archive it.
+- **No history.** A bot sees messages only from the moment it is connected or added; Telegram does not give it old
+  chats. After server downtime of up to a day the missed updates still arrive.
 
-**Что пишется в журнал.** Входящие и свои сообщения (написанные в самом Telegram тоже) — обычные события
-`text`, `voice`, `photo`, `file` с `source: telegram`: свои — `author: me`, чужие — `author: contact:…`.
-В `payload.data.telegram` — аккаунт (`by` / `pl`), чат, его вид и название, отправитель, номер сообщения,
-ответ на какое и пересылка откуда. Голосовые, кружки, фото и документы до 20 МБ скачиваются (голос
-расшифровывает шаг 2); больше — запись «файл не скачан». Правка в Telegram — правка поверх исходника;
-удаление в Telegram — отметка «удалено в Telegram», сообщение не исчезает.
-- **Аккаунт задаёт сферу:** бот BY — работа BY, бот PL — работа PL. Личное (семья, друзья) отделяется ролью
-  контакта в справочнике (П7) и разбором (шаг 3), не настройкой.
-- **Пересылка подрядчику** связывается с исходной заявкой сама: Telegram сообщает автора и время исходного
-  сообщения — пересланное становится продолжением заявки.
+**Journal.** Incoming and own messages (also those written in Telegram itself) are ordinary `text`, `voice`,
+`photo`, `file` events with `source: telegram`: own — `author: me`, others — `author: contact:…`.
+`payload.data.telegram` holds the account (`by` / `pl`), chat, its kind and title, sender, message number, what it
+replies to and where it was forwarded from. Voice, video notes, photos and documents up to 20 MB are downloaded
+(voice is transcribed in step 2); larger ones — «файл не скачан». An edit in Telegram is a correction over the
+source; a deletion is marked «удалено в Telegram», the message does not disappear.
+- **The account sets the sphere:** BY bot — work BY, PL bot — work PL. Personal life (family, friends) is separated
+  by contact roles (P7) and triage, not by settings.
+- **Forwarding to a subcontractor** links itself to the original request: Telegram gives the author and time of the
+  original message, so the forward becomes its continuation.
 
-**В ленте.** Пузырь с заголовком «Telegram BY · имя» (в группе — «группа · автор»). Касание заголовка — экран
-чата: вся переписка с ним. Задачи из переписки собираются как обычно — связями и разбором (§2.8). В левой
-панели — фильтр по источнику (мои, Telegram BY, Telegram PL, телефон).
+**In the feed** a bubble headed «Telegram BY · name» (in a group «group · author»); tasks from chats are built by
+links and triage (§2.8); the left panel filters by source (mine, Telegram BY, Telegram PL, phone).
 
-**Ответ из ленты.** Адресат выбирается в строке «кому» над вводом (§2.9); при ответе на сообщение из чата
-собеседник выбран сразу. Отправка — это и есть подтверждение (действие класса C, коннектор `telegram_by` /
-`telegram_pl`, операция `send_message`). В личный чат ответ уходит от имени аккаунта. Без адресата ответ
-остаётся заметкой себе — наружу ничего не уходит случайно. С шага 3 ИИ готовит черновик (класс B).
-- **Окно 24 часа.** Бот может ответить только в чате, где за последние 24 часа было входящее сообщение.
-  Окно закрыто — Stream говорит об этом сразу и даёт «Открыть чат в Telegram».
-- **В группу** бот пишет от своего имени («Stream BY» / «Stream PL»), не от владельца. Годится, чтобы
-  отправить заявку в рабочую группу напарников; написать в группе от себя — «Открыть чат в Telegram».
-- Повтор не шлёт второе сообщение; если сервер упал посреди отправки, ответ помечается «проверьте в
-  Telegram», а не уходит второй раз.
+**Reply from Stream.** The recipient is chosen in the «кому» row (§2.9); replying to a chat message preselects it.
+Sending is the confirmation (class C, connector `telegram_by` / `telegram_pl`, operation `send_message`). In a
+personal chat the reply goes as the account. No recipient — a note to myself; nothing leaves by accident. From
+step 3 AI prepares a draft (class B).
+- **24-hour window.** A bot can reply only in a chat with an incoming message within the last 24 hours; otherwise
+  Stream says so at once and offers «Открыть чат в Telegram».
+- **In a group** the bot writes as itself («Stream BY» / «Stream PL»), not as the owner — fine for sending a request
+  to the partners' group; to write as yourself — «Открыть чат в Telegram».
+- A repeat never sends twice; if the server fell during sending, the reply is marked «проверьте в Telegram» instead
+  of being sent again.
 
-**Границы.** Секретные чаты недоступны. Боты только читают и отправляют ответы по команде владельца, без
-рассылок. Переписка людей — их персональные данные: хранятся только на своём сервере, в git не идут; разбор
-ИИ — по правилам §6.
+**Limits.** Secret chats are out of reach. Bots only read and send replies on the owner's command — no mass
+messaging. People's messages are personal data: only on our server, never in git; AI triage follows §6.
 
-## 9. Развитие через ИИ-аналитика
+## 9. Growth through an AI analyst
 
-Раз в неделю аналитик читает выгрузку ленты и реестра (по контрактам, не базу напрямую) и кладёт в ленту
-предложения — готовые правки реестра, которые владелец принимает или отклоняет.
+Once a week an analyst reads an export of the feed and the registry (through contracts, not the database) and
+puts proposals into the feed — ready registry edits the owner accepts or rejects.
 
-| Сигнал | Предложение |
+| Signal | Proposal |
 |---|---|
-| Много «не определено» с похожим смыслом | новая цель со схемой и примерами |
-| Одно поле правится руками | исправленная инструкция или новое поле |
-| Одно и то же сделано руками трижды | автоматизация |
-| Часто упоминается один сервис | коннектор или источник |
-| Беседа без событий >7 дней, есть открытые задачи | «закрыть, отложить или следующий шаг?» |
-| 20 подтверждений подряд без правок | поднять порог автоматического выполнения |
+| many «не определено» with similar meaning | a new intent with schema and examples |
+| one field is often fixed by hand | a corrected instruction or a new field |
+| the same thing done by hand three times | an automation |
+| one service mentioned often | a connector or source |
+| a conversation silent >7 days with open tasks | «закрыть, отложить или следующий шаг?» |
+| 20 confirmations in a row without edits | raise the auto-execution threshold |
 
-Против откладывания — три ритуала поверх ленты: утро (три дела), вечер (сводка, неразобранное, вопросы),
-неделя (всплытие забытого, обещания клиентам без отметки).
+Against procrastination — three rituals over the feed: morning (three things), evening (summary, untriaged,
+questions, «Не учтено»), week (forgotten things resurfacing, client promises without a mark).
 
-## 10. Отложено и не делаем
+## 10. Postponed and not doing
 
-- Микросервисы, очереди, векторная база — до измеренной причины.
-- Совместная работа нескольких людей — пользователь один.
-- Своя запись звонков.
-- Публикация приложения в магазинах.
+- Microservices, queues, a vector database — until there is a measured reason.
+- Several users in the app: one owner; partners take part only through the task bot.
+- Recording calls ourselves.
+- Publishing the apps in stores.
 
-## 11. Открытые вопросы
+## 11. Open questions
 
-- ~~Стек~~ — решено 2026-11-11: Node 24 + TS без сборки, `node:sqlite`; Python/FastAPI — запасной вариант.
-- ~~Отношение к iCRM~~ — решено 2026-11-11: сейчас не связаны; позже iCRM — отдельный коннектор.
-- ~~Где живёт сервер~~ — решено 2026-11-11: srv-150 за Cloudflare Tunnel, `stream.sekond.pl`.
-- ~~Какие чаты считать рабочими~~ — решено 2026-11-17: личные — что доступно боту, кроме «не отслеживать»; группы — куда добавлен бот (§8.2).
-- Профиль naserwis.pl в Google: подтверждён ли и как давно.
+- Contact and counterparty directory (P7): store, Google sync, overlap with iCRM — `decisions.md`.
+- Planfix: a plan with API access for the mirror (P14 stage 7).
+- The naserwis.pl Google profile: is it verified and since when (for reviews).

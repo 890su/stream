@@ -529,3 +529,12 @@ SMS (in / missed / rejected) — от стороны `tel:+…` (номер бе
 и путала.
 **Boundary:** Сам вид Лента и его фильтры не меняются.
 **Affected:** `CONCEPT.md` §5; `web/index.html`, `web/app.js`
+
+## 2026-11-19 — CONCEPT.md in English, shorter; communication stays Russian
+**What:** `CONCEPT.md` is rewritten in English and cut to what is current (about 88 KB → 50 KB): superseded
+parts removed (topics, the history window, "not in the MVP" items already built, resolved open questions), the
+section numbers kept. A note at its top: all communication with the owner — chat, questions, summaries, UI — is
+in Russian; Russian UI labels stay quoted in «». It is no longer loaded whole into every agent session.
+**Why:** Owner's request: less context per session, nothing outdated in the source of truth.
+**Boundary:** `CONTEXT.md`, `PLAN.md` and `decisions.md` stay in Russian. § references in code and docs stay valid.
+**Affected:** `CONCEPT.md`, `CONTEXT.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`

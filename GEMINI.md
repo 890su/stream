@@ -4,7 +4,7 @@ Read first:
 
 1. `CONTEXT.md` — canonical AI entrypoint and navigation.
 2. `PLAN.md` — active tasks and blockers.
-3. `CONCEPT.md` — source of truth; read «Коротко» and the sections the task touches (index in `CONTEXT.md`).
+3. `CONCEPT.md` — source of truth; read its Summary and the sections the task touches (index in `CONTEXT.md`).
 4. `docs/CODEMAP.md` — table of contents of the code.
 
 ## Gemini Rules
