@@ -62,13 +62,14 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
 
   function open() { show(true); }
 
-  // The filter icon opens the drawer (CONCEPT.md §5; no opening swipe — horizontal swipes belong to rows); right to
-  // left on the drawer or backdrop closes it. The panel follows the finger; past a third of its width it closes.
+  // The filter icon or a screen swipe from the left (swipezones.js: an edge, or before the first tab) opens the drawer;
+  // right to left on the drawer or backdrop closes it. The panel follows the finger; past a third of its width it closes.
   const START_PX = 12;
   let drag = null; // { x, y, opening, width, horizontal }
-  function begin(event, opening) {
+  // `external` — driven by the screen swipe (swipezones.js, touch events): pointer events leave it alone.
+  function begin(event, opening, external = false) {
     if (isWide() || event.pointerType === 'mouse' || document.body.classList.contains('selecting') || document.body.classList.contains('picking')) return;
-    drag = { x: event.clientX, y: event.clientY, opening, width: drawer.offsetWidth || 300, horizontal: null };
+    drag = { x: event.clientX, y: event.clientY, opening, width: drawer.offsetWidth || 300, horizontal: null, external };
   }
   function move(event) {
     if (!drag) return;
@@ -96,9 +97,9 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
     else if (far) close(); else show(true);
   }
   for (const surface of [drawer, backdrop]) surface.addEventListener('pointerdown', (event) => { if (isOpen()) begin(event, false); });
-  window.addEventListener('pointermove', move, { passive: true });
-  window.addEventListener('pointerup', end);
-  window.addEventListener('pointercancel', () => { if (drag?.horizontal) show(drag.opening ? false : true); drag = null; });
+  window.addEventListener('pointermove', (event) => { if (!drag?.external) move(event); }, { passive: true });
+  window.addEventListener('pointerup', (event) => { if (!drag?.external) end(event); });
+  window.addEventListener('pointercancel', () => { if (drag?.external) return; if (drag?.horizontal) show(drag.opening ? false : true); drag = null; });
   window.addEventListener('resize', () => { if (!drawer.hidden) place(); });
 
   // Contacts: conversations with people (not own notes), latest first. In Беседы a tap opens the conversation;
@@ -195,5 +196,7 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
   onWideChange(dock);
   if (isWide()) dock(true);
   const held = holdRender(drawer, () => { if (!drawer.hidden) render(); }); // a new project's name being typed survives live updates
-  return { render: held, close, open };
+  // The screen swipe from the left (swipezones.js) opens the panel following the finger.
+  const swipeDrag = { begin: (point) => begin(point, true, true), move, end };
+  return { render: held, close, open, isOpen, drag: swipeDrag };
 }

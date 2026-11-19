@@ -214,12 +214,33 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .when-icon { width: 44px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--chip); font-size: 19px; }
 .when-icon.muted { background: none; color: var(--muted); font-size: 16px; }
 .when-date { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-/* «Участники» (participants.js): a name and its roles; a tap opens the role chips. */
-.card-people { display: grid; gap: 4px; }
-.card-person-head { width: 100%; min-height: 44px; display: flex; align-items: baseline; gap: 8px; text-align: left; }
-.card-person-name { font-weight: 600; }
-.card-person-roles { color: var(--muted); font-size: 13.5px; }
-.card-person-edit { padding-bottom: 6px; }
+/* Tabs of the card (taskcard.js cardTabs): Переписка · Участники · Подробности · Лог; a dot where the triage asks. */
+.card-tabs { display: flex; gap: 2px; margin: 8px 0 6px; border-bottom: 1px solid var(--line); }
+.card-tab { position: relative; flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.card-tab.on { color: var(--accent-strong); font-weight: 600; border-bottom-color: var(--accent-strong); }
+.card-tab-badge { margin-left: 2px; color: var(--danger); }
+.card-tab-count { margin-left: 3px; font-size: 11.5px; font-weight: 400; opacity: .75; }
+.card-tab-panel { display: grid; gap: 6px; min-height: 80px; }
+/* «Участники» (participants.js): tiles 👤 · role · | · name · × in a cloud of up to four rows, «+» on the right. */
+.card-people { display: grid; gap: 8px; }
+.people-row { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.people-cloud { flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.people-cloud::-webkit-scrollbar { display: none; }
+.people-cloud.wide { -webkit-mask-image: linear-gradient(to right, #000 88%, transparent); mask-image: linear-gradient(to right, #000 88%, transparent); }
+.people-cloud-inner { display: flex; flex-wrap: wrap; gap: 6px; }
+.person-tile { display: inline-flex; align-items: center; max-width: 100%; min-height: 36px; border-radius: 18px; background: var(--chip); color: var(--chip-text); font-size: 14.5px; }
+.person-tile-icon { flex: none; width: 34px; height: 36px; display: grid; place-items: center; border-radius: 18px 0 0 18px; color: inherit; font-size: 16px; }
+.person-tile-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.person-tile-role { flex: none; font-size: 12.5px; font-weight: 600; color: var(--accent-strong); max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-tile-divider { flex: none; width: 1px; height: 18px; margin: 0 6px; background: currentColor; opacity: .35; }
+.person-tile-name { min-width: 0; min-height: 36px; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bar-text); }
+.person-tile:not(.with-role) .person-tile-name { padding-left: 0; }
+.person-tile-remove { flex: none; width: 32px; height: 36px; border-radius: 0 18px 18px 0; color: var(--muted); font-size: 18px; }
+.person-tile.off { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.person-tile.off .person-tile-name { color: var(--muted); text-decoration: line-through; }
+.person-tile.off .person-tile-role { color: var(--muted); }
+.people-add { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-strong); color: #fff; font-size: 22px; line-height: 1; }
+.card-people-menu:empty { display: none; }
 
 /* The control panel of the task view (viewpanel.js): the view in words, axes, saved views, the gear at the bottom. */
 .view-panel { display: grid; gap: 4px; min-width: 0; }

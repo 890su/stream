@@ -15,7 +15,6 @@ import { taskDetails } from './taskdetails.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
 
-const SWIPE_PX = 70;
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const SOURCES = { me: 'мои заметки', phone: 'телефон', system: 'система' };
 
@@ -118,6 +117,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   function show(next) {
     const same = current?.kind === next.kind && current?.id === next.id;
     current = next;
+    last = next;
     panel.hidden = false;
     if (!isWide()) {
       place();
@@ -132,6 +132,9 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     if (!same) body.scrollTop = 0;
   }
 
+  // The screen swipe from the right (swipezones.js): what was open here last.
+  let last = null;
+  const reopen = () => { if (!last || current) return Boolean(current); show(last); return true; };
   const openTask = (id) => show({ kind: 'task', id });
   const openMessage = (id) => show({ kind: 'message', id });
   const openPerson = (id) => show({ kind: 'person', id });
@@ -167,15 +170,6 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     openTask(id);
   }
 
-  let start = null;
-  panel.addEventListener('pointerdown', (event) => { start = event.pointerType === 'mouse' || isWide() ? null : { x: event.clientX, y: event.clientY }; });
-  panel.addEventListener('pointerup', (event) => {
-    if (!start) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    start = null;
-    if (dx > SWIPE_PX && Math.abs(dx) > Math.abs(dy) * 1.5) close();
-  });
   document.body.addEventListener('click', (event) => {
     const mark = event.target.closest('[data-task-open]');
     if (mark) { event.stopPropagation(); openTask(mark.dataset.taskOpen); }
@@ -194,5 +188,6 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   if (isWide()) dock(true);
   window.addEventListener('resize', () => { if (!panel.hidden) place(); });
 
-  return { render, openTask, openMessage, openPerson, openCounterparty, openFor, createFrom, close, current: () => current };
+  return { render, openTask, openMessage, openPerson, openCounterparty, openFor, createFrom, close, reopen, current: () => current,
+    panel, isOpen: () => !isWide() && panel.classList.contains('open') };
 }

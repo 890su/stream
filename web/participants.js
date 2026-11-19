@@ -1,47 +1,70 @@
-// «Участники» in the task card: each party once with its roles (CONCEPT.md §2.8); a tap on a participant shows every
-// role to switch on or off and «Убрать»; «+ Участник» offers me, the people of the task's conversations, the
-// directory and «Другой…», then the roles. A single role (author, responsible, controller) moves to the new holder;
-// executors and watchers are lists. Pure helpers are tested in node.
-import { partyName } from './parties.js';
+// «Участники» of the task card (owner's design, 2026-11-19): a cloud of tiles — 👤 · role · | · name · ×. The person
+// icon opens the roles (Участник — no role, shown without a label; Постановщик, Контрагент, Исполнитель, then the
+// rest); a tap on the name switches the participant off and on (an answer from the task does not go to a switched-off
+// one); × takes them out. The directory's counterparty of the task is a tile too (◆ / ⌂). Up to four rows of tiles;
+// more — the cloud widens and scrolls sideways. «+» without a label adds a participant (as Участник). Pure helpers
+// are tested in node.
+import { partyName, LIST_ROLES } from './parties.js';
 import { delegateOptions } from './taskactions.js';
 import { personForm } from './taskbar.js';
 import { holding } from './holdrender.js';
+import { counterpartyLine } from './counterpartyline.js';
 
-export const ROLE_TITLES = { executors: 'Исполнитель', responsible: 'Ответственный', controller: 'Контролёр', author: 'Постановщик', watchers: 'Наблюдатель' };
-const ORDER = ['author', 'responsible', 'executors', 'controller', 'watchers'];
-const LISTS = new Set(['executors', 'watchers']);
+export const ROLE_TITLES = { members: 'Участник', author: 'Постановщик', counterparty: 'Контрагент', executors: 'Исполнитель', responsible: 'Ответственный', controller: 'Контролёр', watchers: 'Наблюдатель' };
+const ROLES = ['author', 'counterparty', 'executors', 'responsible', 'controller', 'watchers']; // the menu after «Участник»
+const ALL = [...ROLES, 'members'];
+const has = (roles, role, party) => (LIST_ROLES.has(role) ? (roles?.[role] ?? []).includes(party) : roles?.[role] === party);
 
-// [{ party, roles }]: every party with a role, me first, then in the order roles name them.
+// [{ party, roles, muted }]: every party with a role or plain (members), me first, then in the order roles name them.
 export function participants(task) {
   const byParty = new Map();
-  for (const role of ORDER) {
+  for (const role of ALL) {
     for (const party of [task.roles?.[role]].flat().filter(Boolean)) {
       if (!byParty.has(party)) byParty.set(party, []);
-      byParty.get(party).push(role);
+      if (role !== 'members') byParty.get(party).push(role);
     }
   }
-  return [...byParty.entries()].map(([party, roles]) => ({ party, roles }))
+  const muted = new Set(task.muted ?? []);
+  return [...byParty.entries()].map(([party, roles]) => ({ party, roles, muted: muted.has(party) }))
     .sort((a, b) => Number(b.party === 'me') - Number(a.party === 'me'));
 }
 
-// The roles change that switches `role` for `party`.
+// The roles change that switches `role` for `party`. Nobody drops out with it: the party, and the former holder of a
+// single role, stay as plain participants. `members` — «Участник»: every role of the party off.
 export function toggleRole(roles, party, role) {
-  if (LISTS.has(role)) {
+  const members = roles?.members ?? [];
+  const keep = (list, ...parties) => [...new Set([...list, ...parties.filter(Boolean)])];
+  if (role === 'members') return { ...withoutRoles(roles, party), members: keep(members, party) };
+  if (LIST_ROLES.has(role)) {
     const list = roles?.[role] ?? [];
-    return { [role]: list.includes(party) ? list.filter((item) => item !== party) : [...list, party] };
+    return { [role]: list.includes(party) ? list.filter((item) => item !== party) : [...list, party], members: keep(members, party) };
   }
-  return { [role]: roles?.[role] === party ? null : party };
+  const before = roles?.[role] ?? null;
+  return { [role]: before === party ? null : party, members: keep(members, party, before !== party ? before : null) };
 }
 
-// The roles change that takes every role away from `party`.
-export function removeParticipant(roles, party) {
+// Every role of `party` off (members kept as they are).
+function withoutRoles(roles, party) {
   const change = {};
-  for (const role of ORDER) {
-    if (LISTS.has(role) && (roles?.[role] ?? []).includes(party)) change[role] = roles[role].filter((item) => item !== party);
-    else if (!LISTS.has(role) && roles?.[role] === party) change[role] = null;
+  for (const role of ROLES) {
+    if (!has(roles, role, party)) continue;
+    change[role] = LIST_ROLES.has(role) ? roles[role].filter((item) => item !== party) : null;
   }
   return change;
 }
+
+// The roles change that takes `party` out of the task.
+export function removeParticipant(roles, party) {
+  const change = withoutRoles(roles, party);
+  if ((roles?.members ?? []).includes(party)) change.members = roles.members.filter((item) => item !== party);
+  return change;
+}
+
+// The muted list after a tap on the name.
+export const toggleMuted = (task, party) => ((task.muted ?? []).includes(party) ? task.muted.filter((item) => item !== party) : [...(task.muted ?? []), party]);
+
+// The tile's label: «Участник» is not shown; several roles are joined.
+export const roleLabel = (roles) => roles.map((role) => ROLE_TITLES[role]).join(', ');
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -56,59 +79,119 @@ function button(className, text, onClick, label) {
   if (label) node.setAttribute('aria-label', label);
   return node;
 }
+const PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>';
 
-// Open participant rows survive redraws (each role tap redraws the card): `<task id>|<party>`.
-const openRows = new Set();
+// A tile: icon (a button), role | (when there is one), name (a button), ×.
+function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = false, onRemove, removeLabel }) {
+  const node = element('span', `person-tile${role ? ' with-role' : ''}${off ? ' off' : ''}`);
+  const glyph = button('person-tile-icon', '', onIcon, iconLabel);
+  if (icon) glyph.textContent = icon; else glyph.innerHTML = PERSON;
+  node.append(glyph);
+  if (role) node.append(element('span', 'person-tile-role', role), element('span', 'person-tile-divider'));
+  const label = button('person-tile-name', name, onName, nameLabel);
+  if (off !== null) label.setAttribute('aria-pressed', String(!off));
+  node.append(label, button('person-tile-remove', '×', onRemove, removeLabel));
+  return node;
+}
 
-// ctx: { views (the task's messages), people (the directory), save(change) }
-export function participantsBlock(task, { views = [], people = [], save }) {
-  const box = element('div', 'card-people');
-  const add = element('div', 'chips card-people-add'); // «+ Участник»: who, then the roles
-  const nameOf = (party) => people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name ?? partyName(party, views);
-  // A saved change redraws the card: release the «+ Участник» hold first, open rows come back from `openRows`.
-  const setRoles = (change) => { holding(add, false); save({ op: 'update', roles: change }); };
-  const roleChips = (party, has) => ORDER.map((role) => {
-    const on = has.includes(role);
-    const chip = button(`chip ${on ? 'on' : 'suggest'}`, ROLE_TITLES[role], () => setRoles(toggleRole(task.roles, party, role)));
-    chip.setAttribute('aria-pressed', String(on));
-    return chip;
+// Up to four rows of tiles; more — the inner box widens until they fit in four rows, and the cloud scrolls sideways.
+const ROWS = 4;
+function fitRows(cloud, inner) {
+  requestAnimationFrame(() => {
+    if (!cloud.isConnected) return;
+    inner.style.width = '';
+    const first = inner.firstElementChild;
+    if (!first) return;
+    const gap = parseFloat(getComputedStyle(inner).rowGap) || 0;
+    const max = ROWS * first.offsetHeight + (ROWS - 1) * gap + 1;
+    let width = cloud.clientWidth;
+    while (inner.scrollHeight > max && width < 6000) { width += 80; inner.style.width = `${width}px`; }
+    cloud.classList.toggle('wide', width > cloud.clientWidth);
   });
+}
 
-  for (const { party, roles } of participants(task)) {
+// Open menus survive redraws (each change redraws the card): `<task id>|<party>` or `<task id>|+`.
+let openMenu = null;
+
+// ctx: { views (the task's messages), people, counterparties (the directory), save(change), savePerson, saveCounterparty,
+//   onOpenCounterparty(id), onOpenPerson(id) }
+export function participantsBlock(task, ctx) {
+  const { views = [], people = [], save } = ctx;
+  const box = element('div', 'card-people');
+  const menu = element('div', 'chips card-people-menu');
+  const nameOf = (party) => people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name ?? partyName(party, views);
+  const setRoles = (change) => { openMenu = null; holding(menu, false); save({ op: 'update', roles: change }); };
+  const show = (key, nodes) => {
+    openMenu = nodes ? key : null;
+    holding(menu, Boolean(nodes));
+    menu.replaceChildren(...(nodes ?? []));
+  };
+
+  // The roles of one participant: «Участник» first, then the roles; the ones held are on.
+  const rolesMenu = (party, held) => [element('span', 'picker-section', nameOf(party)),
+    button(`chip ${held.length ? 'suggest' : 'on'}`, ROLE_TITLES.members, () => setRoles(toggleRole(task.roles, party, 'members'))),
+    ...ROLES.map((role) => {
+      const chip = button(`chip ${held.includes(role) ? 'on' : 'suggest'}`, ROLE_TITLES[role], () => setRoles(toggleRole(task.roles, party, role)));
+      chip.setAttribute('aria-pressed', String(held.includes(role)));
+      return chip;
+    }),
+    button('chip suggest muted', 'Закрыть', () => show(null))];
+
+  const cloud = element('div', 'people-cloud');
+  const inner = element('div', 'people-cloud-inner');
+  cloud.append(inner);
+  for (const { party, roles, muted } of participants(task)) {
     const key = `${task.id}|${party}`;
-    const row = element('div', `card-person${openRows.has(key) ? ' open' : ''}`);
-    const head = button('card-person-head', '', () => {
-      const open = row.classList.toggle('open');
-      if (open) openRows.add(key); else openRows.delete(key);
-      edit.hidden = !open;
-    }, `${nameOf(party)}: роли`);
-    head.append(element('span', 'card-person-name', nameOf(party)), element('span', 'card-person-roles', roles.map((role) => ROLE_TITLES[role]).join(', ')));
-    const edit = element('div', 'chips card-person-edit');
-    edit.hidden = !openRows.has(key);
-    edit.append(...roleChips(party, roles), button('chip suggest muted', 'Убрать', () => setRoles(removeParticipant(task.roles, party))));
-    row.append(head, edit);
-    box.append(row);
+    const name = nameOf(party);
+    inner.append(tile({ role: roleLabel(roles), name, off: muted,
+      iconLabel: `${name}: роль`, onIcon: () => (openMenu === key ? show(null) : show(key, rolesMenu(party, roles))),
+      nameLabel: muted ? `${name}: отключён, включить` : `${name}: включён, отключить`,
+      onName: () => save({ op: 'update', muted: toggleMuted(task, party) }),
+      removeLabel: `Убрать ${name}`, onRemove: () => save({ op: 'update', roles: removeParticipant(task.roles, party), ...(muted ? { muted: toggleMuted(task, party) } : {}) }) }));
   }
 
+  // The counterparty of the directory: ◆ an organization, ⌂ an address; the icon changes it, the name opens its card.
+  const counterparty = task.counterparty ? (ctx.counterparties ?? []).find((item) => item.id === task.counterparty) : null;
+  const directory = { people, counterparties: ctx.counterparties ?? [], save, savePerson: ctx.savePerson, saveCounterparty: ctx.saveCounterparty, onOpen: ctx.onOpenCounterparty };
+  if (counterparty) {
+    const key = `${task.id}|counterparty`;
+    const change = () => [counterpartyLine(task, { ...directory, picking: true }), button('chip suggest muted', 'Закрыть', () => show(null))];
+    inner.append(tile({ icon: counterparty.kind === 'address' ? '⌂' : '◆', iconLabel: 'Сменить контрагента', role: 'Контрагент',
+      onIcon: () => (openMenu === key ? show(null) : show(key, change())), off: null,
+      name: `${counterparty.title}${counterparty.status === 'archived' ? ' (в архиве)' : ''}`, nameLabel: 'Карточка контрагента', onName: () => ctx.onOpenCounterparty?.(counterparty.id),
+      removeLabel: 'Убрать контрагента', onRemove: () => save({ op: 'update', counterparty: null }) }));
+  }
 
-  const pickRoles = (party) => {
-    holding(add);
-    add.replaceChildren(element('span', 'picker-section', `${nameOf(party)} —`),
-      ...ORDER.map((role) => button('chip suggest', ROLE_TITLES[role], () => setRoles(toggleRole(task.roles, party, role)))),
-      button('chip suggest muted', 'Отмена', () => { holding(add, false); reset(); }));
-  };
-  const reset = () => add.replaceChildren(button('chip suggest', '+ Участник', choose));
-  function choose() {
-    holding(add);
+  // «+»: me, the people of the task's conversations, the directory, «Другой…» — added as Участник.
+  const addKey = `${task.id}|+`;
+  const addMenu = () => {
     const known = new Set(participants(task).map((item) => item.party));
     const candidates = [{ party: 'me', name: 'Я' }, ...delegateOptions(views),
       ...people.filter((person) => person.status !== 'deleted' && person.points.length).map((person) => ({ party: person.points[0], name: person.name }))]
       .filter((item, index, list) => !known.has(item.party) && list.findIndex((other) => other.party === item.party) === index).slice(0, 12);
-    add.replaceChildren(...candidates.map(({ party, name }) => button('chip suggest', name, () => pickRoles(party))),
-      button('chip suggest', 'Другой…', () => add.replaceChildren(personForm(pickRoles))),
-      button('chip suggest muted', 'Отмена', () => { holding(add, false); reset(); }));
+    const add = (party) => setRoles({ members: [...new Set([...(task.roles?.members ?? []), party])] });
+    return [element('span', 'picker-section', 'Добавить'), ...candidates.map(({ party, name }) => button('chip suggest', name, () => add(party))),
+      button('chip suggest', 'Другой…', () => show(addKey, [personForm(add)])),
+      button('chip suggest muted', 'Закрыть', () => show(null))];
+  };
+  const plus = button('people-add', '+', () => (openMenu === addKey ? show(null) : show(addKey, addMenu())), 'Добавить участника');
+  const row = element('div', 'people-row');
+  row.append(cloud, plus);
+  box.append(row, menu);
+  if (!inner.childElementCount) cloud.append(element('p', 'drawer-empty', 'Участников нет'));
+
+  // No counterparty yet: the triage's question or a choice, under the cloud.
+  if (!counterparty && !task.filed && ctx.counterparties) box.append(counterpartyLine(task, directory));
+
+  // A menu open before the redraw comes back.
+  if (openMenu === addKey) show(addKey, addMenu());
+  else if (openMenu?.startsWith(`${task.id}|`)) {
+    const party = openMenu.slice(task.id.length + 1);
+    const found = participants(task).find((item) => item.party === party);
+    if (party === 'counterparty' && counterparty) show(openMenu, [counterpartyLine(task, { ...directory, picking: true }), button('chip suggest muted', 'Закрыть', () => show(null))]);
+    else if (found) show(openMenu, rolesMenu(party, found.roles));
+    else openMenu = null;
   }
-  reset();
-  box.append(add);
+  fitRows(cloud, inner);
   return box;
 }

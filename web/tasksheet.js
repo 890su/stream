@@ -13,9 +13,12 @@ function element(tag, className, text) {
   return node;
 }
 
+// A personal chat of a participant switched off in the card (participants.js) is not answered from the task.
+export const answerable = (conversation, muted = []) => Boolean(conversation.reply) && (conversation.reply.group || !muted.includes(`tg:${conversation.reply.chat_id}`));
+
 // What the bar needs about a task: is it mine to do, the task in work, its messages, the chat to answer in.
 export function barContext(task, { feed, quick, openConversation }) {
-  const chat = feed.conversations().find((item) => item.reply && item.tasks.some((other) => other.id === task.id));
+  const chat = feed.conversations().find((item) => answerable(item, task.muted) && item.tasks.some((other) => other.id === task.id));
   return {
     mine: isMineToDo(task), hasChat: Boolean(chat), views: feed.taskViews(task.id), current: inWork(feed.tasks()).current, quick,
     onReply: chat ? () => openConversation(chat.key) : null,

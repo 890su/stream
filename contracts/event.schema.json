@@ -684,6 +684,7 @@
                 "counterparty": { "type": ["string", "null"], "description": "The counterparty of the task (contacts design 6).", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
                 "counterparty_options": { "type": "array", "description": "When the triage is unsure: up to three counterparties to choose from.", "items": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" } },
                 "counterparty_hint": { "type": ["string", "null"], "maxLength": 120, "description": "The triage's name for a new counterparty: a firm or an address." },
+                "muted": { "type": "array", "description": "Participants switched off in the task card: answers from the task do not go to them (2026-11-19).", "items": { "type": "string", "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$" } },
                 "report": {
                   "type": "object",
                   "description": "What the owner reported on closing: fields from registry/tasks.json report_fields, currency, missing (fields left empty)."
@@ -691,7 +692,7 @@
                 "roles": {
                   "type": "object",
                   "additionalProperties": false,
-                  "description": "Parties by role (P14): author, responsible, controller, counterparty - one party or null; executors, watchers - lists.",
+                  "description": "Parties by role (P14): author, responsible, controller, counterparty - one party or null; executors, watchers, members (plain participants without a role) - lists.",
                   "properties": {
                     "author": {
                       "type": [
@@ -722,6 +723,13 @@
                       "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
                     },
                     "watchers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$"
+                      }
+                    },
+                    "members": {
                       "type": "array",
                       "items": {
                         "type": "string",

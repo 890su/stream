@@ -1,6 +1,6 @@
 // Tasks as the fold of task_change events (CONCEPT.md §2.8); the server folds the same way (src/tasks/fold.ts).
 // Pure: no DOM, no storage — tested in node.
-import { defaultController, partyOf, ROLE_KEYS } from './parties.js';
+import { defaultController, partyOf, ROLE_KEYS, LIST_ROLES } from './parties.js';
 
 const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred']);
 export const isOpen = (task) => OPEN.has(task.status);
@@ -10,14 +10,14 @@ export const STATUSES = { inbox: 'разобрать', todo: 'сделать', d
 
 const order = (a, b) => a.ts.localeCompare(b.ts) || (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
 
-const emptyRoles = () => ({ author: null, responsible: null, executors: [], controller: null, watchers: [], counterparty: null });
+const emptyRoles = () => ({ author: null, responsible: null, executors: [], controller: null, watchers: [], counterparty: null, members: [] });
 
 // A task whose changes never carried roles: who does it comes from the old `assignee` / `person` fields. I am
 // responsible; work handed to someone else (a person, AI, the system) is under my control («На контроле»).
 function legacyRoles(task) {
   const executors = task.assignee === 'person' ? (task.person ? [`name:${task.person}`] : []) : [task.assignee];
   const roles = { ...emptyRoles(), author: partyOf(task.createdBy), responsible: 'me', executors };
-  return { ...roles, controller: defaultController(roles) };
+  return { ...roles, members: [], controller: defaultController(roles) };
 }
 
 // The old display field, derived: the kind of the first executor.
@@ -54,7 +54,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], ownerTitled: false, history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options', 'counterparty', 'counterparty_options', 'counterparty_hint']) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted']) {
       if (change[key] !== undefined) task[key] = change[key];
     }
     if (change.waiting_for !== undefined) task.waitingFor = change.waiting_for;
@@ -66,7 +66,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
       if (!hasRoles.has(id) && change.op !== 'create') task.roles = legacyRoles(task);
       hasRoles.add(id);
       for (const key of ROLE_KEYS) {
-        if (change.roles[key] !== undefined) task.roles[key] = change.roles[key] ?? (key === 'executors' || key === 'watchers' ? [] : null);
+        if (change.roles[key] !== undefined) task.roles[key] = change.roles[key] ?? (LIST_ROLES.has(key) ? [] : null);
       }
     }
     // When the task was finished (details, history).

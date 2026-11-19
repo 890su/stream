@@ -1,13 +1,14 @@
 // The task card in the right panel (task card design §4): the title, «контрагент · срок · статус», «дальше», «Задача
-// выполнена?», a call and a map; then folding sections — checklist, conversation (the last three), details (project,
-// counterparty, roles, origin), report, history; the action bar (taskbar.js) always at the bottom.
+// выполнена?», a call and a map, the checklist; then tabs (owner's design, 2026-11-19) — Переписка (the last three),
+// Участники (tiles with roles and the counterparty, participants.js), Подробности (project, origin, note, report), Лог;
+// the action bar (taskbar.js) always at the bottom.
 import { STATUSES, describeChange } from './taskfold.js';
 import { checklistBlock } from './checklist.js';
 import { projectLine } from './projectpanel.js';
-import { counterpartyLine } from './counterpartyline.js';
 import { personOf } from './contacts.js';
 import { actionBar } from './taskbar.js';
-import { headline, nextStep, contactLinks, section } from './taskcard.js';
+import { headline, nextStep, contactLinks, cardTabs } from './taskcard.js';
+import { slideIn } from './swipezones.js';
 import { participants, participantsBlock } from './participants.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -94,47 +95,57 @@ export function taskDetails(task, { views, bubble, save, saveTo, others, notify,
   if (checklist && task.items?.length) box.append(checklist);
 
   // The conversation: the last three, «Показать все» for the rest.
-  const talk = element('div', 'details-talk');
-  const message = (view) => {
-    const item = element('div', 'details-message');
-    item.append(bubble(view));
-    if (task.messages.includes(view.id)) item.append(button('icon-button details-unlink', '×', (event) => { event.stopPropagation(); save({ op: 'update', remove: [view.id] }); }, 'Убрать сообщение из задачи'));
-    return item;
+  const talk = () => {
+    const box = element('div', 'details-talk');
+    const message = (view) => {
+      const item = element('div', 'details-message');
+      item.append(bubble(view));
+      if (task.messages.includes(view.id)) item.append(button('icon-button details-unlink', '×', (event) => { event.stopPropagation(); save({ op: 'update', remove: [view.id] }); }, 'Убрать сообщение из задачи'));
+      return item;
+    };
+    box.append(...views.slice(-3).map(message));
+    if (views.length > 3) {
+      const more = button('link-button', `Показать все · ${views.length}`, () => { more.remove(); box.replaceChildren(...views.map(message)); });
+      box.prepend(more);
+    }
+    if (!views.length) box.append(element('p', 'drawer-empty', 'Сообщений нет'));
+    return [box];
   };
-  talk.append(...views.slice(-3).map(message));
-  if (views.length > 3) {
-    const more = button('link-button', `Показать все · ${views.length}`, () => { more.remove(); talk.replaceChildren(...views.map(message)); });
-    talk.prepend(more);
-  }
-  if (!views.length) talk.append(element('p', 'drawer-empty', 'Сообщений нет'));
-  box.append(section('talk', `Переписка · ${views.length}`, [talk], { open: true }));
 
-  // Participants and their roles, added and changed here.
-  const people = participants(task);
-  box.append(section('people', `Участники · ${people.length}`, [participantsBlock(task, { views, people: directory?.people ?? [], save })], { open: true }));
+  // Details: project, an empty checklist, how it was made, the note, the report of a closed task.
+  const details = () => {
+    const more = [projectLine(task, { projects, save })];
+    if (checklist && !task.items?.length) more.push(checklist);
+    const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
+    more.push(element('p', 'details-meta', `${origin} · ${clock.format(new Date(task.createdAt))}`));
+    if (task.note) more.push(element('p', 'details-meta', task.note));
+    // A report belongs to a closed task; a task taken back into work («Вернуть») keeps it in the journal only.
+    if (task.report && task.status === 'done') {
+      more.push(element('p', 'picker-section', 'Отчёт'), reportBlock(task.report, fields));
+      if (task.report.missing?.length && !card) more.push(button('link-button', 'Заполнить отчёт', () => doneCards.start(task)));
+    }
+    return more;
+  };
 
-  // Details: project, counterparty, how it was made; open while the triage asks something here.
-  const asks = (!task.project && task.project_options?.length) || (!task.counterparty && (task.counterparty_options?.length || task.counterparty_hint));
-  const more = [projectLine(task, { projects, save })];
-  if (checklist && !task.items?.length) more.push(checklist);
-  if (directory && !task.filed) more.push(counterpartyLine(task, { ...directory, save }));
-  const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
-  more.push(element('p', 'details-meta', `${origin} · ${clock.format(new Date(task.createdAt))}`));
-  if (task.note) more.push(element('p', 'details-meta', task.note));
-  box.append(section('more', 'Подробности', more, { force: asks ? true : null }));
+  const log = () => {
+    const rows = [...(task.history ?? [])].reverse().map((item) => {
+      const who = item.author === 'me' ? 'вы' : item.change?.processor ? 'разбор' : 'система';
+      return element('div', 'details-fact', `${clock.format(new Date(item.ts))} · ${who} · ${describeChange(item.change ?? {})}`);
+    });
+    return rows.length ? rows : [element('p', 'drawer-empty', 'Изменений нет')];
+  };
 
-  // A report belongs to a closed task; a task taken back into work («Вернуть») keeps it in the journal only.
-  if (task.report && task.status === 'done') {
-    const report = [reportBlock(task.report, fields)];
-    if (task.report.missing?.length && !card) report.push(button('link-button', 'Заполнить отчёт', () => doneCards.start(task)));
-    box.append(section('report', 'Отчёт', report, { open: true }));
-  }
-
-  const history = [...(task.history ?? [])].reverse().map((item) => {
-    const who = item.author === 'me' ? 'вы' : item.change?.processor ? 'разбор' : 'система';
-    return element('div', 'details-fact', `${clock.format(new Date(item.ts))} · ${who} · ${describeChange(item.change ?? {})}`);
-  });
-  box.append(section('history', `История · ${history.length}`, history));
+  // Tabs (owner's design, 2026-11-19); a dot on the tab where the triage asks something.
+  const people = participants(task).length + (task.counterparty ? 1 : 0);
+  const asksCounterparty = Boolean(!task.counterparty && !task.filed && (task.counterparty_options?.length || task.counterparty_hint));
+  const asksProject = Boolean(!task.project && task.project_options?.length);
+  box.append(cardTabs([
+    { id: 'talk', title: 'Переписка', count: views.length, nodes: talk },
+    { id: 'people', title: 'Участники', count: people, badge: asksCounterparty, nodes: () => [participantsBlock(task, { views, people: directory?.people ?? [], counterparties: directory?.counterparties ?? null,
+      save, savePerson: directory?.savePerson, saveCounterparty: directory?.saveCounterparty, onOpenCounterparty: directory?.onOpen })] },
+    { id: 'more', title: 'Подробности', badge: asksProject, nodes: details },
+    { id: 'log', title: 'Лог', count: task.history?.length ?? 0, nodes: log },
+  ], { slide: slideIn }));
 
   // The same six icons as the long-press sheet, always at the bottom (task card design §3).
   if (bar) {

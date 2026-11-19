@@ -1,10 +1,11 @@
 import type { JournalEvent } from '../contracts/validate.ts';
-import { defaultController, partyOf, ROLE_KEYS } from './parties.ts';
+import { defaultController, partyOf, ROLE_KEYS, LIST_ROLES } from './parties.ts';
 
 // Tasks as the fold of `task_change` events (CONCEPT.md §2.8, P14 roles). The client folds the same way (web/taskfold.js).
 
 export interface Roles {
   author: string | null; responsible: string | null; executors: string[]; controller: string | null; watchers: string[]; counterparty: string | null;
+  members: string[]; // plain participants, without a role (2026-11-19)
 }
 
 export interface Task {
@@ -15,6 +16,7 @@ export interface Task {
   resume_note?: string; // where the owner stopped (task manager spec 5.4)
   report?: Record<string, unknown>; // the closing report or its draft from the conversation
   counterparty?: string | null; counterparty_options?: string[]; counterparty_hint?: string | null; // contacts design §6
+  muted?: string[]; // participants switched off: answers from the task do not go to them (2026-11-19)
   items: ChecklistItem[]; owner_titled: boolean; // the checklist (CONCEPT.md §2.8); the owner gave the title
 }
 
@@ -23,14 +25,14 @@ export interface ChecklistItem { id: string; text: string; done: boolean }
 const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred']);
 export const isOpen = (task: Task) => OPEN.has(task.status);
 
-const emptyRoles = (): Roles => ({ author: null, responsible: null, executors: [], controller: null, watchers: [], counterparty: null });
+const emptyRoles = (): Roles => ({ author: null, responsible: null, executors: [], controller: null, watchers: [], counterparty: null, members: [] });
 
 // A task whose changes never carried roles: who does it comes from the old `assignee` / `person` fields. I am
 // responsible; work handed to someone else (a person, AI, the system) is under my control («На контроле»).
 function legacyRoles(task: Task): Roles {
   const executors = task.assignee === 'person' ? (task.person ? [`name:${task.person}`] : []) : [task.assignee];
   const roles = { ...emptyRoles(), author: partyOf(task.created_by), responsible: 'me', executors };
-  return { ...roles, controller: defaultController(roles) };
+  return { ...roles, members: [], controller: defaultController(roles) };
 }
 
 // The old display field, derived: the kind of the first executor.
@@ -63,7 +65,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], owner_titled: false, created_by: event.author, created_at: event.ts, updated_at: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'] as const) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted'] as const) {
       if (change[key] !== undefined) (task as any)[key] = change[key];
     }
     if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }
@@ -72,7 +74,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
       if (!hasRoles.has(id) && change.op !== 'create') task.roles = legacyRoles(task);
       hasRoles.add(id);
       for (const key of ROLE_KEYS) {
-        if (change.roles[key] !== undefined) (task.roles as any)[key] = change.roles[key] ?? (key === 'executors' || key === 'watchers' ? [] : null);
+        if (change.roles[key] !== undefined) (task.roles as any)[key] = change.roles[key] ?? (LIST_ROLES.has(key) ? [] : null);
       }
     }
     for (const message of change.add ?? []) if (!task.messages.includes(message)) task.messages.push(message);

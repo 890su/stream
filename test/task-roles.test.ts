@@ -34,6 +34,9 @@ test('a task change with roles is accepted; a wrong party or role is refused', a
     assert.equal((await post(change({ op: 'update', roles: { executors: ['boss'] } }))).status, 400, 'wrong party');
     assert.equal((await post(change({ op: 'update', roles: { judge: 'me' } }))).status, 400, 'unknown role');
     assert.equal((await post(change({ op: 'update', roles: { controller: ['me'] } }))).status, 400, 'controller is one party');
+    assert.equal((await post(change({ op: 'update', roles: { members: ['tg:8', 'name:Марек'] }, muted: ['tg:8'] }))).status, 201, 'plain participants, a switched-off one');
+    assert.equal((await post(change({ op: 'update', roles: { members: 'tg:8' } }))).status, 400, 'members is a list');
+    assert.equal((await post(change({ op: 'update', muted: ['boss'] }))).status, 400, 'muted holds parties');
     assert.equal((await post(change({ op: 'update', status: 'paused' }))).status, 400, 'unknown status');
     assert.equal((await post(change({ op: 'update', waiting_for: { party: 'boss', since } }))).status, 400, 'waiting_for party');
     assert.equal((await post(change({ op: 'update', promise: { by: 'x', due: '2026-11-20', message: randomUUID() } }))).status, 400, 'promise party');

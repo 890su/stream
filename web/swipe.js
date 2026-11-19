@@ -2,6 +2,9 @@
 // SWIPE_PX it is armed (`data-swipe` = the side's name, class `armed` — the styles colour it), on release the side's
 // action runs. On the place the item leaves, the side's icon and label show (task card design §2): pale before the
 // threshold, bright after it. Vertical moves scroll as usual; the click that ends a swipe does not open the item.
+// The item swipes only when grabbed in the middle half of the screen: the edges move between screens (swipezones.js).
+import { zoneOf } from './swipezones.js';
+
 export const SWIPE_PX = 80;
 const MAX_PX = 140;
 
@@ -41,8 +44,9 @@ export function swipe(item, { onRight, onLeft, right = 'right', left = 'left', s
     under.style.left = reveal.side === 'right' ? `${-width}px` : '';
     under.style.right = reveal.side === 'left' ? `${-width}px` : '';
   };
+  item.dataset.swipeObject = '';
   item.addEventListener('pointerdown', (event) => {
-    if (event.pointerType === 'mouse' || skip(event)) return;
+    if (event.pointerType === 'mouse' || skip(event) || zoneOf(event.clientX, window.innerWidth) !== 'middle') return;
     start = { x: event.clientX, y: event.clientY, horizontal: null };
   });
   item.addEventListener('pointermove', (event) => {

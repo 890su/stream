@@ -1,7 +1,7 @@
 import { HttpError } from '../server/errors.ts';
 import { tasksConfig } from '../config.ts';
 import { isDateTime } from './validate.ts';
-import { ROLE_KEYS, isParty } from '../tasks/parties.ts';
+import { ROLE_KEYS, LIST_ROLES, isParty } from '../tasks/parties.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Task changes (CONCEPT.md §2.8): `task_change` events name their task in payload.ref and carry
@@ -55,7 +55,7 @@ function checkRoles(roles: Record<string, unknown>): void {
   const fail = (reason: string): never => { throw new HttpError(400, `Роли задачи: ${reason}`); };
   for (const [key, value] of Object.entries(roles)) {
     if (!(ROLE_KEYS as readonly string[]).includes(key)) fail(`нет роли ${key}`);
-    const many = key === 'executors' || key === 'watchers';
+    const many = LIST_ROLES.has(key);
     const ok = many ? Array.isArray(value) && value.every(isParty) : value === null || isParty(value);
     if (!ok) fail(`роль ${key} заполнена неверно`);
   }

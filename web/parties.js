@@ -2,7 +2,9 @@
 // name in words (`partyName`), shared by task rows, plaques and details. Pure, no imports — tested in node.
 // A party is at most 120 characters; a `name:` party starts with a non-space (same rule in contracts/event.schema.json).
 export const PARTY_PATTERN = /^(?=.{1,120}$)(?:me|ai|system|tg:\d+|tel:\+\d+|group:tg:-?\d+|name:\S.*)$/u;
-export const ROLE_KEYS = ['author', 'responsible', 'executors', 'controller', 'watchers', 'counterparty'];
+export const ROLE_KEYS = ['author', 'responsible', 'executors', 'controller', 'watchers', 'counterparty', 'members'];
+// Roles held by many parties; the others by one or none. `members` — plain participants, without a role (2026-11-19).
+export const LIST_ROLES = new Set(['executors', 'watchers', 'members']);
 export const PARTY_LABELS = { me: 'Я', ai: 'ИИ', system: 'Система' };
 
 export function isParty(value) {

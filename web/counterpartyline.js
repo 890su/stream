@@ -90,6 +90,8 @@ export function counterpartyLine(task, ctx) {
       button('chip suggest', '+ Новый', () => newForm()));
   };
 
+  // `ctx.picking` — the participants' counterparty tile asks to change it: the choice right away.
+  if (current && ctx.picking) { picker(); box.append(choice); return box; }
   if (current) {
     const line = element('div', 'details-counterparty-line');
     line.append(button('link-button', `◆ ${current.title}${current.status === 'archived' ? ' (в архиве)' : ''}`, () => ctx.onOpen?.(current.id), 'Карточка контрагента'),

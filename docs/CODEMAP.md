@@ -88,10 +88,11 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `checklist.js` | the checklist in task details: tick, add, «Отдельной задачей», «В дело…» (this task as an item of another) |
 | `taskbar.js` | one action bar for a task: ✓ Готово · ▶ В работу · 🕒 Когда · 👤 Поручить · 💬 Ответить · ⋯ Ещё with a second level (`barActions`, `moreActions`, `actionBar`, `personForm`) |
 | `tasksheet.js` | the sheet a long press (right click) on a task row opens: title + action bar; `barContext` for the card too |
-| `participants.js` | «Участники» in the task card: each party once with its roles, a tap shows role chips and «Убрать», «+ Участник» (me, people of the chats, the directory, «Другой…»); `participants`, `toggleRole`, `removeParticipant` |
-| `taskcard.js` | the top of the task card (`headline`, `nextStep`, `contactLinks` — call and map) and folding sections remembered on the device (`section`) |
+| `participants.js` | «Участники» tab of the task card: tiles 👤 · role · name · × in a cloud of up to four rows (more — sideways), the icon picks the role, the name switches the participant off (`muted`), «+» adds a plain participant (`roles.members`), the counterparty as a tile; `participants`, `toggleRole`, `removeParticipant`, `toggleMuted` |
+| `taskcard.js` | the top of the task card (`headline`, `nextStep`, `contactLinks` — call and map), folding sections (`section`) and the card's tabs Переписка · Участники · Подробности · Лог (`cardTabs`, remembered on the device) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
-| `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows): follow, arm, act; not a tap |
+| `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows), only from the middle column: follow, arm, act; not a tap |
+| `swipezones.js` | screen swipes by columns 25 / 50 / 25: tabs Беседы · Задачи, the left panel before them, the right one after; in the right panel — the card's tabs, close before the first (`zoneOf`, `swipeAction`) |
 | `convquick.js` | swipes on a «Беседы» row: left — to the archive (`answered` correction), right — its most urgent task or a new one (`pickTask`, `anchorOf`, `sourceOf`) |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
 | `donecard.js` | card «Задача выполнена?» (triage's `proposed: done`): «Да, готово» closes in one tap, «Ещё нет»; «Заполнить отчёт» on a closed task fills the missing fields; pure report parsing |

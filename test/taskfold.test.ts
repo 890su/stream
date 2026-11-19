@@ -177,3 +177,18 @@ test('resume note is folded and cleared', () => {
   events.push(change('t1', '2026-11-19T11:00:00Z', { op: 'update', status: 'doing', resume_note: '' }, 'me'));
   assert.equal(foldTasks(events)[0].resumeNote, '');
 });
+
+test('plain participants (members) and switched-off ones (muted) fold on the client and the server alike', async () => {
+  const { foldTasks: serverFold } = await import('../src/tasks/fold.ts');
+  const events = [
+    create({ title: 'Созвон', roles: { responsible: 'me', members: ['tg:8'] } }),
+    change('t1', '2026-11-18T09:00:00Z', { op: 'update', roles: { members: ['tg:8', 'tg:9'] }, muted: ['tg:9'] }),
+    change('t1', '2026-11-18T10:00:00Z', { op: 'update', roles: { members: null } }),
+  ];
+  const [client] = foldTasks(events);
+  const [server] = serverFold(events as any);
+  for (const task of [client, server] as any[]) {
+    assert.deepEqual(task.roles.members, [], 'null clears a list role');
+    assert.deepEqual(task.muted, ['tg:9']);
+  }
+});

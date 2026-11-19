@@ -1,6 +1,6 @@
 // One-tap actions of a task (P14, 2026-11-19): which actions a task offers by status, the task change each one
 // makes and the change that undoes it, due-date chips, and the parties a task can be handed to. Pure: no DOM — tested in node.
-import { partyOfEvent, partyName } from './parties.js';
+import { partyOfEvent, partyName, LIST_ROLES } from './parties.js';
 
 const ACTION_LABELS = { accept: 'Принять', delegate: 'Поручить…', defer: 'Отложить…', wait: 'Жду…', done: 'Готово', verify: 'Проверил', reopen: 'Вернуть в работу', cancel: 'Отменить' };
 export const actionLabel = (action) => ACTION_LABELS[action] ?? action;
@@ -51,7 +51,7 @@ export function undoOf(task, change) {
     if (key === 'op' || key === 'add' || key === 'remove') continue;
     if (key === 'report') { if (task.report) undo.report = task.report; continue; }
     if (key === 'roles') {
-      undo.roles = Object.fromEntries(Object.keys(value).map((role) => [role, task.roles?.[role] ?? (role === 'executors' || role === 'watchers' ? [] : null)]));
+      undo.roles = Object.fromEntries(Object.keys(value).map((role) => [role, task.roles?.[role] ?? (LIST_ROLES.has(role) ? [] : null)]));
       continue;
     }
     if (key === 'resume_note') { undo.resume_note = task.resumeNote ?? ''; continue; } // a string: '' clears
