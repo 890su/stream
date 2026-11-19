@@ -3,6 +3,8 @@
 // While a task is open, the composer writes into it.
 import { makeTaskChange, makeCorrection, makePersonChange, makeCounterpartyChange, ownTask } from './shared.js';
 import { inChat } from './actions.js';
+import { personCard } from './personcard.js';
+import { counterpartyCard } from './counterpartycard.js';
 import { reportKeys } from './donecard.js';
 import { snippet, chatOf, sourceKey } from './projection.js';
 import { STATUSES, taskOfMessage } from './taskfold.js';
@@ -36,7 +38,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   const queue = (entry) => composer.queue(entry).catch((error) => { notify(error.message); throw error; });
   const directory = () => ({ counterparties: feed.counterparties(), people: feed.people(),
     saveCounterparty: (id, change) => queue(makeCounterpartyChange(id, change)), savePerson: (id, change) => queue(makePersonChange(id, change)).catch(() => {}),
-    onOpen: () => {} }); // the counterparty card comes with personcard.js (Task 5)
+    onOpen: (id) => openCounterparty(id) });
 
   function place() {
     const top = document.querySelector('.topbar').getBoundingClientRect().bottom;
@@ -92,6 +94,15 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       const others = [...feed.tasks()].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || b.updatedAt.localeCompare(a.updatedAt));
       body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save, others, notify, projects: feed.projects(),
         doneCards, quick, reportKeys: reportKeys(task, config.tasks ?? {}), fields: config.tasks?.report_fields ?? {}, directory: directory() }));
+    } else if (current.kind === 'person' || current.kind === 'counterparty') {
+      // The directory's cards (contacts design §6).
+      const dir = directory();
+      const cardCtx = { ...dir, tasks: feed.tasks(), onOpenPerson: openPerson, onOpenCounterparty: openCounterparty, onOpenTask: openTask };
+      const item = (current.kind === 'person' ? dir.people : dir.counterparties).find((entry) => entry.id === current.id);
+      // Just created: the feed folds it on its next render, which redraws this panel.
+      if (!item) { heading.textContent = 'Сохраняется…'; body.replaceChildren(); return; }
+      heading.textContent = current.kind === 'person' ? item.name : item.title;
+      body.replaceChildren(current.kind === 'person' ? personCard(item, cardCtx) : counterpartyCard(item, cardCtx));
     } else {
       const view = feed.view(current.id);
       if (!view) { close(); return; }
@@ -121,6 +132,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
 
   const openTask = (id) => show({ kind: 'task', id });
   const openMessage = (id) => show({ kind: 'message', id });
+  const openPerson = (id) => show({ kind: 'person', id });
+  const openCounterparty = (id) => show({ kind: 'counterparty', id });
   // The chain title above a message: its first open task, else its latest task, else the message itself.
   function openFor(view) {
     const task = taskOfMessage(view, tasksById());
@@ -179,5 +192,5 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   if (isWide()) dock(true);
   window.addEventListener('resize', () => { if (!panel.hidden) place(); });
 
-  return { render, openTask, openMessage, openFor, createFrom, close, current: () => current };
+  return { render, openTask, openMessage, openPerson, openCounterparty, openFor, createFrom, close, current: () => current };
 }

@@ -124,7 +124,7 @@ function setupMessageActions(feed, composer, config) {
     notify('Связано', { label: 'Отменить', run: () => correct(view, 'unlink') });
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
-  chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id) });
+  chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id), openPerson: (id) => details.openPerson(id) });
   details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update() });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({

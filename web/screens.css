@@ -166,3 +166,9 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .pulse-dot.yellow { background: var(--warn, #d9a400); }
 .pulse-dot.red { background: var(--danger, #d33); }
 .pulse-note { color: var(--muted); }
+
+/* Directory cards (contacts design §6, personcard.js, counterpartycard.js). */
+.details-card { display: grid; gap: 6px; }
+.card-field { display: grid; gap: 2px; }
+.card-value, .card-link { justify-self: start; min-height: 40px; text-align: left; }
+.details-card textarea.details-input, .details-card .details-input { min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; }

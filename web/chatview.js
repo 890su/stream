@@ -1,6 +1,8 @@
 import { accountTitle } from './tgbubble.js';
 import { chatOf, snippet } from './projection.js';
-import { makeTaskChange, ownTask } from './shared.js';
+import { makeTaskChange, makePersonChange, ownTask } from './shared.js';
+import { personOf } from './contacts.js';
+import { personFromConversation } from './personcard.js';
 import { reveal, conceal } from './motion.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -10,7 +12,7 @@ const $ = (selector) => document.querySelector(selector);
 // The composer's recipient is the conversation's reply chat. Without one (a phone number, a chat with only my
 // messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
 // plain notes. «Не отслеживать» for Telegram conversations.
-export function setupChatView({ feed, composer, correct, notify, openTask = () => {} }) {
+export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {} }) {
   const bar = $('#chat-bar');
   let key = null;
   let applied = null; // the reply chat this view put into the composer
@@ -42,6 +44,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     app.hidden = !chat || chat.group;
     app.href = chat && !chat.group ? `tg://user?id=${chat.chat_id}` : '#';
     $('#chat-untrack').hidden = !key.startsWith('tg:');
+    $('#chat-person').hidden = !personFromConversation(conversation ?? { key });
     steer();
   };
 
@@ -78,6 +81,18 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   window.addEventListener('popstate', () => { if (key && !history.state?.conversation) close(); });
   $('#chat-close').onclick = leave;
   $('#chat-back').onclick = leave;
+  // «Контакт»: the person of this conversation from the directory, or a new one from the chat or the number.
+  $('#chat-person').onclick = async () => {
+    const conversation = feed.conversation();
+    const draft = personFromConversation(conversation);
+    if (!draft) { notify('Это не беседа с человеком'); return; }
+    const party = conversation.key.startsWith('tel:') ? conversation.key : `tg:${draft.telegram[0]}`;
+    const known = personOf(party, feed.people());
+    if (known) { openPerson(known.id); return; }
+    const id = crypto.randomUUID();
+    try { await composer.queue(makePersonChange(id, { op: 'create', ...draft })); } catch (error) { notify(error.message); return; }
+    openPerson(id);
+  };
   // «+ Задача»: a new task for this conversation, from its latest message, titled by the conversation.
   $('#chat-task').onclick = async () => {
     const conversation = feed.conversation();
