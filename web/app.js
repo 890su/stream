@@ -18,10 +18,12 @@ import { setupDetails } from './details.js';
 import { conversationOf } from './conversations.js';
 import { reveal, conceal } from './motion.js';
 import { createDoneCards } from './donecard.js';
+import { createTaskQuick } from './taskquick.js';
 import { setupQuestions } from './question.js';
 
 let details; // right panel «Подробности» (CONCEPT.md §5)
 let doneCards;
+let taskQuick; // taskquick.js: task actions with «Вернуть»
 let picker;
 let bulk;
 let drawer;
@@ -102,7 +104,7 @@ function setupMessageActions(feed, composer, config) {
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
   chatView = setupChatView({ feed, composer, correct, notify });
-  details = setupDetails({ feed, composer, notify, doneCards, config });
+  details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
@@ -158,13 +160,17 @@ async function main() {
   const config = await response.json();
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
+  let quick = null; // task actions where a task is seen (taskquick.js), once the composer's queue exists
+  const quickRef = { decorate: (item, task) => quick?.decorate(item, task), done: (task) => quick?.done(task), act: (...args) => quick?.act(...args) };
   const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
+    quick: quickRef, onMoreLists: () => drawer?.open(),
     taskCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); chatView?.sync(); composerRef?.refreshTags(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
   composerRef = composer;
-  doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); } });
+  taskQuick = quick = createTaskQuick({ queue: composer.queue, notify, config });
+  doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); }, close: (task) => quick.done(task) });
   setupViews(feed);
   setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });
   setupMessageActions(feed, composer, config);

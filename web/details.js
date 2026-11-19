@@ -2,6 +2,7 @@
 // a tap (task plaque in a conversation, task row, task mark, history icon, chain title); a left-to-right swipe closes it.
 // While a task is open, the composer writes into it.
 import { makeTaskChange, ownTask } from './shared.js';
+import { reportKeys } from './donecard.js';
 import { snippet, chatOf, sourceKey } from './projection.js';
 import { STATUSES, taskOfMessage } from './taskfold.js';
 import { accountTitle } from './tgbubble.js';
@@ -20,7 +21,7 @@ function element(tag, className, text) {
   return node;
 }
 
-export function setupDetails({ feed, composer, notify, doneCards, config }) {
+export function setupDetails({ feed, composer, notify, doneCards, config, quick }) {
   const panel = document.querySelector('#details');
   const backdrop = document.querySelector('#details-backdrop');
   const body = document.querySelector('#details-body');
@@ -44,7 +45,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
     const source = chatOf(view.event)?.title ? `${accountTitle(chatOf(view.event).account)} · ${chatOf(view.event).title}` : SOURCES[sourceKey(view.event)] ?? view.event.source;
     box.append(element('p', 'details-meta', `${clock.format(new Date(view.event.ts))} · ${source}${view.edited ? ' · изменено' : ''}`));
     if (view.tags.length) box.append(element('p', 'details-meta', view.tags.join(' ')));
-    box.append(element('p', 'picker-section', 'Дела'));
+    box.append(element('p', 'picker-section', 'Задачи'));
     const tasks = view.taskIds.map((id) => tasksById().get(id)).filter(Boolean);
     for (const task of tasks) {
       const row = element('button', `task-row ${task.status}`);
@@ -76,7 +77,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config }) {
       if (!task) { close(); return; }
       heading.textContent = 'Задача';
       body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change),
-        doneCards, fields: config.tasks?.report_fields ?? {} }));
+        doneCards, quick, reportKeys: reportKeys(task, config.tasks ?? {}), fields: config.tasks?.report_fields ?? {} }));
     } else {
       const view = feed.view(current.id);
       if (!view) { close(); return; }

@@ -1,7 +1,7 @@
-// The card «Задача выполнена?» (CONCEPT.md §2.9): the last item of a case when the triage saw «готово».
-// «Выполнить» → «Да» → the fields the task's template asks for (registry/tasks.json); «Готово» in the details
-// starts at «Да» (start). Saving closes the task
-// with a report in one task_change; empty fields are listed as missing for the evening summary.
+// The card «Задача выполнена?» (CONCEPT.md §2.9, 2026-11-19): under a task the triage saw «готово» on — «Да»
+// closes it in one tap (`close`, with «Вернуть»), «Ещё нет» drops the question. «Заполнить отчёт» on a closed task
+// (start) shows the fields still missing (registry/tasks.json); saving keeps the task closed and fills its report,
+// empty fields stay missing for the evening summary.
 import { makeTaskChange } from './shared.js';
 import { play } from './motion.js';
 
@@ -66,9 +66,9 @@ export function buildReport(keys, values, fields, currency) {
 const INPUT = { minutes: { type: 'text', inputMode: 'decimal', placeholder: '90 или 1:30' }, money: { type: 'text', inputMode: 'decimal', placeholder: '0' },
   datetime: { type: 'datetime-local' }, tags: { type: 'text', placeholder: '#метка' }, text: { type: 'text', placeholder: '' } };
 
-export function createDoneCards({ config, queue, notify, onChange = () => {} }) {
+export function createDoneCards({ config, queue, notify, onChange = () => {}, close = () => {} }) {
   const tasks = config.tasks ?? {};
-  const cards = new Map(); // task id -> { node, step, task }
+  const cards = new Map(); // task id -> { node, step, task, manual }
   const save = (task, change) => queue(makeTaskChange(task.id, change)).catch((error) => notify(error.message));
 
   function fill(entry) {
@@ -78,17 +78,11 @@ export function createDoneCards({ config, queue, notify, onChange = () => {} }) 
     if (entry.step === 'ask') {
       body.push(element('p', 'done-card-title', 'Задача выполнена?'), element('p', 'done-card-text', `«${task.title}» — по сообщениям похоже, что готово.`));
       const actions = element('div', 'done-card-actions');
-      actions.append(button('primary', 'Выполнить', () => step(entry, 'confirm')), button('link-button', 'Ещё нет', () => save(task, { op: 'update', proposed: null })));
-      body.push(actions);
-    } else if (entry.step === 'confirm') {
-      body.push(element('p', 'done-card-title', 'Отметить выполненной?'), element('p', 'done-card-text', task.title));
-      const actions = element('div', 'done-card-actions');
-      const cancel = () => { if (entry.manual) { cards.delete(task.id); onChange(); } else step(entry, 'ask'); };
-      actions.append(button('primary', 'Да', () => step(entry, 'fields')), button('link-button', 'Отмена', cancel));
+      actions.append(button('primary', 'Да, готово', () => { cards.delete(task.id); close(task); }), button('link-button', 'Ещё нет', () => save(task, { op: 'update', proposed: null })));
       body.push(actions);
     } else {
-      const keys = reportKeys(task, tasks);
-      body.push(element('p', 'done-card-title', 'Что записать в учёт'));
+      const keys = task.report?.missing?.length ? task.report.missing : reportKeys(task, tasks);
+      body.push(element('p', 'done-card-title', 'Отчёт по задаче'));
       const form = element('form', 'done-card-form');
       for (const key of keys) {
         const field = tasks.report_fields?.[key];
@@ -105,49 +99,51 @@ export function createDoneCards({ config, queue, notify, onChange = () => {} }) 
         label.append(element('span', '', 'Валюта'), select);
         form.append(label);
       }
-      const finish = (skip) => {
-        const values = skip ? {} : Object.fromEntries(new FormData(form));
+      const finish = () => {
+        const values = Object.fromEntries(new FormData(form));
         const result = buildReport(keys, values, tasks.report_fields ?? {}, values.currency ?? tasks.currencies?.[0] ?? 'PLN');
         if (result.error) { notify(result.error); return; }
-        save(task, { op: 'update', status: 'done', proposed: null, report: result.report });
+        const { missing: _old, ...filled } = task.report ?? {};
+        save(task, { op: 'update', status: 'done', proposed: null, report: { ...filled, ...result.report } });
         cards.delete(task.id);
+        onChange();
       };
-      form.onsubmit = (event) => { event.preventDefault(); finish(false); };
+      form.onsubmit = (event) => { event.preventDefault(); finish(); };
       const actions = element('div', 'done-card-actions');
-      actions.append(button('primary', 'Сохранить', () => finish(false)), button('link-button', 'Пропустить', () => finish(true)));
+      actions.append(button('primary', 'Сохранить', finish), button('link-button', 'Позже', () => { cards.delete(task.id); onChange(); }));
       form.append(actions);
-      body.push(form, element('p', 'done-card-text', 'Пустое попадёт в вечернюю сводку.'));
+      body.push(form, element('p', 'done-card-text', 'Пустое останется в вечерней сводке.'));
     }
     node.replaceChildren(...body);
     if (node.isConnected) play(node, [{ height: `${from}px`, overflow: 'hidden' }, { height: `${node.offsetHeight}px`, overflow: 'hidden' }]);
   }
 
-  function step(entry, next) { entry.step = next; fill(entry); entry.node.querySelector('input, button')?.focus({ preventScroll: true }); }
-
   function create(task, step, manual) {
     const entry = { node: element('section', 'done-card'), step, task, manual };
-    entry.node.setAttribute('aria-label', `Задача выполнена? ${task.title}`);
+    entry.node.setAttribute('aria-label', step === 'ask' ? `Задача выполнена? ${task.title}` : `Отчёт по задаче ${task.title}`);
     cards.set(task.id, entry);
     fill(entry);
     return entry;
   }
 
-  // The card for a task the triage proposes to close or the owner is closing, or null. The same node across
-  // redraws keeps what was typed.
+  // The card for a task the triage proposes to close, or whose report the owner is filling, or null. The same
+  // node across redraws keeps what was typed.
   function card(task) {
     let entry = cards.get(task.id);
+    if (entry?.manual) { entry.task = task; return entry.node; }
     const open = ['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred'].includes(task.status);
-    if (!open || (task.proposed !== 'done' && !entry?.manual)) { cards.delete(task.id); return null; }
+    if (!open || task.proposed !== 'done') { cards.delete(task.id); return null; }
     entry ??= create(task, 'ask', false);
     entry.task = task;
     return entry.node;
   }
 
-  // «Готово» by the owner, or «Проверил» on a task in review (closing ends with `done` + report): straight to «Отметить выполненной?», then the report.
+  // «Заполнить отчёт»: the report fields of a task (closed or closing).
   function start(task) {
     cards.delete(task.id);
-    create(task, 'confirm', true);
+    create(task, 'fields', true);
     onChange();
+    cards.get(task.id)?.node.querySelector('input')?.focus({ preventScroll: true });
   }
 
   return { card, start };

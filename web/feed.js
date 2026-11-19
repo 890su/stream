@@ -7,7 +7,7 @@ import { project, bursts, chains, sourceKey } from './projection.js';
 import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } from './taskfold.js';
 import { visibleTasks } from './filters.js';
 import { questionOptions } from './question.js';
-import { taskRow, emptyTasks } from './tasklist.js';
+import { taskRow, emptyTasks, sectionsOf, sectionHeader, listChips, listCount } from './tasklist.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
 import { convRow, doneRow, splitDone } from './convlist.js';
@@ -20,7 +20,7 @@ const MODES = ['conversations', 'tasks', 'feed'];
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
 const DEFAULT_CONVERSATIONS = { quiet_days: 7, urgent_tags: [], states: ['urgent', 'mine', 'theirs', 'quiet', 'done'] };
 
-export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, onMoreLists = () => {} }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -42,6 +42,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let convKeys = new Map(); // message id -> conversation key (conversations.js)
   let listTop = 0; // where the list was when a conversation opened: «назад» returns there
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
+  const openSections = new Set(); // Задачи: folded sections («Дальше») the owner unfolded
   let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
   let mode = 'conversations';
   const taskFilters = limits.filters?.length ? limits.filters : [{ id: 'all', title: 'Все', all: [] }]; // saved filters (registry/filters.json)
@@ -153,11 +154,29 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };
     const filtered = Boolean((mode === 'feed' && sourceFilter) || tagFilter.size || conversationKey);
     if (mode === 'tasks') {
-      const shownTasks = visibleTasks(taskList, { filter: taskFilter(), matches: taskMatches(), now });
-      for (const task of shownTasks) {
-        children.push(taskRow(task, task.messages.map((id) => views.get(id)).filter(Boolean), { onOpen: onOpenTask, showAssignee: taskFilter().id !== taskFilters[0].id }));
+      // The chips of the main lists on top, then the list by its sections (CONCEPT.md §5).
+      const filter = taskFilter();
+      const matches = taskMatches();
+      const counts = new Map(taskFilters.filter((item) => item.pinned || item.id === filter.id)
+        .map((item) => [item.id, listCount(visibleTasks(taskList, { filter: item, matches, now }), item, now)]));
+      children.push(listChips(taskFilters, filter, counts, { onPick: (id) => setTaskFilter(id), onMore: onMoreLists }));
+      const shownTasks = visibleTasks(taskList, { filter, matches, now });
+      const row = (task) => taskRow(task, task.messages.map((id) => views.get(id)).filter(Boolean), { onOpen: onOpenTask, showAssignee: filter.id !== taskFilters[0].id, quick });
+      for (const section of sectionsOf(shownTasks, filter, now)) {
+        const key = `section:${filter.id}:${section.id}`;
+        const open = !section.folded || openSections.has(key);
+        if (section.title) {
+          const head = sectionHeader(section, { open, onToggle: () => toggleGroup(key, open, () => { if (open) openSections.delete(key); else openSections.add(key); }) });
+          head.dataset.group = key;
+          children.push(head);
+        }
+        if (open) {
+          const rows = section.tasks.map(row);
+          if (section.folded) groupNodes.set(key, rows);
+          children.push(...rows);
+        }
       }
-      if (!shownTasks.length) children.push(emptyTasks(taskFilter()));
+      if (!shownTasks.length) children.push(emptyTasks(filter));
     } else if (mode === 'conversations' && !inside) {
       // The list (CONCEPT.md §5): by state; finished ones folded into one row at the end.
       const { active, done } = splitDone(convList.filter((item) => item.views.some(tagged)));
@@ -170,7 +189,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       if (!active.length && !done.length) empty(filtered ? 'Под фильтр ничего не подходит.' : 'Здесь появятся беседы: чаты Telegram, звонки и SMS, ваши заметки.');
     } else {
       // One conversation (its task plaques on top) or the Лента: messages in a row.
-      const plaques = inside && current ? convTasks(current, { onOpen: onOpenTask }) : null;
+      const plaques = inside && current ? convTasks(current, { onOpen: onOpenTask, quick }) : null;
       if (plaques) children.push(plaques);
       for (const group of bursts(visible)) renderGroup(group);
       // «Задача выполнена?» — after the conversation's messages (CONCEPT.md §2.9).

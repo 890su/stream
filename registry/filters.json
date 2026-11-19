@@ -1,41 +1,15 @@
 {
-  "version": 1,
+  "version": 2,
   "filters": [
-    { "id": "mine", "title": "Мои", "all": [
-      { "field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"] },
-      { "field": "filed", "op": "eq", "value": false },
-      { "field": "involves_me", "op": "eq", "value": true },
-      { "any": [
-        { "field": "role.executors", "op": "includes", "value": "me" },
-        { "all": [{ "field": "role.executors", "op": "empty" }, { "field": "role.responsible", "op": "eq", "value": "me" }] }
-      ] }
-    ] },
-    { "id": "new", "title": "Новые", "all": [
-      { "field": "status", "op": "eq", "value": "inbox" },
-      { "field": "filed", "op": "eq", "value": false },
-      { "field": "involves_me", "op": "eq", "value": true }
-    ] },
-    { "id": "control", "title": "На контроле", "all": [
-      { "field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"] },
-      { "field": "filed", "op": "eq", "value": false },
-      { "field": "role.controller", "op": "eq", "value": "me" },
-      { "field": "role.executors", "op": "excludes", "value": "me" }
-    ] },
-    { "id": "waiting", "title": "Жду от людей", "all": [{ "field": "status", "op": "eq", "value": "waiting" }] },
-    { "id": "overdue", "title": "Просрочено", "all": [
-      { "field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"] },
-      { "field": "due", "op": "eq", "value": "overdue" },
-      { "field": "involves_me", "op": "eq", "value": true }
-    ], "order": "due" },
-    { "id": "review", "title": "На проверке", "all": [{ "field": "status", "op": "eq", "value": "review" }] },
-    { "id": "team", "title": "Команда", "all": [
-      { "field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"] },
-      { "field": "involves_me", "op": "eq", "value": false }
-    ] },
-    { "id": "unreported", "title": "Не учтено", "all": [
-      { "field": "status", "op": "eq", "value": "done" },
-      { "field": "report_missing", "op": "not_empty" }
-    ] },
-    { "id": "done", "title": "Готовые", "all": [{ "field": "status", "op": "in", "value": ["done", "cancelled"] }] }
+    {"id": "today", "title": "Сегодня", "pinned": true, "order": "due", "all": [{"field": "status", "op": "in", "value": ["inbox", "todo", "doing", "review", "deferred"]}, {"field": "filed", "op": "eq", "value": false}, {"field": "involves_me", "op": "eq", "value": true}, {"field": "snoozed", "op": "eq", "value": false}, {"any": [{"any": [{"field": "role.executors", "op": "includes", "value": "me"}, {"all": [{"field": "role.executors", "op": "empty"}, {"field": "role.responsible", "op": "eq", "value": "me"}]}]}, {"field": "status", "op": "eq", "value": "inbox"}, {"all": [{"field": "status", "op": "eq", "value": "review"}, {"field": "role.controller", "op": "eq", "value": "me"}]}]}], "sections": [{"id": "overdue", "title": "Просрочено", "all": [{"field": "due", "op": "eq", "value": "overdue"}]}, {"id": "today", "title": "Сегодня", "any": [{"field": "due", "op": "eq", "value": "today"}, {"field": "status", "op": "eq", "value": "deferred"}]}, {"id": "review", "title": "Проверить", "all": [{"field": "status", "op": "eq", "value": "review"}]}, {"id": "new", "title": "Разобрать", "all": [{"field": "status", "op": "eq", "value": "inbox"}]}, {"id": "later", "title": "Дальше", "folded": true, "all": []}]},
+    {"id": "new", "title": "Разобрать", "pinned": true, "all": [{"field": "status", "op": "eq", "value": "inbox"}, {"field": "filed", "op": "eq", "value": false}, {"field": "involves_me", "op": "eq", "value": true}]},
+    {"id": "waiting", "title": "Жду", "pinned": true, "order": "due", "all": [{"field": "status", "op": "eq", "value": "waiting"}, {"field": "filed", "op": "eq", "value": false}, {"field": "involves_me", "op": "eq", "value": true}]},
+    {"id": "control", "title": "Контроль", "pinned": true, "all": [{"field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"]}, {"field": "filed", "op": "eq", "value": false}, {"field": "role.controller", "op": "eq", "value": "me"}, {"field": "role.executors", "op": "excludes", "value": "me"}]},
+    {"id": "mine", "title": "Все мои", "all": [{"field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"]}, {"field": "filed", "op": "eq", "value": false}, {"field": "involves_me", "op": "eq", "value": true}, {"any": [{"field": "role.executors", "op": "includes", "value": "me"}, {"all": [{"field": "role.executors", "op": "empty"}, {"field": "role.responsible", "op": "eq", "value": "me"}]}]}]},
+    {"id": "overdue", "title": "Просрочено", "order": "due", "all": [{"field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"]}, {"field": "due", "op": "eq", "value": "overdue"}, {"field": "involves_me", "op": "eq", "value": true}]},
+    {"id": "review", "title": "На проверке", "all": [{"field": "status", "op": "eq", "value": "review"}, {"field": "involves_me", "op": "eq", "value": true}]},
+    {"id": "team", "title": "Команда", "all": [{"field": "status", "op": "in", "value": ["inbox", "todo", "doing", "waiting", "review", "deferred"]}, {"field": "involves_me", "op": "eq", "value": false}]},
+    {"id": "unreported", "title": "Не учтено", "all": [{"field": "status", "op": "eq", "value": "done"}, {"field": "report_missing", "op": "not_empty"}]},
+    {"id": "done", "title": "Готовые", "all": [{"field": "status", "op": "in", "value": ["done", "cancelled"]}]}
   ]
 }

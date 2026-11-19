@@ -1,9 +1,11 @@
 // Saved task filters (registry/filters.json, P14): a filter is data — `all` / `any` lists of conditions — and
-// `matchesFilter` evaluates it against a folded task. Pure: no DOM, no storage — tested in node.
+// `matchesFilter` evaluates it against a folded task. A filter may also carry `pinned` (a chip on top of Задачи),
+// `order` and `sections` (each a condition list; tasklist.js). Pure: no DOM, no storage — tested in node.
 //
 // Condition: { field, op, value? }, or a nested group { all: [...] } / { any: [...] } as an element of a list.
 // Fields: status, role.<key> (role.executors / role.watchers are arrays), involves_me, due, filed,
-//   report_missing (array of unfilled report fields), updated_days (whole days since the last change).
+//   report_missing (array of unfilled report fields), updated_days (whole days since the last change),
+//   snoozed (deferred and its `remind_at` still ahead — hidden until then, back by itself after).
 //   `due` values: today, overdue, none, later, and `week` — due today or within the next 7 days
 //   (today .. today + 7, inclusive; overdue and later dates are not «week»).
 // Ops: eq, ne, in, not_in, includes, excludes, empty, not_empty, lte, gte. The owner is the party `me`.
@@ -36,6 +38,7 @@ function read(task, field, now) {
     case 'filed': return { known: true, value: !!task.filed };
     case 'due': return { known: true, due: true, value: dueState(task, now) };
     case 'report_missing': return { known: true, value: task.report?.missing ?? [] };
+    case 'snoozed': return { known: true, value: task.status === 'deferred' && Boolean(task.remindAt) && Date.parse(task.remindAt) > now.getTime() };
     case 'updated_days': return { known: true, value: Math.floor((now.getTime() - Date.parse(task.updatedAt)) / DAY) };
     default: return { known: false };
   }

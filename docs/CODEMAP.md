@@ -66,11 +66,12 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `app.js` | entry: wires everything, message action dispatch, «Беседы · Задачи · Лента» switch (old saved views map to new) |
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter; paging |
-| `tasklist.js` / `days.js` | a task row of the «Задачи» view (who does it — in every list but «Мои»); day pill labels |
+| `tasklist.js` / `days.js` | the «Задачи» view: list chips (`pinned`), sections of a list (`sectionsOf`, `listCount`), a task row (mark, title, facts, due word — `dueLabel`); day pill labels |
+| `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`) |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
-| `donecard.js` | card «Задача выполнена?»: Выполнить → Да → report fields → close with a report (also «Проверил» on a task in review); pure report parsing |
+| `donecard.js` | card «Задача выполнена?» (triage's `proposed: done`): «Да, готово» closes in one tap, «Ещё нет»; «Заполнить отчёт» on a closed task fills the missing fields; pure report parsing |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
-| `convlist.js` / `convtasks.js` | a row of the «Беседы» list (state label, channels, open tasks) and the «Завершённые · N» fold; task plaques on top of a conversation (status, executor, due) |
+| `convlist.js` / `convtasks.js` | a row of the «Беседы» list (state label, channels, open tasks) and the «Завершённые · N» fold; task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
@@ -82,10 +83,10 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
 | `drawer.js` | left panel — filters by view: contacts (conversations) and tags (shared), «Завершённые» (Беседы, Лента), sources (Лента), saved filters (Задачи) |
 | `taskfold.js` | pure: tasks from `task_change` (with history, roles), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
-| `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter`, `visibleTasks` |
+| `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter` (fields incl. `snoozed`), `visibleTasks` |
 | `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done, order from the registry; `conversationKeys` (an own note joins the conversation it continues or answers); `withWhom` |
-| `details.js` / `taskdetails.js` | right panel «Подробности»: a task (roles, one-tap actions, due chips, messages, history) or a message (versions, tasks) |
-| `taskactions.js` | pure: actions a task offers by status and roles (`actionsFor`), the change of each (`changeFor`; `'report'` = the done card), due chips, delegate and «Жду…» options (callers included) |
+| `details.js` / `taskdetails.js` | right panel «Подробности»: a task (actions and due first, roles folded, «Другой…» typed in place, report, messages, folded history) or a message (versions, tasks) |
+| `taskactions.js` | pure: actions a task offers by status (`actionsFor`; «Готово» in every open status), the change of each (`changeFor`, `closeChange` — done at once, report fields to `missing`), its undo (`undoOf`), due chips, delegate and «Жду…» options (callers included) |
 | `parties.js` | pure: parties and roles (mirror of `src/tasks/parties.ts`) and `partyName` — a party in words for rows, plaques and details |
 | `chatview.js` | the bar of an open conversation: title, «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «Не отслеживать» |
 | `system.js` | System screen: sources, connections, sends, exclusions |
@@ -107,7 +108,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», closing reports (`report_fields`, per-template `report`, currencies) |
 | `registry/conversations.json` | conversations: quiet days, urgent tags, order of states |
-| `registry/filters.json` | saved task filters: conditions over roles, status, due, report; first is the default |
+| `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Сегодня») is the default |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere

@@ -1,6 +1,7 @@
 import { sourceKey } from './projection.js';
 import { accountTitle } from './tgbubble.js';
 import { visibleTasks } from './filters.js';
+import { listCount } from './tasklist.js';
 import { isWide, onWideChange } from './layout.js';
 
 // Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
@@ -155,16 +156,24 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
     const rows = feed.taskFilters().map((filter) => {
       const row = element('button', `drawer-contact${filter.id === current.id ? ' on' : ''}`);
       row.type = 'button';
-      row.append(element('span', 'drawer-title', filter.title), element('span', 'drawer-count', String(visibleTasks(feed.tasks(), { filter, matches }).length)));
+      const count = listCount(visibleTasks(feed.tasks(), { filter, matches }), filter);
+      row.classList.toggle('empty-list', !count);
+      row.append(element('span', 'drawer-title', filter.title), element('span', 'drawer-count', count ? String(count) : ''));
       row.setAttribute('aria-pressed', String(filter.id === current.id));
-      row.onclick = async () => { await feed.setTaskFilter(filter.id); onFilterChange(); render(); };
+      row.onclick = async () => { await feed.setTaskFilter(filter.id); onFilterChange(); render(); if (!isWide()) close(); };
       return row;
     });
     modeBox.replaceChildren(element('h3', 'drawer-section', 'Списки'), ...rows);
   }
+  // In Задачи the lists come first, above the contacts; elsewhere the view's filters follow the contacts.
+  const contactsHead = contactsBox.previousElementSibling;
+  function placeModeBox() {
+    if (feed.mode() === 'tasks') contactsHead.before(modeBox); else contactsBox.after(modeBox);
+  }
 
   function render() {
     renderContacts();
+    placeModeBox();
     if (feed.mode() === 'tasks') renderTaskFilters(); else renderSources();
     document.querySelector('#drawer-title').textContent = { feed: 'Фильтры ленты', conversations: 'Фильтры бесед', tasks: 'Фильтры задач' }[feed.mode()] ?? 'Фильтры';
     const counts = new Map();
@@ -196,5 +205,5 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
   };
   onWideChange(dock);
   if (isWide()) dock(true);
-  return { render: () => { if (!drawer.hidden) render(); }, close };
+  return { render: () => { if (!drawer.hidden) render(); }, close, open };
 }

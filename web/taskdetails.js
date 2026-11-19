@@ -1,5 +1,6 @@
-// Details of a case (task) in the right panel (CONCEPT.md §5): name, status and one-tap actions, roles, due date,
-// the triage's note, the closing report, «Задача выполнена?», the whole conversation and the history of changes.
+// Details of a task in the right panel (CONCEPT.md §5, 2026-11-19), action first: name, status, «Задача
+// выполнена?», one-tap actions (with «Вернуть»), due date; then roles in one folded line, the triage's note, the
+// report («Заполнить отчёт» while fields are missing), the whole conversation and the folded history of changes.
 import { STATUSES, describeChange } from './taskfold.js';
 import { actionsFor, actionLabel, changeFor, dueChips, delegateOptions } from './taskactions.js';
 import { partyName } from './parties.js';
@@ -28,7 +29,7 @@ function titleBlock(task, save) {
   const title = button('details-title', task.title, () => {
     const form = element('form', 'details-rename');
     const input = Object.assign(document.createElement('input'), { value: task.title, maxLength: 200, enterKeyHint: 'done' });
-    input.setAttribute('aria-label', 'Название дела');
+    input.setAttribute('aria-label', 'Название задачи');
     form.append(input, button('link-button', 'Готово', () => form.requestSubmit()));
     form.onsubmit = (event) => {
       event.preventDefault();
@@ -39,7 +40,7 @@ function titleBlock(task, save) {
     title.replaceWith(form);
     input.focus();
     input.select();
-  }, 'Переименовать дело');
+  }, 'Переименовать задачу');
   return title;
 }
 
@@ -55,36 +56,59 @@ function reportBlock(report, fields) {
   return box;
 }
 
-// Roles as lines: only the filled ones.
+// Roles: folded into one line — who does it, else who answers for it; unfolded — every filled role.
 function rolesBlock(task, views) {
-  const box = element('div', 'details-roles');
   const { roles } = task;
-  const lines = [['Ответственный', [roles.responsible]], ['Исполнитель', roles.executors], ['Контролёр', [roles.controller]], ['Постановщик', [roles.author]], ['Ждём', [task.waitingFor?.party]]];
-  for (const [label, parties] of lines) {
-    const names = parties.filter(Boolean).map((party) => partyName(party, views));
-    if (names.length) box.append(element('div', 'details-fact', `${label} · ${names.join(', ')}`));
-  }
+  const lines = [['Исполнитель', roles.executors], ['Ответственный', [roles.responsible]], ['Контролёр', [roles.controller]], ['Постановщик', [roles.author]], ['Ждём', [task.waitingFor?.party]]]
+    .map(([label, parties]) => [label, parties.filter(Boolean).map((party) => partyName(party, views))]).filter(([, names]) => names.length);
+  if (!lines.length) return null;
+  const box = element('details', 'details-roles');
+  const [label, names] = lines[0];
+  box.append(element('summary', 'details-fact', `${label} · ${names.join(', ')}${lines.length > 1 ? ' · ещё роли' : ''}`));
+  for (const [line, people] of lines.slice(1)) box.append(element('div', 'details-fact', `${line} · ${people.join(', ')}`));
   return box;
 }
 
-// `ctx`: { views (the case's messages), bubble(view), save(change), doneCards, fields (report fields) }.
-export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
+// Someone by name or phone number, typed in place (no browser prompt): a number — `tel:`, else `name:`.
+export function personParty(raw) {
+  const text = raw.trim();
+  const digits = text.replace(/[\s()-]/g, '');
+  if (/^\+\d{5,}$/.test(digits)) return `tel:${digits}`;
+  return text ? `name:${text.slice(0, 115)}` : null;
+}
+
+function personForm(onPick) {
+  const form = element('form', 'details-rename');
+  const input = Object.assign(document.createElement('input'), { maxLength: 115, enterKeyHint: 'done', placeholder: 'Имя или телефон' });
+  input.setAttribute('aria-label', 'Кто: имя или телефон');
+  form.append(input, button('link-button', 'Готово', () => form.requestSubmit()));
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const party = personParty(input.value);
+    if (party) onPick(party);
+  };
+  return form;
+}
+
+const MESSAGES = { done: 'Готово', verify: 'Проверено', accept: 'Принято', delegate: 'Поручено', defer: 'Отложено', wait: 'Ждём', reopen: 'Снова в работе', cancel: 'Отменено' };
+
+// `ctx`: { views (the task's messages), bubble(view), save(change), doneCards, quick (taskquick.js), reportKeys, fields }.
+export function taskDetails(task, { views, bubble, save, doneCards, quick, reportKeys = [], fields }) {
   const box = element('div', 'details-task');
   box.append(titleBlock(task, save));
   const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
   box.append(element('p', 'details-meta', `${STATUSES[task.status] ?? task.status} · ${origin} · ${clock.format(new Date(task.createdAt))}`));
-  if (task.note) box.append(element('p', 'details-meta', task.note));
   const card = doneCards.card(task);
   if (card) box.append(card);
 
-  box.append(rolesBlock(task, views));
+  // A change with «Вернуть» in the toast (taskquick.js).
+  const act = (change, message) => (quick ? quick.act(task, change, message) : save({ op: 'update', ...change }));
   const actions = element('div', 'task-actions');
   const choice = element('div', 'task-choice');
   box.append(actions, choice);
   const apply = (action, arg) => {
-    const change = changeFor(action, task, arg);
-    if (change === 'report') doneCards.start(task);
-    else if (change) save({ op: 'update', ...change });
+    const change = changeFor(action, task, arg, new Date(), reportKeys);
+    if (change) act(change, `${MESSAGES[action] ?? actionLabel(action)}: «${task.title}»`);
   };
   const pick = (action, options) => {
     choice.replaceChildren(element('p', 'picker-section', actionLabel(action)), ...options);
@@ -93,10 +117,7 @@ export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
   const partyButtons = (action, others) => [
     ...delegateOptions(views).map(({ party, name }) => button('chip suggest', name, () => apply(action, party))),
     ...(others ? [button('chip suggest', 'ИИ', () => apply(action, 'ai'))] : []),
-    button('chip suggest', 'Другой…', () => {
-      const name = (window.prompt('Кто? Имя или телефон') ?? '').trim();
-      if (name) apply(action, /^\+\d+$/.test(name) ? `tel:${name}` : `name:${name.slice(0, 115)}`);
-    }),
+    button('chip suggest', 'Другой…', () => pick(action, [personForm((party) => apply(action, party))])),
   ];
   const ask = {
     delegate: () => pick('delegate', partyButtons('delegate', true)),
@@ -108,24 +129,34 @@ export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
       pick('defer', [...dueChips().map((chip) => button('chip suggest', chip.label, () => apply('defer', morning(chip.due)))), input]);
     },
   };
-  const primary = new Set(['done', 'verify', 'accept']);
+  const primary = new Set(['done', 'verify']);
   for (const action of actionsFor(task)) {
-    actions.append(button(primary.has(action) ? 'primary' : 'link-button', actionLabel(action), () => (ask[action] ? ask[action]() : apply(action))));
+    const kind = primary.has(action) ? 'primary' : action === 'cancel' ? 'link-button muted' : 'link-button';
+    actions.append(button(kind, actionLabel(action), () => (ask[action] ? ask[action]() : apply(action))));
   }
 
-  const due = Object.assign(document.createElement('input'), { type: 'date', value: task.due ? String(task.due).slice(0, 10) : '', className: 'details-due' });
-  due.setAttribute('aria-label', 'Срок');
-  due.onchange = () => save({ op: 'update', due: due.value || null });
-  const chips = element('div', 'chips task-due');
-  for (const chip of dueChips()) {
-    const on = String(task.due ?? '').slice(0, 10) === chip.due;
-    const node = button(`chip ${on ? 'on' : 'suggest'}`, chip.label, () => save({ op: 'update', due: chip.due }));
-    node.setAttribute('aria-pressed', String(on));
-    chips.append(node);
+  if (!['done', 'cancelled'].includes(task.status)) {
+    const due = Object.assign(document.createElement('input'), { type: 'date', value: task.due ? String(task.due).slice(0, 10) : '', className: 'details-due' });
+    due.setAttribute('aria-label', 'Срок');
+    due.onchange = () => act({ due: due.value || null }, due.value ? 'Срок изменён' : 'Срок снят');
+    const chips = element('div', 'chips task-due');
+    for (const chip of dueChips()) {
+      const on = String(task.due ?? '').slice(0, 10) === chip.due;
+      const node = button(`chip ${on ? 'on' : 'suggest'}`, chip.label, () => act({ due: chip.due }, `Срок «${chip.label}»`));
+      node.setAttribute('aria-pressed', String(on));
+      chips.append(node);
+    }
+    chips.append(due);
+    box.append(element('p', 'picker-section', 'Срок'), chips);
   }
-  box.append(element('p', 'picker-section', 'Срок'), chips, due);
 
-  if (task.report) box.append(element('p', 'picker-section', 'Отчёт'), reportBlock(task.report, fields));
+  const roles = rolesBlock(task, views);
+  if (roles) box.append(roles);
+  if (task.note) box.append(element('p', 'details-meta', task.note));
+
+  // A report belongs to a closed task; a task taken back into work («Вернуть») keeps it in the journal only.
+  if (task.report && task.status === 'done') box.append(element('p', 'picker-section', 'Отчёт'), reportBlock(task.report, fields));
+  if (task.status === 'done' && task.report?.missing?.length && !card) box.append(button('link-button', 'Заполнить отчёт', () => doneCards.start(task)));
 
   box.append(element('p', 'picker-section', `Переписка · ${views.length}`));
   const talk = element('div', 'details-talk');
@@ -133,15 +164,15 @@ export function taskDetails(task, { views, bubble, save, doneCards, fields }) {
     const line = element('div', 'details-message');
     line.append(bubble(view));
     if (task.messages.includes(view.id)) {
-      line.append(button('icon-button details-unlink', '×', (event) => { event.stopPropagation(); save({ op: 'update', remove: [view.id] }); }, 'Убрать сообщение из дела'));
+      line.append(button('icon-button details-unlink', '×', (event) => { event.stopPropagation(); save({ op: 'update', remove: [view.id] }); }, 'Убрать сообщение из задачи'));
     }
     talk.append(line);
   }
   if (!views.length) talk.append(element('p', 'drawer-empty', 'Сообщений нет'));
   box.append(talk);
 
-  box.append(element('p', 'picker-section', 'История'));
-  const history = element('div', 'details-history');
+  const history = element('details', 'details-history');
+  history.append(element('summary', 'picker-section', `История · ${task.history?.length ?? 0}`));
   for (const item of [...(task.history ?? [])].reverse()) {
     const who = item.author === 'me' ? 'вы' : item.change?.processor ? 'разбор' : 'система';
     history.append(element('div', 'details-fact', `${clock.format(new Date(item.ts))} · ${who} · ${describeChange(item.change ?? {})}`));

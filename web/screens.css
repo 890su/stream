@@ -45,15 +45,41 @@
 .task-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 4px 0; }
 .task-actions .primary { min-height: 40px; padding: 0 18px; border-radius: 20px; background: var(--accent-strong); color: #fff; font-weight: 600; }
 .task-assignees { padding: 0 4px; }
-.task-row { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); border-radius: 0; }
-.task-row:active, .task-row:hover { background: var(--press); }
-.task-title { font-size: 15.5px; line-height: 1.3; }
-.task-row.inbox .task-title { font-style: italic; }
-.task-row.proposed .task-title { color: var(--accent-strong); }
-.task-row.done .task-title, .task-row.cancelled .task-title { opacity: .55; text-decoration: line-through; }
+.task-title { font-size: 15.5px; line-height: 1.3; overflow-wrap: anywhere; }
 .task-meta { font-size: 13px; color: var(--muted); }
-/* The «Задачи» view in the centre: rows as cards */
-#feed-list > .task-row { align-self: stretch; margin: 3px 6px; border: 0; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); padding: 10px 12px; }
+/* The «Задачи» view in the centre (tasklist.js): list chips, sections, rows with a «Готово» mark and a due date */
+.task-lists { position: sticky; top: -8px; z-index: 3; align-self: stretch; display: flex; gap: 6px; overflow-x: auto; margin: -8px -8px 2px; padding: 12px 8px 8px; background: var(--chat); scrollbar-width: none; }
+.task-lists::-webkit-scrollbar { display: none; }
+.task-list { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; font-size: 14.5px; font-weight: 600; }
+.task-list.on { background: var(--accent-strong); color: #fff; }
+.task-list-count { min-width: 20px; padding: 0 6px; border-radius: 10px; background: color-mix(in srgb, currentColor 16%, transparent); font-size: 13px; line-height: 20px; text-align: center; }
+.task-list.more { font-weight: 500; }
+.task-section { align-self: stretch; display: flex; align-items: baseline; gap: 8px; margin: 12px 14px 4px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; text-align: left; }
+button.task-section { min-height: 40px; margin: 6px 6px 0; padding: 0 8px; border-radius: 10px; align-items: center; }
+button.task-section::after { content: '\203A'; margin-left: auto; font-size: 18px; transition: transform .18s ease-out; }
+button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
+.task-item { align-self: stretch; position: relative; display: flex; flex-wrap: wrap; align-items: center; margin: 3px 6px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); touch-action: pan-y; transition: transform .18s ease-out, opacity .18s ease-out, background-color .12s ease-out; }
+.task-item.swiping { transition: none; }
+.task-item[data-swipe="done"].armed { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); }
+.task-item[data-swipe="when"].armed { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }
+.task-item.closing { opacity: .35; }
+.task-main { flex: 1 1 0; min-width: 0; display: grid; gap: 2px; padding: 10px 4px 10px 0; text-align: left; min-height: 52px; color: inherit; }
+.task-main:active { opacity: .7; }
+.task-due { flex: none; align-self: flex-start; margin: 12px 12px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.task-due.today { color: var(--accent-strong); }
+.task-due.overdue { color: var(--danger); }
+.task-item.proposed .task-title { color: var(--accent-strong); }
+.task-item.done .task-title, .task-item.cancelled .task-title { opacity: .55; text-decoration: line-through; }
+.task-item.inbox .task-check-ring { border-style: dashed; }
+/* The round «Готово» mark (taskquick.js), 44px to touch */
+.task-check { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: 4px 0 4px 2px; border-radius: 50%; }
+.task-check-ring { width: 22px; height: 22px; border: 2px solid var(--muted); border-radius: 50%; transition: background-color .15s ease-out, border-color .15s ease-out; }
+.task-check:hover .task-check-ring, .task-check:active .task-check-ring { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 25%, transparent); }
+.task-item.closing .task-check-ring, .conv-plaque.closing .task-check-ring, .task-check.checked .task-check-ring { border-color: var(--ok); background: var(--ok); box-shadow: inset 0 0 0 3px var(--panel); }
+.task-when { flex-basis: 100%; gap: 6px; align-items: center; padding: 0 10px 10px 46px; }
+.task-when .chip { min-height: 40px; }
+.task-when .details-due { min-height: 40px; }
+.task-when-close { width: 40px; height: 40px; font-size: 20px; }
 .task-mark { font-size: 13px; padding: 0 4px; color: inherit; opacity: .8; }
 /* «Задача выполнена?» after a conversation's messages and in task details */
 .done-card { align-self: stretch; margin: 8px 6px 4px; padding: 12px 14px; border-radius: 14px; background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--accent-strong), var(--shadow); }
@@ -68,6 +94,19 @@
 .case-question { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 2px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--bubble-meta) 25%, transparent); }
 .case-question-label { flex-basis: 100%; font-size: 13px; color: var(--bubble-meta); }
 .case-question .chip { min-height: 34px; font-size: 14px; padding: 0 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.views { display: inline-flex; padding: 2px; border-radius: 18px; background: var(--chip); max-width: 100%; }
-.views button { min-height: 32px; padding: 0 11px; border-radius: 16px; color: var(--chip-text); font-size: 14px; font-weight: 600; white-space: nowrap; transition: background-color .18s ease-out, color .18s ease-out; }
+.views { display: inline-flex; padding: 2px; border-radius: 22px; background: var(--chip); max-width: 100%; }
+.views button { min-height: 40px; padding: 0 12px; border-radius: 20px; color: var(--chip-text); font-size: 14px; font-weight: 600; white-space: nowrap; transition: background-color .18s ease-out, color .18s ease-out; }
 .views button[aria-selected="true"] { background: var(--accent-strong); color: #fff; }
+/* Task details (taskdetails.js): «Отменить» quieter; roles and history folded */
+.task-actions .link-button.muted { color: var(--muted); }
+.chips.task-due { align-items: center; }
+.chips.task-due .details-due { min-height: 40px; }
+.details-roles { margin: 10px 4px 0; }
+.details-roles > summary, .details-history > summary { cursor: pointer; list-style: none; min-height: 40px; display: flex; align-items: center; }
+.details-roles > summary::-webkit-details-marker, .details-history > summary::-webkit-details-marker { display: none; }
+.details-roles > summary::after, .details-history > summary::after { content: '\203A'; margin-left: 8px; color: var(--muted); transition: transform .18s ease-out; }
+.details-roles[open] > summary::after, .details-history[open] > summary::after { transform: rotate(90deg); }
+/* A task line in a message's details (details.js) */
+.task-row { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 8px; min-height: 48px; border-bottom: 1px solid var(--line); border-radius: 0; color: inherit; }
+.task-row:active, .task-row:hover { background: var(--press); }
+.task-row.done .task-title, .task-row.cancelled .task-title { opacity: .55; text-decoration: line-through; }

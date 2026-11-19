@@ -1,37 +1,56 @@
-// One-tap actions of a task card (P14): which actions a task offers by status and roles, the task change each
-// one makes, due-date chips, and the parties a task can be handed to. Pure: no DOM — tested in node.
+// One-tap actions of a task (P14, 2026-11-19): which actions a task offers by status, the task change each one
+// makes and the change that undoes it, due-date chips, and the parties a task can be handed to. Pure: no DOM — tested in node.
 import { partyOfEvent, partyName } from './parties.js';
 
 const ACTION_LABELS = { accept: 'Принять', delegate: 'Поручить…', defer: 'Отложить…', wait: 'Жду…', done: 'Готово', verify: 'Проверил', reopen: 'Вернуть в работу', cancel: 'Отменить' };
 export const actionLabel = (action) => ACTION_LABELS[action] ?? action;
 
-// Someone other than me does the task.
-const delegated = (task) => task.roles.executors.length > 0 && !task.roles.executors.includes('me');
-
 export function actionsFor(task) {
   switch (task.status) {
-    case 'inbox': return ['accept', 'delegate', 'defer', 'cancel'];
-    case 'todo': case 'doing': return ['done', 'delegate', 'defer', 'wait', 'cancel'];
+    case 'inbox': return ['done', 'accept', 'delegate', 'defer', 'cancel'];
+    case 'todo': case 'doing': return ['done', 'delegate', 'wait', 'defer', 'cancel'];
     case 'waiting': return ['done', 'delegate', 'defer', 'cancel'];
     case 'review': return ['verify', 'reopen', 'cancel'];
-    case 'deferred': return ['reopen', 'cancel'];
+    case 'deferred': return ['done', 'reopen', 'cancel'];
     default: return ['reopen'];
   }
 }
 
-// The change for an action, or 'report' when closing goes through the card «Задача выполнена?».
-export function changeFor(action, task, arg, now = new Date()) {
+// Closing in one tap (CONCEPT.md §2.9, 2026-11-19): `done` at once; the report fields the template asks for
+// (`reportKeys`) stay in `report.missing` for the evening summary and «Не учтено».
+export function closeChange(reportKeys = []) {
+  return { status: 'done', proposed: null, ...(reportKeys.length ? { report: { missing: [...reportKeys] } } : {}) };
+}
+
+// The change for an action. `arg` — the party (delegate, wait), the date-time (defer); `reportKeys` — for done.
+export function changeFor(action, task, arg, now = new Date(), reportKeys = []) {
   switch (action) {
     case 'accept': return { status: 'todo', roles: { executors: ['me'] } };
     case 'delegate': return { roles: { executors: [arg], controller: 'me' } };
     case 'defer': return { status: 'deferred', remind_at: arg };
     case 'wait': return { status: 'waiting', waiting_for: { party: arg, since: now.toISOString() } };
-    case 'done': return delegated(task) ? { status: 'review', proposed: null } : 'report';
-    case 'verify': return 'report';
+    case 'done': case 'verify': return closeChange(reportKeys);
     case 'reopen': return { status: 'todo' };
     case 'cancel': return { status: 'cancelled' };
     default: return null;
   }
+}
+
+const FIELD_OF = { remind_at: 'remindAt', waiting_for: 'waitingFor' };
+
+// The change that puts back what `change` replaced, for «Вернуть» — a new event, the journal stays as it was.
+// A report cannot be unset (Event v1): it stays, and a task that is not done is not «Не учтено» anyway.
+export function undoOf(task, change) {
+  const undo = {};
+  for (const [key, value] of Object.entries(change)) {
+    if (key === 'op' || key === 'report' || key === 'add' || key === 'remove') continue;
+    if (key === 'roles') {
+      undo.roles = Object.fromEntries(Object.keys(value).map((role) => [role, task.roles?.[role] ?? (role === 'executors' || role === 'watchers' ? [] : null)]));
+      continue;
+    }
+    undo[key] = task[FIELD_OF[key] ?? key] ?? null;
+  }
+  return undo;
 }
 
 const dayOf = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { actionsFor, changeFor, dueChips, delegateOptions } from '../web/taskactions.js';
+import { actionsFor, changeFor, closeChange, undoOf, dueChips, delegateOptions } from '../web/taskactions.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { partyName } from '../web/parties.js';
 
@@ -10,24 +10,33 @@ const roles = (executors: string[] = []) => ({ author: 'me', responsible: 'me', 
 const task = (status: string, executors: string[] = []) => ({ id: 't1', title: 'Проверить Wi-Fi', status, roles: roles(executors) });
 const NOW = new Date('2026-11-18T09:00:00Z'); // Wednesday
 
-test('a new task of mine: accept, delegate, defer; a delegated one is done into review', () => {
-  const fresh = actionsFor(task('inbox'));
-  for (const action of ['accept', 'delegate', 'defer']) assert.ok(fresh.includes(action), action);
-  assert.ok(!fresh.includes('reopen'));
-  const delegated = task('todo', ['tg:42']);
-  assert.ok(actionsFor(delegated).includes('done'));
-  assert.deepEqual(changeFor('done', delegated), { status: 'review', proposed: null });
-  assert.equal(changeFor('done', task('todo', ['me'])), 'report');
-  assert.equal(changeFor('done', task('todo')), 'report');
+test('«Готово» in every open status, a new task too; it closes at once, the report waits', () => {
+  for (const status of ['inbox', 'todo', 'doing', 'waiting', 'deferred']) assert.ok(actionsFor(task(status)).includes('done'), status);
+  assert.equal(actionsFor(task('inbox'))[0], 'done', 'the first, primary action');
+  assert.deepEqual(changeFor('done', task('todo')), { status: 'done', proposed: null });
+  assert.deepEqual(changeFor('done', task('todo', ['tg:42']), undefined, NOW, ['minutes', 'cost']),
+    { status: 'done', proposed: null, report: { missing: ['minutes', 'cost'] } }, 'the owner closes a delegated task too');
+  assert.deepEqual(closeChange([]), { status: 'done', proposed: null });
 });
 
-test('review is verified with a report; closed tasks reopen', () => {
+test('review is verified the same way; closed tasks reopen', () => {
   const review = actionsFor(task('review', ['tg:42']));
   assert.ok(review.includes('verify') && review.includes('reopen') && !review.includes('done'));
-  assert.equal(changeFor('verify', task('review', ['tg:42'])), 'report');
+  assert.deepEqual(changeFor('verify', task('review', ['tg:42']), undefined, NOW, ['summary']), { status: 'done', proposed: null, report: { missing: ['summary'] } });
   assert.deepEqual(actionsFor(task('done')), ['reopen']);
   assert.deepEqual(changeFor('reopen', task('cancelled')), { status: 'todo' });
   assert.deepEqual(changeFor('cancel', task('todo')), { status: 'cancelled' });
+});
+
+test('«Вернуть» puts back exactly what a change replaced', () => {
+  const proposed = { ...task('todo'), proposed: 'done', due: '2026-11-20' };
+  assert.deepEqual(undoOf(proposed, closeChange(['summary'])), { status: 'todo', proposed: 'done' });
+  assert.deepEqual(undoOf(task('inbox'), changeFor('accept', task('inbox'))), { status: 'inbox', roles: { executors: [] } });
+  assert.deepEqual(undoOf(task('todo', ['me']), changeFor('delegate', task('todo'), 'tg:42')), { roles: { executors: ['me'], controller: null } });
+  assert.deepEqual(undoOf(task('todo'), { due: '2026-11-21' }), { due: null });
+  assert.deepEqual(undoOf({ ...task('deferred'), remindAt: '2026-11-19T08:00:00.000Z' }, { status: 'deferred', remind_at: '2026-11-25T08:00:00.000Z' }),
+    { status: 'deferred', remind_at: '2026-11-19T08:00:00.000Z' });
+  assert.deepEqual(undoOf(task('todo'), changeFor('wait', task('todo'), 'tg:42', NOW)), { status: 'todo', waiting_for: null });
 });
 
 test('accept, delegate, defer and wait changes', () => {
