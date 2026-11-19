@@ -616,3 +616,15 @@ conversations, convlist, drawer, app, index.html, стили), новые `web/l
 **Boundary:** Event v1: необязательные `project.sources` и `task.project_options`. Проект беседы (одного чата) по
 умолчанию — позже, вместе с окном «связь».
 **Affected:** `CONCEPT.md` §2.11; `contracts/event.schema.json`; `src/tasks/`; `registry/tasks.json`, `registry/filters.json`; `web/`
+
+## 2026-11-19 — Менеджер задач: пульт, одно дело в работе, пауза с «где остановился»
+**What:** ТЗ менеджера задач (`docs/plans/2026-11-19-task-manager-spec.md`) утверждено; этапы —
+`docs/plans/2026-11-19-task-manager-roadmap.md`. Этап 1: «Задачи» открываются пультом (В работе · Горит · Сегодня ·
+Слежу · Проекты · Дальше), порядок — вычисленная важность. В работе одно моё дело (`doing`); взять другое —
+прежнее приостанавливается (`todo` + `resume_note`), возврат снимает `resume_note`. Время в работе считается по
+истории статусов, таймер руками не включается. Лимит дня — время до события, а не число дел (с календарём, этап 4).
+**Why:** Владелец: видеть очередь, моё, за чем слежу и динамику проектов на одном экране; прерывания срочным не
+должны терять начатое дело; 5 дел в день — слишком мало.
+**Boundary:** Event v1: необязательное `task.resume_note` (строка до 200 символов, `''` — снять). Валидатор схемы
+теперь понимает `maxLength`. Пороги и веса пульта — `registry/pulse.json`.
+**Affected:** `contracts/event.schema.json`, `src/contracts/validate.ts`, `src/tasks/fold.ts`, `web/taskfold.js`

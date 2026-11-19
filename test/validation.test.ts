@@ -29,3 +29,10 @@ test('owner tags are optional, validated per item and accept Cyrillic', () => {
     assert.throws(() => validateEvent(event({ payload: { text: 'x', tags } })), /400/);
   }
 });
+
+test('a task change may carry where the owner stopped (resume_note, up to 200 characters)', () => {
+  const taskEvent = (task: Record<string, unknown>) => event({ kind: 'task_change', source: 'app', author: 'me', payload: { ref: { type: 'task', id: 't1' }, data: { task } } });
+  validateEvent(taskEvent({ op: 'update', status: 'todo', resume_note: 'проверить Wi-Fi' }));
+  validateEvent(taskEvent({ op: 'update', resume_note: '' }));
+  assert.throws(() => validateEvent(taskEvent({ op: 'update', resume_note: 'x'.repeat(201) })), /400/);
+});

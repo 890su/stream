@@ -35,6 +35,7 @@ interface Schema {
   items?: Schema;
   minimum?: number;
   pattern?: string;
+  maxLength?: number;
   format?: string;
 }
 
@@ -61,6 +62,7 @@ function check(value: unknown, rule: Schema, path: string): void {
   if (typeof value === 'number' && (!Number.isFinite(value) || (rule.minimum !== undefined && value < rule.minimum))) fail('вне допустимого диапазона');
   if (typeof value === 'string') {
     if (rule.pattern && !new RegExp(rule.pattern, 'u').test(value)) fail('имеет неверный формат');
+    if (rule.maxLength !== undefined && [...value].length > rule.maxLength) fail('слишком длинный');
     if (rule.format === 'uuid' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) fail('должен быть UUID');
     if (rule.format === 'date-time' && !isDateTime(value)) fail('должен быть датой ISO 8601');
   }

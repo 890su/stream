@@ -167,3 +167,13 @@ test('a checklist folds from item changes; an owner rename marks the title as na
   const [named] = foldTasks([ev(at(1), { op: 'create', title: 'x' }), ev(at(2), { op: 'update', title: 'Моё название' }, 'me')]);
   assert.equal(named.ownerTitled, true);
 });
+
+test('resume note is folded and cleared', () => {
+  const events = [
+    change('t1', '2026-11-19T10:00:00Z', { op: 'create', title: 'Сеть у клиента', status: 'doing' }),
+    change('t1', '2026-11-19T10:30:00Z', { op: 'update', status: 'todo', resume_note: 'проверить Wi-Fi' }, 'me'),
+  ];
+  assert.equal(foldTasks(events)[0].resumeNote, 'проверить Wi-Fi');
+  events.push(change('t1', '2026-11-19T11:00:00Z', { op: 'update', status: 'doing', resume_note: '' }, 'me'));
+  assert.equal(foldTasks(events)[0].resumeNote, '');
+});

@@ -571,6 +571,11 @@
                 "note": {
                   "type": "string"
                 },
+                "resume_note": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "Where the owner stopped when the task was paused (task manager spec 5.4); '' clears it."
+                },
                 "processor": {
                   "type": "string",
                   "description": "Name and version of the handler that made the change (absent for the owner)."

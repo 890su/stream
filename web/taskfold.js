@@ -59,6 +59,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     }
     if (change.waiting_for !== undefined) task.waitingFor = change.waiting_for;
     if (change.remind_at !== undefined) task.remindAt = change.remind_at;
+    if (change.resume_note !== undefined) task.resumeNote = change.resume_note;
     if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }
     if (change.roles) {
       // The first roles change of an old task merges into its old roles, not into empty ones.
