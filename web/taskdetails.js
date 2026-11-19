@@ -6,6 +6,7 @@ import { actionsFor, actionLabel, changeFor, dueChips, delegateOptions } from '.
 import { partyName } from './parties.js';
 import { checklistBlock } from './checklist.js';
 import { projectLine } from './projectpanel.js';
+import { holding } from './holdrender.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -111,10 +112,12 @@ export function taskDetails(task, { views, bubble, save, saveTo, others, notify,
   box.append(actions, choice);
   const apply = (action, arg) => {
     const change = changeFor(action, task, arg, new Date(), reportKeys);
+    holding(choice, false);
     if (change) act(change, `${MESSAGES[action] ?? actionLabel(action)}: «${task.title}»`);
   };
   const pick = (action, options) => {
     choice.replaceChildren(element('p', 'picker-section', actionLabel(action)), ...options);
+    holding(choice);
     choice.querySelector('button, input')?.focus({ preventScroll: true });
   };
   const partyButtons = (action, others) => [

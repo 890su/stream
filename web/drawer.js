@@ -4,6 +4,7 @@ import { visibleTasks } from './filters.js';
 import { listCount } from './tasklist.js';
 import { isWide, onWideChange } from './layout.js';
 import { projectTreeBlock } from './projectpanel.js';
+import { holdRender } from './holdrender.js';
 
 // Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
 // view changes); Беседы — «Завершённые»; Лента — «Завершённые» and sources; Задачи — the saved task filters.
@@ -209,5 +210,6 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
   };
   onWideChange(dock);
   if (isWide()) dock(true);
-  return { render: () => { if (!drawer.hidden) render(); }, close, open };
+  const held = holdRender(drawer, () => { if (!drawer.hidden) render(); }); // a new project's name being typed survives live updates
+  return { render: held, close, open };
 }

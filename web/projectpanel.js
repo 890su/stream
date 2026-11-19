@@ -2,6 +2,7 @@
 // «+ Проект» creates one) and the «Проект» line in task details (which project and section the task lives in).
 import { projectTree, defaultSections, KINDS } from './projects.js';
 import { inlineForm } from './projectview.js';
+import { holding } from './holdrender.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -39,12 +40,14 @@ export function projectTreeBlock({ projects, tasks, current, onOpen, onCreate, a
 }
 
 // «Проект» in task details: the current project and section; a tap shows active projects, then that project's sections.
-export function projectLine(task, { projects, save }) {
+export function projectLine(task, { projects, save: store }) {
+  let choice;
+  const save = (change) => { if (choice) holding(choice, false); store(change); };
   const byId = new Map(projects.map((project) => [project.id, project]));
   const project = task.project ? byId.get(task.project) : null;
   const section = project?.sections.find((item) => item.id === task.section);
   const box = element('div', 'details-project');
-  const choice = element('div', 'chips');
+  choice = element('div', 'chips');
   // The triage hesitated (CONCEPT.md §2.11): its candidates first, one tap places the task.
   const options = !project ? (task.project_options ?? []).map((id) => byId.get(id)).filter(Boolean) : [];
   if (options.length) {
@@ -54,11 +57,13 @@ export function projectLine(task, { projects, save }) {
   }
   const label = project ? `▸ ${project.title}${section ? ` · ${section.title}` : ''}` : 'Входящие · без проекта';
   const sections = (target) => {
+    holding(choice);
     choice.replaceChildren(...target.sections.map((item) => button(`chip ${task.project === target.id && task.section === item.id ? 'on' : 'suggest'}`, item.title,
       () => save({ op: 'update', project: target.id, section: item.id }))));
     if (!target.sections.length) save({ op: 'update', project: target.id, section: null });
   };
   box.append(button('link-button details-project-pick', label, () => {
+    holding(choice);
     const active = projects.filter((item) => item.status === 'active' || item.id === task.project).sort((a, b) => a.title.localeCompare(b.title, 'ru'));
     choice.replaceChildren(...active.map((item) => button(`chip ${item.id === task.project ? 'on' : 'suggest'}`, item.title, () => (item.sections.length ? sections(item) : save({ op: 'update', project: item.id, section: null })))),
       ...(task.project ? [button('chip suggest', 'Без проекта', () => save({ op: 'update', project: null, section: null }))] : []));

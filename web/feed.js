@@ -10,6 +10,7 @@ import { questionOptions } from './question.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { foldProjects, markNext, projectScope } from './projects.js';
+import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
 import { convRow, foldRow, splitDone } from './convlist.js';
@@ -61,7 +62,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   // Lists read from the top; a conversation and the Лента read from the bottom, like a chat.
   const readsDown = () => mode === 'tasks' || (mode === 'conversations' && !conversationKey);
   const load = createMediaLoader();
-  const { refresh, loadOlder } = createPager({ scroller, historyState, notify, render, readsDown });
+  const { refresh, loadOlder } = createPager({ scroller, historyState, notify, render: (...args) => draw(...args), readsDown });
 
   // `keep` — { key, top }: the header that was tapped stays where it was; `quiet` — no animation of new rows;
   // `top` — a list goes to the top (true) or to a remembered position (a number).
@@ -229,9 +230,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   // The keyboard opening or closing resizes the feed: keep the last message glued to the composer.
   new ResizeObserver(() => { if (stick && !readsDown()) scroller.scrollTop = scroller.scrollHeight; }).observe(scroller);
   // A live event from any device: cache it like a fetched page and redraw.
+  // Updates from outside wait while a project form or a list of choices in the centre is in use (holdrender.js).
+  const draw = holdRender(list, render);
   async function receive(event) {
     await cacheEvents([event]);
-    await render();
+    await draw();
   }
 
   // Opens a conversation (or, with null, goes back to the list where it was); in Задачи and Лента it filters.
@@ -276,7 +279,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   // Messages of one task, oldest first, for its details (details.js).
   const taskViews = (taskId) => { const task = taskList.find((item) => item.id === taskId); return task ? taskMembers(task, viewList) : []; };
 
-  return { refresh, render, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
+  return { refresh, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),
     openConversation, conversation: () => current, conversationKey: () => conversationKey, conversations: () => convList,
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,

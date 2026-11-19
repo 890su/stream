@@ -2,6 +2,7 @@
 // (the item becomes a task of its own and leaves the list), and «В дело…» — this whole task becomes an item of
 // another open task (its messages go there, this one is cancelled). Every change is one task_change.
 import { isOpen, itemsProgress } from './taskfold.js';
+import { holding } from './holdrender.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -59,7 +60,9 @@ export function checklistBlock(task, { save, saveTo, others = [], notify }) {
   if (targets.length) {
     const choice = element('div', 'chips checklist-into');
     const into = button('link-button', 'В дело…', () => {
+      holding(choice);
       choice.replaceChildren(...targets.map((other) => button('chip suggest', other.title, async () => {
+        holding(choice, false);
         await saveTo(other.id, { op: 'update', add: task.messages, items_add: [{ id: crypto.randomUUID(), text: line(task.title) }] });
         save({ op: 'update', status: 'cancelled' });
         notify(`«${task.title}» — пункт дела «${other.title}»`);

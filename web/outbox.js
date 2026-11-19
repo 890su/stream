@@ -9,12 +9,17 @@ export async function enqueue(entry) {
   window.dispatchEvent(new Event('queue-change'));
 }
 
+// Sends what is queued. Only a queue that had entries announces `queue-change` (the screen redraws on it): an empty
+// queue checked every few seconds must not redraw the screen and throw away what the owner is typing.
 export function synchronize() {
+  let pending = 0;
   active ??= (async () => {
+    pending = (await listEntries()).length;
+    if (!pending) return true;
     const run = async () => syncEntries({ list: listEntries, save: saveEntry, remove: removeEntry }, await getSetting('ownerToken'), fetch,
       (event) => cacheEvents([event]), requestTimeoutMs);
     return navigator.locks ? navigator.locks.request('stream-sync', run) : run();
-  })().finally(() => { active = undefined; window.dispatchEvent(new Event('queue-change')); });
+  })().finally(() => { active = undefined; if (pending) window.dispatchEvent(new Event('queue-change')); });
   return active;
 }
 

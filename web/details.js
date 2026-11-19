@@ -9,6 +9,7 @@ import { accountTitle } from './tgbubble.js';
 import { versionCard } from './versioncard.js';
 import { taskDetails } from './taskdetails.js';
 import { isWide, onWideChange } from './layout.js';
+import { holdRender } from './holdrender.js';
 
 const SWIPE_PX = 70;
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -64,7 +65,9 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     return box;
   }
 
-  function render() {
+  // While a name is typed or a list of choices is open in the panel, a live update waits (holdrender.js).
+  const render = holdRender(document.querySelector('#details'), draw);
+  function draw() {
     onRender(); // the view switch counts the open task's conversations
     if (!current) {
       // On a wide screen the column stays: a hint until something is chosen.
