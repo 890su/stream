@@ -296,6 +296,12 @@ promised what by when, with the quoted message. "I'll do it tomorrow" — a task
 | «Готово» reported by an executor via the bot (stage 3) | `review`, a check task for me |
 | Due | today / tomorrow / this week / a date |
 
+**One task in work; pause and return** (2026-11-19, task manager spec §5.4). My task in `doing` is the one I am
+on now; «▶ В работу» on another pauses it: back to `todo` with `resume_note` — where I stopped (the first unticked
+item). With nothing in work, the pulse offers «Вернуться к: … — дальше: …»; returning clears the note. «Вернуть»
+undoes both changes. Time in work comes from the status history (no manual timer) — for the report and, later,
+for forecasting how long similar tasks take.
+
 **Act where the task is seen** (2026-11-19). Task rows and task plaques in a conversation have a round mark on the
 left: tap — «Готово». Swipe right — «Готово» too; swipe left — «Когда?» (today, tomorrow, this week, a date). A tap
 on the row opens details. Every action shows a toast with «Вернуть» for a few seconds; undo is a new `task_change`
@@ -517,8 +523,13 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
   open the conversation's task (the most urgent open one) or, if it has none, make a task from its latest message
   and open it. Each with «Вернуть» in the toast.
 - **«Задачи»** — a compact list of rows chosen by a saved filter. On top — chips of the main lists with counts:
-  «Сегодня · Разобрать · Жду · Контроль · Ещё…» (`pinned` in `registry/filters.json`); «Ещё…» opens all lists on the
-  left. Default «Сегодня»: my open tasks in sections «Просрочено · Сегодня · Проверить · Разобрать · Дальше»
+  «Пульт · Сегодня · Разобрать · Жду · Контроль · Ещё…» (`pinned` in `registry/filters.json`); «Ещё…» opens all lists on the
+  left. **Default — «Пульт»** (2026-11-19, `docs/plans/2026-11-19-task-manager-spec.md` §5): the task in work
+  («Готово», «⏸ Пауза») or «Вернуться к…», then blocks «⏸ Ждут возврата · 🔥 Горит (overdue, due today, a
+  conversation waiting for my answer over `hot_wait_hours`) · ▶ Сегодня · 👁 Слежу (waiting and delegated, ⚠ —
+  no change for `watch_alert_days`) · 📊 Проекты (done and new over 7 days, health) · ⏭ Дальше». Every task is in
+  one block; order is a computed importance (burns, money, blocks others, due tomorrow, stale) — weights in
+  `registry/pulse.json`; «▶» on a row takes it into work. «Сегодня» as a list: my open tasks in sections «Просрочено · Сегодня · Проверить · Разобрать · Дальше»
   (`sections`, data; «Дальше» folded). Waiting — in «Жду», delegated — in «Контроль»; a deferred task is hidden until
   its date and returns by itself. A row: the «Готово» mark, title, with whom and what, checklist progress (2/5); due on the right. The
   last chip groups the list: «По срокам» (sections, default), «По меткам», «По людям»; the choice is remembered on

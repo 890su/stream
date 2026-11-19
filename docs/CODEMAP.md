@@ -70,11 +70,13 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter |
 | `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history) |
 | `tasklist.js` / `days.js` | the «Задачи» view: list chips (`pinned`) and the grouping chip, sections of a list (`sectionsOf`, `listCount`) or groups by tag / person (`groupsOf`), a task row (mark, title, facts with checklist progress, due word — `dueLabel`); day pill labels |
-| `taskview.js` | the «Задачи» centre: a saved list (chips, sections or groups) or one project (`taskViewNodes`) |
+| `taskview.js` | the «Задачи» centre: a saved list (chips, sections or groups), the pulse (a filter with `view: 'pulse'`) or one project (`taskViewNodes`) |
+| `pulse.js` / `pulseview.js` | the pulse — the default of «Задачи»: pure blocks (`pulseBlocks`: in work, paused, hot incl. conversations waiting for me, today, watch with alerts, projects, later), `importance`, `projectHealth`, `pulseCount`; and its DOM (`pulseNodes`) |
+| `focus.js` | pure: one task of mine in work (`inWork`, `isMineToDo`), «▶ В работу» / «Пауза» changes with `resume_note` (`startWork`, `pauseWork`, `resumeNoteOf`), `workedMinutes` from the status history |
 | `projects.js` | pure: projects from `project_change` (`foldProjects`), tree with counts, scope, sections of a project, next actions (`markNext` sets `task.next`, `task.projectTitle`) |
 | `projectview.js` / `projectpanel.js` | one project's header (kind, status, «Нет следующего шага», «Изменить») and section heads with «+»; the project tree in the left panel and «Проект» in task details |
 | `checklist.js` | the checklist in task details: tick, add, «Отдельной задачей», «В дело…» (this task as an item of another) |
-| `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`) |
+| `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows): follow, arm, act; not a tap |
 | `convquick.js` | swipes on a «Беседы» row: left — to the archive (`answered` correction), right — its most urgent task or a new one (`pickTask`, `anchorOf`, `sourceOf`) |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
@@ -120,7 +122,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», closing reports (`report_fields`, per-template `report`, currencies) |
 | `registry/conversations.json` | conversations: quiet days, urgent tags, order of states |
-| `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Сегодня») is the default |
+| `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Пульт», `view: 'pulse'`) is the default |
+| `registry/pulse.json` | the pulse: rows per block, `hot_wait_hours`, `watch_alert_days`, `stale_days`, `paused_remind_hours`, money templates, importance weights |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere
