@@ -76,7 +76,7 @@ A tag and a field are one concept (2026-11-11). Three kinds:
 |---|---|---|
 | Plain | `#идея` | a mark only |
 | With variables | `#расход` → amount, currency, client | field values from `registry/fields.yaml`, filled by triage and sent to connectors; an intent is a tag with variables |
-| Link to a project or task | `#stream` | belonging to a project or task (§2.8) |
+| Link to a project or task | `#stream` | a way to name a project (§2.11) or task while typing; the project itself is an entity, not a tag |
 
 The dictionary is data in `registry/tags.json`: tag, intent, cue words. The owner creates a plain tag by typing
 `#word`. AI never invents variables on the fly: it proposes, the owner accepts, the field enters the dictionary.
@@ -99,9 +99,12 @@ one list, and each leads to its source. A task and a conversation are different 
 **Stream owns the tasks** (2026-11-18, option A). Google Tasks, Google Calendar and Planfix (later Todoist,
 TickTick) are mirror connectors. Changes made there return as `task_change` authored by the connector; when one
 field changes on both sides, the later wins and the loser stays in the task history; a deletion there becomes a
-question to the owner, not a deletion here. Which tasks go where is decided by saved filters (§5) — data.
+question to the owner, not a deletion here. **Which tasks go where is decided by the task's project** (§2.11): a
+project may have a mirror, a task without a project or in a project without one stays only in Stream. Personal
+mirrors (Google Tasks, Calendar) may also select by saved filters (§5).
 
-- **Now:** title, source messages, roles (§2.8), statuses, due, plan, reminder, promise, a checklist (§2.8).
+- **Now:** title, source messages, roles (§2.8), statuses, due, plan, reminder, promise, a checklist (§2.8),
+  one project (§2.11).
 - **Later:** recurring tasks, boards on the same filters, subtasks with their own roles and dates, time tracking,
   weekly report.
 - **Not doing:** collaboration inside the app (partners act through the task bot), own attachments (links to events only).
@@ -305,7 +308,7 @@ restarts it. Then everything new is triaged together, with up to `context_messag
 the same conversation from the last day as context. **A batch is a window, not one task:** each message goes to
 zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
 two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
-script). Its outcome: close at once by filing it (wellbeing → diary, a system idea → the project plan, "ok" and
+script). Its outcome: close at once by filing it (wellbeing → diary, "ok" and
 chatter → «без дела»), attach to an open task, or create a task for me, the system or a person. A message without a
 triage outcome is untriaged. Owner corrections (move to another task, merge, cancel) are events and golden examples.
 
@@ -394,7 +397,41 @@ Later stages, one at a time after a week of using the previous one; details and 
   (frequency, daily limit, quiet hours). Nothing goes to people without «да».
 - **Task bot** — a separate bot: the owner gets reminders and questions with buttons; partners get assignments
   with «Принять» / «Не могу» and a report.
-- **Mirrors** — Google Tasks, Calendar, Planfix (§2.3).
+- **Mirrors** — Google Tasks, Calendar, Planfix (§2.3); which tasks a mirror gets is set on the project (§2.11).
+
+### 2.11 Projects (2026-11-19)
+
+As in Todoist, TickTick and Planfix, a project is a **container**: **a task lives in exactly one project**, or in
+«Входящие» without one. Everything many-valued (topic, client, urgency, place) stays a tag (§2.2). One project per
+task is what makes mirrors unambiguous: a tag could point a task to two CRMs at once, a project cannot.
+
+**A project** is data the owner edits without code; its names and external ids are content, so projects live in
+the journal as `project_change` events (a new event kind; a contract change with a `decisions.md` entry when
+built), not in git. A project has:
+- a title, a parent (projects nest into folders), a kind, a status (active / paused / done / archived);
+- sections — the columns of its board and the parts of its list (e.g. «Идеи · Следующее · В работе · Готово»);
+- defaults for its tasks: counterparty, responsible, tags;
+- **a mirror** (optional): connector (Planfix, the Polish CRM, Google), the target there (a project, a pipeline),
+  which fields and in which direction; leaving the project — the old copy is closed or kept there (a setting).
+
+**Two kinds:**
+- **Stream** — ongoing work without an end («Удалёнка BY», «Работа PL»): requests come and go, usually mirrored
+  to a CRM, reported by period.
+- **Project with a goal** (Stream, a website, a move): a roadmap of milestones, a backlog, and always **one next
+  action**. The next action shows in «Сегодня» / «Дальше» or is delegated (a person, a group, AI). An active
+  project with no open next action, or with no change for `stale_days`, comes up in the evening summary and in
+  the weekly review: «следующий шаг, отложить или закрыть?». An idea about a project goes to its backlog (section
+  «Идеи»), not filed away.
+
+**How a task gets its project** (cheapest first): the project chosen in the link window (§2.9) or named with a
+`#tag`; the default project of the conversation or source (the BY bot → «Удалёнка BY»); triage by content, with
+«В какой проект?» under the message when unsure. Moving a task to another project is an owner correction and a
+golden example; it moves the task to the other mirror by the projects' settings.
+
+**Views:** the left panel shows the project tree with counts; a project opens as its list by sections or as a
+board (drag between sections changes the section, not the status), and a project with a goal also as its
+roadmap. The same saved filters (§5) work inside a project; «Сегодня» gathers next actions from all active
+projects.
 
 ## 3. Pipeline
 
@@ -494,7 +531,7 @@ the morning three, process rules and mirrors all select tasks with the same filt
 **Left panel.** Shared across views and kept on switching: contacts and tags (with counts; selected tags filter —
 a message must carry all, a task through at least one message). Per view: Беседы — state, channel,
 «Завершённые»; Задачи — saved filters, role, status, due; Лента — sources, «Завершённые» (messages of finished
-tasks, hidden by default). Projects become a filter with project link tags (P3). While a filter is on, the top bar
+tasks, hidden by default). Задачи also has the project tree (§2.11). While a filter is on, the top bar
 shows a reset button. **«Архив»** in the top bar works for all views (archived messages paler), off by default.
 The panel sits between the top bar and the input row; opened only by the filter icon (no opening swipe — horizontal
 swipes belong to rows), closed by a swipe right-to-left, the backdrop or «назад».
