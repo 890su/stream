@@ -1,9 +1,8 @@
 import { sourceKey } from './projection.js';
+import { viewPanel } from './viewpanel.js';
+import { viewStore } from './viewstore.js';
 import { accountTitle } from './tgbubble.js';
-import { visibleTasks } from './filters.js';
-import { listCount } from './tasklist.js';
 import { isWide, onWideChange } from './layout.js';
-import { projectTreeBlock } from './projectpanel.js';
 import { holdRender } from './holdrender.js';
 
 // Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
@@ -23,7 +22,6 @@ function age(ts) {
 }
 
 export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject = () => {} }) {
-  let allProjects = false; // finished and archived projects in the tree too
   const drawer = document.querySelector('#drawer');
   const backdrop = document.querySelector('#drawer-backdrop');
   const contactsBox = document.querySelector('#drawer-contacts');
@@ -150,25 +148,10 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
   }
 
   const chipRow = (chips) => { const row = element('div', 'chips'); row.append(...chips); return row; };
-  // The «Задачи» view: the saved filters of registry/filters.json with their task counts (CONCEPT.md §5).
+  // The «Задачи» view: the control panel of the view (viewpanel.js) — three layouts over one view, the gear below.
   function renderTaskFilters() {
-    const current = feed.taskFilter();
-    const matches = feed.taskMatches();
-    const rows = feed.taskFilters().map((filter) => {
-      const row = element('button', `drawer-contact${filter.id === current.id ? ' on' : ''}`);
-      row.type = 'button';
-      const count = filter.view === 'pulse' ? feed.pulseCount() : listCount(visibleTasks(feed.tasks(), { filter, matches }), filter);
-      row.classList.toggle('empty-list', !count);
-      row.append(element('span', 'drawer-title', filter.title), element('span', 'drawer-count', count ? String(count) : ''));
-      row.setAttribute('aria-pressed', String(filter.id === current.id));
-      row.onclick = async () => { await feed.setTaskFilter(filter.id); onFilterChange(); render(); if (!isWide()) close(); };
-      return row;
-    });
-    // Projects (CONCEPT.md §2.11): a tap opens one in the centre.
-    const tree = projectTreeBlock({ projects: feed.projects(), tasks: feed.tasks(), current: feed.project()?.id ?? null, all: allProjects,
-      onAll: () => { allProjects = !allProjects; render(); },
-      onOpen: async (id) => { await feed.setProject(id); render(); if (!isWide()) close(); }, onCreate: onCreateProject });
-    modeBox.replaceChildren(element('h3', 'drawer-section', 'Проекты'), tree, element('h3', 'drawer-section', 'Списки'), ...rows);
+    modeBox.replaceChildren(viewPanel({ store: viewStore, tasks: feed.tasks(), projects: feed.projects(), counterparties: feed.counterparties(), people: feed.people(),
+      onCreateProject, done: () => { onFilterChange(); if (!isWide()) close(); } }));
   }
   // In Задачи the lists come first, above the contacts; elsewhere the view's filters follow the contacts.
   const contactsHead = contactsBox.previousElementSibling;
@@ -199,6 +182,7 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
     }) : [element('p', 'drawer-empty', 'Меток пока нет')]));
   }
 
+  viewStore.onChange(() => { if (!drawer.hidden && feed.mode() === 'tasks') render(); onFilterChange(); });
   document.querySelector('#drawer-button').onclick = open;
   document.querySelector('#drawer-close').onclick = close;
   backdrop.onclick = close;

@@ -74,7 +74,10 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter |
 | `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history) |
 | `tasklist.js` / `days.js` | the «Задачи» view: the head of a list opened from the left panel («← Пульт», name, grouping — `listHead`), sections of a list (`sectionsOf`, `listCount`) or groups by tag / person (`groupsOf`), a task row (mark, title, facts with checklist progress, due word — `dueLabel`); day pill labels |
-| `taskview.js` | the «Задачи» centre: a saved list (chips, sections or groups), the pulse (a filter with `view: 'pulse'`) or one project (`taskViewNodes`) |
+| `taskview.js` | the «Задачи» centre by the view: the pulse of its tasks, one project by its sections, or a list by dates / tags / people (`taskViewNodes`) |
+| `viewstate.js` | pure: the view of «Задачи» — when (`WHEN`) · whose (`WHOSE`) · where (project, counterparty, person); `applyView`, `countsFor`, `viewTitle`, `dueGroups` |
+| `viewstore.js` | the view kept on the device: current view, «Мои виды», panel layout; listeners redraw (`viewStore`, `LAYOUTS`) |
+| `viewpanel.js` | the left panel of «Задачи»: three layouts over one view — «Оси», «Списки» (TickTick), «Дерево» (Things) — and the gear ⚙ at the bottom |
 | `pulse.js` / `pulseview.js` | the pulse — the default of «Задачи»: pure blocks (`pulseBlocks`: in work, paused, hot incl. conversations waiting for me, today, watch with alerts, projects, later), `importance`, `projectHealth`, `pulseCount`; and its DOM (`pulseNodes`) |
 | `focus.js` | pure: one task of mine in work (`inWork`, `isMineToDo`), «▶ В работу» / «Пауза» changes with `resume_note` (`startWork`, `pauseWork`, `resumeNoteOf`), `workedMinutes` from the status history |
 | `contacts.js` | pure: the directory (mirror of `src/contacts/fold.ts`), `markCounterparties` (titles for rows) |

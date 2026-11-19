@@ -11,7 +11,8 @@ import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
 import { foldPeople, foldCounterparties, markCounterparties } from './contacts.js';
-import { foldProjects, markNext, projectScope } from './projects.js';
+import { viewStore } from './viewstore.js';
+import { foldProjects, markNext } from './projects.js';
 import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
@@ -45,8 +46,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   let projectList = []; // all projects (CONCEPT.md §2.11)
   let peopleList = []; let counterpartyList = []; // the directory (contacts.js)
-  let projectId = null; // the project open in Задачи, or null
-  const currentProject = () => (mode === 'tasks' && projectList.find((item) => item.id === projectId)) || null;
+  // The project open in Задачи: the view's project when it shows all open tasks (viewstate.js, viewpanel.js).
+  const currentProject = () => { const view = viewStore.get(); return (mode === 'tasks' && view.when === 'all' && projectList.find((item) => item.id === view.where?.project)) || null; };
   const openSections = new Set(); // Задачи: folded sections («Дальше») the owner unfolded
   let showArchivedConversations = false; // Беседы: the «Архив · N» fold unfolded
   let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
@@ -168,6 +169,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         isOpenSection: (key) => openSections.has(key), toggle: (key, open) => toggleGroup(key, open, () => { if (open) openSections.delete(key); else openSections.add(key); }),
         flip: (key, hiding) => toggleGroup(key, hiding, () => { if (openSections.has(key)) openSections.delete(key); else openSections.add(key); }),
         keepRows: (key, rows) => groupNodes.set(key, rows), project: currentProject(), projects: projectList, projectActions,
+        view: viewStore.get(), people: peopleList, counterparties: counterpartyList, onResetView: () => viewStore.reset(),
         conversations: convList, pulseConfig: limits.pulse, onOpenConversation: (key) => onGoConversation?.(key), onOpenProject: (id) => setProject(id) }));
     } else if (mode === 'conversations' && !inside) {
       // The list (CONCEPT.md §5): by state; finished, then archived ones folded at the end («Архив» on top unfolds it).
@@ -270,16 +272,16 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     return render({ bottom: !readsDown(), top: true, quiet: true });
   }
   // Contact and tag filters match a task through any of its messages.
-  const taskMatches = () => { const scope = currentProject() && projectScope(projectList, projectId); return (task) => (!scope || scope.has(task.project)) && byMessages(task); };
+  const taskMatches = () => byMessages; // the project, people and counterparty are the view's (viewstate.js)
   const byMessages = (task) => (!conversationKey && !tagFilter.size) || task.messages.some((id) => {
     const view = views.get(id);
     return view && !view.deleted && (!conversationKey || convKeys.get(id) === conversationKey) && [...tagFilter].every((tag) => view.tags.includes(tag));
   });
   // A project in Задачи (null — back to the lists).
-  function setProject(id) { quick?.reset?.(); projectId = id || null; return render({ top: true, quiet: true }); }
+  function setProject(id) { quick?.reset?.(); if (id) viewStore.replace({ when: 'all', where: { project: id } }); else viewStore.reset(); return render({ top: true, quiet: true }); }
+  viewStore.onChange(() => { quick?.reset?.(); void render({ top: true, quiet: true }); });
   function setTaskFilter(id) {
     quick?.reset?.();
-    projectId = null;
     taskFilterId = id;
     try { localStorage.setItem('stream.taskFilter.v3', id); } catch { /* storage may be blocked */ }
     return render({ top: true });

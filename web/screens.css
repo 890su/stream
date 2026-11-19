@@ -220,3 +220,19 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .card-person-name { font-weight: 600; }
 .card-person-roles { color: var(--muted); font-size: 13.5px; }
 .card-person-edit { padding-bottom: 6px; }
+
+/* The control panel of the task view (viewpanel.js): the view in words, axes, saved views, the gear at the bottom. */
+.view-panel { display: grid; gap: 4px; min-width: 0; }
+.view-current, .view-gear, .view-save { min-width: 0; }
+.view-current .icon-button { flex: none; }
+.view-current { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 6px; border-radius: 10px; background: var(--chip); }
+.view-current-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 14px; }
+.view-axis { padding: 0 6px; }
+.view-saved { display: flex; align-items: center; }
+.view-saved > .drawer-contact { flex: 1; }
+.view-save { display: flex; gap: 6px; padding: 4px 6px; }
+.view-save .details-input, .view-search { flex: 1; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; }
+.view-search { margin: 0 6px; }
+.view-gear { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 6px; border-top: 1px solid var(--line); background: var(--panel); }
+.view-gear-icon { font-size: 20px; }
+.view-gear-select { flex: 1; min-width: 0; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; padding: 0 8px; }
