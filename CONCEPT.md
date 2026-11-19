@@ -424,8 +424,13 @@ built), not in git. A project has:
   «Идеи»), not filed away.
 
 **How a task gets its project** (cheapest first): the project chosen in the link window (§2.9) or named with a
-`#tag`; the default project of the conversation or source (the BY bot → «Удалёнка BY»); triage by content, with
-«В какой проект?» under the message when unsure. Moving a task to another project is an owner correction and a
+`#tag`; the default project of the source — a project lists the sources it takes by default (`sources`: Telegram
+BY, Telegram PL, phone, own notes; later one chat), so the BY bot → «Удалёнка BY»; triage by content (the planner
+sees the active projects with their sections and each message's default project). When unsure, triage leaves the
+project empty and names up to three candidates (`project_options`): the task shows «В какой проект?» with them.
+Triage sets the project of a new task, or of an existing one that has none; it never moves a task the owner placed.
+An idea about a known project becomes a task in its «ideas» section (not a filed note); ideas stay out of «Сегодня».
+ Moving a task to another project is an owner correction and a
 golden example; it moves the task to the other mirror by the projects' settings.
 
 **Views:** the left panel shows the project tree with counts; a project opens as its list by sections or as a

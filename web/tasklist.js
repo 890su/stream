@@ -37,6 +37,7 @@ export function dueLabel(task, now = new Date()) {
 export function rowParts(task, views, { showAssignee = false, showProject = true } = {}) {
   const parts = [];
   if (showProject && task.projectTitle) parts.push(`▸ ${task.projectTitle}`);
+  else if (showProject && task.project_options?.length && !task.project) parts.push('проект?');
   if (task.status !== 'todo') parts.push(STATUSES[task.status] ?? task.status);
   if (task.proposed === 'done') parts.push('готово?');
   if (task.items?.length) parts.push(`☑ ${itemsProgress(task)}`);

@@ -11,7 +11,7 @@ export interface Task {
   id: string; title: string; status: string; assignee: string; person?: string; template?: string; due?: string | null;
   roles: Roles; waiting_for?: unknown; plan?: unknown; remind_at?: string | null; promise?: unknown; filed: boolean;
   messages: string[]; confidence?: number; processor?: string; proposed?: string | null; created_by: string; created_at: string; updated_at: string;
-  project?: string | null; section?: string | null; // CONCEPT.md §2.11
+  project?: string | null; section?: string | null; project_options?: string[]; // CONCEPT.md §2.11
   items: ChecklistItem[]; owner_titled: boolean; // the checklist (CONCEPT.md §2.8); the owner gave the title
 }
 
@@ -60,7 +60,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], owner_titled: false, created_by: event.author, created_at: event.ts, updated_at: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section'] as const) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options'] as const) {
       if (change[key] !== undefined) (task as any)[key] = change[key];
     }
     if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }

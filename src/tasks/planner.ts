@@ -4,13 +4,16 @@
 export interface PlanMessage {
   id: string; time: string; source: string; from: string; party: string; text: string; tags: string[];
   reply_to?: string; continues?: string; in_tasks: string[];
+  default_project?: string | null; // the project this message's source goes to by default (CONCEPT.md §2.11)
 }
 // A task given as context: its last messages, the conversations (sources) they came from, its last activity.
 // items — its checklist; owner_titled — the owner named it, so it is never renamed (CONCEPT.md §2.8).
-export interface PlanTask { id: string; title: string; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string; items: { text: string; done: boolean }[]; owner_titled: boolean }
+export interface PlanTask { id: string; title: string; project?: string | null; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string; items: { text: string; done: boolean }[]; owner_titled: boolean }
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
 // context — earlier messages of the same conversation, already triaged: to understand, not to assign.
-export interface PlanInput { now: string; job_days: number; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
+// An active project: the triage may put tasks in it, in one of its sections.
+export interface PlanProject { id: string; title: string; kind: string; sections: { id: string; title: string; role?: string }[] }
+export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
 
 export interface PlannedTask {
   task_id: string | null; // an open or recently closed task this continues, or null for a new one
@@ -28,6 +31,9 @@ export interface PlannedTask {
   alternatives: string[]; // other tasks these messages may belong to: the owner is asked right on the message
   items?: string[]; // checklist items this adds: a step of a job, or the things a list names (CONCEPT.md §2.8)
   rename?: string | null; // a general title for a job that grew past one action
+  project?: string | null; // the project of the task (an id from projects), or null when unsure or none
+  section?: string | null; // a section of that project
+  project_options?: string[]; // when unsure: up to three candidate projects, the owner is asked
 }
 export interface PlanOutput { tasks: PlannedTask[]; usage?: { input_tokens: number; output_tokens: number } }
 
@@ -44,7 +50,7 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options'],
         properties: {
           task_id: { type: ['string', 'null'] },
           title: { type: 'string' },
@@ -61,6 +67,9 @@ export const PLAN_SCHEMA = {
           alternatives: { type: 'array', items: { type: 'string' } },
           items: { type: 'array', items: { type: 'string' } },
           rename: { type: ['string', 'null'] },
+          project: { type: ['string', 'null'] },
+          section: { type: ['string', 'null'] },
+          project_options: { type: 'array', items: { type: 'string' } },
         },
       },
     },
@@ -76,7 +85,7 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
 - Пачка — не одна задача. Каждое сообщение относится к одной или нескольким задачам.
 - У КАЖДОГО сообщения пачки должен быть итог: его id есть хотя бы в одной задаче ответа.
 - Если делать ничего не нужно, только разложить, верни задачу с filed: true — она сразу закрыта. Для этого
-  шаблоны с filed: true: diary (самочувствие, события дня), plan (идея или доработка проекта), note
+  шаблоны с filed: true: diary (самочувствие, события дня), plan (идея, для которой нет подходящего проекта), note
   (мысль, справка), chatter (болтовня, «ок», служебное). Несколько таких сообщений одного вида — одна задача.
 - filed: false — настоящее дело, которое кто-то должен сделать.
 - done: true — сообщения говорят, что дело сделано («готово», «сделал», «закончил», «установил, работает»).
@@ -99,6 +108,13 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
     своя задача, в чеклист чужой задачи не складывай.
   * Список — одно сообщение перечисляет несколько мелочей одного дела («купить кабель, коннекторы и стяжки») — одна
     задача, items — пункты.
+- Проекты (projects — активные проекты с разделами). У каждой задачи project — id проекта, к которому она относится,
+  и section — id его раздела, или null. Сообщение с default_project обычно относится к этому проекту (рабочий поток
+  источника), если по смыслу дело явно не другого проекта. Если уверенности нет — project: null и project_options —
+  до трёх id вероятных проектов (владельца спросят); иначе project_options: []. Задача, у которой проект уже есть
+  (project в open_tasks), остаётся в нём: верни его же или null. filed-задачам project: null.
+- Идея, мысль о доработке известного проекта — не filed: задача в этом проекте, section — раздел с role ideas.
+  Шаг, который прямо следующий («завтра сделаю…», «надо начать с…»), — раздел с role next.
 - items — короткие пункты по-русски, одна строка каждый; пункты, которые уже есть у задачи (items в open_tasks),
   не повторяй. Новая задача из одного действия — items: []. rename — только для задачи с task_id, иначе null.
 - Болтовню, приветствия, «ок», служебное не превращай в дела: это filed: true с шаблоном chatter.

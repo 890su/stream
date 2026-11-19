@@ -51,9 +51,10 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), budget | `Triage`, `streamOf`, `checklistChange` |
+| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) | `anthropicPlanner` |
 | `fold.ts` | tasks as fold of `task_change` (server side, checklist `items`, `owner_titled`); old tasks get roles from `assignee` | `foldTasks`, `isOpen` |
+| `projects.ts` | projects as fold of `project_change` (server side), the default project of a stream (`defaultProject`, by `sources`) | `foldProjects`, `defaultProject` |
 | `parties.ts` | parties and roles: pattern, author → party, incoming call / SMS → caller, phone number form, default controller (client copy `web/parties.js`) | `isParty`, `partyOf`, `partyOfEvent`, `phoneNumber`, `defaultController` |
 
 ## Client — `web/` (plain ES modules, no bundler; new module → `VERSIONED` in `src/server/static.ts` and `web/sw.js`)

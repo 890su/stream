@@ -475,6 +475,11 @@
                 "title": { "type": "string", "pattern": "^\\S[^\\n]{0,119}$" },
                 "parent": { "type": ["string", "null"], "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
                 "kind": { "enum": ["stream", "goal"] },
+                "sources": {
+                  "type": "array",
+                  "description": "Sources whose new tasks go to this project by default (CONCEPT.md 2.11): tg:<account>, phone, me.",
+                  "items": { "type": "string", "pattern": "^(?:tg:[a-z]{2,10}|phone|me)$" }
+                },
                 "status": { "enum": ["active", "paused", "done", "archived"] },
                 "sections": {
                   "type": "array",
@@ -583,6 +588,11 @@
                 },
                 "project": { "type": ["string", "null"], "description": "The one project the task lives in (CONCEPT.md 2.11); null - Входящие.", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
                 "section": { "type": ["string", "null"], "pattern": "^[0-9a-z-]{1,64}$" },
+                "project_options": {
+                  "type": "array",
+                  "description": "Projects the triage hesitates between: the task asks «В какой проект?» (CONCEPT.md 2.11).",
+                  "items": { "type": "string", "format": "uuid" }
+                },
                 "items_add": {
                   "type": "array",
                   "description": "Checklist items added to the task (CONCEPT.md 2.8): id and one line of text.",

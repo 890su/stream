@@ -36,6 +36,10 @@ export class TriageStore {
       .all(id) as unknown as Row[]).map(fromRow);
   }
 
+  projectEvents(): JournalEvent[] {
+    return (this.#db.prepare(`SELECT * FROM events WHERE kind = 'project_change' ORDER BY ts, received_at`).all() as unknown as Row[]).map(fromRow);
+  }
+
   taskEvents(): JournalEvent[] {
     return (this.#db.prepare(`SELECT * FROM events WHERE kind = 'task_change' ORDER BY ts, received_at`).all() as unknown as Row[]).map(fromRow);
   }

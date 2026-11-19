@@ -1,7 +1,8 @@
 // One project in the «Задачи» view (CONCEPT.md §2.11): a header (title, kind, status, «Изменить», ×) with the next
 // action warning, and a head per section with «+» to add a task right there. The project's own sections come from
 // projects.js; every change goes through `actions` (feed → app: saving project and task changes).
-import { KINDS, PROJECT_STATUSES, projectSections } from './projects.js';
+import { KINDS, PROJECT_STATUSES, SOURCE_TITLES, projectSections } from './projects.js';
+import { accountTitle, accountKeys } from './tgbubble.js';
 import { isOpen } from './taskfold.js';
 
 export { projectSections };
@@ -21,6 +22,7 @@ function button(className, text, onClick, label) {
   return node;
 }
 
+let editing = null; // the project whose «Изменить» is open: it stays open across redraws
 const line = (text, max) => text.replace(/\s+/g, ' ').trim().slice(0, max);
 
 // An inline one-line form: `onSubmit(text)`; Escape or an empty submit closes it.
@@ -53,7 +55,7 @@ export function projectHead(project, tasks, actions) {
   }
 
   const edit = element('div', 'project-edit');
-  edit.hidden = true;
+  edit.hidden = editing !== project.id;
   const chips = (values, current, key) => {
     const row = element('div', 'chips');
     for (const [value, title] of Object.entries(values)) {
@@ -65,10 +67,26 @@ export function projectHead(project, tasks, actions) {
   };
   edit.append(
     button('link-button', 'Переименовать', () => edit.append(inlineForm('Название проекта', (title) => actions.saveProject({ title }), { value: project.title, max: 120 }))),
-    chips(PROJECT_STATUSES, project.status, 'status'), chips(KINDS, project.kind, 'kind'),
+    chips(PROJECT_STATUSES, project.status, 'status'), chips(KINDS, project.kind, 'kind'), sourcesBlock(project, actions),
     button('link-button', '+ Раздел', () => edit.append(inlineForm('Название раздела', (title) => actions.saveProject({ sections: [...project.sections, { id: crypto.randomUUID().slice(0, 8), title: line(title, 60) }] }), { max: 60 }))),
   );
-  box.append(button('link-button project-edit-toggle', 'Изменить', () => { edit.hidden = !edit.hidden; }), edit);
+  box.append(button('link-button project-edit-toggle', 'Изменить', () => { edit.hidden = !edit.hidden; editing = edit.hidden ? null : project.id; }), edit);
+  return box;
+}
+
+// «Сюда по умолчанию»: sources whose new tasks the triage puts here (CONCEPT.md §2.11).
+function sourcesBlock(project, actions) {
+  const box = element('div', 'project-sources');
+  box.append(element('p', 'picker-section', 'Задачи отсюда — в этот проект'));
+  const row = element('div', 'chips');
+  const sources = { ...Object.fromEntries(accountKeys().map((account) => [`tg:${account}`, accountTitle(account)])), ...SOURCE_TITLES };
+  const on = new Set(project.sources ?? []);
+  for (const [key, title] of Object.entries(sources)) {
+    const chip = button(`chip ${on.has(key) ? 'on' : 'suggest'}`, title, () => actions.saveProject({ sources: on.has(key) ? [...on].filter((item) => item !== key) : [...on, key] }));
+    chip.setAttribute('aria-pressed', String(on.has(key)));
+    row.append(chip);
+  }
+  box.append(row);
   return box;
 }
 

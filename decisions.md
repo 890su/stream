@@ -605,3 +605,14 @@ conversations, convlist, drawer, app, index.html, стили), новые `web/l
 проект беседы по умолчанию, доска и дорожная карта — следующими шагами П15.
 **Affected:** `contracts/event.schema.json`, `src/contracts/task.ts`, `src/tasks/fold.ts`, `registry/filters.json`,
 `web/projects.js`, `web/projectview.js`, `web/projectpanel.js`, `web/taskview.js`, `web/feed.js`, `web/drawer.js`
+
+## 2026-11-19 — Разбор ставит проект (`triage-ai-v8`); источники проекта по умолчанию; идеи — в бэклог
+**What:** Разбор видит активные проекты с разделами и у каждого сообщения — проект его источника по умолчанию
+(`project.sources`: `tg:by`, `tg:pl`, `phone`, `me`). Ответ разбора — `project`, `section`, а при сомнении
+`project_options` (до трёх): у задачи «В какой проект?». Проект ставится новой задаче или задаче без проекта; задачу,
+которую владелец поместил сам, разбор не переносит. Идея по известному проекту — задача в его разделе «Идеи», а не
+закрытая заметка; задачи раздела «Идеи» не попадают в «Сегодня» (поле фильтра `idea`).
+**Why:** Владелец: задачи должны сами попадать в проекты; идеи по проектам не должны пропадать.
+**Boundary:** Event v1: необязательные `project.sources` и `task.project_options`. Проект беседы (одного чата) по
+умолчанию — позже, вместе с окном «связь».
+**Affected:** `CONCEPT.md` §2.11; `contracts/event.schema.json`; `src/tasks/`; `registry/tasks.json`, `registry/filters.json`; `web/`

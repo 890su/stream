@@ -6,6 +6,7 @@ let accounts = {}; // account -> { title }, from /capture-config.json
 
 export function setAccounts(map) { accounts = map ?? {}; }
 export const accountTitle = (account) => accounts[account]?.title ?? `Telegram ${String(account).toUpperCase()}`;
+export const accountKeys = () => Object.keys(accounts);
 export const isMessenger = (event) => Boolean(event?.payload?.data?.telegram || event?.payload?.data?.outbound);
 
 const SKIPPED = { too_large: 'слишком большой', unsupported: 'формат не сохраняется', failed: 'не скачался' };

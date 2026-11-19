@@ -144,3 +144,4 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .project-row.muted .drawer-title { color: var(--muted); }
 .details-project { display: grid; gap: 6px; }
 .details-project-pick { justify-self: start; }
+.project-ask { align-items: center; }

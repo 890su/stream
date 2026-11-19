@@ -70,3 +70,13 @@ test('the server accepts a project change and a task in a project; refuses a sel
     assert.equal((await post(taskChange)).status, 201);
   } finally { await f.stop(); }
 });
+
+test('a task in a project\'s ideas is an idea and stays out of «Сегодня»', () => {
+  const goal = foldProjects([change(P1, { op: 'create', title: 'Сайт', kind: 'goal', sections: defaultSections('goal'), sources: ['tg:by'] })]);
+  assert.deepEqual(goal[0].sources, ['tg:by']);
+  const [idea, loose] = markNext([task('a', { project: P1, section: 'ideas', roles: { executors: ['me'], responsible: 'me' } }), task('b', { roles: { executors: ['me'], responsible: 'me' } })], goal);
+  assert.equal(idea.idea, true);
+  const today = filtersConfig.filters[0]!;
+  assert.equal(matchesFilter(idea, today), false);
+  assert.equal(matchesFilter(loose, today), true);
+});

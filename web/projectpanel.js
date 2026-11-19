@@ -45,6 +45,13 @@ export function projectLine(task, { projects, save }) {
   const section = project?.sections.find((item) => item.id === task.section);
   const box = element('div', 'details-project');
   const choice = element('div', 'chips');
+  // The triage hesitated (CONCEPT.md §2.11): its candidates first, one tap places the task.
+  const options = !project ? (task.project_options ?? []).map((id) => byId.get(id)).filter(Boolean) : [];
+  if (options.length) {
+    const ask = element('div', 'chips project-ask');
+    ask.append(element('span', 'picker-section', 'В какой проект?'), ...options.map((item) => button('chip suggest', item.title, () => save({ op: 'update', project: item.id, section: null }))));
+    box.append(ask);
+  }
   const label = project ? `▸ ${project.title}${section ? ` · ${section.title}` : ''}` : 'Входящие · без проекта';
   const sections = (target) => {
     choice.replaceChildren(...target.sections.map((item) => button(`chip ${task.project === target.id && task.section === item.id ? 'on' : 'suggest'}`, item.title,

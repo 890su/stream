@@ -4,6 +4,9 @@
 import { isOpen } from './taskfold.js';
 
 export const KINDS = { stream: 'Поток', goal: 'Проект с целью' };
+// Sources a project may take by default (CONCEPT.md §2.11); Telegram accounts come from the registry.
+export const SOURCE_TITLES = { me: 'Мои заметки', phone: 'Телефон' };
+
 export const PROJECT_STATUSES = { active: 'активный', paused: 'на паузе', done: 'готов', archived: 'в архиве' };
 
 // Sections a new project starts with; the owner renames, adds and removes them.
@@ -23,10 +26,10 @@ export function foldProjects(events) {
     let project = projects.get(id);
     if (!project) {
       if (change.op !== 'create') continue;
-      project = { id, title: change.title, parent: null, kind: 'stream', status: 'active', sections: [], createdAt: event.ts, updatedAt: event.ts };
+      project = { id, title: change.title, parent: null, kind: 'stream', status: 'active', sections: [], sources: [], createdAt: event.ts, updatedAt: event.ts };
       projects.set(id, project);
     }
-    for (const key of ['title', 'parent', 'kind', 'status', 'sections']) if (change[key] !== undefined) project[key] = change[key];
+    for (const key of ['title', 'parent', 'kind', 'status', 'sections', 'sources']) if (change[key] !== undefined) project[key] = change[key];
     project.updatedAt = event.ts;
   }
   // A parent that does not exist (or a loop) puts the project at the top.
@@ -49,6 +52,7 @@ export function markNext(tasks, projects) {
     const project = projectOf(task, byId);
     const section = project?.sections.find((item) => item.id === task.section);
     task.projectTitle = project?.title ?? null;
+    task.idea = Boolean(project && section?.role === 'ideas'); // the backlog stays out of «Сегодня»
     task.next = Boolean(project && project.kind === 'goal' && project.status === 'active' && section?.role === 'next' && isOpen(task));
   }
   return tasks;
