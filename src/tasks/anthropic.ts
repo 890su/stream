@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { tasksConfig } from '../config.ts';
 import { PLAN_INSTRUCTIONS, PLAN_SCHEMA, type PlanInput, type PlanOutput, type Planner } from './planner.ts';
+import { TITLE_RULE, type NameInput, type NameOutput, type Namer } from './namer.ts';
 
 // The AI planner for the task triage (CONCEPT.md §2.8, §6): one structured-output call per batch.
 // Model, effort and limits — registry/tasks.json; the key — ANTHROPIC_API_KEY in /srv/stream/.env.
@@ -28,5 +29,25 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
     if (!text || text.type !== 'text') throw new Error('модель не вернула разбор');
     const parsed = JSON.parse(text.text) as Pick<PlanOutput, 'tasks'>;
     return { tasks: parsed.tasks, usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
+  };
+}
+
+// Titles of tasks the owner made by hand (namer.ts): one small structured-output call per task.
+const NAME_SCHEMA = { type: 'object', additionalProperties: false, required: ['title'], properties: { title: { type: 'string' } } };
+export function anthropicNamer(apiKey: string, baseURL?: string): Namer {
+  const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) });
+  const system = `Ты называешь задачу владельца по её сообщениям. Верни одно название, по-русски.
+${TITLE_RULE}`;
+  return async (input: NameInput): Promise<NameOutput> => {
+    const response = await client.messages.create({
+      model: tasksConfig.ai.model, max_tokens: 300,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: NAME_SCHEMA } },
+      messages: [{ role: 'user', content: `Задача и её сообщения (JSON):
+${JSON.stringify(input)}` }],
+    });
+    const text = response.content.find((block) => block.type === 'text');
+    if (response.stop_reason === 'refusal' || !text || text.type !== 'text') throw new Error('модель не дала названия');
+    return { title: (JSON.parse(text.text) as { title: string }).title, usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
   };
 }

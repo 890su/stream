@@ -148,7 +148,7 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v9').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v10').length, 4);
   } finally { s.cleanup(); }
 });
 

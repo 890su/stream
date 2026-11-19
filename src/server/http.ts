@@ -11,6 +11,7 @@ import { share } from './share.ts';
 import { phone } from './phone.ts';
 import { TelegramBot } from '../telegram/bot.ts';
 import { Triage } from '../tasks/triage.ts';
+import type { Namer } from '../tasks/namer.ts';
 import type { Planner } from '../tasks/planner.ts';
 import { system, watchSilence } from './system.ts';
 import { staticFile } from './static.ts';
@@ -23,7 +24,7 @@ const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`)
 // triage (optional) — the task triage (CONCEPT.md §2.8); planner null keeps it off and says why on the System screen.
 export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
   store: JournalStore; ownerToken: string; phoneToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
-  triage?: { planner: Planner | null; reason?: string; everyMs?: number };
+  triage?: { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number };
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
@@ -73,7 +74,7 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
   const stopWatching = watchSilence(store, live);
   const bots = Object.entries(telegram?.tokens ?? {}).filter(([account, token]) => token && telegramConfig.accounts[account])
     .map(([account, token]) => new TelegramBot({ account, token, store, live, apiBase: telegram?.apiBase }));
-  const triageWorker = triage ? new Triage({ store, live, planner: triage.planner, reason: triage.reason }) : null;
+  const triageWorker = triage ? new Triage({ store, live, planner: triage.planner, namer: triage.namer ?? null, reason: triage.reason }) : null;
   server.on('listening', () => { for (const bot of bots) void bot.start(); triageWorker?.start(triage?.everyMs); });
   server.on('close', () => { stopWatching(); for (const bot of bots) bot.stop(); triageWorker?.stop(); });
   return server;

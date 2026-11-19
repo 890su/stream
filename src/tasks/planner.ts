@@ -1,5 +1,7 @@
 // The one interface the task triage talks to (development rule 9): a batch of new messages plus the open
 // tasks in, a list of tasks out. The provider (AI now, scripts later) is a setting, not a code path.
+import { TITLE_RULE } from './namer.ts';
+
 
 export interface PlanMessage {
   id: string; time: string; source: string; from: string; party: string; text: string; tags: string[];
@@ -130,7 +132,7 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
   не повторяй. Новая задача из одного действия — items: []. rename — только для задачи с task_id, иначе null.
 - Болтовню, приветствия, «ок», служебное не превращай в дела: это filed: true с шаблоном chatter.
 - Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, executors — из шаблона.
-- title — коротко и по делу, по-русски, в повелительном наклонении («Перезвонить Марку про роутер»).
+- ${TITLE_RULE}
 - responsible — кто отвечает за итог: me, если просят владельца или он сам взялся; иначе — сторона того, кого просят
   (party из messages). executors — кто делает (может быть пусто, пока никто не взялся); ai / system — для шаблонов ИИ и
   системы. author — сторона того, кто попросил. Задачи заводятся и там, где владельца нет: клиент просит напарника,

@@ -7,8 +7,10 @@ import { tasksConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { stateChanged } from '../server/system.ts';
 import { foldTasks, isOpen, type Task } from './fold.ts';
+import { describe, from } from './messages.ts';
+import { nameTasks, type Namer } from './namer.ts';
 import { foldProjects, defaultProject, type Project } from './projects.ts';
-import { defaultController, isParty, partyOf, partyOfEvent } from './parties.ts';
+import { defaultController, isParty, partyOfEvent } from './parties.ts';
 import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
@@ -64,36 +66,6 @@ export function quietOf(stream: string): number {
   return tasksConfig.quiet_s_by_stream[stream.split('|')[0]!] ?? tasksConfig.quiet_s;
 }
 
-function describe(event: JournalEvent, store: JournalStore): { text: string; tags: string[]; deleted: boolean } {
-  let text = event.payload.text ?? '';
-  let tags = event.payload.tags ?? [];
-  let deleted = false;
-  for (const correction of store.triage.corrections(event.id)) {
-    const op = correction.payload.data?.op;
-    if (op === 'edit') { text = correction.payload.text ?? text; tags = correction.payload.tags ?? tags; }
-    if (op === 'delete') deleted = true;
-    if (op === 'restore') deleted = false;
-  }
-  const data = event.payload.data ?? {};
-  const call = data.call as { direction: string; duration_s?: number; name?: string; number?: string } | undefined;
-  if (call) text = `[звонок ${call.direction}${call.duration_s ? `, ${call.duration_s} с` : ''}, ${call.name || call.number || 'скрытый номер'}]`;
-  const media = event.payload.media ?? [];
-  if (event.kind === 'voice') text = `[голосовое без расшифровки]${text ? ` ${text}` : ''}`;
-  else if (media.length && !text) text = `[${event.kind === 'photo' ? 'фото' : 'файл'} без подписи]`;
-  return { text, tags, deleted };
-}
-
-function from(event: JournalEvent): string {
-  // The phone companion stores every call and SMS as mine; an incoming one is from the caller.
-  if (partyOfEvent(event) !== partyOf(event.author)) {
-    const phone = (event.payload.data?.call ?? event.payload.data?.sms) as { name?: string; number?: string } | undefined;
-    return phone?.name?.trim() || phone?.number || 'скрытый номер';
-  }
-  if (event.author === 'me') return 'владелец';
-  const telegram = event.payload.data?.telegram as { from_name?: string; chat_title?: string } | undefined;
-  return telegram?.from_name || telegram?.chat_title || event.author;
-}
-
 // A report draft from what the conversation says was done (task manager spec §11): only valid fields — a known
 // currency, sums and minutes not below zero, the result line up to 500 characters. A task the owner already
 // reported on keeps its report. Closing stays the owner's: «Задача выполнена?» → «Да» keeps these values.
@@ -115,15 +87,18 @@ export class Triage {
   #store: JournalStore;
   #live: LiveFeed;
   #planner: Planner | null;
+  #namer: Namer | null;
   #reason: string;
   #timer?: ReturnType<typeof setInterval>;
   #busy = false;
 
   // `planner` null — triage is off (no AI key); `reason` says why on the System screen.
-  constructor({ store, live, planner, reason = 'нет ключа ИИ' }: { store: JournalStore; live: LiveFeed; planner: Planner | null; reason?: string }) {
+  // `namer` — titles of tasks the owner made by hand (namer.ts); none — they keep the text they were made from.
+  constructor({ store, live, planner, namer = null, reason = 'нет ключа ИИ' }: { store: JournalStore; live: LiveFeed; planner: Planner | null; namer?: Namer | null; reason?: string }) {
     this.#store = store;
     this.#live = live;
     this.#planner = planner;
+    this.#namer = namer;
     this.#reason = reason;
   }
 
@@ -283,6 +258,8 @@ export class Triage {
       const month = new Date(now).toISOString().slice(0, 7);
       if (this.#store.triage.spent(month) >= tasksConfig.ai.monthly_budget_usd) { this.#health('error', `исчерпан лимит трат на ИИ за месяц ($${tasksConfig.ai.monthly_budget_usd})`); return; }
       for (const batch of this.ready(now)) await this.run(batch);
+      if (this.#namer) await nameTasks({ store: this.#store, live: this.#live, namer: this.#namer, now,
+        tasks: foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) }) });
       this.#health('ok', null);
     } catch (error) {
       console.error('Triage failed', error instanceof Error ? error.message : error);
