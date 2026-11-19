@@ -156,7 +156,12 @@ request and the job given to a partner).
 
 **Conversation** — a projection of the journal with no events of its own.
 - Key — the channel: a personal chat or group in Telegram (per account), a phone number (calls and SMS), the
-  task-bot chat, the owner's own «Я» (notes, AI commands). One person's conversations merge across channels once
+  task-bot chat, the owner's own «Я» (notes, AI commands). **Own notes by task** (2026-11-19): a note in a task that is
+  not filed away is the conversation of that task, named by it; filed and untriaged notes stay in «Заметки».
+  **Split** (2026-11-19): «Отдельно» on a chat message (correction `split`, back — `unsplit`) makes it and what
+  continues or answers it a conversation of its own, named by its task (else by its text); answers still go to the
+  chat. «В задачу» on a chat message splits it off at once; «+ Задача» in the conversation bar makes a task for the
+  whole conversation. One person's conversations merge across channels once
   the contact directory exists (P7); before that — by Telegram user id.
 - Participants have no roles; roles belong to tasks (§2.8).
 - **State** is computed; thresholds are data (`registry/conversations.json`):
@@ -522,9 +527,9 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
   top; the input writes into it. Default view. **Swipes on a row:** right-to-left — to the archive (§2.5); left-to-right —
   open the conversation's task (the most urgent open one) or, if it has none, make a task from its latest message
   and open it. Each with «Вернуть» in the toast.
-- **«Задачи»** — a compact list of rows chosen by a saved filter. On top — chips of the main lists with counts:
-  «Пульт · Сегодня · Разобрать · Жду · Контроль · Ещё…» (`pinned` in `registry/filters.json`); «Ещё…» opens all lists on the
-  left. **Default — «Пульт»** (2026-11-19, `docs/plans/2026-11-19-task-manager-spec.md` §5): the task in work
+- **«Задачи»** — the pulse fills the screen; there are no list chips (2026-11-19). The saved lists («Сегодня ·
+  Разобрать · Жду · Контроль · …») are in the left panel; one opened there shows «← Пульт», its name, count and the
+  grouping. **Default — «Пульт»** (2026-11-19, `docs/plans/2026-11-19-task-manager-spec.md` §5): the task in work
   («Готово», «⏸ Пауза») or «Вернуться к…», then blocks «⏸ Ждут возврата · 🔥 Горит (overdue, due today, a
   conversation waiting for my answer over `hot_wait_hours`) · ▶ Сегодня · 👁 Слежу (waiting and delegated, ⚠ —
   no change for `watch_alert_days`) · 📊 Проекты (done and new over 7 days, health) · ⏭ Дальше». Every task is in
