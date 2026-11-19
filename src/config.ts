@@ -43,3 +43,9 @@ export const filtersConfig = JSON.parse(readFileSync(new URL('../registry/filter
   version: number; filters: Array<{ id: string; title: string; all?: FilterCondition[]; any?: FilterCondition[]; order?: 'updated' | 'due'; pinned?: boolean;
     sections?: Array<{ id: string; title: string; folded?: boolean; all?: FilterCondition[]; any?: FilterCondition[] }> }>;
 };
+
+// The pulse — the default of «Задачи» (task manager spec §5): block sizes, thresholds and importance weights.
+export const pulseConfig = JSON.parse(readFileSync(new URL('../registry/pulse.json', import.meta.url), 'utf8')) as {
+  version: number; rows: number; hot_wait_hours: number; watch_alert_days: number; stale_days: number; paused_remind_hours: number;
+  money_templates: string[]; weights: { hot: number; money: number; blocks: number; due_soon: number; stale_per_day: number };
+};

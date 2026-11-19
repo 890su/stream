@@ -75,3 +75,13 @@ test('every client module parses, so a typo cannot ship a blank screen', async (
     execFileSync(process.execPath, ['--check', new URL(`../web/${file}`, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], { stdio: 'pipe' });
   }
 });
+
+test('capture config carries the pulse thresholds and weights (registry/pulse.json)', async () => {
+  const f = await fixture();
+  try {
+    const config = await (await fetch(f.base + '/capture-config.json')).json();
+    assert.equal(config.pulse.hot_wait_hours, 2);
+    assert.equal(config.pulse.weights.hot, 1000);
+    assert.deepEqual(config.pulse.money_templates, ['lead', 'money']);
+  } finally { await f.stop(); }
+});
