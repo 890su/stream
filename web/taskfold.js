@@ -54,7 +54,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], ownerTitled: false, history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options']) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options', 'counterparty', 'counterparty_options', 'counterparty_hint']) {
       if (change[key] !== undefined) task[key] = change[key];
     }
     if (change.waiting_for !== undefined) task.waitingFor = change.waiting_for;

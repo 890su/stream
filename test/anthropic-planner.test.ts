@@ -23,7 +23,7 @@ test('the planner sends one structured-output request and reads the tasks', asyn
   await once(server, 'listening');
   try {
     const plan = anthropicPlanner('test-key', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-    const output = await plan({ now: '2026-11-18T10:00:00Z', job_days: 14, projects: [], templates: [], open_tasks: [], closed_tasks: [], context: [], messages: [{ id: 'm1', time: '2026-11-18T09:59:00Z', source: 'me', from: 'владелец', party: 'me', text: 'перезвонить Марку', tags: [], in_tasks: [] }] });
+    const output = await plan({ now: '2026-11-18T10:00:00Z', job_days: 14, projects: [], counterparties: [], templates: [], open_tasks: [], closed_tasks: [], context: [], messages: [{ id: 'm1', time: '2026-11-18T09:59:00Z', source: 'me', from: 'владелец', party: 'me', text: 'перезвонить Марку', tags: [], in_tasks: [] }] });
     assert.equal(output.tasks[0]!.title, 'Перезвонить Марку');
     assert.deepEqual(output.usage, { input_tokens: 1200, output_tokens: 80 });
     assert.equal(request.model, 'claude-haiku-5-5');

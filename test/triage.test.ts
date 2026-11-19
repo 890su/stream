@@ -148,7 +148,7 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v10').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v11').length, 4);
   } finally { s.cleanup(); }
 });
 
@@ -390,5 +390,46 @@ test('«готово» with what was done drafts the report; the owner still con
     assert.equal(task!.status, 'todo', 'not closed silently');
     assert.equal(task!.proposed, 'done');
     assert.deepEqual((task as any).report, { note: 'Настроил печать из дома на офисный принтер', duration_min: 30, cost: 120 }, 'only valid fields; a made-up currency and a negative sum are dropped');
+  } finally { s.cleanup(); }
+});
+
+test('triage sets the counterparty of a task, or options and a hint; a set one stays; archived ones are not offered', async () => {
+  const C1 = '33333333-3333-4333-8333-333333333333';
+  const C2 = '44444444-4444-4444-8444-444444444444';
+  const C3 = '55555555-5555-4555-8555-555555555555';
+  const base = { responsible: 'me', executors: [], author: null, template: null, due: null, confidence: 0.9, note: null, filed: false, done: false, alternatives: [], items: [], rename: null, project: null, section: null, project_options: [] };
+  let reply: (input: PlanInput) => PlanOutput = () => ({ tasks: [] });
+  const s = setup((input) => reply(input));
+  const firm = (id: string, data: Record<string, unknown>) => s.add({ ...event({ kind: 'counterparty_change', payload: { ref: { type: 'counterparty', id }, data: { counterparty: data } } }), source: 'app', author: 'me' } as JournalEvent);
+  const person = (data: Record<string, unknown>) => s.add({ ...event({ kind: 'contact_change', payload: { ref: { type: 'person', id: randomUUID() }, data: { contact: data } } }), source: 'app', author: 'me' } as JournalEvent);
+  try {
+    firm(C1, { op: 'create', kind: 'org', title: 'ООО Пример', side: 'by' });
+    firm(C2, { op: 'create', kind: 'address', title: 'ул. Пробная 1' });
+    firm(C3, { op: 'create', kind: 'org', title: 'Старая фирма' });
+    firm(C3, { op: 'update', status: 'archived' });
+    person({ op: 'create', name: 'Анна Тестова', telegram: ['7201'], roles: [{ counterparty: C1, title: 'бухгалтер' }] });
+    reply = (input) => {
+      assert.deepEqual(input.counterparties.map((item) => item.title).sort(), ['ООО Пример', 'ул. Пробная 1'], 'archived ones are not offered');
+      assert.deepEqual(input.counterparties.find((item) => item.id === C1)!.people, ['Анна Тестова (бухгалтер)']);
+      assert.equal(input.messages[0]!.person, 'Анна Тестова');
+      return { tasks: [
+        { ...base, task_id: null, title: 'ООО Пример: счёт', message_ids: [input.messages[0]!.id], counterparty: C1, counterparty_options: [], counterparty_hint: null },
+        { ...base, task_id: null, title: 'Новый клиент: роутер', message_ids: [input.messages[1]!.id], counterparty: 'made-up', counterparty_options: [C2, C3, 'xx'], counterparty_hint: 'ООО Новое' },
+      ] };
+    };
+    s.add(telegram('7201', 'пришлите счёт'));
+    s.add(telegram('7201', 'и ещё роутер соседу'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const byTitle = new Map(s.tasks().map((task) => [task.title, task as any]));
+    assert.equal(byTitle.get('ООО Пример: счёт').counterparty, C1);
+    assert.equal(byTitle.get('Новый клиент: роутер').counterparty, undefined, 'an unknown id is dropped');
+    assert.deepEqual(byTitle.get('Новый клиент: роутер').counterparty_options, [C2], 'only known active options');
+    assert.equal(byTitle.get('Новый клиент: роутер').counterparty_hint, 'ООО Новое');
+    // A task with a counterparty keeps it.
+    const bill = byTitle.get('ООО Пример: счёт');
+    reply = (input) => ({ tasks: [{ ...base, task_id: bill.id, title: bill.title, message_ids: [input.messages[0]!.id], counterparty: C2, counterparty_options: [], counterparty_hint: null }] });
+    s.add(telegram('7201', 'счёт на другую фирму?'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.equal((s.tasks().find((task) => task.id === bill.id) as any).counterparty, C1);
   } finally { s.cleanup(); }
 });

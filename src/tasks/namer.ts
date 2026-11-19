@@ -7,6 +7,7 @@ import { tasksConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { isOpen, type Task } from './fold.ts';
 import { describe, from } from './messages.ts';
+import { foldCounterparties } from '../contacts/fold.ts';
 
 // The title rule, shared with the triage instructions (planner.ts).
 export const TITLE_RULE = `title — «Контрагент: суть». Контрагент — организация или клиент, о ком дело (название фирмы,
@@ -15,7 +16,8 @@ export const TITLE_RULE = `title — «Контрагент: суть». Кон�
   за октябрь»). Своё дело владельца без контрагента — только суть («Купить кабель и коннекторы»). Не выдумывай
   контрагента, которого нет в сообщениях.`;
 
-export interface NameInput { title: string; messages: { from: string; time: string; text: string }[] }
+// `counterparty` — the task's counterparty from the directory, when set: the title starts with it.
+export interface NameInput { title: string; counterparty: string | null; messages: { from: string; time: string; text: string }[] }
 export interface NameOutput { title: string; usage?: { input_tokens: number; output_tokens: number } }
 export type Namer = (input: NameInput) => Promise<NameOutput>;
 
@@ -34,13 +36,15 @@ export async function nameTasks({ store, live, namer, tasks, now = Date.now(), l
   store: JournalStore; live: LiveFeed; namer: Namer; tasks: Task[]; now?: number; limit?: number;
 }): Promise<number> {
   let renamed = 0;
+  const counterparties = new Map(foldCounterparties(store.triage.contactEvents()).map((item) => [item.id, item.title]));
   for (const task of unnamed(tasks, now).slice(0, limit)) {
     const messages = task.messages.slice(-8).map((id) => store.getEvent(id)).filter((event): event is JournalEvent => Boolean(event))
       .map((event) => ({ event, view: describe(event, store) })).filter(({ view }) => !view.deleted && view.text.trim())
       .map(({ event, view }) => ({ from: from(event), time: event.ts, text: view.text.slice(0, 1000) }));
     if (!messages.length) continue;
     let output: NameOutput;
-    try { output = await namer({ title: task.title, messages }); } catch (error) {
+    const counterparty = (task.counterparty && counterparties.get(task.counterparty)) || null;
+    try { output = await namer({ title: task.title, counterparty, messages }); } catch (error) {
       console.error('Naming failed', error instanceof Error ? error.message : error); // the triage goes on; next tick tries again
       break;
     }

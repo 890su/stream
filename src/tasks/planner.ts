@@ -7,7 +7,10 @@ export interface PlanMessage {
   id: string; time: string; source: string; from: string; party: string; text: string; tags: string[];
   reply_to?: string; continues?: string; in_tasks: string[];
   default_project?: string | null; // the project this message's source goes to by default (CONCEPT.md §2.11)
+  person?: string | null; // the directory's name for the author, when known (contacts design §3)
 }
+// A counterparty the triage may set (contacts design §6): active ones, with their people and job titles.
+export interface PlanCounterparty { id: string; kind: string; title: string; address: string; side: string | null; people: string[] }
 // A task given as context: its last messages, the conversations (sources) they came from, its last activity.
 // items — its checklist; owner_titled — the owner named it, so it is never renamed (CONCEPT.md §2.8).
 export interface PlanTask { id: string; title: string; project?: string | null; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string; items: { text: string; done: boolean }[]; owner_titled: boolean }
@@ -15,7 +18,7 @@ export interface PlanTemplate { name: string; tag: string | null; title: string;
 // context — earlier messages of the same conversation, already triaged: to understand, not to assign.
 // An active project: the triage may put tasks in it, in one of its sections.
 export interface PlanProject { id: string; title: string; kind: string; sections: { id: string; title: string; role?: string }[] }
-export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
+export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; counterparties: PlanCounterparty[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
 
 export interface PlannedTask {
   task_id: string | null; // an open or recently closed task this continues, or null for a new one
@@ -36,6 +39,9 @@ export interface PlannedTask {
   project?: string | null; // the project of the task (an id from projects), or null when unsure or none
   section?: string | null; // a section of that project
   project_options?: string[]; // when unsure: up to three candidate projects, the owner is asked
+  counterparty?: string | null; // an id from counterparties, or null when unsure or none
+  counterparty_options?: string[]; // when unsure: up to three candidate counterparties
+  counterparty_hint?: string | null; // how to name a new counterparty: a firm or an address
   report?: PlannedReport | null; // with done: what the messages say was done — a draft of the closing report
 }
 // A report draft from the conversation (task manager spec §11): the result in one line and the numbers named.
@@ -55,7 +61,7 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options', 'report'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'],
         properties: {
           task_id: { type: ['string', 'null'] },
           title: { type: 'string' },
@@ -75,6 +81,9 @@ export const PLAN_SCHEMA = {
           project: { type: ['string', 'null'] },
           section: { type: ['string', 'null'] },
           project_options: { type: 'array', items: { type: 'string' } },
+          counterparty: { type: ['string', 'null'] },
+          counterparty_options: { type: 'array', items: { type: 'string' } },
+          counterparty_hint: { type: ['string', 'null'] },
           report: {
             type: ['object', 'null'], additionalProperties: false, required: ['note', 'duration_min', 'cost', 'expenses', 'currency'],
             properties: { note: { type: ['string', 'null'] }, duration_min: { type: ['number', 'null'] }, cost: { type: ['number', 'null'] }, expenses: { type: ['number', 'null'] }, currency: { type: ['string', 'null'] } },
@@ -126,6 +135,12 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
   источника), если по смыслу дело явно не другого проекта. Если уверенности нет — project: null и project_options —
   до трёх id вероятных проектов (владельца спросят); иначе project_options: []. Задача, у которой проект уже есть
   (project в open_tasks), остаётся в нём: верни его же или null. filed-задачам project: null.
+- Контрагенты (counterparties — организации и адреса частных клиентов, с людьми и должностями). У каждой задачи
+  counterparty — id контрагента, о ком дело: организация автора (person сообщения и people контрагента), адрес из
+  сообщений. Не уверен — counterparty: null, counterparty_options — до трёх вероятных id, и counterparty_hint — как
+  назвать нового, если его нет в списке: название фирмы или адрес («ООО Ромашка», «ул. Dzika 11, Варшава»); иначе
+  counterparty_hint: null. Своё дело владельца без контрагента — counterparty: null, hint: null. Задача, у которой
+  контрагент уже есть, остаётся с ним. filed-задачам — null. Название задачи начинай с контрагента из списка.
 - Идея, мысль о доработке известного проекта — не filed: задача в этом проекте, section — раздел с role ideas.
   Шаг, который прямо следующий («завтра сделаю…», «надо начать с…»), — раздел с role next.
 - items — короткие пункты по-русски, одна строка каждый; пункты, которые уже есть у задачи (items в open_tasks),

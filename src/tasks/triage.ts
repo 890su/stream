@@ -9,6 +9,8 @@ import { stateChanged } from '../server/system.ts';
 import { foldTasks, isOpen, type Task } from './fold.ts';
 import { describe, from } from './messages.ts';
 import { nameTasks, type Namer } from './namer.ts';
+import { counterpartyChange } from './counterparty.ts';
+import { foldPeople, foldCounterparties, personOf, peopleOf } from '../contacts/fold.ts';
 import { foldProjects, defaultProject, type Project } from './projects.ts';
 import { defaultController, isParty, partyOfEvent } from './parties.ts';
 import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts';
@@ -131,6 +133,9 @@ export class Triage {
     const closed = tasks.filter((task) => !isOpen(task) && task.updated_at >= closedSince)
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.closed_tasks_in_context);
     const projects = foldProjects(this.#store.triage.projectEvents()).filter((project) => project.status === 'active');
+    const directory = this.#store.triage.contactEvents();
+    const people = foldPeople(directory);
+    const counterparties = foldCounterparties(directory);
     const taskOf = (id: string) => tasks.filter((task) => task.messages.includes(id)).map((task) => task.id);
     const snippet = (id: string) => { const event = this.#store.getEvent(id); return event ? describe(event, this.#store).text.slice(0, 160) : ''; };
     const asContext = (task: (typeof tasks)[number]) => {
@@ -147,6 +152,7 @@ export class Triage {
         ...(event.reply_to ? { reply_to: event.reply_to } : {}), ...(continuation?.on ? { continues: continuation.target } : {}),
         in_tasks: [...new Set([event.id, ...linked].flatMap(taskOf))],
         default_project: defaultProject(projects, streamOf(event))?.id ?? null,
+        person: personOf(partyOfEvent(event), people)?.name ?? null,
       };
     };
     const messages: PlanMessage[] = [];
@@ -171,6 +177,8 @@ export class Triage {
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
     const input: PlanInput = {
       now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections }) => ({ id, title, kind, sections })), templates: tasksConfig.templates,
+      counterparties: counterparties.filter((item) => item.status === 'active').map(({ id, kind, title, address, side }) => ({ id, kind, title, address, side,
+        people: peopleOf(id, people).map(({ person, title: job }) => (job ? `${person.name} (${job})` : person.name)) })),
       open_tasks: open.map(asContext),
       closed_tasks: closed.map(asContext),
       context,
@@ -228,7 +236,8 @@ export class Triage {
       // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
       const proposal = planned.done && !planned.filed ? { proposed: 'done', ...reportDraft(planned, existing ? taskById.get(existing) : undefined) } : {};
       const checklist = checklistChange(taskId, planned, existing ? taskById.get(existing) : undefined);
-      const placed = projectChange(planned, existing ? taskById.get(existing) : undefined, projects, defaultProject(projects, streamOf(batch[0]!)));
+      const placed = { ...projectChange(planned, existing ? taskById.get(existing) : undefined, projects, defaultProject(projects, streamOf(batch[0]!))),
+        ...counterpartyChange(planned, existing ? taskById.get(existing) : undefined, counterparties) };
       const change: Record<string, unknown> = existing
         ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked, ...checklist, ...placed }
         : {
