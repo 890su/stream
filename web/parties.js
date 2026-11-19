@@ -75,3 +75,11 @@ export function partyName(party, views = []) {
   }
   return party;
 }
+
+// Someone by name or phone number, typed in place (no browser prompt): a number — `tel:`, else `name:`.
+export function personParty(raw) {
+  const text = raw.trim();
+  const digits = text.replace(/[\s()-]/g, '');
+  if (/^\+\d{5,}$/.test(digits)) return `tel:${digits}`;
+  return text ? `name:${text.slice(0, 115)}` : null;
+}

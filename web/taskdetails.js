@@ -73,13 +73,7 @@ function rolesBlock(task, views) {
   return box;
 }
 
-// Someone by name or phone number, typed in place (no browser prompt): a number — `tel:`, else `name:`.
-export function personParty(raw) {
-  const text = raw.trim();
-  const digits = text.replace(/[\s()-]/g, '');
-  if (/^\+\d{5,}$/.test(digits)) return `tel:${digits}`;
-  return text ? `name:${text.slice(0, 115)}` : null;
-}
+export { personParty } from './parties.js'; // moved: the action bar types people in too (taskbar.js)
 
 function personForm(onPick) {
   const form = element('form', 'details-rename');

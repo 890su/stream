@@ -2,6 +2,7 @@
 // the composer, and starts sync and live updates.
 import { getSetting } from './db.js';
 import { watchDialogs } from './backclose.js';
+import { openTaskSheet } from './tasksheet.js';
 import { setupComposer } from './composer.js';
 import { setupFeed } from './feed.js';
 import { startSync } from './outbox.js';
@@ -214,7 +215,8 @@ async function main() {
         today: today ? visibleTasks(feed.tasks(), { filter: today }) : [] };
     } });
   composerRef = composer;
-  taskQuick = quick = createTaskQuick({ queue: composer.queue, notify, config });
+  taskQuick = quick = createTaskQuick({ queue: composer.queue, notify, config,
+    onHold: (task) => openTaskSheet(task, { feed, quick, openConversation: (key) => goView?.('conversations', key) }) });
   // A new task is opened once the feed has drawn it (the queue redraws without waiting).
   convQuick = createConvQuick({ queue: composer.queue, notify, openTask: async (id) => { if (!feed.task(id)) await feed.render(); details.openTask(id); } });
   doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); }, close: (task) => quick.done(task), drop: (task) => quick.act(task, { proposed: null }, `Ещё не готово: «${task.title}»`) });

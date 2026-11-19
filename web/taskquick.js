@@ -25,7 +25,8 @@ function button(className, text, onClick, label) {
 }
 
 // `queue(event)` — the composer's queue; `notify(text, action)` — the toast; `config` — capture config (tasks).
-export function createTaskQuick({ queue, notify, config }) {
+// `onHold(task)` — a long press (or right click) on a row: the action sheet (tasksheet.js).
+export function createTaskQuick({ queue, notify, config, onHold = null }) {
   const tasksConfig = config.tasks ?? {};
 
   // Saves a change and offers «Вернуть» for it. One change per task at a time: a second tap while the first is
@@ -78,6 +79,27 @@ export function createTaskQuick({ queue, notify, config }) {
     item.prepend(mark);
     if (isOpen) swipe(item, { right: 'done', left: 'when', labels: { right: { icon: '✓', text: 'Готово' }, left: { icon: '🕒', text: 'Когда?' } }, skip: (event) => Boolean(event.target.closest('.task-when')), onRight: () => { item.classList.add('closing'); done(task); }, onLeft: () => whenRow(item, task) });
     if (isOpen && whenFor === task.id) whenRow(item, task, false);
+    if (onHold) holdOn(item, task);
+  }
+
+  // A long press (450 ms without moving) or a right click opens the action sheet; the click after it does not open
+  // the card. Moving the finger (a scroll, a swipe) cancels it.
+  function holdOn(item, task) {
+    let timer = null;
+    let at = null;
+    let held = false;
+    const cancel = () => { clearTimeout(timer); timer = null; };
+    item.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse' || event.target.closest('.task-check, .task-when')) return;
+      at = { x: event.clientX, y: event.clientY };
+      held = false;
+      timer = setTimeout(() => { timer = null; held = true; navigator.vibrate?.(10); onHold(task); }, 450);
+    });
+    item.addEventListener('pointermove', (event) => { if (timer && (Math.abs(event.clientX - at.x) > 10 || Math.abs(event.clientY - at.y) > 10)) cancel(); });
+    item.addEventListener('pointerup', cancel);
+    item.addEventListener('pointercancel', cancel);
+    item.addEventListener('contextmenu', (event) => { event.preventDefault(); cancel(); if (!held) onHold(task); });
+    item.addEventListener('click', (event) => { if (held) { held = false; event.stopPropagation(); event.preventDefault(); } }, true);
   }
 
   // Several tasks changed by one tap (focus.js: «▶ В работу» pauses the current task) — saved in order, and
