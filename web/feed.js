@@ -46,7 +46,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
   let mode = 'conversations';
   const taskFilters = limits.filters?.length ? limits.filters : [{ id: 'all', title: 'Все', all: [] }]; // saved filters (registry/filters.json)
-  let taskFilterId = (() => { try { return localStorage.getItem('stream.taskFilter'); } catch { return null; } })();
+  let taskFilterId = (() => { try { return localStorage.getItem('stream.taskFilter.v2'); } catch { return null; } })();
   const taskFilter = () => taskFilters.find((item) => item.id === taskFilterId) ?? taskFilters[0]; // the first one is the default
   let groupNodes = new Map(); // 'done' -> rows under that header, for smooth folding
   // Lists read from the top; a conversation and the Лента read from the bottom, like a chat.
@@ -198,7 +198,10 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         : showArchive || !projected.length ? 'Здесь появятся ваши записи. Напишите, наговорите голосом или приложите фото.'
         : 'Все сообщения в архиве. Показать их: ⋮ → «Показывать архив».');
     }
+    const chipsLeft = list.querySelector('.task-lists')?.scrollLeft ?? 0; // live redraws keep the chips where they were
     list.replaceChildren(...children);
+    const chipsRow = list.querySelector('.task-lists');
+    if (chipsRow) chipsRow.scrollLeft = chipsLeft;
     list.classList.toggle('reads-down', readsDown()); // a list starts at the top, a chat at the bottom
     const anchor = keep && list.querySelector(`[data-group="${CSS.escape(keep.key)}"]`);
     if (anchor) scroller.scrollTop += anchor.getBoundingClientRect().top - keep.top;
@@ -300,6 +303,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   function setShowDone(value) { showDone = value; return render(); }
   function setSourceFilter(key) { sourceFilter = key || null; return render({ bottom: true, top: true }); }
   function setMode(next) {
+    quick?.reset?.();
     const wanted = OLD_MODES[next] ?? next;
     mode = MODES.includes(wanted) ? wanted : 'conversations';
     stick = !readsDown();
@@ -311,8 +315,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     return view && !view.deleted && (!conversationKey || convKeys.get(id) === conversationKey) && [...tagFilter].every((tag) => view.tags.includes(tag));
   });
   function setTaskFilter(id) {
+    quick?.reset?.();
     taskFilterId = id;
-    try { localStorage.setItem('stream.taskFilter', id); } catch { /* storage may be blocked */ }
+    try { localStorage.setItem('stream.taskFilter.v2', id); } catch { /* storage may be blocked */ }
     return render({ top: true });
   }
   // Messages of one task, oldest first, for its details (details.js).

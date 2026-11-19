@@ -63,11 +63,12 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .task-item[data-swipe="done"].armed { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); }
 .task-item[data-swipe="when"].armed { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }
 .task-item.closing { opacity: .35; }
-.task-main { flex: 1 1 0; min-width: 0; display: grid; gap: 2px; padding: 10px 4px 10px 0; text-align: left; min-height: 52px; color: inherit; }
+.task-main { flex: 1 1 0; min-width: 0; display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px 10px 0; text-align: left; min-height: 52px; color: inherit; }
+.task-text { flex: 1 1 0; min-width: 0; display: grid; gap: 2px; }
 .task-main:active { opacity: .7; }
-.task-due { flex: none; align-self: flex-start; margin: 12px 12px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
-.task-due.today { color: var(--accent-strong); }
-.task-due.overdue { color: var(--danger); }
+.task-due-label { flex: none; margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.task-due-label.today { color: var(--accent-strong); }
+.task-due-label.overdue { color: var(--danger); }
 .task-item.proposed .task-title { color: var(--accent-strong); }
 .task-item.done .task-title, .task-item.cancelled .task-title { opacity: .55; text-decoration: line-through; }
 .task-item.inbox .task-check-ring { border-style: dashed; }

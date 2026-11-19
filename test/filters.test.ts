@@ -92,6 +92,7 @@ test('«Сегодня»: my open tasks by sections; waiting, delegated, team an
     make('спит', { ...mine, status: 'deferred', remind_at: '2026-11-20T08:00:00.000Z' }),
     make('проверить', { status: 'review', roles: { responsible: 'me', executors: ['tg:1'], controller: 'me' } }),
     make('новая', { status: 'inbox', roles: { responsible: 'me' } }),
+    make('проверяют меня', { status: 'review', roles: { responsible: 'tg:5', executors: ['me'], controller: 'tg:5' } }),
     make('потом', { ...mine, due: '2026-11-25' }),
     make('без срока', mine),
     make('жду', { ...mine, status: 'waiting' }),
@@ -103,7 +104,7 @@ test('«Сегодня»: my open tasks by sections; waiting, delegated, team an
   const shown = visibleTasks(tasks, { filter: today, now });
   const sections = sectionsOf(shown, today, now).map((section: any) => [section.id, section.tasks.map((task: any) => task.title)]);
   assert.deepEqual(sections, [
-    ['overdue', ['просрочено']], ['today', ['на сегодня', 'проснулась']], ['review', ['проверить']], ['new', ['новая']], ['later', ['потом', 'без срока']]]);
+    ['overdue', ['просрочено']], ['today', ['на сегодня', 'проснулась']], ['review', ['проверить']], ['new', ['новая']], ['later', ['потом', 'проверяют меня', 'без срока']]]);
   assert.equal(listCount(shown, today, now), 5, '«Дальше» is folded and not counted');
   assert.deepEqual(ids(tasks, 'waiting'), ['жду']);
   assert.deepEqual(ids(tasks, 'new'), ['новая']);
@@ -129,6 +130,7 @@ test('row words: due date as a word, facts without «сделать» and messag
   assert.deepEqual(dueLabel({ status: 'todo', due: '2026-11-18' }, now), { text: 'сегодня', state: 'today' });
   assert.deepEqual(dueLabel({ status: 'todo', due: '2026-11-19' }, now), { text: 'завтра', state: 'later' });
   assert.equal(dueLabel({ status: 'todo', due: '2026-11-21' }, now).state, 'later');
+  assert.equal(dueLabel({ status: 'done', due: '2026-11-10' }, now), null, 'a closed task is never «просрочено»');
   const task = make('x', { roles: { responsible: 'me' } });
   assert.deepEqual(rowParts(task, []), []);
   assert.deepEqual(rowParts({ ...task, status: 'waiting', proposed: 'done', confidence: 0.4 }, []), ['ждёт', 'готово?', 'проверьте']);

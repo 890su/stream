@@ -66,7 +66,7 @@ export function buildReport(keys, values, fields, currency) {
 const INPUT = { minutes: { type: 'text', inputMode: 'decimal', placeholder: '90 или 1:30' }, money: { type: 'text', inputMode: 'decimal', placeholder: '0' },
   datetime: { type: 'datetime-local' }, tags: { type: 'text', placeholder: '#метка' }, text: { type: 'text', placeholder: '' } };
 
-export function createDoneCards({ config, queue, notify, onChange = () => {}, close = () => {} }) {
+export function createDoneCards({ config, queue, notify, onChange = () => {}, close = () => {}, drop = null }) {
   const tasks = config.tasks ?? {};
   const cards = new Map(); // task id -> { node, step, task, manual }
   const save = (task, change) => queue(makeTaskChange(task.id, change)).catch((error) => notify(error.message));
@@ -78,7 +78,7 @@ export function createDoneCards({ config, queue, notify, onChange = () => {}, cl
     if (entry.step === 'ask') {
       body.push(element('p', 'done-card-title', 'Задача выполнена?'), element('p', 'done-card-text', `«${task.title}» — по сообщениям похоже, что готово.`));
       const actions = element('div', 'done-card-actions');
-      actions.append(button('primary', 'Да, готово', () => { cards.delete(task.id); close(task); }), button('link-button', 'Ещё нет', () => save(task, { op: 'update', proposed: null })));
+      actions.append(button('primary', 'Да, готово', () => { cards.delete(task.id); close(task); }), button('link-button', 'Ещё нет', () => (drop ? drop(task) : save(task, { op: 'update', proposed: null }))));
       body.push(actions);
     } else {
       const keys = task.report?.missing?.length ? task.report.missing : reportKeys(task, tasks);
@@ -104,7 +104,7 @@ export function createDoneCards({ config, queue, notify, onChange = () => {}, cl
         const result = buildReport(keys, values, tasks.report_fields ?? {}, values.currency ?? tasks.currencies?.[0] ?? 'PLN');
         if (result.error) { notify(result.error); return; }
         const { missing: _old, ...filled } = task.report ?? {};
-        save(task, { op: 'update', status: 'done', proposed: null, report: { ...filled, ...result.report } });
+        save(task, { op: 'update', report: { ...filled, ...result.report } }); // the task stays as it is (closed)
         cards.delete(task.id);
         onChange();
       };
@@ -130,7 +130,8 @@ export function createDoneCards({ config, queue, notify, onChange = () => {}, cl
   // node across redraws keeps what was typed.
   function card(task) {
     let entry = cards.get(task.id);
-    if (entry?.manual) { entry.task = task; return entry.node; }
+    if (entry?.manual && task.status === 'done') { entry.task = task; return entry.node; }
+    if (entry?.manual) cards.delete(task.id); // reopened while the report was open
     const open = ['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred'].includes(task.status);
     if (!open || task.proposed !== 'done') { cards.delete(task.id); return null; }
     entry ??= create(task, 'ask', false);

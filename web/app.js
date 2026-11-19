@@ -161,7 +161,7 @@ async function main() {
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
   let quick = null; // task actions where a task is seen (taskquick.js), once the composer's queue exists
-  const quickRef = { decorate: (item, task) => quick?.decorate(item, task), done: (task) => quick?.done(task), act: (...args) => quick?.act(...args) };
+  const quickRef = { decorate: (item, task) => quick?.decorate(item, task), done: (task) => quick?.done(task), act: (...args) => quick?.act(...args), reset: () => quick?.reset() };
   const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
     quick: quickRef, onMoreLists: () => drawer?.open(),
     taskCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); chatView?.sync(); composerRef?.refreshTags(); } });
@@ -170,7 +170,7 @@ async function main() {
     onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
   composerRef = composer;
   taskQuick = quick = createTaskQuick({ queue: composer.queue, notify, config });
-  doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); }, close: (task) => quick.done(task) });
+  doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); }, close: (task) => quick.done(task), drop: (task) => quick.act(task, { proposed: null }, `Ещё не готово: «${task.title}»`) });
   setupViews(feed);
   setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });
   setupMessageActions(feed, composer, config);

@@ -21,7 +21,7 @@ function element(tag, className, text) {
 // The due date as a word: { text, state } — «просрочено», «сегодня», «завтра», a weekday within a week, else a date.
 // null without a due date. Pure (tested in node).
 export function dueLabel(task, now = new Date()) {
-  if (!task.due) return null;
+  if (!task.due || task.status === 'done' || task.status === 'cancelled') return null;
   const state = dueState(task, now);
   if (state === 'overdue') return { text: 'просрочено', state };
   const date = new Date(`${String(task.due).slice(0, 10)}T00:00:00`);
@@ -69,13 +69,15 @@ export function taskRow(task, views, { onOpen, showAssignee, quick }) {
   item.dataset.task = task.id;
   const main = element('button', 'task-main');
   main.type = 'button';
-  main.append(element('span', 'task-title', task.title));
+  const text = element('span', 'task-text');
+  text.append(element('span', 'task-title', task.title));
   const parts = rowParts(task, views, { showAssignee });
-  if (parts.length) main.append(element('span', 'task-meta', parts.join(' · ')));
-  main.onclick = () => onOpen(task.id);
+  if (parts.length) text.append(element('span', 'task-meta', parts.join(' · ')));
+  main.append(text);
   const due = dueLabel(task);
+  if (due) main.append(element('span', `task-due-label ${due.state}`, due.text));
+  main.onclick = () => onOpen(task.id);
   item.append(main);
-  if (due) item.append(element('span', `task-due ${due.state}`, due.text));
   quick?.decorate(item, task);
   return item;
 }
@@ -96,15 +98,14 @@ export function sectionHeader(section, { open, onToggle }) {
 // `counts` — Map filter id -> number.
 export function listChips(filters, current, counts, { onPick, onMore }) {
   const bar = element('div', 'task-lists');
-  bar.setAttribute('role', 'tablist');
+  bar.setAttribute('role', 'group');
   bar.setAttribute('aria-label', 'Списки задач');
   const shown = filters.filter((filter) => filter.pinned || filter.id === current.id);
   for (const filter of shown) {
     const on = filter.id === current.id;
     const chip = element('button', `chip task-list${on ? ' on' : ''}`);
     chip.type = 'button';
-    chip.setAttribute('role', 'tab');
-    chip.setAttribute('aria-selected', String(on));
+    chip.setAttribute('aria-pressed', String(on));
     chip.append(element('span', '', filter.title));
     const count = counts.get(filter.id) ?? 0;
     if (count) chip.append(element('span', 'task-list-count', String(count)));

@@ -28,16 +28,21 @@ function button(className, text, onClick, label) {
 export function createTaskQuick({ queue, notify, config }) {
   const tasksConfig = config.tasks ?? {};
 
-  // Saves a change and offers «Вернуть» for it.
+  // Saves a change and offers «Вернуть» for it. One change per task at a time: a second tap while the first is
+  // being saved (a double tap, a swipe then a tap) does nothing.
+  const busy = new Set();
   function act(task, change, message) {
+    if (busy.has(task.id)) return;
+    busy.add(task.id);
     const undo = undoOf(task, change);
     queue(makeTaskChange(task.id, { op: 'update', ...change }))
       .then(() => notify(message, { label: 'Вернуть', run: () => queue(makeTaskChange(task.id, { op: 'update', ...undo })).catch((error) => notify(error.message)) }))
-      .catch((error) => notify(error.message));
+      .catch((error) => notify(error.message))
+      .finally(() => setTimeout(() => busy.delete(task.id), 300));
   }
 
   const open = (task) => !['done', 'cancelled'].includes(task.status);
-  const done = (task) => act(task, closeChange(reportKeys(task, tasksConfig)), `Готово: «${task.title}»`);
+  const done = (task) => act(task, closeChange(reportKeys(task, tasksConfig), task.report), `Готово: «${task.title}»`);
   const reopen = (task) => act(task, { status: 'todo' }, `Снова в работе: «${task.title}»`);
   const setDue = (task, due, label) => act(task, { due }, `Срок «${label}»: «${task.title}»`);
 
@@ -102,6 +107,7 @@ export function createTaskQuick({ queue, notify, config }) {
   function decorate(item, task) {
     const isOpen = open(task);
     const mark = button(`task-check${isOpen ? '' : ' checked'}`, '', () => {
+      if (item.classList.contains('closing')) return;
       if (isOpen) {
         item.classList.add('closing');
         setTimeout(() => done(task), reduced() ? 0 : 180);
@@ -109,9 +115,12 @@ export function createTaskQuick({ queue, notify, config }) {
     }, isOpen ? `Готово: ${task.title}` : `Вернуть в работу: ${task.title}`);
     mark.append(element('span', 'task-check-ring'));
     item.prepend(mark);
-    if (isOpen) swipe(item, { onRight: () => done(task), onLeft: () => whenRow(item, task) });
+    if (isOpen) swipe(item, { onRight: () => { item.classList.add('closing'); done(task); }, onLeft: () => whenRow(item, task) });
     if (isOpen && whenFor === task.id) whenRow(item, task, false);
   }
 
-  return { decorate, done, act };
+  // A list or view change closes an open «Когда?» row (it would come back later out of context).
+  const reset = () => { whenFor = null; };
+
+  return { decorate, done, act, reset };
 }

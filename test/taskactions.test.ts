@@ -19,6 +19,14 @@ test('«Готово» in every open status, a new task too; it closes at once, 
   assert.deepEqual(closeChange([]), { status: 'done', proposed: null });
 });
 
+test('closing again keeps a report filled before; «Вернуть» puts the old report back', () => {
+  const reopened = { ...task('todo'), report: { minutes: 30, missing: ['cost'] } };
+  const change = changeFor('done', reopened, undefined, NOW, ['minutes', 'cost']);
+  assert.deepEqual(change, { status: 'done', proposed: null, report: { minutes: 30, missing: ['cost'] } });
+  assert.deepEqual(undoOf(reopened, change), { status: 'todo', proposed: null, report: { minutes: 30, missing: ['cost'] } });
+  assert.deepEqual(undoOf(task('todo'), closeChange(['cost'])), { status: 'todo', proposed: null }, 'no report before — none put back');
+});
+
 test('review is verified the same way; closed tasks reopen', () => {
   const review = actionsFor(task('review', ['tg:42']));
   assert.ok(review.includes('verify') && review.includes('reopen') && !review.includes('done'));
