@@ -97,3 +97,15 @@ test('a task row names its executor, else the responsible, unless the list is «
   assert.ok(!rowParts(legacy, [], { showAssignee: false, now }).includes('Марек'));
   assert.ok(rowParts(theirs, views, { showAssignee: true, now }).includes('Анна Тестова'));
 });
+
+test('the «Задачи» list groups by the most used tag or by the first person; the rest goes last', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { groupsOf } = await import('../web/tasklist.js');
+  const view = (tags: string[], chat?: string) => ({ tags, event: { kind: 'text', author: chat ? 'contact:tg:by:1' : 'me', payload: chat ? { data: { telegram: { account: 'by', chat_id: '1', chat_title: chat } } } : {} } });
+  const views: Record<string, any[]> = { a: [view(['#stream', '#идея']), view(['#stream'])], b: [view(['#дом'], 'Жена')], c: [view([])], d: [view(['#дом'], 'Жена')] };
+  const tasks = ['a', 'b', 'c', 'd'].map((id) => ({ id }));
+  const byTags = groupsOf(tasks, 'tags', (task: any) => views[task.id]);
+  assert.deepEqual(byTags.map((group: any) => [group.title, group.tasks.map((task: any) => task.id)]), [['#дом', ['b', 'd']], ['#stream', ['a']], ['Без метки', ['c']]]);
+  const byPeople = groupsOf(tasks, 'people', (task: any) => views[task.id]);
+  assert.deepEqual(byPeople.map((group: any) => group.title), ['Жена', 'Мои заметки']);
+});

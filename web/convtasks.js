@@ -1,7 +1,7 @@
 // Plaques of a conversation's tasks on top of the conversation (CONCEPT.md §2.5), one line each and stuck to the
 // top while the conversation scrolls (feed.css): the «Готово» mark and swipes (taskquick.js), title, status, executor,
 // due date. A tap opens the task's details on the right. plaqueFacts is pure (tested in node).
-import { isOpen, STATUSES, dueState } from './taskfold.js';
+import { isOpen, STATUSES, dueState, itemsProgress } from './taskfold.js';
 import { partyName } from './parties.js';
 
 const day = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
@@ -14,6 +14,7 @@ export function plaqueFacts(conversation, now = new Date()) {
       const facts = [task.proposed === 'done' ? 'готово?' : STATUSES[task.status] ?? task.status];
       const executor = task.roles?.executors?.[0];
       if (executor) facts.push(partyName(executor, conversation.views));
+      if (task.items?.length) facts.push(`☑ ${itemsProgress(task)}`);
       if (task.due) facts.push(`${dueState(task, now) === 'overdue' ? 'просрочено, ' : ''}до ${day.format(new Date(task.due))}`);
       return { id: task.id, task, title: task.title, facts: facts.join(' · '), status: task.status, overdue: dueState(task, now) === 'overdue' };
     });

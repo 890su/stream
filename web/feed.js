@@ -8,7 +8,7 @@ import { project, bursts, chains, sourceKey } from './projection.js';
 import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } from './taskfold.js';
 import { visibleTasks } from './filters.js';
 import { questionOptions } from './question.js';
-import { taskRow, emptyTasks, sectionsOf, sectionHeader, listChips, listCount } from './tasklist.js';
+import { taskRow, emptyTasks, sectionsOf, sectionHeader, listChips, listCount, groupsOf, GROUPINGS } from './tasklist.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
 import { convRow, doneRow, splitDone } from './convlist.js';
@@ -46,6 +46,13 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let taskFilterId = (() => { try { return localStorage.getItem('stream.taskFilter.v2'); } catch { return null; } })();
   const taskFilter = () => taskFilters.find((item) => item.id === taskFilterId) ?? taskFilters[0]; // the first one is the default
   let groupNodes = new Map(); // 'done' -> rows under that header, for smooth folding
+  let grouping = (() => { try { return localStorage.getItem('stream.taskGrouping') ?? 'due'; } catch { return 'due'; } })();
+  const nextGrouping = () => {
+    const keys = Object.keys(GROUPINGS);
+    grouping = keys[(keys.indexOf(grouping) + 1) % keys.length];
+    try { localStorage.setItem('stream.taskGrouping', grouping); } catch { /* storage may be blocked */ }
+    return render({ top: true, quiet: true });
+  };
   // Lists read from the top; a conversation and the Лента read from the bottom, like a chat.
   const readsDown = () => mode === 'tasks' || (mode === 'conversations' && !conversationKey);
   const load = createMediaLoader();
@@ -145,10 +152,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       const matches = taskMatches();
       const counts = new Map(taskFilters.filter((item) => item.pinned || item.id === filter.id)
         .map((item) => [item.id, listCount(visibleTasks(taskList, { filter: item, matches, now }), item, now)]));
-      children.push(listChips(taskFilters, filter, counts, { onPick: (id) => setTaskFilter(id), onMore: onMoreLists }));
+      children.push(listChips(taskFilters, filter, counts, { onPick: (id) => setTaskFilter(id), onMore: onMoreLists, grouping, onGroup: nextGrouping }));
       const shownTasks = visibleTasks(taskList, { filter, matches, now });
       const row = (task) => taskRow(task, task.messages.map((id) => views.get(id)).filter(Boolean), { onOpen: onOpenTask, showAssignee: filter.id !== taskFilters[0].id, quick });
-      for (const section of sectionsOf(shownTasks, filter, now)) {
+      const grouped = grouping === 'due' ? sectionsOf(shownTasks, filter, now) : groupsOf(shownTasks, grouping, (task) => task.messages.map((id) => views.get(id)).filter(Boolean));
+      for (const section of grouped) {
         const key = `section:${filter.id}:${section.id}`;
         const open = !section.folded || openSections.has(key);
         if (section.title) {

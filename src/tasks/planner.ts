@@ -6,10 +6,11 @@ export interface PlanMessage {
   reply_to?: string; continues?: string; in_tasks: string[];
 }
 // A task given as context: its last messages, the conversations (sources) they came from, its last activity.
-export interface PlanTask { id: string; title: string; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string }
+// items — its checklist; owner_titled — the owner named it, so it is never renamed (CONCEPT.md §2.8).
+export interface PlanTask { id: string; title: string; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string; items: { text: string; done: boolean }[]; owner_titled: boolean }
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
 // context — earlier messages of the same conversation, already triaged: to understand, not to assign.
-export interface PlanInput { now: string; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
+export interface PlanInput { now: string; job_days: number; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
 
 export interface PlannedTask {
   task_id: string | null; // an open or recently closed task this continues, or null for a new one
@@ -25,6 +26,8 @@ export interface PlannedTask {
   filed: boolean; // nothing to do but file it: the task is created already done
   done: boolean; // the messages say the work is finished: the owner is asked to close it with a report
   alternatives: string[]; // other tasks these messages may belong to: the owner is asked right on the message
+  items?: string[]; // checklist items this adds: a step of a job, or the things a list names (CONCEPT.md §2.8)
+  rename?: string | null; // a general title for a job that grew past one action
 }
 export interface PlanOutput { tasks: PlannedTask[]; usage?: { input_tokens: number; output_tokens: number } }
 
@@ -41,7 +44,7 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename'],
         properties: {
           task_id: { type: ['string', 'null'] },
           title: { type: 'string' },
@@ -56,6 +59,8 @@ export const PLAN_SCHEMA = {
           filed: { type: 'boolean' },
           done: { type: 'boolean' },
           alternatives: { type: 'array', items: { type: 'string' } },
+          items: { type: 'array', items: { type: 'string' } },
+          rename: { type: ['string', 'null'] },
         },
       },
     },
@@ -83,6 +88,19 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
 - alternatives — id других задач (из open_tasks или closed_tasks), к которым эти сообщения тоже могут относиться,
   до трёх, самые вероятные первыми. Только при настоящем сомнении: владельца спросят прямо на сообщении. Иначе [].
 - Два разных дела в одном сообщении — две задачи. Несколько сообщений об одном деле — одна задача.
+- Три формы работы (выбирай по источнику и смыслу):
+  * Дело — в рабочей переписке (source tg|… или phone) с клиентом, напарником, поставщиком. Новая просьба того же
+    собеседника по тому же делу (тот же предмет, оборудование, заказ, выезд: «а ещё…», «забыл…», «и вот это») — не новая
+    задача: верни задачу дела с её task_id, а саму просьбу — пунктом в items. Дело из closed_tasks, закрытое не раньше
+    job_days дней назад, о котором человек пишет снова («опять сломалось», «по гарантии»), — тоже его task_id и пункт в items.
+    Если дело было одним действием, а теперь их несколько, rename — общее название «Собеседник: предмет»
+    («Анна: настройка компьютера»), но только когда owner_titled: false; иначе rename: null.
+  * Отдельные задачи — заметки владельца (source me) и личная переписка (семья, друзья, бытовые дела): каждое дело —
+    своя задача, в чеклист чужой задачи не складывай.
+  * Список — одно сообщение перечисляет несколько мелочей одного дела («купить кабель, коннекторы и стяжки») — одна
+    задача, items — пункты.
+- items — короткие пункты по-русски, одна строка каждый; пункты, которые уже есть у задачи (items в open_tasks),
+  не повторяй. Новая задача из одного действия — items: []. rename — только для задачи с task_id, иначе null.
 - Болтовню, приветствия, «ок», служебное не превращай в дела: это filed: true с шаблоном chatter.
 - Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, executors — из шаблона.
 - title — коротко и по делу, по-русски, в повелительном наклонении («Перезвонить Марку про роутер»).

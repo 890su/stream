@@ -73,11 +73,15 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     }
     if (panel.hidden) return;
     const scroll = body.scrollTop;
+    const typing = Boolean(document.activeElement?.closest?.('.checklist-add')); // adding items one after another
     if (current.kind === 'task') {
       const task = feed.task(current.id);
       if (!task) { close(); return; }
       heading.textContent = 'Задача';
-      body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change),
+      // «В дело…» offers the tasks of the same conversations first, then the latest changed.
+      const mine = new Set(feed.conversations().filter((item) => item.tasks.some((other) => other.id === task.id)).flatMap((item) => item.tasks.map((other) => other.id)));
+      const others = [...feed.tasks()].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || b.updatedAt.localeCompare(a.updatedAt));
+      body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save, others, notify,
         doneCards, quick, reportKeys: reportKeys(task, config.tasks ?? {}), fields: config.tasks?.report_fields ?? {} }));
     } else {
       const view = feed.view(current.id);
@@ -86,6 +90,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       body.replaceChildren(messageDetails(view));
     }
     body.scrollTop = scroll;
+    if (typing) body.querySelector('.checklist-add input')?.focus({ preventScroll: true });
   }
 
   function show(next) {

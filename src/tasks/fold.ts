@@ -11,7 +11,10 @@ export interface Task {
   id: string; title: string; status: string; assignee: string; person?: string; template?: string; due?: string | null;
   roles: Roles; waiting_for?: unknown; plan?: unknown; remind_at?: string | null; promise?: unknown; filed: boolean;
   messages: string[]; confidence?: number; processor?: string; proposed?: string | null; created_by: string; created_at: string; updated_at: string;
+  items: ChecklistItem[]; owner_titled: boolean; // the checklist (CONCEPT.md §2.8); the owner gave the title
 }
+
+export interface ChecklistItem { id: string; text: string; done: boolean }
 
 const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred']);
 export const isOpen = (task: Task) => OPEN.has(task.status);
@@ -29,6 +32,17 @@ function legacyRoles(task: Task): Roles {
 // The old display field, derived: the kind of the first executor.
 const kindOf = (party: string) => (party === 'me' || party === 'ai' || party === 'system' ? party : 'person');
 
+// Checklist changes, in place: add (once per id), set (done, text), remove.
+export function foldItems(items: ChecklistItem[], change: Record<string, any>): void {
+  for (const item of change.items_add ?? []) if (!items.some((known) => known.id === item.id)) items.push({ id: item.id, text: item.text, done: false });
+  for (const update of change.items_set ?? []) {
+    const item = items.find((known) => known.id === update.id);
+    if (item && update.done !== undefined) item.done = update.done;
+    if (item && update.text !== undefined) item.text = update.text;
+  }
+  if (change.items_remove) items.splice(0, items.length, ...items.filter((item) => !change.items_remove.includes(item.id)));
+}
+
 // `filedTemplates` — names of templates marked `filed` in the config: such tasks are filed away, not worked on.
 export function foldTasks(events: JournalEvent[], { filedTemplates = [] as string[] } = {}): Task[] {
   const tasks = new Map<string, Task>();
@@ -42,7 +56,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
     let task = tasks.get(id);
     if (!task) {
       if (change.op !== 'create') continue;
-      task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], created_by: event.author, created_at: event.ts, updated_at: event.ts };
+      task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], owner_titled: false, created_by: event.author, created_at: event.ts, updated_at: event.ts };
       tasks.set(id, task);
     }
     for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise'] as const) {
@@ -59,6 +73,8 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
     }
     for (const message of change.add ?? []) if (!task.messages.includes(message)) task.messages.push(message);
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
+    foldItems(task.items, change);
+    if (change.op === 'update' && change.title !== undefined && event.author === 'me') task.owner_titled = true;
     task.updated_at = event.ts;
   }
   for (const task of tasks.values()) {

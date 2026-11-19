@@ -148,7 +148,7 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v6').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v7').length, 4);
   } finally { s.cleanup(); }
 });
 
@@ -269,5 +269,33 @@ test('what I ask someone else to answer for is under my control', async () => {
     s.add(telegram('10', 'пришли счёт'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     assert.deepEqual(lastChange(s, 'Счёт от Паши').roles, { author: 'me', responsible: 'tg:10', executors: [], controller: 'me' });
+  } finally { s.cleanup(); }
+});
+
+test('a follow-up request becomes a checklist item of the job, which gets a general title; an owner title stays', async () => {
+  let round = 0;
+  const base = { responsible: 'me', executors: [], author: null, template: null, due: null, confidence: 0.9, note: null, filed: false, done: false, alternatives: [] };
+  const s = setup((input) => {
+    round += 1;
+    const ids = [input.messages[0]!.id];
+    if (round === 1) return { tasks: [{ ...base, task_id: null, title: 'Установить программу', message_ids: ids, items: ['установить программу'], rename: null }] };
+    const job = input.open_tasks[0]!;
+    if (round === 2) assert.deepEqual(job.items, [{ text: 'установить программу', done: false }], 'the checklist is given as context');
+    assert.equal(input.job_days, 14);
+    return { tasks: [{ ...base, task_id: job.id, title: job.title, message_ids: ids, items: ['установить программу', 'настроить почту', '  '], rename: 'Клиент: настройка компьютера' }] };
+  });
+  try {
+    s.add(telegram('7002', 'поставьте программу'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.add(telegram('7002', 'и почту настройте'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const [job] = s.tasks();
+    assert.equal(job!.title, 'Клиент: настройка компьютера');
+    assert.deepEqual(job!.items.map((item) => item.text), ['установить программу', 'настроить почту'], 'no duplicate, no empty item');
+    // The owner names the task: the next rename is ignored.
+    s.add({ ...event({ kind: 'task_change', payload: { ref: { type: 'task', id: job!.id }, data: { task: { op: 'update', title: 'Мой заголовок' } } } }), ts: new Date(Date.now() + 1000).toISOString(), source: 'app', author: 'me' } as JournalEvent);
+    s.add(telegram('7002', 'и принтер ещё'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.equal(s.tasks()[0]!.title, 'Мой заголовок');
   } finally { s.cleanup(); }
 });

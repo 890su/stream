@@ -101,8 +101,9 @@ TickTick) are mirror connectors. Changes made there return as `task_change` auth
 field changes on both sides, the later wins and the loser stays in the task history; a deletion there becomes a
 question to the owner, not a deletion here. Which tasks go where is decided by saved filters (§5) — data.
 
-- **Now:** title, source messages, roles (§2.8), statuses, due, plan, reminder, promise.
-- **Later:** recurring tasks, boards on the same filters, subtasks, time tracking, weekly report.
+- **Now:** title, source messages, roles (§2.8), statuses, due, plan, reminder, promise, a checklist (§2.8).
+- **Later:** recurring tasks, boards on the same filters, subtasks with their own roles and dates, time tracking,
+  weekly report.
 - **Not doing:** collaboration inside the app (partners act through the task bot), own attachments (links to events only).
 
 Before adding a task feature, check whether a mirror or a registry process (§2.10) already covers it.
@@ -319,6 +320,22 @@ triage outcome is untriaged. Owner corrections (move to another task, merge, can
 with instructions). A repeated scenario (rule of three, §9) gets its own script; then AI is called only for unclear
 cases: no tags, low confidence, several candidate tasks. The same applies to tags and message links.
 
+**Three shapes of work** (2026-11-19, a trial — the owner decides after using it):
+- **A job** — one task with a **checklist**. In a work chat (Telegram BY / PL, phone) new requests of the same
+  person about the same matter become items of their open job task: "install the program", then "also this", an
+  hour later "I forgot that". A job closed within `job_days` (registry) that the person writes about again ("it
+  broke again") comes back to work with a new item. When a job grows past one action, triage renames it to a
+  general title ("Client A: computer setup"). One report per job.
+- **Separate tasks** — the owner's own notes and personal chats (family, friends): each matter is its own task
+  with its own date, grouped by tags and people in the «Задачи» view (§5), never folded into one.
+- **A list** — one message that enumerates things ("buy a cable, connectors and ties") is one task with a checklist.
+
+Triage chooses the shape from the source, the open and recently closed tasks and their items. A checklist item
+is text with «сделано»; it has no roles or dates. Items live in `task_change` (`items_add`, `items_set`,
+`items_remove`). Triage never renames a task the owner named. The owner corrects: «Отдельной задачей» on an item
+makes it a task of its own; «В дело…» on a task moves it into another task's checklist (the moved task is
+cancelled). Corrections are golden examples.
+
 **Filed outcomes stay tasks** with `filed`: they do not affect conversation state and are excluded from default
 filters, processes and mirrors.
 
@@ -459,7 +476,9 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
   «Сегодня · Разобрать · Жду · Контроль · Ещё…» (`pinned` in `registry/filters.json`); «Ещё…» opens all lists on the
   left. Default «Сегодня»: my open tasks in sections «Просрочено · Сегодня · Проверить · Разобрать · Дальше»
   (`sections`, data; «Дальше» folded). Waiting — in «Жду», delegated — in «Контроль»; a deferred task is hidden until
-  its date and returns by itself. A row: the «Готово» mark, title, with whom and what; due on the right.
+  its date and returns by itself. A row: the «Готово» mark, title, with whom and what, checklist progress (2/5); due on the right. The
+  last chip groups the list: «По срокам» (sections, default), «По меткам», «По людям»; the choice is remembered on
+  the device.
 - **«Лента»** — all messages in a row like a chat, newest at the bottom; for analysis and history (filters by tags,
   sources, people, dates; later an AI analyst selection, §9). Opened from ⋮ → «Лента сообщений» (2026-11-19);
   back — «Беседы» or «Задачи». The chosen view (Беседы or Задачи) is remembered per device; Лента is not.
@@ -481,7 +500,8 @@ swipes belong to rows), closed by a swipe right-to-left, the backdrop or «на�
 **Right panel** opens only on a tap: a task plaque, a task row, the task or history icon under a message, the
 title over a message. A swipe left-to-right closes it.
 - **Task:** title (tap — rename), status and actions (§2.8, «Готово» closes at once, §2.9; «Отменить»,
-  «Вернуть»), due next to the actions, roles in one folded line, triage note and confidence, report, «Задача
+  «Вернуть», «В дело…»), due next to the actions, the checklist (tick, add, «Отдельной задачей»), roles in one
+  folded line, triage note and confidence, report, «Задача
   выполнена?», the task's messages (× removes from the task), its conversations, change history.
 - **Message:** versions down to the source, tags, where from and when, its tasks (tap — task details) or
   «Сделать задачей». Under a message, when triage is unsure — «О каком деле?» (§2.8).

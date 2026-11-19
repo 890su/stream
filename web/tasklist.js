@@ -1,7 +1,7 @@
 // The «Задачи» view in the centre (CONCEPT.md §5, 2026-11-19): the chips of the main lists on top, sections of a
 // list («Просрочено · Сегодня · …», data in registry/filters.json), one row per task with its own actions — the
 // «Готово» mark, swipes (taskquick.js) and the due date on the right. A tap on the row opens the task's details.
-import { STATUSES, dueState } from './taskfold.js';
+import { STATUSES, dueState, itemsProgress } from './taskfold.js';
 import { withWhom } from './conversations.js';
 import { partyName } from './parties.js';
 import { matchesFilter } from './filters.js';
@@ -38,6 +38,7 @@ export function rowParts(task, views, { showAssignee = false } = {}) {
   const parts = [];
   if (task.status !== 'todo') parts.push(STATUSES[task.status] ?? task.status);
   if (task.proposed === 'done') parts.push('готово?');
+  if (task.items?.length) parts.push(`☑ ${itemsProgress(task)}`);
   const who = task.roles?.executors?.[0] ?? task.roles?.responsible;
   if (showAssignee && who) parts.push(partyName(who, views));
   const whom = withWhom(views).slice(0, 2).join(', ');
@@ -96,7 +97,31 @@ export function sectionHeader(section, { open, onToggle }) {
 
 // The chips of the main lists (`pinned`) with counts, the current list always among them, and «Ещё…».
 // `counts` — Map filter id -> number.
-export function listChips(filters, current, counts, { onPick, onMore }) {
+// Grouping of the «Задачи» list (CONCEPT.md §5): by due sections (the filter's own), by tags, by people.
+export const GROUPINGS = { due: 'По срокам', tags: 'По меткам', people: 'По людям' };
+
+// Tasks grouped by their most used tag or by the first person they are with; the biggest group first, the rest
+// («Без метки», «Мои заметки») last. `viewsOf(task)` — the task's messages. Pure: sections like sectionsOf.
+export function groupsOf(tasks, by, viewsOf) {
+  const groups = new Map();
+  for (const task of tasks) {
+    const views = viewsOf(task);
+    let key;
+    if (by === 'tags') {
+      const counts = new Map();
+      for (const tag of views.flatMap((view) => view.tags ?? [])) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      key = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru'))[0]?.[0] ?? '';
+    } else key = withWhom(views)[0] ?? '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(task);
+  }
+  const rest = by === 'tags' ? 'Без метки' : 'Мои заметки';
+  return [...groups.entries()]
+    .sort(([a, x], [b, y]) => Number(!a) - Number(!b) || y.length - x.length || a.localeCompare(b, 'ru'))
+    .map(([key, list]) => ({ id: `${by}:${key}`, title: key || rest, tasks: list, folded: false }));
+}
+
+export function listChips(filters, current, counts, { onPick, onMore, grouping = 'due', onGroup }) {
   const bar = element('div', 'task-lists');
   bar.setAttribute('role', 'group');
   bar.setAttribute('aria-label', 'Списки задач');
@@ -117,6 +142,14 @@ export function listChips(filters, current, counts, { onPick, onMore }) {
   more.setAttribute('aria-label', 'Все списки задач');
   more.onclick = onMore;
   bar.append(more);
+  if (onGroup) {
+    // The last chip cycles the grouping: по срокам → по меткам → по людям.
+    const group = element('button', 'chip task-list group', `≡ ${GROUPINGS[grouping]}`);
+    group.type = 'button';
+    group.setAttribute('aria-label', `Группировка: ${GROUPINGS[grouping]}. Сменить`);
+    group.onclick = onGroup;
+    bar.append(group);
+  }
   return bar;
 }
 

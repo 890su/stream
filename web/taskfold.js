@@ -26,6 +26,20 @@ const kindOf = (party) => (party === 'me' || party === 'ai' || party === 'system
 // I am in any role of the task.
 export const involvesMe = (task) => ROLE_KEYS.some((key) => [task.roles[key]].flat().includes('me'));
 
+// Checklist changes, in place (CONCEPT.md §2.8): add (once per id), set (done, text), remove.
+export function foldItems(items, change) {
+  for (const item of change.items_add ?? []) if (!items.some((known) => known.id === item.id)) items.push({ id: item.id, text: item.text, done: false });
+  for (const update of change.items_set ?? []) {
+    const item = items.find((known) => known.id === update.id);
+    if (item && update.done !== undefined) item.done = update.done;
+    if (item && update.text !== undefined) item.text = update.text;
+  }
+  if (change.items_remove) items.splice(0, items.length, ...items.filter((item) => !change.items_remove.includes(item.id)));
+}
+
+// Checklist progress for rows and plaques: «2/5», or '' without items.
+export const itemsProgress = (task) => (task.items?.length ? `${task.items.filter((item) => item.done).length}/${task.items.length}` : '');
+
 // `filedTemplates` — names of templates marked `filed` in the config: such tasks are filed away, not worked on.
 export function foldTasks(events, { filedTemplates = [] } = {}) {
   const tasks = new Map();
@@ -37,7 +51,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     let task = tasks.get(id);
     if (!task) {
       if (change.op !== 'create') continue;
-      task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
+      task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], ownerTitled: false, history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
       tasks.set(id, task);
     }
     for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise']) {
@@ -58,6 +72,8 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     if (change.status !== undefined) task.doneAt = OPEN.has(change.status) ? undefined : event.ts;
     for (const message of change.add ?? []) if (!task.messages.includes(message)) task.messages.push(message);
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
+    foldItems(task.items, change);
+    if (change.op === 'update' && change.title !== undefined && event.author === 'me') task.ownerTitled = true;
     task.history.push({ ts: event.ts, author: event.author, change });
     task.updatedAt = event.ts;
   }
@@ -90,6 +106,9 @@ export function describeChange(change) {
   if (change.due !== undefined) parts.push(change.due ? `срок: ${change.due}` : 'без срока');
   if (change.add?.length) parts.push(`+${change.add.length} сообщ.`);
   if (change.remove?.length) parts.push(`−${change.remove.length} сообщ.`);
+  if (change.items_add?.length) parts.push(`+${change.items_add.length} в чеклист`);
+  if (change.items_set?.length) parts.push(`чеклист: ${change.items_set.map((item) => (item.done === true ? '✓' : item.done === false ? '○' : '✎')).join('')}`);
+  if (change.items_remove?.length) parts.push(`−${change.items_remove.length} из чеклиста`);
   if (change.proposed === 'done') parts.push('похоже, готово');
   if (change.proposed === null) parts.push('вопрос снят');
   if (change.report) parts.push('отчёт');

@@ -51,9 +51,9 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), budget | `Triage`, `streamOf` |
+| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), budget | `Triage`, `streamOf`, `checklistChange` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) | `anthropicPlanner` |
-| `fold.ts` | tasks as fold of `task_change` (server side); old tasks get roles from `assignee` | `foldTasks`, `isOpen` |
+| `fold.ts` | tasks as fold of `task_change` (server side, checklist `items`, `owner_titled`); old tasks get roles from `assignee` | `foldTasks`, `isOpen` |
 | `parties.ts` | parties and roles: pattern, author → party, incoming call / SMS → caller, phone number form, default controller (client copy `web/parties.js`) | `isParty`, `partyOf`, `partyOfEvent`, `phoneNumber`, `defaultController` |
 
 ## Client — `web/` (plain ES modules, no bundler; new module → `VERSIONED` in `src/server/static.ts` and `web/sw.js`)
@@ -68,7 +68,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter |
 | `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history) |
-| `tasklist.js` / `days.js` | the «Задачи» view: list chips (`pinned`), sections of a list (`sectionsOf`, `listCount`), a task row (mark, title, facts, due word — `dueLabel`); day pill labels |
+| `tasklist.js` / `days.js` | the «Задачи» view: list chips (`pinned`) and the grouping chip, sections of a list (`sectionsOf`, `listCount`) or groups by tag / person (`groupsOf`), a task row (mark, title, facts with checklist progress, due word — `dueLabel`); day pill labels |
+| `checklist.js` | the checklist in task details: tick, add, «Отдельной задачей», «В дело…» (this task as an item of another) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`) |
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows): follow, arm, act; not a tap |
 | `convquick.js` | swipes on a «Беседы» row: left — «Отвечено» (`answered` correction), right — its most urgent task or a new one (`pickTask`, `anchorOf`, `sourceOf`) |
@@ -88,7 +89,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
 | `drawer.js` | left panel (opened by the filter icon; closed by a swipe) — filters by view: contacts (conversations) and tags (shared), «Завершённые» (Беседы, Лента), sources (Лента), saved filters (Задачи) |
-| `taskfold.js` | pure: tasks from `task_change` (with history, roles), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
+| `taskfold.js` | pure: tasks from `task_change` (with history, roles, checklist — `foldItems`, `itemsProgress`, `ownerTitled`), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter` (fields incl. `snoozed`), `visibleTasks` |
 | `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done (an `answered` mark quiets what precedes it), order from the registry; `conversationKeys` (an own note joins the conversation it continues or answers); `withWhom` |
 | `details.js` / `taskdetails.js` | right panel «Подробности»: a task (actions and due first, roles folded, «Другой…» typed in place, report, messages, folded history) or a message (versions, tasks) |

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { foldTasks, tasksByMessage, involvesMe, STATUSES } from '../web/taskfold.js';
+import { foldTasks, tasksByMessage, involvesMe, STATUSES, itemsProgress } from '../web/taskfold.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { visibleTasks } from '../web/filters.js';
 import { filtersConfig } from '../src/config.ts';
@@ -150,4 +150,20 @@ test('extra fields fold; filed comes from the change or the template', () => {
   assert.equal(task.promise.due, '2026-11-20');
   assert.equal(other.filed, true);
   assert.equal(foldTasks([create({ title: 'Z', template: 'diary' })])[0].filed, false);
+});
+
+test('a checklist folds from item changes; an owner rename marks the title as named', () => {
+  const at = (minute: number) => `2026-11-19T10:0${minute}:00.000Z`;
+  const ev = (ts: string, task: Record<string, unknown>, author = 'system') => ({ id: crypto.randomUUID(), schema_version: 1, source: author === 'me' ? 'app' : 'system', author, ts, kind: 'task_change', payload: { ref: { type: 'task', id: 'job' }, data: { task } } });
+  const [task] = foldTasks([
+    ev(at(1), { op: 'create', title: 'Установить программу', items_add: [{ id: 'i1', text: 'установить программу' }] }),
+    ev(at(2), { op: 'update', title: 'Клиент А: настройка компьютера', items_add: [{ id: 'i2', text: 'настроить почту' }, { id: 'i1', text: 'дубль' }] }),
+    ev(at(3), { op: 'update', items_set: [{ id: 'i1', done: true }, { id: 'i2', text: 'настроить почту и календарь' }] }),
+    ev(at(4), { op: 'update', items_add: [{ id: 'i3', text: 'лишнее' }], items_remove: ['i3'] }),
+  ]);
+  assert.deepEqual(task.items, [{ id: 'i1', text: 'установить программу', done: true }, { id: 'i2', text: 'настроить почту и календарь', done: false }]);
+  assert.equal(itemsProgress(task), '1/2');
+  assert.equal(task.ownerTitled, false, 'triage renamed it');
+  const [named] = foldTasks([ev(at(1), { op: 'create', title: 'x' }), ev(at(2), { op: 'update', title: 'Моё название' }, 'me')]);
+  assert.equal(named.ownerTitled, true);
 });

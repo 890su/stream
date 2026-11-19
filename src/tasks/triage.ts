@@ -6,7 +6,7 @@ import type { SourceState } from '../store/status.ts';
 import { tasksConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { stateChanged } from '../server/system.ts';
-import { foldTasks, isOpen } from './fold.ts';
+import { foldTasks, isOpen, type Task } from './fold.ts';
 import { defaultController, isParty, partyOf, partyOfEvent } from './parties.ts';
 import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts';
 
@@ -27,6 +27,22 @@ export function streamOf(event: JournalEvent): string {
   if (outbound) return `tg|${outbound.connector.replace(/^telegram_/, '')}|${outbound.chat_id}`;
   if (event.source === 'android_phone') return 'phone';
   return 'me';
+}
+
+// Checklist items and a new title from the planner (CONCEPT.md §2.8): one-line items not already in the task;
+// a rename only for an existing task the owner has not named.
+export function checklistChange(taskId: string, planned: PlannedTask, task?: Task): Record<string, unknown> {
+  const known = new Set((task?.items ?? []).map((item) => item.text.trim().toLowerCase()));
+  const items_add: { id: string; text: string }[] = [];
+  for (const raw of planned.items ?? []) {
+    const text = String(raw).replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!text || known.has(text.toLowerCase())) continue;
+    known.add(text.toLowerCase());
+    items_add.push({ id: nameId(`item|${taskId}|${text}`), text });
+  }
+  const rename = planned.rename?.trim().slice(0, 200);
+  const title = task && rename && !task.owner_titled && rename !== task.title ? { title: rename } : {};
+  return { ...(items_add.length ? { items_add } : {}), ...title };
 }
 
 // Quiet window of a stream in seconds: by its kind (`tg`, `phone`, `me`), else the default.
@@ -113,7 +129,8 @@ export class Triage {
     const asContext = (task: (typeof tasks)[number]) => {
       const events = task.messages.slice(-5).map((id) => this.#store.getEvent(id)).filter((event): event is JournalEvent => Boolean(event));
       return { id: task.id, title: task.title, assignee: task.assignee, roles: task.roles, status: task.status, recent: task.messages.slice(-3).map(snippet),
-        chats: [...new Set(events.map(streamOf))], last_at: events.at(-1)?.ts ?? task.updated_at };
+        chats: [...new Set(events.map(streamOf))], last_at: events.at(-1)?.ts ?? task.updated_at,
+        items: task.items.map((item) => ({ text: item.text, done: item.done })), owner_titled: task.owner_titled };
     };
     const toMessage = (event: JournalEvent, text: string, tags: string[]): PlanMessage => {
       const continuation = event.payload.data?.continuation as { target: string; on: boolean } | undefined;
@@ -145,7 +162,7 @@ export class Triage {
     const at = new Date().toISOString();
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
     const input: PlanInput = {
-      now: at, templates: tasksConfig.templates,
+      now: at, job_days: tasksConfig.job_days, templates: tasksConfig.templates,
       open_tasks: open.map(asContext),
       closed_tasks: closed.map(asContext),
       context,
@@ -161,6 +178,7 @@ export class Triage {
     const openIds = new Set(open.map((task) => task.id));
     const closedById = new Map(closed.map((task) => [task.id, task]));
     const known = new Set([...openIds, ...closedById.keys()]);
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
     const filedTemplates = new Set(tasksConfig.templates.filter((template) => template.filed).map((template) => template.name));
     const batchKey = createHash('sha256').update([...batchIds].sort().join(',')).digest('hex').slice(0, 16);
     const covered = new Set(output.tasks.flatMap((planned) => planned.message_ids));
@@ -198,12 +216,13 @@ export class Triage {
       const confidence = Math.max(0, Math.min(1, planned.confidence));
       // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
       const proposal = planned.done && !planned.filed ? { proposed: 'done' } : {};
+      const checklist = checklistChange(taskId, planned, existing ? taskById.get(existing) : undefined);
       const change: Record<string, unknown> = existing
-        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked }
+        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked, ...checklist }
         : {
           op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles: rolesOf(planned, add),
           status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
-          add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked,
+          add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked, ...checklist,
           ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
         };

@@ -4,6 +4,7 @@
 import { STATUSES, describeChange } from './taskfold.js';
 import { actionsFor, actionLabel, changeFor, dueChips, delegateOptions } from './taskactions.js';
 import { partyName } from './parties.js';
+import { checklistBlock } from './checklist.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -92,8 +93,9 @@ function personForm(onPick) {
 
 const MESSAGES = { done: 'Готово', verify: 'Проверено', accept: 'Принято', delegate: 'Поручено', defer: 'Отложено', wait: 'Ждём', reopen: 'Снова в работе', cancel: 'Отменено' };
 
-// `ctx`: { views (the task's messages), bubble(view), save(change), doneCards, quick (taskquick.js), reportKeys, fields }.
-export function taskDetails(task, { views, bubble, save, doneCards, quick, reportKeys = [], fields }) {
+// `ctx`: { views (the task's messages), bubble(view), save(change), saveTo(id, change), others (open tasks), notify,
+// doneCards, quick (taskquick.js), reportKeys, fields }.
+export function taskDetails(task, { views, bubble, save, saveTo, others, notify, doneCards, quick, reportKeys = [], fields }) {
   const box = element('div', 'details-task');
   box.append(titleBlock(task, save));
   const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
@@ -149,6 +151,9 @@ export function taskDetails(task, { views, bubble, save, doneCards, quick, repor
     chips.append(due);
     box.append(element('p', 'picker-section', 'Срок'), chips);
   }
+
+  const checklist = checklistBlock(task, { save, saveTo, others, notify });
+  if (checklist) box.append(checklist);
 
   const roles = rolesBlock(task, views);
   if (roles) box.append(roles);

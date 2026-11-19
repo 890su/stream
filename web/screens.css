@@ -109,3 +109,16 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .task-row { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 8px; min-height: 48px; border-bottom: 1px solid var(--line); border-radius: 0; color: inherit; }
 .task-row:active, .task-row:hover { background: var(--press); }
 .task-row.done .task-title, .task-row.cancelled .task-title { opacity: .55; text-decoration: line-through; }
+
+/* The checklist of a task (checklist.js) */
+.checklist { display: grid; gap: 2px; }
+.checklist-item { display: flex; align-items: center; gap: 4px; min-height: 44px; border-radius: 10px; }
+.checklist-tick { flex: none; width: 44px; height: 44px; font-size: 20px; color: var(--accent-strong); }
+.checklist-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.checklist-item.done .checklist-text { color: var(--muted); text-decoration: line-through; }
+.checklist-out { width: 40px; height: 40px; font-size: 18px; }
+.checklist-add { display: flex; align-items: center; gap: 8px; padding-left: 12px; }
+.checklist-add input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 8px 2px; outline: none; font: inherit; }
+.checklist-add input:focus { border-bottom-color: var(--accent); }
+.checklist-into { margin-top: 4px; }
+.checklist > .link-button { justify-self: start; }

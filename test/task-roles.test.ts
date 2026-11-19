@@ -119,3 +119,15 @@ test('a task the owner makes from a message carries his roles and passes the con
     assert.equal(response.status, 201, await response.clone().text());
   } finally { await f.stop(); }
 });
+
+test('a checklist change is accepted; a multi-line item or a bad id is refused', async () => {
+  const f = await fixture();
+  const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    assert.equal((await post(change({ op: 'create', title: 'Клиент А: настройка', items_add: [{ id: 'i-1', text: 'установить программу' }] }))).status, 201);
+    assert.equal((await post(change({ op: 'update', items_set: [{ id: 'i-1', done: true }], items_remove: ['i-2'] }))).status, 201);
+    assert.equal((await post(change({ op: 'update', items_add: [{ id: 'i-3', text: 'две\nстроки' }] }))).status, 400);
+    assert.equal((await post(change({ op: 'update', items_add: [{ id: 'I 3', text: 'x' }] }))).status, 400);
+    assert.equal((await post(change({ op: 'update', items_set: [{ id: 'i-1', done: 'yes' }] }))).status, 400);
+  } finally { await f.stop(); }
+});
