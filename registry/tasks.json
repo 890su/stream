@@ -22,7 +22,7 @@
       "input": 0.1,
       "output": 0.5
     },
-    "processor": "triage-ai-v11"
+    "processor": "triage-ai-v12"
   },
   "assignees": [
     "me",

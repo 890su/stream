@@ -148,7 +148,7 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v11').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v12').length, 4);
   } finally { s.cleanup(); }
 });
 
@@ -432,4 +432,11 @@ test('triage sets the counterparty of a task, or options and a hint; a set one s
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     assert.equal((s.tasks().find((task) => task.id === bill.id) as any).counterparty, C1);
   } finally { s.cleanup(); }
+});
+
+test('the triage keeps personal talk and consultations in the conversation; items are steps still to do', async () => {
+  const { PLAN_INSTRUCTIONS } = await import('../src/tasks/planner.ts');
+  for (const rule of ['Остаётся в беседе', 'консультация', 'личная и семейная переписка', 'Пункт — только шаг', 'Сомневаешься — задачи нет']) {
+    assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
+  }
 });
