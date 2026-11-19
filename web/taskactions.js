@@ -54,6 +54,7 @@ export function undoOf(task, change) {
       undo.roles = Object.fromEntries(Object.keys(value).map((role) => [role, task.roles?.[role] ?? (role === 'executors' || role === 'watchers' ? [] : null)]));
       continue;
     }
+    if (key === 'resume_note') { undo.resume_note = task.resumeNote ?? ''; continue; } // a string: '' clears
     undo[key] = task[FIELD_OF[key] ?? key] ?? null;
   }
   return undo;
