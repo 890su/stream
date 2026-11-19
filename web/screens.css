@@ -48,12 +48,10 @@
 .task-title { font-size: 15.5px; line-height: 1.3; overflow-wrap: anywhere; }
 .task-meta { font-size: 13px; color: var(--muted); }
 /* The «Задачи» view in the centre (tasklist.js): list chips, sections, rows with a «Готово» mark and a due date */
-.task-lists { position: sticky; top: -8px; z-index: 3; align-self: stretch; display: flex; gap: 6px; overflow-x: auto; margin: -8px -8px 2px; padding: 12px 8px 8px; background: var(--chat); scrollbar-width: none; }
-.task-lists::-webkit-scrollbar { display: none; }
-.task-list { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; font-size: 14.5px; font-weight: 600; }
-.task-list.on { background: var(--accent-strong); color: #fff; }
+.task-list-head { position: sticky; top: -8px; z-index: 3; align-self: stretch; display: flex; align-items: center; gap: 8px; margin: -8px -8px 2px; padding: 8px 8px 6px; background: var(--chat); }
+.task-list-head .link-button { min-height: 44px; padding: 0 10px; font-size: 14.5px; }
+.task-list-title { flex: 1; display: inline-flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 600; }
 .task-list-count { min-width: 20px; padding: 0 6px; border-radius: 10px; background: color-mix(in srgb, currentColor 16%, transparent); font-size: 13px; line-height: 20px; text-align: center; }
-.task-list.more { font-weight: 500; }
 .task-section { align-self: stretch; display: flex; align-items: baseline; gap: 8px; margin: 12px 14px 4px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; text-align: left; }
 button.task-section { min-height: 40px; margin: 6px 6px 0; padding: 0 8px; border-radius: 10px; align-items: center; }
 button.task-section::after { content: '\203A'; margin-left: auto; font-size: 18px; transition: transform .18s ease-out; }
@@ -161,6 +159,6 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .pulse-person, .pulse-project { min-height: 52px; padding: 6px 14px; gap: 10px; justify-content: space-between; text-align: left; }
 .pulse-project { justify-content: flex-start; }
 .pulse-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
-.pulse-dot.yellow { background: #d9a400; }
+.pulse-dot.yellow { background: var(--warn, #d9a400); }
 .pulse-dot.red { background: var(--danger, #d33); }
 .pulse-note { color: var(--muted); }

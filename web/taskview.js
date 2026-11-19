@@ -1,10 +1,10 @@
 // The «Задачи» view of the centre (CONCEPT.md §5, §2.11): either a saved list — chips of the main lists, then its
 // sections or groups — or one project by its sections (projectview.js). Returns the nodes; feed.js places them.
 import { visibleTasks } from './filters.js';
-import { taskRow, emptyTasks, sectionsOf, sectionHeader, listChips, listCount, groupsOf } from './tasklist.js';
+import { taskRow, emptyTasks, sectionsOf, sectionHeader, listHead, listCount, groupsOf } from './tasklist.js';
 import { projectHead, projectSectionHead, projectSections } from './projectview.js';
 import { pulseNodes } from './pulseview.js';
-import { pulseBlocks, pulseCount } from './pulse.js';
+import { PULSE_DEFAULTS } from './pulse.js';
 
 // ctx: { tasks, viewsOf(task), now, filters, filter, matches, grouping, onGroup, onPick, onMore, onOpen, quick,
 //   isOpenSection(key), toggle(key, open), keepRows(key, rows), project, projects, projectActions,
@@ -12,7 +12,7 @@ import { pulseBlocks, pulseCount } from './pulse.js';
 export function taskViewNodes(ctx) {
   const { tasks, viewsOf, now, filter, matches, quick } = ctx;
   const nodes = [];
-  const row = (task, { showProject = true } = {}) => taskRow(task, viewsOf(task), { onOpen: ctx.onOpen, showAssignee: filter.id !== ctx.filters[0].id, showProject, quick });
+  const row = (task, { showProject = true } = {}) => taskRow(task, viewsOf(task), { onOpen: ctx.onOpen, showAssignee: filter.id !== 'today', showProject, quick });
   if (ctx.project) {
     // One project: its header, then every section (empty ones too: the plan stays visible), loose tasks first.
     const shown = tasks.filter(matches).filter((task) => !['cancelled'].includes(task.status) && (task.status !== 'done' || ctx.showDone));
@@ -23,16 +23,12 @@ export function taskViewNodes(ctx) {
     }
     return nodes;
   }
-  const counts = new Map(ctx.filters.filter((item) => item.pinned || item.id === filter.id)
-    .map((item) => [item.id, item.view === 'pulse' && ctx.pulseConfig
-      ? pulseCount(pulseBlocks({ tasks: tasks.filter(matches), conversations: ctx.conversations, projects: ctx.projects, now, config: ctx.pulseConfig }))
-      : listCount(visibleTasks(tasks, { filter: item, matches, now }), item, now)]));
-  nodes.push(listChips(ctx.filters, filter, counts, { onPick: ctx.onPick, onMore: ctx.onMore, grouping: ctx.grouping, onGroup: ctx.onGroup }));
-  if (filter.view === 'pulse' && ctx.pulseConfig) {
-    nodes.push(...pulseNodes({ ...ctx, tasks: tasks.filter(matches), config: ctx.pulseConfig }));
-    return nodes;
-  }
+  // The pulse is the screen (task manager spec §5): no list chips; the lists are in the left panel.
+  if (filter.view === 'pulse') return pulseNodes({ ...ctx, tasks: tasks.filter(matches), config: ctx.pulseConfig ?? PULSE_DEFAULTS });
   const shown = visibleTasks(tasks, { filter, matches, now });
+  // A list opened from the left panel: its name, «← Пульт» back, the grouping.
+  const pulse = ctx.filters.find((item) => item.view === 'pulse');
+  nodes.push(listHead(filter, listCount(shown, filter, now), { onBack: pulse ? () => ctx.onPick(pulse.id) : null, grouping: ctx.grouping, onGroup: ctx.onGroup }));
   const grouped = ctx.grouping === 'due' ? sectionsOf(shown, filter, now) : groupsOf(shown, ctx.grouping, viewsOf);
   for (const section of grouped) {
     const key = `section:${filter.id}:${section.id}`;

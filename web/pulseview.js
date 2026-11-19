@@ -33,7 +33,7 @@ export function pulseNodes(ctx) {
   const nodes = [];
   const row = (task, { start = true } = {}) => {
     const item = taskRow(task, viewsOf(task), { onOpen: ctx.onOpen, showAssignee: !isMineToDo(task), quick });
-    if (start && quick?.start && isMineToDo(task)) item.append(button('pulse-start', '▶', () => quick.start(task, b.work), `В работу: ${task.title}`));
+    if (start && quick?.start && isMineToDo(task) && task.status !== 'waiting') item.append(button('pulse-start', '▶', () => quick.start(task, b.work), `В работу: ${task.title}`));
     return item;
   };
 
@@ -62,7 +62,7 @@ export function pulseNodes(ctx) {
   block(nodes, ctx, { key: 'paused', title: '⏸ Ждут возврата', items: waiting, folded: true, quietWhenEmpty: false,
     draw: (task) => {
       const item = row(task);
-      if (pausedHours(task) >= config.paused_remind_hours) item.querySelector('.task-meta, .task-text')?.append(element('span', 'pulse-note', ` · на паузе ${pausedHours(task)} ч`));
+      if (pausedHours(task) >= config.paused_remind_hours) (item.querySelector('.task-meta') ?? item.querySelector('.task-text'))?.append(element('span', 'pulse-note', ` · на паузе ${pausedHours(task)} ч`));
       return item;
     } });
 
@@ -111,6 +111,7 @@ function block(nodes, ctx, { key, title, items, draw, count = null, quiet = '', 
   const sectionKey = `pulse:${key}`;
   const open = !folded || ctx.isOpenSection(sectionKey);
   const head = element(folded ? 'button' : 'div', 'task-section pulse-head');
+  head.dataset.group = `pulse:${key}`; // the scroll anchor keeps its place when a block unfolds (feed.js)
   if (folded) {
     head.type = 'button';
     head.setAttribute('aria-expanded', String(open));

@@ -133,3 +133,25 @@ test('the pulse counter is what burns plus what is for today', () => {
     assert.equal(pulseCount(b), 3);
   });
 });
+
+test('review fixes: paused stack holds only plain paused tasks; a burning paused one burns; reminders come back to today', () => {
+  const b = blocks([
+    create('в работе', { status: 'doing', roles: mine }),
+    create('пауза', { roles: mine, resume_note: 'дальше' }),
+    create('пауза и отложено', { status: 'deferred', remind_at: at('2026-11-25T09:00:00'), roles: mine, resume_note: 'дальше' }),
+    create('пауза и жду', { status: 'waiting', roles: mine, resume_note: 'дальше' }),
+    create('пауза и горит', { roles: mine, resume_note: 'дальше', due: '2026-11-19' }),
+    create('напоминание пришло', { status: 'deferred', remind_at: at('2026-11-19T08:00:00'), roles: mine }),
+  ]);
+  assert.deepEqual(titles(b.paused), ['пауза']);
+  assert.deepEqual(titles(b.hot), ['пауза и горит']);
+  assert.deepEqual(titles(b.watch), ['пауза и жду']);
+  assert.deepEqual(titles(b.today), ['напоминание пришло']);
+});
+
+test('review fixes: an urgent conversation burns; one I already answered does not', () => {
+  const answered = conversation('Клиент Д', 'mine', '2026-11-19T08:00:00');
+  answered.views.push({ id: 'Клиент Д-2', event: { ts: at('2026-11-19T08:30:00'), kind: 'text', author: 'me', payload: { text: 'ок' } } } as any);
+  const b = blocks([], [conversation('Клиент Е', 'urgent', '2026-11-19T08:00:00'), answered]);
+  assert.deepEqual(b.hot.map((item: any) => item.conversation.key), ['Клиент Е']);
+});

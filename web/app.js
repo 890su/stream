@@ -233,6 +233,8 @@ async function main() {
   composer.loadRecipients();
   // Fallback only: while the live stream is up, new messages arrive without polling.
   setInterval(() => { if (!document.hidden && !live.connected()) feed.refresh(); }, config.feed_refresh_ms);
+  // The pulse counts time (waiting hours, minutes in work, midnight): redraw it each minute while it is on screen.
+  setInterval(() => { if (!document.hidden && feed.mode() === 'tasks') feed.render(); }, 60_000);
 
   const mode = new URL(location.href).searchParams.get('mode');
   if (new URL(location.href).searchParams.has('shared')) feed.scrollToBottom();

@@ -157,7 +157,7 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
     const rows = feed.taskFilters().map((filter) => {
       const row = element('button', `drawer-contact${filter.id === current.id ? ' on' : ''}`);
       row.type = 'button';
-      const count = listCount(visibleTasks(feed.tasks(), { filter, matches }), filter);
+      const count = filter.view === 'pulse' ? feed.pulseCount() : listCount(visibleTasks(feed.tasks(), { filter, matches }), filter);
       row.classList.toggle('empty-list', !count);
       row.append(element('span', 'drawer-title', filter.title), element('span', 'drawer-count', count ? String(count) : ''));
       row.setAttribute('aria-pressed', String(filter.id === current.id));

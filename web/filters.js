@@ -1,5 +1,5 @@
 // Saved task filters (registry/filters.json, P14): a filter is data — `all` / `any` lists of conditions — and
-// `matchesFilter` evaluates it against a folded task. A filter may also carry `pinned` (a chip on top of Задачи),
+// `matchesFilter` evaluates it against a folded task. A filter may also carry `view: 'pulse'` (the pulse, pulse.js),
 // `order` and `sections` (each a condition list; tasklist.js). Pure: no DOM, no storage — tested in node.
 //
 // Condition: { field, op, value? }, or a nested group { all: [...] } / { any: [...] } as an element of a list.

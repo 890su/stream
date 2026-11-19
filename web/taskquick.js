@@ -83,11 +83,15 @@ export function createTaskQuick({ queue, notify, config }) {
   // Several tasks changed by one tap (focus.js: «▶ В работу» pauses the current task) — saved in order, and
   // «Вернуть» puts every one back. `parts` — [{ id, change }]; `byId` — the tasks as they were.
   function actAll(parts, byId, message) {
+    if (parts.some(({ id }) => busy.has(id))) return Promise.resolve(); // a double tap does nothing
+    for (const { id } of parts) busy.add(id);
+    const free = () => setTimeout(() => { for (const { id } of parts) busy.delete(id); }, 300);
     const undos = parts.map(({ id, change }) => ({ id, change: { op: 'update', ...undoOf(byId.get(id), change) } }));
     const save = (list) => list.reduce((chain, { id, change }) => chain.then(() => queue(makeTaskChange(id, change))), Promise.resolve());
     return save(parts)
       .then(() => notify(message, { label: 'Вернуть', run: () => save([...undos].reverse()).catch((error) => notify(error.message)) }))
-      .catch((error) => notify(error.message));
+      .catch((error) => notify(error.message))
+      .finally(free);
   }
   const byIdOf = (...tasks) => new Map(tasks.filter(Boolean).map((task) => [task.id, task]));
   // «▶ В работу» / «Вернуться»: this task in work, the current one paused with where I stopped.

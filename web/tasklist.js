@@ -123,30 +123,21 @@ export function groupsOf(tasks, by, viewsOf) {
     .map(([key, list]) => ({ id: `${by}:${key}`, title: key || rest, tasks: list, folded: false }));
 }
 
-export function listChips(filters, current, counts, { onPick, onMore, grouping = 'due', onGroup }) {
-  const bar = element('div', 'task-lists');
-  bar.setAttribute('role', 'group');
-  bar.setAttribute('aria-label', 'Списки задач');
-  const shown = filters.filter((filter) => filter.pinned || filter.id === current.id);
-  for (const filter of shown) {
-    const on = filter.id === current.id;
-    const chip = element('button', `chip task-list${on ? ' on' : ''}`);
-    chip.type = 'button';
-    chip.setAttribute('aria-pressed', String(on));
-    chip.append(element('span', '', filter.title));
-    const count = counts.get(filter.id) ?? 0;
-    if (count) chip.append(element('span', 'task-list-count', String(count)));
-    chip.onclick = () => onPick(filter.id);
-    bar.append(chip);
+// The head of a list opened from the left panel: «← Пульт», the list's name and count, the grouping switch
+// (по срокам → по меткам → по людям). Lists are not chips any more: the pulse is the screen (task manager spec §5).
+export function listHead(filter, count, { onBack, grouping = 'due', onGroup }) {
+  const bar = element('div', 'task-list-head');
+  if (onBack) {
+    const back = element('button', 'link-button task-list-back', '← Пульт');
+    back.type = 'button';
+    back.onclick = onBack;
+    bar.append(back);
   }
-  const more = element('button', 'chip task-list more', 'Ещё…');
-  more.type = 'button';
-  more.setAttribute('aria-label', 'Все списки задач');
-  more.onclick = onMore;
-  bar.append(more);
+  const title = element('span', 'task-list-title', filter.title);
+  if (count) title.append(element('span', 'task-list-count', String(count)));
+  bar.append(title);
   if (onGroup) {
-    // The last chip cycles the grouping: по срокам → по меткам → по людям.
-    const group = element('button', 'chip task-list group', `≡ ${GROUPINGS[grouping]}`);
+    const group = element('button', 'link-button task-list-group', `≡ ${GROUPINGS[grouping]}`);
     group.type = 'button';
     group.setAttribute('aria-label', `Группировка: ${GROUPINGS[grouping]}. Сменить`);
     group.onclick = onGroup;

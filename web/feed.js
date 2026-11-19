@@ -9,7 +9,7 @@ import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } fr
 import { questionOptions } from './question.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
-import { pulseBlocks, pulseCount } from './pulse.js';
+import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
 import { foldProjects, markNext, projectScope } from './projects.js';
 import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
@@ -282,7 +282,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   const taskViews = (taskId) => { const task = taskList.find((item) => item.id === taskId); return task ? taskMembers(task, viewList) : []; };
 
   // The pulse counter (the view switch on Беседы): what burns plus what is for today (pulse.js).
-  const pulseTotal = () => (limits.pulse ? pulseCount(pulseBlocks({ tasks: taskList, conversations: convList, projects: projectList, now: new Date(), config: limits.pulse })) : 0);
+  const pulseTotal = () => pulseCount(pulseBlocks({ tasks: taskList, conversations: convList, projects: projectList, now: new Date(), config: limits.pulse ?? PULSE_DEFAULTS }));
 
   return { pulseCount: pulseTotal, refresh, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),

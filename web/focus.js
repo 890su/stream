@@ -1,7 +1,6 @@
 // Focus (task manager spec §5.4): one task of mine in work (`doing`); taking another pauses it — `todo` with a
 // `resume_note`, where I stopped — and «Вернуться» takes it back. Time in work comes from the status history, no
 // manual timer. Pure: no DOM — tested in node; the changes go through the usual queue (taskquick.js).
-import { isOpen } from './taskfold.js';
 
 // I execute it, or nobody executes it and I answer for it.
 export function isMineToDo(task) {
@@ -16,7 +15,8 @@ const newestFirst = (a, b) => b.updatedAt.localeCompare(a.updatedAt);
 export function inWork(tasks) {
   const doing = tasks.filter((task) => task.status === 'doing' && isMineToDo(task)).sort(newestFirst);
   const current = doing[0] ?? null;
-  const noted = tasks.filter((task) => isOpen(task) && task.status !== 'doing' && task.resumeNote && isMineToDo(task));
+  // Only a plain paused task waits for return: deferred, waiting or filed ones live in their own places.
+  const noted = tasks.filter((task) => task.status === 'todo' && !task.filed && task.resumeNote && isMineToDo(task));
   const paused = [...doing.slice(1), ...noted].sort(newestFirst);
   return { current, paused };
 }

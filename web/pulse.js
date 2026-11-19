@@ -3,8 +3,12 @@
 // checked top-down; order inside a block is a computed importance (spec §4.5), weights in registry/pulse.json.
 // Pure: no DOM — tested in node; pulseview.js draws it.
 import { dueState, involvesMe, isOpen } from './taskfold.js';
-import { directionOf } from './conversations.js';
+import { directionOf, conversationOf } from './conversations.js';
 import { inWork, isMineToDo } from './focus.js';
+
+// Used when the capture config has no `pulse` (an old cached config): the values of registry/pulse.json v1.
+export const PULSE_DEFAULTS = { rows: 4, hot_wait_hours: 2, watch_alert_days: 1, stale_days: 7, paused_remind_hours: 2, money_templates: ['lead', 'money'],
+  weights: { hot: 1000, money: 300, blocks: 200, due_soon: 100, stale_per_day: 5 } };
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -34,11 +38,14 @@ const byImportance = (now, config) => (a, b) => importance(b, { now, config }) -
   || (a.due ? String(a.due) : '￿').localeCompare(b.due ? String(b.due) : '￿');
 
 // A conversation waits for my answer longer than the threshold: hours since its last incoming message, else null.
+// Who spoke last decides: an own note pulled into a chat is not an answer; my reply ends the wait.
 function waitingHours(conversation, now, config) {
-  if (conversation.state !== 'mine' || conversation.archived) return null;
-  const incoming = (conversation.views ?? []).filter((view) => !view.deleted && directionOf(view.event) === 'in').at(-1);
-  if (!incoming) return null;
-  const hours = Math.floor((now.getTime() - Date.parse(incoming.event.ts)) / HOUR);
+  if (!['mine', 'urgent'].includes(conversation.state) || conversation.archived) return null;
+  const spoken = (conversation.views ?? []).filter((view) => !view.deleted && directionOf(view.event) !== 'unknown'
+    && !(conversation.key !== 'me' && conversationOf(view.event) === 'me'));
+  const last = spoken.at(-1);
+  if (!last || directionOf(last.event) !== 'in') return null;
+  const hours = Math.floor((now.getTime() - Date.parse(last.event.ts)) / HOUR);
   return hours >= config.hot_wait_hours ? hours : null;
 }
 
@@ -65,7 +72,9 @@ const HEALTH_ORDER = { red: 0, yellow: 1, green: 2 };
 // conversation, waitingHours } (people waiting, longest first) then { kind: 'task', task }.
 export function pulseBlocks({ tasks, conversations = [], projects = [], now = new Date(), config }) {
   const order = byImportance(now, config);
-  const { current, paused } = inWork(tasks);
+  const focus = inWork(tasks);
+  const current = focus.current;
+  const paused = focus.paused.filter((task) => !burns(task, now)); // a burning paused task stays in «Горит»
   const taken = new Set([current, ...paused].filter(Boolean).map((task) => task.id));
   const eligible = tasks.filter((task) => !taken.has(task.id) && isOpen(task) && !task.filed && !task.idea
     && !snoozed(task, now) && involvesMe(task));
@@ -76,7 +85,7 @@ export function pulseBlocks({ tasks, conversations = [], projects = [], now = ne
   for (const task of eligible) {
     const mineOrNew = isMineToDo(task) || task.status === 'inbox';
     if (burns(task, now) && (mineOrNew || watched(task) || checksMine(task))) hot.push(task);
-    else if (mineOrNew && (task.next || task.status === 'inbox' || isTomorrow(task, now)) && task.status !== 'waiting') today.push(task);
+    else if (mineOrNew && (task.next || task.status === 'inbox' || task.status === 'deferred' || isTomorrow(task, now)) && task.status !== 'waiting') today.push(task);
     else if (checksMine(task)) today.push(task);
     else if (watched(task)) watch.push(task);
     else if (isMineToDo(task)) later.push(task);
