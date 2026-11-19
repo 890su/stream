@@ -594,3 +594,11 @@ SMS (in / missed / rejected) — от стороны `tel:+…` (номер бе
 `sections`.
 **Affected:** `CONCEPT.md` §2.8, §2.9, §5; `registry/filters.json`; `web/taskactions.js`, `web/tasklist.js`,
 `web/convtasks.js`, `web/taskquick.js`, `web/filters.js`, `web/taskdetails.js`, `web/donecard.js`, `web/feed.js`, `web/drawer.js`
+
+## 2026-11-19 — Лента — из верхней строки в меню
+**What:** Переключатель в верхней строке — «Беседы · Задачи». Лента (все сообщения подряд, фильтры по источникам)
+открывается из меню ⋮ → «Лента сообщений» и не запоминается как вид при следующем запуске.
+**Why:** Владелец: Лента — технический слой для анализа и истории, не рабочий экран; третья вкладка занимала место
+и путала.
+**Boundary:** Сам вид Лента и его фильтры не меняются.
+**Affected:** `CONCEPT.md` §5; `web/index.html`, `web/app.js`

@@ -1,4 +1,4 @@
-// Stream PWA entry point: wires the centre («Беседы · Задачи · Лента»), filters on the left, details on the right,
+// Stream PWA entry point: wires the centre («Беседы · Задачи», Лента from ⋮), filters on the left, details on the right,
 // the composer, and starts sync and live updates.
 import { getSetting } from './db.js';
 import { setupComposer } from './composer.js';
@@ -30,13 +30,14 @@ let drawer;
 let system;
 let chatView; // { open(key), close(), sync() } — one conversation (CONCEPT.md §2.5)
 
-// «Беседы · Задачи · Лента» in the top bar (CONCEPT.md §5); the choice is remembered on this device. Views saved
-// by earlier versions ('cases', 'messages') map to the new ones (feed.js).
+// «Беседы · Задачи» in the top bar (CONCEPT.md §5); the choice is remembered on this device. The technical Лента
+// opens from ⋮ («Лента сообщений») and is not remembered. Views saved by earlier versions map to the new ones (feed.js).
 function setupViews(feed) {
   const buttons = [...document.querySelectorAll('#views [data-view]')];
   const show = (mode) => { for (const button of buttons) button.setAttribute('aria-selected', String(button.dataset.view === mode)); };
   let saved = 'conversations';
   try { saved = localStorage.getItem('stream.feedMode') ?? 'conversations'; } catch { /* private mode */ }
+  if (saved === 'feed' || saved === 'messages') saved = 'conversations';
   feed.setMode(saved);
   show(feed.mode());
   try { if (saved !== feed.mode()) localStorage.setItem('stream.feedMode', feed.mode()); } catch { /* private mode */ }
@@ -53,6 +54,16 @@ function setupViews(feed) {
       drawer?.render();
     };
   }
+  // ⋮ → «Лента сообщений»: no tab is selected while it is shown.
+  $('#feed-button').onclick = async () => {
+    $('#settings').close();
+    if (chatView?.key()) chatView.leave();
+    show('feed');
+    await feed.setMode('feed');
+    chatView?.sync();
+    updateFilter();
+    drawer?.render();
+  };
 }
 
 // The reset button shows how many tags (and, in the Лента, sources) filter the centre.
