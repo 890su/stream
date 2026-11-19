@@ -21,7 +21,7 @@ function element(tag, className, text) {
   return node;
 }
 
-export function setupDetails({ feed, composer, notify, doneCards, config, quick }) {
+export function setupDetails({ feed, composer, notify, doneCards, config, quick, onRender = () => {} }) {
   const panel = document.querySelector('#details');
   const backdrop = document.querySelector('#details-backdrop');
   const body = document.querySelector('#details-body');
@@ -65,6 +65,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick 
   }
 
   function render() {
+    onRender(); // the view switch counts the open task's conversations
     if (!current) {
       // On a wide screen the column stays: a hint until something is chosen.
       if (isWide()) { heading.textContent = 'Подробности'; body.replaceChildren(element('p', 'details-empty', 'Выберите задачу или сообщение: здесь появятся его свойства, переписка и история. Касание плашки задачи в беседе, строки задачи или значка под сообщением.')); }

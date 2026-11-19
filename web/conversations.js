@@ -36,7 +36,7 @@ const titleOf = (view, key) => {
 };
 
 // Who spoke last: 'out' (me), 'in' (them), 'unknown'. Phone events are all stored as `me`; their direction decides.
-function directionOf(event) {
+export function directionOf(event) {
   if (event.kind === 'call' || event.kind === 'sms') {
     const direction = (event.kind === 'call' ? event.payload?.data?.call : event.payload?.data?.sms)?.direction;
     if (direction === 'out') return 'out';
@@ -74,13 +74,17 @@ export function conversationState(conversation, { now = new Date(), config }) {
   };
   // An own note pulled into a chat or a number (a call description, a reply not sent) is not an answer.
   const note = (view) => conversation.key !== 'me' && conversationOf(view.event) === 'me';
-  const candidates = views.filter((view) => directionOf(view.event) !== 'unknown' && !note(view) && meaningful(view) && matters(view));
+  // «Отвечено» (CONCEPT.md §2.5): messages up to the marked one, and tasks with no message after it, wait for nobody.
+  const mark = views.filter((view) => view.answered).reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);
+  const after = (view) => !mark || view.event.ts > mark.event.ts;
+  const fresh = (task) => !mark || views.some((view) => after(view) && task.messages?.includes(view.id));
+  const candidates = views.filter((view) => after(view) && directionOf(view.event) !== 'unknown' && !note(view) && meaningful(view) && matters(view));
   const last = candidates.reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);
 
   if (conversation.key !== 'me') {
-    if ((last && isIncoming(last)) || mineOpen.some((task) => task.status === 'inbox' || task.status === 'review')) return 'mine';
-    if ((last && isMine(last)) || open.some((task) => task.status === 'waiting')
-      || open.some((task) => task.roles.controller === 'me' && task.roles.executors.length && !task.roles.executors.includes('me'))) return 'theirs';
+    if ((last && isIncoming(last)) || mineOpen.some((task) => fresh(task) && (task.status === 'inbox' || task.status === 'review'))) return 'mine';
+    if ((last && isMine(last)) || open.some((task) => fresh(task) && task.status === 'waiting')
+      || open.some((task) => fresh(task) && task.roles.controller === 'me' && task.roles.executors.length && !task.roles.executors.includes('me'))) return 'theirs';
   }
   const age = (now.getTime() - Date.parse(conversation.last)) / 86_400_000;
   return open.length || age < config.quiet_days ? 'quiet' : 'done';

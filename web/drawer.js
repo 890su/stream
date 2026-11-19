@@ -61,8 +61,8 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
 
   function open() { show(true); }
 
-  // Swipe left to right on the feed opens the drawer; right to left on the drawer or backdrop closes it.
-  // The panel follows the finger; letting go past a third of its width finishes the move.
+  // The filter icon opens the drawer (CONCEPT.md §5; no opening swipe — horizontal swipes belong to rows); right to
+  // left on the drawer or backdrop closes it. The panel follows the finger; past a third of its width it closes.
   const START_PX = 12;
   let drag = null; // { x, y, opening, width, horizontal }
   function begin(event, opening) {
@@ -94,8 +94,6 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
     if (opening) show(far);
     else if (far) close(); else show(true);
   }
-  const feedArea = document.querySelector('#messages');
-  feedArea.addEventListener('pointerdown', (event) => { if (!isOpen()) begin(event, true); });
   for (const surface of [drawer, backdrop]) surface.addEventListener('pointerdown', (event) => { if (isOpen()) begin(event, false); });
   window.addEventListener('pointermove', move, { passive: true });
   window.addEventListener('pointerup', end);

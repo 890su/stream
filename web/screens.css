@@ -95,9 +95,7 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .case-question { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 2px; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--bubble-meta) 25%, transparent); }
 .case-question-label { flex-basis: 100%; font-size: 13px; color: var(--bubble-meta); }
 .case-question .chip { min-height: 34px; font-size: 14px; padding: 0 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.views { display: inline-flex; padding: 2px; border-radius: 22px; background: var(--chip); max-width: 100%; }
-.views button { min-height: 40px; padding: 0 12px; border-radius: 20px; color: var(--chip-text); font-size: 14px; font-weight: 600; white-space: nowrap; transition: background-color .18s ease-out, color .18s ease-out; }
-.views button[aria-selected="true"] { background: var(--accent-strong); color: #fff; }
+.view-title { margin: 0 0 0 2px; font-size: 19px; font-weight: 600; line-height: 1.2; color: var(--bar-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Task details (taskdetails.js): «Отменить» quieter; roles and history folded */
 .task-actions .link-button.muted { color: var(--muted); }
 .chips.task-due { align-items: center; }

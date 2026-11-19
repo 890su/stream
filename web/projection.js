@@ -73,6 +73,9 @@ export function project(events, pendingIds = new Set()) {
       case 'topic_unarchive': view.topicArchived = false; break;
       // Deleted by its author in Telegram: the message stays, marked (CONCEPT.md §8.2).
       case 'remote_delete': view.remoteDeleted = true; break;
+      // «Отвечено» on a conversation (CONCEPT.md §2.5): nothing up to this message waits for me.
+      case 'answered': view.answered = true; break;
+      case 'unanswered': view.answered = false; break;
       default: break;
     }
   }

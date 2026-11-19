@@ -5,9 +5,8 @@ import { closeChange, undoOf, dueChips } from './taskactions.js';
 import { reportKeys } from './donecard.js';
 import { makeTaskChange } from './shared.js';
 import { reduced } from './motion.js';
+import { swipe } from './swipe.js';
 
-const SWIPE_PX = 80;
-const EDGE_PX = 24; // a swipe from the screen edge still opens the left panel (drawer.js)
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -64,45 +63,6 @@ export function createTaskQuick({ queue, notify, config }) {
     if (focus) row.querySelector('button')?.focus({ preventScroll: true });
   }
 
-  // Horizontal swipe on an item: right — `onRight`, left — `onLeft`. Vertical moves scroll as usual.
-  function swipe(item, { onRight, onLeft }) {
-    let start = null; // { x, y, horizontal }
-    let swiped = false;
-    const reset = () => { item.style.transform = ''; delete item.dataset.swipe; item.classList.remove('swiping'); start = null; };
-    item.addEventListener('pointerdown', (event) => {
-      if (event.pointerType === 'mouse' || event.clientX < EDGE_PX || event.target.closest('.task-when')) return;
-      event.stopPropagation(); // not the drawer's swipe (drawer.js listens on the feed)
-      start = { x: event.clientX, y: event.clientY, horizontal: null };
-    });
-    item.addEventListener('pointermove', (event) => {
-      if (!start) return;
-      const dx = event.clientX - start.x;
-      const dy = event.clientY - start.y;
-      if (start.horizontal === null) {
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-        start.horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
-        if (!start.horizontal) { reset(); return; }
-        item.classList.add('swiping');
-      }
-      item.style.transform = `translateX(${Math.max(-140, Math.min(140, dx))}px)`;
-      item.dataset.swipe = dx > 0 ? 'done' : 'when';
-      item.classList.toggle('armed', Math.abs(dx) >= SWIPE_PX);
-    });
-    const finish = (event) => {
-      if (!start?.horizontal) { reset(); return; }
-      const dx = event.clientX - start.x;
-      reset();
-      item.classList.remove('armed');
-      swiped = true;
-      setTimeout(() => { swiped = false; }, 400);
-      if (dx >= SWIPE_PX) onRight(); else if (dx <= -SWIPE_PX) onLeft();
-    };
-    item.addEventListener('pointerup', finish);
-    item.addEventListener('pointercancel', () => { reset(); item.classList.remove('armed'); });
-    // A swipe is not a tap: the click after it does not open the details.
-    item.addEventListener('click', (event) => { if (swiped) { event.stopPropagation(); event.preventDefault(); } }, true);
-  }
-
   // Adds the «Готово» mark (first child) and the swipes to a task row or plaque.
   function decorate(item, task) {
     const isOpen = open(task);
@@ -115,7 +75,7 @@ export function createTaskQuick({ queue, notify, config }) {
     }, isOpen ? `Готово: ${task.title}` : `Вернуть в работу: ${task.title}`);
     mark.append(element('span', 'task-check-ring'));
     item.prepend(mark);
-    if (isOpen) swipe(item, { onRight: () => { item.classList.add('closing'); done(task); }, onLeft: () => whenRow(item, task) });
+    if (isOpen) swipe(item, { right: 'done', left: 'when', skip: (event) => Boolean(event.target.closest('.task-when')), onRight: () => { item.classList.add('closing'); done(task); }, onLeft: () => whenRow(item, task) });
     if (isOpen && whenFor === task.id) whenRow(item, task, false);
   }
 

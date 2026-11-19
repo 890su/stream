@@ -1,4 +1,6 @@
-// The composer: text, voice, files, tags, recipient (recipients.js) and modes (reply, edit, continue) of the next message.
+// The composer: text, voice, files and modes (reply, edit, continue) of the next message; the row above it — the
+// «связь» button with its window (linkwindow.js), the chosen conversation or task (linkstate.js), the recipient
+// (recipients.js), tags (tagrow.js).
 import { makeEntry, makeCorrection } from './shared.js';
 import { snippet, chatOf } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
@@ -7,19 +9,21 @@ import { createTagRow, leadButtons } from './tagrow.js';
 import { outboundData } from './outbound.js';
 import { createRecipients } from './recipients.js';
 import { createDraftFiles } from './draftfiles.js';
+import { createLinkState } from './linkstate.js';
+import { setupLinkWindow } from './linkwindow.js';
 import { conceal, toggleHidden } from './motion.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent, getViews, onPickRequest }) {
+export function setupComposer(config, { notify, onSent, getViews, linkContext }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
-  const tagButton = $('#tag-button');
+  const linkButton = $('#link-button');
   const attachButton = $('#attach-button');
-  const tagPanel = $('#tag-panel');
+  const linkPanel = $('#link-panel');
   const attachMenu = $('#attach-menu');
   const recordingBar = $('#recording-bar');
   const inputs = { camera: $('#camera-input'), gallery: $('#gallery-input'), file: $('#file-input') };
@@ -30,18 +34,22 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   let topic = null; // { last: () => view }
   // While messages are selected (select.js) the tag row acts on the selection: link, unlink, tags.
   let selection = null; // { link(), unlink(), toggleTag(tag), stateOf(tag) }
-  // Leading buttons of the tag row: "link" for the draft (picker.js), or link / unlink for a selection.
-  const lead = () => leadButtons({ selection, quiet: Boolean(mode || topic), onPick: onPickRequest });
-  // The connection of the draft: the explicit "continue" mode, or the topic screen.
+  // Chips before the tags: link / unlink for a selection; else the chosen conversation or task and the recipient.
+  const lead = () => (selection ? leadButtons({ selection }) : [link.chip(), recipients.chip()].filter(Boolean));
+  // The connection of the draft: the explicit "continue" mode, a conversation chosen in the window, or the topic.
   const continuation = () => (mode?.type === 'continue' ? { target: mode.view.id, on: true }
-    : topic?.last() ? { target: topic.last().id, on: true } : undefined);
+    : link.continuation() ?? (topic?.last() ? { target: topic.last().id, on: true } : undefined));
+  let linkWindow = null;
+  const rowChanged = () => { tagRow.render(); updateAction(); linkWindow?.refresh(); };
   const tagRow = createTagRow({
     dictionary: config.tagging, getViews, lead,
     override: () => selection && { click: (tag) => selection.toggleTag(tag), stateOf: (tag) => selection.stateOf(tag) },
-    onChange: (on) => tagButton.classList.toggle('active', on.length > 0),
+    onChange: () => linkWindow?.refresh(),
   });
   // «кому»: no recipient — a note to myself (CONCEPT.md §2.9).
-  const recipients = createRecipients({ config, getViews, notify, queue: (entry) => queue(entry), onChange: () => updateAction() });
+  const recipients = createRecipients({ getViews, notify, queue: (entry) => queue(entry), onChange: rowChanged });
+  const link = createLinkState({ conversation: (key) => linkContext().conversations.find((item) => item.key === key), recipients, queue: (entry) => queue(entry), onChange: rowChanged });
+  linkWindow = setupLinkWindow({ tagRow, recipients, context: linkContext, attached: link.attached, attach: link.attach, notify, close: () => togglePanel(linkPanel, linkButton, false) });
   const draftFiles = createDraftFiles(config, { notify, onChange: () => updateAction() });
   let pendingVoice; // a finished recording that could not be queued yet
   let pressedAt = 0;
@@ -66,14 +74,16 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   }
 
   function togglePanel(panel, button, open = panel.hidden) {
-    recipients.closePanel();
-    for (const [other, otherButton] of [[tagPanel, tagButton], [attachMenu, attachButton]]) {
+    for (const [other, otherButton] of [[linkPanel, linkButton], [attachMenu, attachButton]]) {
       if (other !== panel) conceal(other);
       otherButton.setAttribute('aria-expanded', 'false');
     }
+    if (open && panel === linkPanel) linkWindow.reset();
     toggleHidden(panel, !open);
+    if (open && panel === linkPanel) linkWindow.render();
     button.setAttribute('aria-expanded', String(open));
   }
+  const closePanels = () => togglePanel(linkPanel, linkButton, false);
 
   // A fresh draft: tags start from suggestions again (edit mode starts from the message's own tags).
   function resetTags(initial = []) { tagRow.reset(initial); tagRow.update(text.value); }
@@ -119,12 +129,14 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
       return;
     }
     const view = mode?.type === 'reply' ? mode.view : undefined;
-    await queue(await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
-      outbound: outboundData(chat, view, config), replyTo: view?.id }));
+    const entry = await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
+      outbound: outboundData(chat, view, config), replyTo: view?.id });
+    await queue(entry);
     text.value = '';
     if (mode) setMode(null);
+    await link.sent(entry);
     recipients.reset(chatDefault);
-    autosize(); resetTags(); togglePanel(tagPanel, tagButton, false);
+    autosize(); resetTags(); closePanels();
   }
 
   async function sendEdit() {
@@ -159,11 +171,13 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     const attached = draftFiles.list();
     const kind = !attached.length ? 'text' : attached.every((file) => file.type.startsWith('image/')) ? 'photo' : 'file';
     try {
-      await queue(await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
-        replyTo: mode?.type === 'reply' ? mode.view.id : undefined }));
+      const entry = await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
+        replyTo: mode?.type === 'reply' ? mode.view.id : undefined });
+      await queue(entry);
       text.value = ''; draftFiles.clear();
       if (mode) setMode(null);
-      autosize(); resetTags(); togglePanel(tagPanel, tagButton, false);
+      await link.sent(entry);
+      autosize(); resetTags(); closePanels();
     } catch (error) { notify(`Сообщение не сохранено. ${error.message}`); }
     finally { busy = false; updateAction(); }
   }
@@ -172,8 +186,10 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     pendingVoice = recording;
     try {
       const replyTo = mode?.type === 'reply' ? mode.view.id : undefined;
-      await queue(await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(), replyTo }));
+      const entry = await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(), replyTo });
+      await queue(entry);
       pendingVoice = undefined;
+      await link.sent(entry);
       if (mode?.type === 'reply' || mode?.type === 'continue') setMode(null);
       resetTags();
     } catch (error) { notify(`Голосовое ждёт сохранения, нажмите «Отправить» ещё раз. ${error.message}`); }
@@ -188,7 +204,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   }
 
   async function startRecording() {
-    togglePanel(tagPanel, tagButton, false);
+    closePanels();
     try {
       await recorder.start({
         onTick: (seconds) => { $('#rec-time').textContent = formatDuration(seconds); },
@@ -241,15 +257,9 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   text.addEventListener('keydown', (event) => { if (event.key === 'Escape' && mode) cancelMode(); });
 
   text.addEventListener('input', () => { autosize(); updateAction(); tagRow.update(text.value); });
-  $('#new-tag-form').addEventListener('submit', (event) => {
-    event.preventDefault();
-    const input = $('#new-tag');
-    if (tagRow.addNew(input.value)) input.value = '';
-    else notify('Метка — одно слово: буквы, цифры, «-» или «_»');
-  });
-  text.addEventListener('focus', () => togglePanel(tagPanel, tagButton, false)); // the keyboard replaces open panels
+  text.addEventListener('focus', closePanels); // the keyboard replaces open panels
   form.addEventListener('submit', (event) => { event.preventDefault(); sendDraft(); });
-  tagButton.onclick = () => togglePanel(tagPanel, tagButton);
+  linkButton.onclick = () => togglePanel(linkPanel, linkButton);
   attachButton.onclick = () => togglePanel(attachMenu, attachButton);
   for (const button of attachMenu.querySelectorAll('[data-attach]')) {
     button.onclick = () => { togglePanel(attachMenu, attachButton, false); inputs[button.dataset.attach].click(); };
@@ -267,7 +277,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     selectionTags: (state) => { selection = state; tagRow.update(selection ? '' : text.value); },
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
     loadRecipients: () => recipients.load(),
-    // A reply to a messenger message opens «кому» with its chat chosen; other recipients can be chosen instead.
+    // A reply to a messenger message chooses its chat as the recipient; another can be chosen in the link window.
     reply: (view) => { setMode({ type: 'reply', view }); const chat = chatOf(view.event); if (chat) recipients.choose(chat); },
     chat: (chat) => { chatDefault = chat; recipients.reset(chat); },
     recipient: () => recipients.selected(),
@@ -277,6 +287,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     enterTopic: (state, placeholder = 'Сообщение в тему') => { topic = state; resetTags(tagRow.active()); text.placeholder = placeholder; },
     leaveTopic: () => { topic = null; resetTags(tagRow.active()); text.placeholder = 'Сообщение'; },
     queue,
+    attach: (next) => link.attach(next),
     record: () => { locked = true; return startRecording(); },
     focus: () => text.focus(),
     openAttach: () => togglePanel(attachMenu, attachButton, true),

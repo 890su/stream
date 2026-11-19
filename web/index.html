@@ -18,19 +18,16 @@
 </head>
 <body>
   <header class="topbar">
-    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры: контакты, метки, списки" aria-controls="drawer">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-    </button>
     <div class="title">
-      <div id="views" class="views" role="tablist" aria-label="Что показывать">
-        <button type="button" role="tab" data-view="conversations" aria-selected="true">Беседы</button>
-        <button type="button" role="tab" data-view="tasks" aria-selected="false">Задачи</button>
-      </div>
+      <h1 id="view-title" class="view-title">Беседы</h1>
       <p id="network" role="status">подключение…</p>
     </div>
-    <button id="filter-reset" type="button" class="filter-reset" hidden aria-label="Сбросить фильтр по меткам">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5Z"/><path d="m16 16 5 5M21 16l-5 5"/></svg>
+    <button id="filter-reset" type="button" class="filter-reset" hidden aria-label="Сбросить фильтр">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>
       <span id="filter-count"></span>
+    </button>
+    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры: контакты, метки, списки" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5Z"/></svg>
     </button>
     <button id="archive-toggle" type="button" class="icon-button" aria-pressed="false" aria-label="Показывать архив">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>
@@ -130,19 +127,14 @@
   </div>
 
   <footer class="composer-area">
-    <div id="tag-panel" class="panel" hidden aria-label="Метки">
-      <p class="panel-title">Все метки</p>
-      <div id="tag-options" class="chips"></div>
-      <form id="new-tag-form" class="new-tag" autocomplete="off">
-        <label class="visually-hidden" for="new-tag">Новая метка</label>
-        <input id="new-tag" type="text" placeholder="#новая-метка" maxlength="40" enterkeyhint="done">
-        <button type="submit" class="link-button">Добавить</button>
-      </form>
-    </div>
-    <div id="to-panel" class="panel to-panel" hidden aria-label="Кому отправить">
-      <label class="visually-hidden" for="to-search">Найти адресата</label>
-      <input id="to-search" type="search" placeholder="Кому: имя чата или группы" autocomplete="off" enterkeyhint="search">
-      <div id="to-list" class="to-list"></div>
+    <div id="link-panel" class="panel link-panel" hidden role="dialog" aria-label="Связь: метки, контакты, беседы, задачи">
+      <div id="link-head" class="link-head" hidden>
+        <button id="link-back" type="button" class="icon-button" aria-label="Назад ко всем разделам">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <h2 id="link-title" class="link-title"></h2>
+      </div>
+      <div id="link-body" class="link-body"></div>
     </div>
     <div id="attach-menu" class="panel attach-menu" hidden aria-label="Прикрепить">
       <button type="button" data-attach="camera"><span class="round">
@@ -168,14 +160,11 @@
       <div id="draft-files" class="draft-files"></div>
     </div>
     <div id="tag-row" class="tag-row">
-      <button id="tag-button" type="button" class="chip round-chip row-end" aria-label="Все метки" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3.5 7.5 20.5M16.5 3.5l-2 17M4 8.5h16.5M3.5 15.5H20"/></svg>
+      <button id="link-button" type="button" class="chip round-chip row-end" aria-label="Связь: метки, контакты, беседы, задачи" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
       </button>
-      <div id="tag-chips" class="row-chips" role="group" aria-label="Метки сообщения: касание включает или выключает"></div>
-      <div id="to-chips" class="row-chips" role="group" aria-label="Кому отправить: без адресата — заметка себе" hidden></div>
-      <button id="to-button" type="button" class="chip round-chip row-end" aria-label="Кому отправить" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 4 3.5 10.6l5.6 2 2.2 6.9 3.1-3.9 4.6 3.4L20.5 4Z"/><path d="m9.1 12.6 7.4-5.1"/></svg>
-      </button>
+      <div id="tag-chips" class="row-chips" role="group" aria-label="С чем уйдёт сообщение: беседа или задача, адресат, метки"></div>
+      <button id="view-switch" type="button" class="view-switch row-end"><span id="view-switch-label">Задачи</span><span id="view-switch-count" class="view-switch-count" hidden></span></button>
     </div>
     <form id="composer" class="composer" autocomplete="off">
       <div id="recording-bar" class="recording-bar" hidden>

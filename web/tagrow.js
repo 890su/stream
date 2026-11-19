@@ -3,11 +3,12 @@ import { suggestTags, tagStats, typedTags, normalizeTag } from './suggest.js';
 const SPARK = '<svg class="spark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 13.8 10.2 20.5 12 13.8 13.8 12 20.5 10.2 13.8 3.5 12 10.2 10.2Z"/></svg>';
 const TAG = /^#[\p{L}0-9_-]+$/u;
 
-// The tag side of the row above the composer (the «кому» side — recipients.js): suggested (off), switched on by the owner, switched on automatically.
-// Remembers what the owner did with suggestions, which is saved with the message as payload.data.tagging.
+// Tags in the row above the composer (CONCEPT.md §2.2, §2.9): suggested (off), switched on by the owner, switched on
+// automatically; `lead()` puts the chosen conversation or task and the recipient before them. The link window
+// (linkwindow.js) shows every tag through `ordered()`. Remembers what the owner did with suggestions, which is saved
+// with the message as payload.data.tagging.
 export function createTagRow({ dictionary, getViews, onChange, lead = () => [], override = () => null }) {
   const row = document.querySelector('#tag-chips');
-  const options = document.querySelector('#tag-options');
   const owner = new Set(); // switched on by the owner (row, full list or new tag)
   const auto = new Set(); // switched on by the suggester and still on
   const off = new Set(); // switched on by the suggester, then switched off by the owner
@@ -69,10 +70,18 @@ export function createTagRow({ dictionary, getViews, onChange, lead = () => [], 
       return;
     }
     row.replaceChildren(...lead(), ...on.map((tag) => chip(tag, autoOn.has(tag) ? 'auto' : 'on')), ...shown.map((tag) => chip(tag, 'suggest')));
-    // Full list behind the # button: dictionary and every tag used before.
-    const all = [...new Set([...dictionary.tags.map((entry) => normalizeTag(entry.tag)), ...currentStats().keys(), ...on])].sort((a, b) => a.localeCompare(b, 'ru'));
-    options.replaceChildren(...all.map((tag) => chip(tag, on.includes(tag) ? (autoOn.has(tag) ? 'auto' : 'on') : 'suggest')));
     onChange(on);
+  }
+
+  // Every tag, most likely first: switched on, suggested, then the dictionary and used tags by frequency.
+  function ordered() {
+    const on = active();
+    const stats = currentStats();
+    const count = (tag) => stats.get(tag)?.uses ?? 0;
+    const rest = [...new Set([...dictionary.tags.map((entry) => normalizeTag(entry.tag)), ...stats.keys()])]
+      .filter((tag) => !on.includes(tag) && !shown.includes(tag))
+      .sort((a, b) => count(b) - count(a) || a.localeCompare(b, 'ru'));
+    return [...on.map((tag) => ({ tag, state: auto.has(tag) ? 'auto' : 'on' })), ...shown.map((tag) => ({ tag, state: 'suggest' })), ...rest.map((tag) => ({ tag, state: 'suggest' }))];
   }
 
   function addNew(raw) {
@@ -98,7 +107,7 @@ export function createTagRow({ dictionary, getViews, onChange, lead = () => [], 
     return Object.values(result).some((value) => Array.isArray(value) && value.length) ? result : undefined;
   }
 
-  return { update, reset, active, tagging, addNew, render };
+  return { update, reset, active, tagging, addNew, render, ordered, chip };
 }
 
 const LINK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>';
@@ -114,10 +123,8 @@ function roundIcon(svg, label, onClick) {
   return button;
 }
 
-// Leading buttons of the tag row: link / unlink for a selection; "link" for a fresh draft; none while the
-// composer is in a mode or inside a topic (`quiet`).
-export function leadButtons({ selection, quiet, onPick }) {
-  if (selection) return [roundIcon(LINK, 'Привязать выбранные', () => selection.link()), roundIcon(UNLINK, 'Отвязать выбранные', () => selection.unlink())];
-  if (quiet) return [];
-  return [roundIcon(LINK, 'Связать новое сообщение с другим', () => onPick())];
+// Chips of a selection (select.js) at the start of the tag row: link / unlink the selected messages.
+export function leadButtons({ selection }) {
+  if (!selection) return [];
+  return [roundIcon(LINK, 'Привязать выбранные', () => selection.link()), roundIcon(UNLINK, 'Отвязать выбранные', () => selection.unlink())];
 }

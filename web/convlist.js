@@ -39,7 +39,7 @@ function element(tag, className, text) {
   return node;
 }
 
-export function convRow(conversation, { onOpen }) {
+export function convRow(conversation, { onOpen, decorate }) {
   const facts = rowFacts(conversation);
   const row = element('button', `conv-row ${conversation.state}`);
   row.type = 'button';
@@ -55,6 +55,7 @@ export function convRow(conversation, { onOpen }) {
   row.append(head, line);
   row.setAttribute('aria-label', [facts.title, facts.label, facts.tasks ? tasksLabel(facts.tasks) : '', facts.snippet].filter(Boolean).join(', '));
   row.onclick = () => onOpen(conversation.key);
+  decorate?.(row, conversation); // swipes: «Отвечено» and the task (convquick.js)
   return row;
 }
 

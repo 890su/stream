@@ -204,3 +204,23 @@ test('an urgent tag counts while its message is untriaged or in an open task', (
   const closed = change('h1', '2026-11-18T09:20:00', { op: 'update', status: 'done' });
   assert.equal(run([hot, reply, open, closed])[0].state, 'theirs', 'its task is done');
 });
+
+const answered = (target: string, ts: string, op = 'answered') => ({
+  id: `a${++n}`, schema_version: 1, source: 'app', author: 'me', ts, kind: 'correction', payload: { ref: { type: 'event', id: target }, data: { op } },
+});
+
+test('«Отвечено» on the latest message stops a conversation waiting for me; a newer message brings it back', () => {
+  const ask = tg('by', '501', '2026-11-18T09:00:00', 'можно сегодня?');
+  const task = change('t1', '2026-11-18T09:05:00', { op: 'create', title: 'ответить', status: 'inbox', roles: { author: 'tg:501', responsible: 'me', executors: [] }, add: [ask.id] });
+  assert.equal(run([ask, task])[0].state, 'mine');
+  const marked = [ask, task, answered(ask.id, '2026-11-18T09:30:00')];
+  assert.equal(run(marked)[0].state, 'quiet');
+  assert.equal(run([...marked, answered(ask.id, '2026-11-18T09:40:00', 'unanswered')])[0].state, 'mine');
+  assert.equal(run([...marked, tg('by', '501', '2026-11-18T10:00:00', 'алло?')])[0].state, 'mine');
+});
+
+test('«Отвечено» does not take away urgency by a due date', () => {
+  const ask = tg('by', '501', '2026-11-18T09:00:00', 'срочно счёт');
+  const task = change('t1', '2026-11-18T09:05:00', { op: 'create', title: 'счёт', status: 'todo', due: '2026-11-18', roles: { author: 'tg:501', responsible: 'me', executors: ['me'] }, add: [ask.id] });
+  assert.equal(run([ask, task, answered(ask.id, '2026-11-18T09:30:00')])[0].state, 'urgent');
+});

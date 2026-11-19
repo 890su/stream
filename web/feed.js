@@ -21,7 +21,7 @@ const MODES = ['conversations', 'tasks', 'feed'];
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
 const DEFAULT_CONVERSATIONS = { quiet_days: 7, urgent_tags: [], states: ['urgent', 'mine', 'theirs', 'quiet', 'done'] };
 
-export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, onMoreLists = () => {} }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {} }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -166,10 +166,10 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     } else if (mode === 'conversations' && !inside) {
       // The list (CONCEPT.md §5): by state; finished ones folded into one row at the end.
       const { active, done } = splitDone(convList.filter((item) => item.views.some(tagged)));
-      for (const item of active) children.push(convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key) }));
+      for (const item of active) children.push(convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key), decorate: convQuick?.decorate }));
       if (done.length) {
         children.push(doneRow(done.length, { open: showDone, onToggle: () => toggleGroup('done', showDone, () => { showDone = !showDone; }) }));
-        if (showDone) groupNodes.set('done', done.map((item) => convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key) })));
+        if (showDone) groupNodes.set('done', done.map((item) => convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key), decorate: convQuick?.decorate })));
         children.push(...(groupNodes.get('done') ?? []));
       }
       if (!active.length && !done.length) empty(filtered ? 'Под фильтр ничего не подходит.' : 'Здесь появятся беседы: чаты Telegram, звонки и SMS, ваши заметки.');

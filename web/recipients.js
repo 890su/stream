@@ -1,32 +1,21 @@
-// The «кому» side of the row above the input (CONCEPT.md §2.9): the address book (chats and groups with the
-// bot, pinned and frequent first), the chosen recipient, the full list with search and pins.
-// No recipient — a note to myself; nothing goes out by accident.
+// Recipients of the next message (CONCEPT.md §2.9): the address book (chats and groups with the bot, pinned and
+// frequent first), the chosen recipient (its chip in the input row) and the rows of the link window's Контакты
+// section (linkwindow.js). No recipient — a note to myself; nothing goes out by accident.
 import { getSetting } from './db.js';
 import { makeCorrection } from './shared.js';
 import { accountTitle } from './tgbubble.js';
 import { replyWindowClosed } from './outbound.js';
-import { reveal, conceal } from './motion.js';
 
-const $ = (selector) => document.querySelector(selector);
 const CACHE = 'stream.recipients';
 const GROUP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.8a3 3 0 0 1 0 5.4M17.5 14.2A5.5 5.5 0 0 1 20.5 19"/></svg>';
-const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8Z"/></svg>';
 
 const short = (account) => accountTitle(account).replace(/^Telegram\s*/, '');
 const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE) ?? '[]'); } catch { return []; } };
 const writeCache = (list) => { try { localStorage.setItem(CACHE, JSON.stringify(list)); } catch { /* private mode: the list is fetched again */ } };
 
-export function createRecipients({ config, getViews, notify, queue, onChange }) {
-  const chips = $('#to-chips');
-  const tagChips = $('#tag-chips');
-  const button = $('#to-button');
-  const panel = $('#to-panel');
-  const search = $('#to-search');
-  const listBox = $('#to-list');
-  const rowSize = config.telegram?.address_book?.row_size ?? 8;
+export function createRecipients({ getViews, notify, queue, onChange }) {
   let list = readCache();
   let chosen = null; // { key, account, chat_id, title, group }
-  let shown = false; // the row shows recipients instead of tags
   let enabled = true;
 
   async function load() {
@@ -35,105 +24,53 @@ export function createRecipients({ config, getViews, notify, queue, onChange }) 
       if (!response.ok) return;
       list = (await response.json()).recipients;
       writeCache(list);
-      render();
+      onChange?.(chosen);
     } catch { /* offline: the cached list stays */ }
   }
 
   // A personal chat answers only within 24 hours of the client's message; the server's answer or a newer
   // message already in the feed opens it.
   const isOpen = (item) => item.group || item.window_open || !replyWindowClosed(item, getViews());
+  const facts = (item) => [accountTitle(item.account), item.group ? 'группа, пишет бот' : null, isOpen(item) ? null : 'окно 24 часа закрыто'].filter(Boolean).join(' · ');
 
-  function chip(item, on) {
-    const chipButton = document.createElement('button');
-    chipButton.type = 'button';
-    chipButton.className = `chip recipient ${on ? 'on' : 'suggest'}${isOpen(item) ? '' : ' closed'}`;
-    chipButton.setAttribute('aria-pressed', String(on));
-    chipButton.setAttribute('aria-label', `${item.title}, ${accountTitle(item.account)}${item.group ? ', группа' : ''}${isOpen(item) ? '' : ', окно 24 часа закрыто'}`);
-    if (item.group) chipButton.innerHTML = GROUP;
-    chipButton.append(item.title);
+  // The chosen recipient's chip in the input row: a tap takes it back.
+  function chip() {
+    if (!chosen || !enabled) return null;
+    const node = document.createElement('button');
+    node.type = 'button';
+    node.className = `chip recipient on${isOpen(chosen) ? '' : ' closed'}`;
+    node.setAttribute('aria-label', `Кому: ${chosen.title}, ${accountTitle(chosen.account)}${isOpen(chosen) ? '' : ', окно 24 часа закрыто'}. Убрать`);
+    if (chosen.group) node.innerHTML = GROUP;
+    node.append(chosen.title);
     const badge = document.createElement('small');
-    badge.textContent = short(item.account);
-    chipButton.append(badge);
-    chipButton.onclick = () => (on ? choose(null) : choose(item));
-    return chipButton;
+    badge.textContent = short(chosen.account);
+    node.append(badge);
+    node.onclick = () => choose(null);
+    return node;
   }
 
-  function render() {
-    button.hidden = !enabled;
-    button.classList.toggle('active', Boolean(chosen));
-    button.setAttribute('aria-expanded', String(shown));
-    // Tags and recipients swap places with a short slide.
-    if (shown && enabled) { tagChips.hidden = true; reveal(chips, 'translateX(16px)'); }
-    else { chips.hidden = true; reveal(tagChips, 'translateX(-16px)'); }
-    if (!shown || !enabled) { chips.replaceChildren(); return; }
-    const others = list.filter((item) => item.key !== chosen?.key).slice(0, rowSize);
-    const all = document.createElement('button');
-    all.type = 'button'; all.className = 'chip suggest'; all.textContent = 'Все…';
-    all.onclick = () => openPanel();
-    chips.replaceChildren(...(chosen ? [chip(chosen, true)] : []), ...others.map((item) => chip(item, false)), all);
-  }
-
-  function renderPanel() {
-    const query = search.value.trim().toLowerCase();
-    const found = list.filter((item) => !query || item.title.toLowerCase().includes(query));
-    listBox.replaceChildren(...found.map((item) => {
-      const line = document.createElement('div');
-      line.className = `to-line${item.key === chosen?.key ? ' chosen' : ''}`;
-      const pick = document.createElement('button');
-      pick.type = 'button'; pick.className = 'to-pick';
-      const name = document.createElement('span'); name.textContent = item.title;
-      const facts = document.createElement('small');
-      facts.textContent = [accountTitle(item.account), item.group ? 'группа, пишет бот' : null, isOpen(item) ? null : 'окно 24 часа закрыто'].filter(Boolean).join(' · ');
-      pick.append(name, facts);
-      pick.onclick = () => { choose(item); conceal(panel); };
-      const pin = document.createElement('button');
-      pin.type = 'button'; pin.className = `icon-button to-pin${item.pinned ? ' active' : ''}`; pin.innerHTML = STAR;
-      pin.disabled = !item.anchor;
-      pin.setAttribute('aria-label', !item.anchor ? 'Закрепить можно после первого сообщения в чате' : item.pinned ? 'Открепить' : 'Закрепить в строке «кому»');
-      pin.onclick = () => togglePin(item);
-      line.append(pick, pin);
-      return line;
-    }));
-    if (!found.length) listBox.append(Object.assign(document.createElement('p'), { className: 'panel-title', textContent: list.length ? 'Никого не найдено' : 'Пока некому писать: адресаты — чаты Telegram и группы с ботом' }));
-  }
+  // Items for the link window: pinned first, then frequent (the server's order), filtered by a query.
+  const items = (query = '') => list.filter((item) => !query || item.title.toLowerCase().includes(query.toLowerCase()))
+    .map((item) => ({ key: item.key, title: item.title, sub: facts(item), on: item.key === chosen?.key, item, group: item.group, pinned: item.pinned, anchor: item.anchor }));
 
   async function togglePin(item) {
     const op = item.pinned ? 'unpin' : 'pin';
     try { await queue(makeCorrection(item.anchor, op)); } catch (error) { notify(error.message); return; }
     item.pinned = !item.pinned;
     list.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.count - a.count);
-    writeCache(list); renderPanel(); render();
+    writeCache(list); onChange?.(chosen);
   }
 
-  function openPanel() {
-    search.value = '';
-    renderPanel();
-    reveal(panel);
-    load().then(() => { if (!panel.hidden) renderPanel(); });
-  }
-
-  // Choosing a recipient shows the recipients in the row; the tags wait under #.
   function choose(item) {
     chosen = item ? (list.find((entry) => entry.key === item.key) ?? { ...item, window_open: false }) : null;
-    if (chosen) shown = true;
-    render(); onChange?.(chosen);
+    onChange?.(chosen);
   }
 
-  button.onclick = () => {
-    shown = !shown;
-    conceal(panel);
-    render();
-    if (shown) load();
-  };
-  search.addEventListener('input', renderPanel);
-
   return {
-    choose, load, render,
-    selected: () => chosen,
-    isOpen,
-    // Back to the tags: after sending, or a chat view's default recipient.
-    reset: (item = null) => { chosen = null; shown = false; conceal(panel); if (item) choose(item); else { render(); onChange?.(null); } },
-    enable: (on) => { enabled = on; if (!on) conceal(panel); render(); },
-    closePanel: () => conceal(panel),
+    choose, load, chip, items, togglePin, isOpen,
+    selected: () => (enabled ? chosen : null),
+    // Back to no recipient after sending, or a conversation's default recipient.
+    reset: (item = null) => choose(item),
+    enable: (on) => { enabled = on; onChange?.(chosen); },
   };
 }

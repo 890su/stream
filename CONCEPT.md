@@ -169,8 +169,12 @@ request and the job given to a partner).
 - «ждёт меня» uses the triage outcome, not just the last message: an incoming "ok, thanks" filed as «без дела»
   waits for nothing. In a group a message waits for me only when addressed to me or part of my task. My reply in
   any channel of the conversation is an answer.
+- **«Отвечено»** (2026-11-19): the owner can mark a conversation answered even when the last message is not
+  theirs — a `correction` with `op: answered` on its latest message (`unanswered` undoes it). Messages up to that
+  one, and tasks of the conversation with no message after it, no longer make it «ждёт меня» or «жду ответа»; a
+  new message after the mark brings the state back. Urgency by due date stays.
 - Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
-  reply goes through the chosen channel (the «кому» row, §2.9); each message shows to whom, where and when.
+  reply goes through the chosen channel (the input row, §2.9); each message shows to whom, where and when.
 
 **Message links** (2026-11-14) — hints for triage, from reliable to guessed:
 1. explicit owner signals: «продолжить» on a message, «связать…» while typing, «Связать» / «Отделить»
@@ -231,7 +235,7 @@ its actions; a batch — «Обработать всё показанное» in
 **In the feed** a message is shown **processed**, not raw. A message with history or links has a history icon; it
 opens the message details on the right (§5): versions swipe left and right down to the source (each says what it
 is and when), next to the message's tasks. No swipe on a message in the feed: tap — action panel, long press —
-selection, swipe left-to-right — left panel (§5). "Linked" means the reply chain and messages of shared tasks.
+selection (§5). "Linked" means the reply chain and messages of shared tasks.
 
 ### 2.8 Tasks — the main entity; batch triage (2026-11-17)
 
@@ -289,7 +293,7 @@ promised what by when, with the quoted message. "I'll do it tomorrow" — a task
 **Act where the task is seen** (2026-11-19). Task rows and task plaques in a conversation have a round mark on the
 left: tap — «Готово». Swipe right — «Готово» too; swipe left — «Когда?» (today, tomorrow, this week, a date). A tap
 on the row opens details. Every action shows a toast with «Вернуть» for a few seconds; undo is a new `task_change`
-restoring the previous values. A swipe from the very left screen edge still opens the left panel. The same
+restoring the previous values. The same
 actions work as text or voice in «Я»: "move the call to Anna to Friday".
 
 **Batch triage.** After a message the triage waits for a quiet window (`registry/tasks.json`: `quiet_s`, now 60 s;
@@ -323,21 +327,34 @@ filters, processes and mirrors.
 
 ### 2.9 Recipients; closing a task (2026-11-18)
 
-**The row above the input has two sides:**
-- left: `#` (the full tag window), the link icon, then suggested or switched-on tags;
-- right: «кому» — a tap slides contacts in from the right, tags hide under `#`;
-- replying to a chat message opens the row with that contact already chosen; others can be added (forward,
-  share). Nobody chosen — a note to myself, nothing goes out;
-- each recipient is its own send (class C) with a status under the reply. For now one recipient per message:
-  tapping another replaces it;
-- a personal chat accepts text only and only within the 24-hour window (§8.2): such a recipient is struck out,
-  and sending offers «Открыть» the chat in Telegram.
+**The row above the input** (2026-11-19, replaces «#» on the left and «кому» on the right):
+- left — the only button, round «связь»: it opens the **link window** (below);
+- then chips of what the next message carries: the chosen conversation or task, the recipient, switched-on and
+  suggested tags (§2.2); × or a tap removes a chosen item;
+- right — the view switch with a counter (§5);
+- replying to a chat message chooses its contact as the recipient; nobody chosen — a note to myself, nothing goes
+  out. Each recipient is its own send (class C) with a status under the reply; for now one recipient per message;
+- a personal chat accepts text only and only within the 24-hour window (§8.2): such a recipient is struck out, and
+  sending offers «Открыть» the chat in Telegram.
+
+**Link window** — one popup with sections **Метки · Контакты · Беседы · Задачи**. In each section the most likely
+items come first and a swipe left shows the less likely ones; long items (contacts, conversations, tasks) go in
+pages, swiped left and right. A tap on a section title expands it to the whole window with «назад» left of the
+title (search and the full list there; «+ новая метка» in Метки, the pin star in Контакты). Choosing:
+- a tag — switches it on or off for the next message;
+- a contact — the recipient;
+- a conversation — the next message goes into it: it continues the conversation's last message, and a chat's
+  contact becomes the recipient;
+- a task — the next message is added to that task when sent.
+Likely first: tags by the suggester (§2.2); contacts pinned, then frequent; conversations — the open one, then
+«срочно» and «ждёт меня», then recent; tasks — the open one, those of the open conversation, «Сегодня», then
+recently changed. The window stays on screen; nothing navigates away.
 
 **Address book** — the start of P7: contacts and groups one can write to (personal Telegram chats, groups with the
-bot; later phones and mail). The «кому» row shows the most frequent (from the journal, `address_book.frequent_days`
-in `registry/telegram.json`) and pinned ones. A group is a recipient too, e.g. the partners' work group for new
-requests. Untracked chats and foreign groups are not in it. Pin — the star in the full list («Все…» with search);
-pinning is a `pin` / `unpin` correction on a message of that chat.
+bot; later phones and mail) — the Контакты section of the link window: pinned first, then the most frequent (from
+the journal, `address_book.frequent_days` in `registry/telegram.json`). A group is a recipient too, e.g. the
+partners' work group for new requests. Untracked chats and foreign groups are not in it. Pin — the star in the
+expanded section (with search); pinning is a `pin` / `unpin` correction on a message of that chat.
 
 **Closing — one tap, report later** (2026-11-19). «Готово» closes at once; no report form on closing — it
 punished the owner for doing the work. Report fields required by the template go to `report.missing`: such tasks
@@ -422,14 +439,22 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 
 | Where | Question | What |
 |---|---|---|
-| Centre | what am I looking at | «Беседы · Задачи» switch in the top bar; the technical «Лента» from the ⋮ menu |
-| Left | how to narrow it | filters per view (☰ or a swipe left-to-right) |
+| Centre | what am I looking at | «Беседы» or «Задачи» (switch in the input row); the technical «Лента» from the ⋮ menu |
+| Left | how to narrow it | filters per view (the filter icon in the top bar) |
 | Right | what is this | details of what was tapped: a task, a conversation or a message |
 | Bottom | what to say | the input row, always there; above it the tags and recipients row (§2.9) |
 
+- **Top bar** (2026-11-19): the name of the current view and the network status; on the right — filter (with the
+  number of active filters), «Архив», ⋮. No tabs: the views switch in the input row.
+- **View switch** — the button at the right end of the input row: «Задачи» on Беседы, «Беседы» on Задачи and Лента.
+  Its counter belongs to the open context: the Беседы list — tasks for «Сегодня»; an open conversation — its open
+  tasks (a tap shows Задачи filtered by it); the Задачи list — conversations «срочно» and «ждёт меня»; an open task —
+  its conversations in those states (a tap opens the first of them, or its first conversation).
 - **«Беседы»** — the conversation list by state (§2.5): urgent → mine → theirs → quiet → done. A row: title, last
   message, channel badge, open tasks count, state. A tap opens the conversation: messages and its task plaques on
-  top; the input writes into it. Default view.
+  top; the input writes into it. Default view. **Swipes on a row:** right-to-left — «Отвечено» (§2.5); left-to-right —
+  open the conversation's task (the most urgent open one) or, if it has none, make a task from its latest message
+  and open it. Each with «Вернуть» in the toast.
 - **«Задачи»** — a compact list of rows chosen by a saved filter. On top — chips of the main lists with counts:
   «Сегодня · Разобрать · Жду · Контроль · Ещё…» (`pinned` in `registry/filters.json`); «Ещё…» opens all lists on the
   left. Default «Сегодня»: my open tasks in sections «Просрочено · Сегодня · Проверить · Разобрать · Дальше»
@@ -450,8 +475,8 @@ a message must carry all, a task through at least one message). Per view: Бес
 «Завершённые»; Задачи — saved filters, role, status, due; Лента — sources, «Завершённые» (messages of finished
 tasks, hidden by default). Projects become a filter with project link tags (P3). While a filter is on, the top bar
 shows a reset button. **«Архив»** in the top bar works for all views (archived messages paler), off by default.
-The panel sits between the top bar and the input row; opened by ☰ or a swipe left-to-right, closed by the
-opposite swipe.
+The panel sits between the top bar and the input row; opened only by the filter icon (no opening swipe — horizontal
+swipes belong to rows), closed by a swipe right-to-left, the backdrop or «назад».
 
 **Right panel** opens only on a tap: a task plaque, a task row, the task or history icon under a message, the
 title over a message. A swipe left-to-right closes it.
@@ -480,8 +505,8 @@ messages, and instead of the input a bar for the selection appears (link, tag, c
 ends it. In selection the tag row acts on all selected: «привязать», «отвязать», and tags (a tap adds the tag to all;
 if all have it — removes).
 
-**Link picker** — one window for «связать…» while typing, «Связать» in the action panel and a single selection:
-search, open tasks, recent messages and «Выбрать в ленте» (a banner shows the mode, «Назад» cancels).
+**Message link picker** — for «Связать» in the action panel and a single selection (the input row uses the link
+window, §2.9): search, open tasks, recent messages and «Выбрать в ленте» (a banner shows the mode, «Назад» cancels).
 
 **Messages** (2026-11-14):
 - Only linked messages share one bubble with thin dividers: a continuation right under what it continues; each
@@ -494,7 +519,7 @@ search, open tasks, recent messages and «Выбрать в ленте» (a bann
 - Long text is cut with «Показать полностью»; photos are thumbnails, a tap opens full screen.
 
 **No jumps** (2026-11-18): everything that expands, collapses, appears or leaves does so smoothly (task plaques,
-list rows, folded «Завершённые», panels, the «кому» row, details, toasts; a new message slides in from below). The
+list rows, folded «Завершённые», panels, the link window, details, toasts; a new message slides in from below). The
 system "reduce motion" setting turns animation off.
 
 **«Система» screen** (2026-11-17) — the record of everything that works without the owner, instead of a separate
@@ -627,7 +652,7 @@ source; a deletion is marked «удалено в Telegram», the message does no
 **In the feed** a bubble headed «Telegram BY · name» (in a group «group · author»); tasks from chats are built by
 links and triage (§2.8); the left panel filters by source (mine, Telegram BY, Telegram PL, phone).
 
-**Reply from Stream.** The recipient is chosen in the «кому» row (§2.9); replying to a chat message preselects it.
+**Reply from Stream.** The recipient is chosen in the input row or the link window (§2.9); replying to a chat message preselects it.
 Sending is the confirmation (class C, connector `telegram_by` / `telegram_pl`, operation `send_message`). In a
 personal chat the reply goes as the account. No recipient — a note to myself; nothing leaves by accident. From
 step 3 AI prepares a draft (class B).

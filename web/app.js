@@ -19,7 +19,12 @@ import { conversationOf } from './conversations.js';
 import { reveal, conceal } from './motion.js';
 import { createDoneCards } from './donecard.js';
 import { createTaskQuick } from './taskquick.js';
+import { createConvQuick } from './convquick.js';
 import { setupQuestions } from './question.js';
+import { setupViewSwitch } from './viewswitch.js';
+import { isWide } from './layout.js';
+import { listCount } from './tasklist.js';
+import { visibleTasks } from './filters.js';
 
 let details; // right panel «Подробности» (CONCEPT.md §5)
 let doneCards;
@@ -29,48 +34,48 @@ let bulk;
 let drawer;
 let system;
 let chatView; // { open(key), close(), sync() } — one conversation (CONCEPT.md §2.5)
+let viewSwitch; // the «Беседы» / «Задачи» button of the input row
 
-// «Беседы · Задачи» in the top bar (CONCEPT.md §5); the choice is remembered on this device. The technical Лента
-// opens from ⋮ («Лента сообщений») and is not remembered. Views saved by earlier versions map to the new ones (feed.js).
+// «Беседы» / «Задачи» (CONCEPT.md §5): the switch at the right end of the input row (viewswitch.js); the choice is
+// remembered on this device. The technical Лента opens from ⋮ («Лента сообщений») and is not remembered. Views saved
+// by earlier versions map to the new ones (feed.js).
 function setupViews(feed) {
-  const buttons = [...document.querySelectorAll('#views [data-view]')];
-  const show = (mode) => { for (const button of buttons) button.setAttribute('aria-selected', String(button.dataset.view === mode)); };
+  const update = () => viewSwitch?.update();
   let saved = 'conversations';
   try { saved = localStorage.getItem('stream.feedMode') ?? 'conversations'; } catch { /* private mode */ }
   if (saved === 'feed' || saved === 'messages') saved = 'conversations';
   feed.setMode(saved);
-  show(feed.mode());
   try { if (saved !== feed.mode()) localStorage.setItem('stream.feedMode', feed.mode()); } catch { /* private mode */ }
-  for (const button of buttons) {
-    button.onclick = async () => {
-      const next = button.dataset.view;
-      // The selected «Беседы» tab inside a conversation goes back to the list.
-      if (next === feed.mode()) { if (next === 'conversations' && chatView?.key()) chatView.leave(); return; }
-      try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
-      show(next);
-      await feed.setMode(next);
-      chatView?.sync();
-      updateFilter();
-      drawer?.render();
-    };
+  const after = () => { chatView?.sync(); updateFilter(); drawer?.render(); update(); };
+  // `key` — a conversation to open (from a task or a conversation filter); Задачи keep an open conversation as a filter.
+  async function go(next, key = null) {
+    try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
+    if (next === 'conversations' && details?.current()?.kind === 'task' && !isWide()) details.close();
+    await feed.setMode(next);
+    if (next === 'conversations' && key && key !== chatView?.key()) await chatView.open(key);
+    after();
   }
-  // ⋮ → «Лента сообщений»: no tab is selected while it is shown.
+  const todayCount = () => {
+    const today = feed.taskFilters()[0];
+    return today ? listCount(visibleTasks(feed.tasks(), { filter: today }), today) : 0;
+  };
+  viewSwitch = setupViewSwitch({ feed, todayCount, taskId: () => (details?.current()?.kind === 'task' ? details.current().id : null), go });
+  update();
+  // ⋮ → «Лента сообщений».
   $('#feed-button').onclick = async () => {
     $('#settings').close();
     if (chatView?.key()) chatView.leave();
-    show('feed');
     await feed.setMode('feed');
-    chatView?.sync();
-    updateFilter();
-    drawer?.render();
+    after();
   };
 }
 
-// The reset button shows how many tags (and, in the Лента, sources) filter the centre.
+// The reset button next to the filter icon shows how many tags (and, in the Лента, sources) filter the centre.
 function updateFilter() {
   const count = (feedRef?.tagFilter().length ?? 0) + (feedRef?.mode() === 'feed' && feedRef?.sourceFilter() ? 1 : 0);
   $('#filter-reset').hidden = !count;
   $('#filter-count').textContent = count ? String(count) : '';
+  $('#drawer-button').classList.toggle('active', Boolean(count));
 }
 let feedRef;
 let composerRef; // tag suggestions follow the feed: frequent tags are known once it is loaded
@@ -115,7 +120,7 @@ function setupMessageActions(feed, composer, config) {
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
   chatView = setupChatView({ feed, composer, correct, notify });
-  details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick });
+  details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update() });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
@@ -173,14 +178,26 @@ async function main() {
   const onQueue = setupStatus();
   let quick = null; // task actions where a task is seen (taskquick.js), once the composer's queue exists
   const quickRef = { decorate: (item, task) => quick?.decorate(item, task), done: (task) => quick?.done(task), act: (...args) => quick?.act(...args), reset: () => quick?.reset() };
+  let convQuick = null; // swipes on conversation rows (convquick.js), once the composer's queue exists
+  const convQuickRef = { decorate: (row, conversation) => convQuick?.decorate(row, conversation) };
   const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
-    quick: quickRef, onMoreLists: () => drawer?.open(),
-    taskCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); chatView?.sync(); composerRef?.refreshTags(); } });
+    quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open(),
+    taskCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); chatView?.sync(); composerRef?.refreshTags(); viewSwitch?.update(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
-    onPickRequest: () => picker.open({ onPick: (view) => composer.proceed(view) }) });
+    // The link window's sections: conversations and tasks as the feed sees them, and what is open now.
+    linkContext: () => {
+      const open = details?.current()?.kind === 'task' ? details.current().id : null;
+      const key = feed.conversationKey();
+      const today = feed.taskFilters()[0];
+      return { conversations: feed.conversations(), tasks: feed.tasks(), openConversation: key, openTask: open,
+        conversationTasks: feed.conversations().find((item) => item.key === key)?.tasks ?? [],
+        today: today ? visibleTasks(feed.tasks(), { filter: today }) : [] };
+    } });
   composerRef = composer;
   taskQuick = quick = createTaskQuick({ queue: composer.queue, notify, config });
+  // A new task is opened once the feed has drawn it (the queue redraws without waiting).
+  convQuick = createConvQuick({ queue: composer.queue, notify, openTask: async (id) => { if (!feed.task(id)) await feed.render(); details.openTask(id); } });
   doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); }, close: (task) => quick.done(task), drop: (task) => quick.act(task, { proposed: null }, `Ещё не готово: «${task.title}»`) });
   setupViews(feed);
   setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });
