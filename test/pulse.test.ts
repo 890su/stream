@@ -52,9 +52,9 @@ test('every task lands in exactly one block; team, filed, snoozed and ideas are 
   assert.equal(b.work.title, 'в работе');
   assert.deepEqual(titles(b.paused), ['на паузе']);
   assert.deepEqual(titles(b.hot), ['просрочено']);
-  assert.deepEqual(titles(b.today).sort(), ['завтра', 'разобрать']);
+  assert.deepEqual(titles(b.today), ['разобрать'], '«До конца дня»: what is for today, not tomorrow');
   assert.deepEqual(titles(b.watch).sort(), ['жду адрес', 'поручено']);
-  assert.deepEqual(titles(b.later), ['потом']);
+  assert.deepEqual(titles(b.later), ['завтра', 'потом'], 'tomorrow leads «Дальше»');
   const all = [b.work, ...b.paused, ...b.hot.map((item: any) => item.task), ...b.today, ...b.watch, ...b.later].filter(Boolean).map((task: any) => task.title);
   assert.equal(new Set(all).size, all.length, 'no task twice');
 });
@@ -96,7 +96,7 @@ test('money outranks a plain task with the same due; the order inside a block fo
   const [plain, money] = foldTasks([create('обычное', { roles: mine, due: '2026-11-20' }), create('заявка', { roles: mine, due: '2026-11-20', template: 'lead' })]);
   assert.ok(importance(money, { now, config }) > importance(plain, { now, config }));
   const b = blocks([create('обычное', { roles: mine, due: '2026-11-20' }), create('заявка', { roles: mine, due: '2026-11-20', template: 'lead' })]);
-  assert.deepEqual(titles(b.today), ['заявка', 'обычное']);
+  assert.deepEqual(titles(b.later), ['заявка', 'обычное']);
 });
 
 test('project health: overdue red, a goal without a next step yellow, moving green; 7-day counts', () => {
@@ -128,7 +128,7 @@ test('project health: overdue red, a goal without a next step yellow, moving gre
 test('the pulse counter is what burns plus what is for today', () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   return import('../web/pulse.js').then(({ pulseCount }) => {
-    const b = blocks([create('горит', { roles: mine, due: '2026-11-18' }), create('завтра', { roles: mine, due: '2026-11-20' }), create('потом', { roles: mine })],
+    const b = blocks([create('горит', { roles: mine, due: '2026-11-18' }), create('разобрать', { roles: mine, status: 'inbox' }), create('потом', { roles: mine })],
       [conversation('Клиент А', 'mine', '2026-11-19T09:00:00')]);
     assert.equal(pulseCount(b), 3);
   });

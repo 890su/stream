@@ -1,5 +1,7 @@
 // Message actions: a tap opens the action panel; a long press (or Ctrl/Shift+click) selects messages for bulk
 // actions (select.js). Right click and the menu key also open the panel.
+import { backStack } from './backclose.js';
+
 const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 10;
 const GAP_PX = 8;
@@ -50,14 +52,18 @@ export function setupActions({ list, getView, onAction }) {
     linkButton.setAttribute('aria-label', view.continues ? 'Отделить от предыдущего' : 'Связать с предыдущим сообщением');
     layer.hidden = false;
     panel.hidden = false;
+    release = backStack?.opened(close) ?? null; // the system back closes the panel
     place(bubble);
     bubble.classList.add('selected');
     panel.querySelector('button').focus({ preventScroll: true });
     navigator.vibrate?.(10);
   }
 
+  let release = null;
   function close() {
     if (layer.hidden) return;
+    release?.();
+    release = null;
     layer.hidden = true;
     panel.hidden = true;
     selected?.classList.remove('selected');

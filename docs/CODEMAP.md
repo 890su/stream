@@ -81,6 +81,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `convquick.js` | swipes on a «Беседы» row: left — to the archive (`answered` correction), right — its most urgent task or a new one (`pickTask`, `anchorOf`, `sourceOf`) |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
 | `donecard.js` | card «Задача выполнена?» (triage's `proposed: done`): «Да, готово» closes in one tap, «Ещё нет»; «Заполнить отчёт» on a closed task fills the missing fields; pure report parsing |
+| `backclose.js` | the system back closes what is open on top (link window, attach menu, message actions, dialogs) instead of leaving the app: history entries per window (`createBackStack`, `watchDialogs`) |
 | `holdrender.js` | redraws of the left panel, details and centre wait while an input or a list of choices there is in use (`holdRender`, `holding`) |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `convlist.js` / `convtasks.js` | a row of the «Беседы» list (state label, channels, open tasks) and the «Завершённые · N» / «Архив · N» folds (`foldRow`); task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |

@@ -1,6 +1,7 @@
 // Stream PWA entry point: wires the centre («Беседы · Задачи», Лента from ⋮), filters on the left, details on the right,
 // the composer, and starts sync and live updates.
 import { getSetting } from './db.js';
+import { watchDialogs } from './backclose.js';
 import { setupComposer } from './composer.js';
 import { setupFeed } from './feed.js';
 import { startSync } from './outbox.js';
@@ -179,6 +180,7 @@ function setupMessageActions(feed, composer, config) {
 }
 
 async function main() {
+  watchDialogs(); // the system back closes an open dialog instead of leaving the app
   // Chrome on Android: let the keyboard overlay the page so CSS can slide the layout instead of a jump resize.
   if ('virtualKeyboard' in navigator) navigator.virtualKeyboard.overlaysContent = true;
   const response = await fetch('/capture-config.json');

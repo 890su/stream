@@ -85,7 +85,7 @@ export function pulseBlocks({ tasks, conversations = [], projects = [], now = ne
   for (const task of eligible) {
     const mineOrNew = isMineToDo(task) || task.status === 'inbox';
     if (burns(task, now) && (mineOrNew || watched(task) || checksMine(task))) hot.push(task);
-    else if (mineOrNew && (task.next || task.status === 'inbox' || task.status === 'deferred' || isTomorrow(task, now)) && task.status !== 'waiting') today.push(task);
+    else if (mineOrNew && (task.next || task.status === 'inbox' || task.status === 'deferred') && task.status !== 'waiting') today.push(task);
     else if (checksMine(task)) today.push(task);
     else if (watched(task)) watch.push(task);
     else if (isMineToDo(task)) later.push(task);

@@ -71,11 +71,17 @@ export function setupPicker({ getVisible, getChain, notify }) {
   }
 
   function chooseInFeed() {
+    const start = () => {
+      document.body.classList.add('picking');
+      banner.hidden = false;
+      history.pushState({ picking: true }, '');
+      notify('Прокрутите ленту и коснитесь нужного сообщения');
+    };
+    // Closing the dialog takes its history entry back (backclose.js); choosing starts once that back has landed.
+    const waiting = Boolean(history.state?.overlay);
     dialog.close();
-    document.body.classList.add('picking');
-    banner.hidden = false;
-    history.pushState({ picking: true }, '');
-    notify('Прокрутите ленту и коснитесь нужного сообщения');
+    if (waiting) window.addEventListener('popstate', () => setTimeout(start, 0), { once: true });
+    else start();
   }
 
   search.addEventListener('input', render);

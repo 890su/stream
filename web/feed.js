@@ -161,6 +161,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       children.push(...taskViewNodes({ tasks: taskList, viewsOf, now, filters: taskFilters, filter: taskFilter(), matches: taskMatches(), grouping, onGroup: nextGrouping,
         onPick: (id) => setTaskFilter(id), onMore: onMoreLists, onOpen: onOpenTask, quick, showDone,
         isOpenSection: (key) => openSections.has(key), toggle: (key, open) => toggleGroup(key, open, () => { if (open) openSections.delete(key); else openSections.add(key); }),
+        flip: (key, hiding) => toggleGroup(key, hiding, () => { if (openSections.has(key)) openSections.delete(key); else openSections.add(key); }),
         keepRows: (key, rows) => groupNodes.set(key, rows), project: currentProject(), projects: projectList, projectActions,
         conversations: convList, pulseConfig: limits.pulse, onOpenConversation: (key) => onGoConversation?.(key), onOpenProject: (id) => setProject(id) }));
     } else if (mode === 'conversations' && !inside) {

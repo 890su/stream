@@ -11,6 +11,7 @@ import { createRecipients } from './recipients.js';
 import { createDraftFiles } from './draftfiles.js';
 import { createLinkState } from './linkstate.js';
 import { setupLinkWindow } from './linkwindow.js';
+import { backStack } from './backclose.js';
 import { conceal, toggleHidden } from './motion.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
@@ -73,11 +74,15 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     text.style.height = `${Math.min(text.scrollHeight, 160)}px`;
   }
 
+  // The system back closes an open panel (backclose.js); closing it otherwise takes its history entry back.
+  const released = new Map(); // panel -> release of its history entry
   function togglePanel(panel, button, open = panel.hidden) {
     for (const [other, otherButton] of [[linkPanel, linkButton], [attachMenu, attachButton]]) {
-      if (other !== panel) conceal(other);
+      if (other !== panel) { conceal(other); released.get(other)?.(); released.delete(other); }
       otherButton.setAttribute('aria-expanded', 'false');
     }
+    if (open && panel.hidden && backStack) released.set(panel, backStack.opened(() => { released.delete(panel); togglePanel(panel, button, false); }));
+    if (!open) { released.get(panel)?.(); released.delete(panel); }
     if (open && panel === linkPanel) linkWindow.reset();
     toggleHidden(panel, !open);
     if (open && panel === linkPanel) linkWindow.render();

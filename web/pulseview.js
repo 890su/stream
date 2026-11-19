@@ -73,10 +73,13 @@ export function pulseNodes(ctx) {
     return item;
   };
   block(nodes, ctx, { key: 'hot', title: '🔥 Горит', items: b.hot, draw: hotRow, quiet: 'Ничего не горит' });
-  block(nodes, ctx, { key: 'today', title: '▶ Сегодня', items: b.today, draw: (task) => row(task), quiet: 'На сегодня всё сделано' });
-  block(nodes, ctx, { key: 'watch', title: '👁 Слежу', count: b.watchAlerts.length ? `${b.watch.length} · ⚠ ${b.watchAlerts.length}` : null,
+  // Without a calendar the window is the rest of the working day (task manager spec §5.1).
+  block(nodes, ctx, { key: 'today', title: '▶ До конца дня', items: b.today, draw: (task) => row(task), quiet: 'На сегодня всё сделано' });
+  block(nodes, ctx, { key: 'watch', title: '👁 Слежу', folded: true, count: b.watchAlerts.length ? `${b.watch.length} · ⚠ ${b.watchAlerts.length}` : null,
     items: b.watch, draw: (task) => row(task, { start: false }), quiet: 'Слежу — всё по плану' });
-  block(nodes, ctx, { key: 'projects', title: '📊 Проекты', items: b.projects, draw: (health) => projectRow(health, ctx), quiet: 'Нет активных проектов' });
+  // The head counts open tasks of the projects, not the projects.
+  block(nodes, ctx, { key: 'projects', title: '📊 Проекты', folded: true, count: String(b.projects.reduce((sum, item) => sum + item.open, 0)),
+    items: b.projects, draw: (health) => projectRow(health, ctx), quiet: 'Нет активных проектов' });
   block(nodes, ctx, { key: 'later', title: '⏭ Дальше', items: b.later, draw: (task) => row(task), folded: true, quietWhenEmpty: false });
 
   if (!b.work && !b.paused.length && !b.hot.length && !b.today.length && !b.watch.length && !b.projects.length && !b.later.length) {
@@ -101,22 +104,22 @@ function projectRow(health, ctx) {
   return item;
 }
 
-// A block: head with a count; up to `rows` items, «ещё N» unfolds the rest; folded blocks open on a tap; an empty
-// block is one quiet line (or nothing, `quietWhenEmpty: false`).
+// A block: head with a count; a tap on the head folds or unfolds it — `folded` blocks start closed (Ждут возврата,
+// Слежу, Проекты, Дальше), the others open (Горит, До конца дня). Up to `rows` items, «ещё N» unfolds the rest. An
+// empty block is one quiet line (or nothing, `quietWhenEmpty: false`). The fold is kept for this session (feed.js).
 function block(nodes, ctx, { key, title, items, draw, count = null, quiet = '', folded = false, quietWhenEmpty = true }) {
   if (!items.length) {
     if (quietWhenEmpty && quiet) nodes.push(element('div', 'pulse-quiet', `✓ ${quiet}`));
     return;
   }
   const sectionKey = `pulse:${key}`;
-  const open = !folded || ctx.isOpenSection(sectionKey);
-  const head = element(folded ? 'button' : 'div', 'task-section pulse-head');
-  head.dataset.group = `pulse:${key}`; // the scroll anchor keeps its place when a block unfolds (feed.js)
-  if (folded) {
-    head.type = 'button';
-    head.setAttribute('aria-expanded', String(open));
-    head.onclick = () => ctx.toggle(sectionKey, open);
-  }
+  const flipped = ctx.isOpenSection(sectionKey); // toggled away from its default
+  const open = folded ? flipped : !flipped;
+  const head = element('button', 'task-section pulse-head');
+  head.dataset.group = sectionKey; // the scroll anchor keeps its place when a block folds (feed.js)
+  head.type = 'button';
+  head.setAttribute('aria-expanded', String(open));
+  head.onclick = () => ctx.flip(sectionKey, open);
   head.append(element('span', 'task-section-title', title), element('span', 'task-section-count', count ?? String(items.length)));
   nodes.push(head);
   if (!open) return;
@@ -124,5 +127,6 @@ function block(nodes, ctx, { key, title, items, draw, count = null, quiet = '', 
   const all = ctx.isOpenSection(moreKey);
   const rows = ctx.config.rows;
   nodes.push(...(all ? items : items.slice(0, rows)).map(draw));
-  if (!all && items.length > rows) nodes.push(button('pulse-more', `ещё ${items.length - rows}`, () => ctx.toggle(moreKey, false)));
+  if (!all && items.length > rows) nodes.push(button('pulse-more', `ещё ${items.length - rows}`, () => ctx.flip(moreKey, false)));
+  ctx.keepRows?.(sectionKey, nodes.slice(nodes.indexOf(head) + 1)); // folding animates these rows
 }
