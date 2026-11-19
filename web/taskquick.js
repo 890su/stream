@@ -1,7 +1,8 @@
 // Acting on a task where it is seen (CONCEPT.md §2.8, 2026-11-19): the round «Готово» mark, a swipe right (done)
 // and left («Когда?» — due today, tomorrow, this week, a date) on task rows and conversation plaques, and every
 // change with «Вернуть» in the toast — the undo is one more task_change with the replaced values.
-import { closeChange, undoOf, dueChips } from './taskactions.js';
+import { closeChange, undoOf } from './taskactions.js';
+import { whenRowIcons } from './taskbar.js';
 import { reportKeys } from './donecard.js';
 import { makeTaskChange } from './shared.js';
 import { reduced } from './motion.js';
@@ -53,14 +54,11 @@ export function createTaskQuick({ queue, notify, config, onHold = null }) {
   function whenRow(item, task, focus = true) {
     item.querySelector('.task-when')?.remove();
     whenFor = task.id;
-    const row = element('div', 'task-when chips');
+    const row = element('div', 'task-when');
     row.setAttribute('aria-label', 'Когда сделать');
     const close = () => { whenFor = null; row.remove(); };
-    for (const chip of dueChips()) row.append(button('chip suggest', chip.label, () => { close(); setDue(task, chip.due, chip.label); }));
-    const date = Object.assign(document.createElement('input'), { type: 'date', className: 'details-due' });
-    date.setAttribute('aria-label', 'Срок');
-    date.onchange = () => { if (date.value) { close(); setDue(task, date.value, date.value.split('-').reverse().join('.')); } };
-    row.append(date, button('icon-button task-when-close', '×', close, 'Закрыть'));
+    // One compact row of icons (☀ сегодня, 🌙 завтра, 🗓 на неделе, 📅 дата, ✕), not a card of words.
+    row.append(whenRowIcons((due, label) => { close(); setDue(task, due, label); }, { onClose: close }));
     item.append(row);
     if (focus) row.querySelector('button')?.focus({ preventScroll: true });
   }

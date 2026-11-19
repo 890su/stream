@@ -38,6 +38,31 @@ export function moreActions(task) {
 
 const morning = (day) => new Date(`${day}T09:00:00`).toISOString();
 
+// «Когда?» as icons (the words go to the screen reader and the hint): today, tomorrow, this week.
+const WHEN_ICONS = ['☀', '🌙', '🗓'];
+export function whenChoices(now = new Date()) {
+  return dueChips(now).map((chip, index) => ({ ...chip, icon: WHEN_ICONS[index] }));
+}
+
+// A compact row of «Когда?» icons and a calendar for any date; `onPick(due, label)`.
+export function whenRowIcons(onPick, { onClose = null } = {}) {
+  const row = element('div', 'when-icons');
+  for (const choice of whenChoices()) {
+    const node = button('when-icon', choice.icon, () => onPick(choice.due, choice.label), choice.label);
+    node.title = choice.label;
+    row.append(node);
+  }
+  // Any date: the calendar icon opens the date picker of a hidden field.
+  const input = Object.assign(document.createElement('input'), { type: 'date', className: 'when-date' });
+  input.setAttribute('aria-label', 'Выбрать дату');
+  input.onchange = () => input.value && onPick(input.value, input.value.split('-').reverse().join('.'));
+  const calendar = button('when-icon', '📅', () => { try { input.showPicker(); } catch { input.focus(); input.click(); } }, 'Выбрать дату');
+  calendar.title = 'дата';
+  row.append(calendar, input);
+  if (onClose) row.append(button('when-icon muted', '✕', onClose, 'Закрыть'));
+  return row;
+}
+
 // «Другой…»: a name or a phone number typed in.
 export function personForm(onPick) {
   const form = element('form', 'details-rename');
@@ -75,12 +100,7 @@ export function actionBar(task, ctx) {
     ...(withAi ? [button('chip suggest', 'ИИ', () => run(action, 'ai', message))] : []),
     button('chip suggest', 'Другой…', () => show(`${action}-other`, [personForm((party) => run(action, party, message))])),
   ];
-  const dates = (onPick) => {
-    const input = Object.assign(document.createElement('input'), { type: 'date', className: 'details-due' });
-    input.setAttribute('aria-label', 'Дата');
-    input.onchange = () => input.value && onPick(input.value, input.value.split('-').reverse().join('.'));
-    return [...dueChips().map((chip) => button('chip suggest', chip.label, () => onPick(chip.due, chip.label))), input];
-  };
+  const dates = (onPick) => [whenRowIcons(onPick)];
   const handlers = {
     done: () => { ctx.quick.done(task); finish(); },
     verify: () => { ctx.quick.done(task); finish(); },

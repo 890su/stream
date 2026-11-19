@@ -208,3 +208,15 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .card-section > summary::after { content: '\203A'; margin-left: auto; font-size: 18px; transition: transform .18s ease-out; }
 .card-section[open] > summary::after { transform: rotate(90deg); }
 .card-bar { position: sticky; bottom: 0; z-index: 2; margin: 6px 0 0; padding: 6px 0; background: var(--panel); border-top: 1px solid var(--line); }
+
+/* «Когда?» as one compact row of icons (taskbar.js whenRowIcons): swipe left on a row and the bar's «Когда». */
+.when-icons { display: flex; align-items: center; gap: 4px; }
+.when-icon { width: 44px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--chip); font-size: 19px; }
+.when-icon.muted { background: none; color: var(--muted); font-size: 16px; }
+.when-date { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* «Участники» (participants.js): a name and its roles; a tap opens the role chips. */
+.card-people { display: grid; gap: 4px; }
+.card-person-head { width: 100%; min-height: 44px; display: flex; align-items: baseline; gap: 8px; text-align: left; }
+.card-person-name { font-weight: 600; }
+.card-person-roles { color: var(--muted); font-size: 13.5px; }
+.card-person-edit { padding-bottom: 6px; }

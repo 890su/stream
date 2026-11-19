@@ -2,13 +2,13 @@
 // выполнена?», a call and a map; then folding sections — checklist, conversation (the last three), details (project,
 // counterparty, roles, origin), report, history; the action bar (taskbar.js) always at the bottom.
 import { STATUSES, describeChange } from './taskfold.js';
-import { partyName } from './parties.js';
 import { checklistBlock } from './checklist.js';
 import { projectLine } from './projectpanel.js';
 import { counterpartyLine } from './counterpartyline.js';
 import { personOf } from './contacts.js';
 import { actionBar } from './taskbar.js';
 import { headline, nextStep, contactLinks, section } from './taskcard.js';
+import { participants, participantsBlock } from './participants.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -55,19 +55,6 @@ function reportBlock(report, fields) {
     box.append(element('div', 'details-fact', `${fields[key].title}: ${shown}`));
   }
   if (report.missing?.length) box.append(element('div', 'details-fact muted', `Не заполнено: ${report.missing.map((key) => fields[key]?.title ?? key).join(', ')}`));
-  return box;
-}
-
-// Roles: folded into one line — who does it, else who answers for it; unfolded — every filled role.
-function rolesBlock(task, views) {
-  const { roles } = task;
-  const lines = [['Исполнитель', roles.executors], ['Ответственный', [roles.responsible]], ['Контролёр', [roles.controller]], ['Постановщик', [roles.author]], ['Ждём', [task.waitingFor?.party]]]
-    .map(([label, parties]) => [label, parties.filter(Boolean).map((party) => partyName(party, views))]).filter(([, names]) => names.length);
-  if (!lines.length) return null;
-  const box = element('details', 'details-roles');
-  const [label, names] = lines[0];
-  box.append(element('summary', 'details-fact', `${label} · ${names.join(', ')}${lines.length > 1 ? ' · ещё роли' : ''}`));
-  for (const [line, people] of lines.slice(1)) box.append(element('div', 'details-fact', `${line} · ${people.join(', ')}`));
   return box;
 }
 
@@ -122,13 +109,15 @@ export function taskDetails(task, { views, bubble, save, saveTo, others, notify,
   if (!views.length) talk.append(element('p', 'drawer-empty', 'Сообщений нет'));
   box.append(section('talk', `Переписка · ${views.length}`, [talk], { open: true }));
 
-  // Details: project, counterparty, roles, how it was made; open while the triage asks something here.
+  // Participants and their roles, added and changed here.
+  const people = participants(task);
+  box.append(section('people', `Участники · ${people.length}`, [participantsBlock(task, { views, people: directory?.people ?? [], save })], { open: true }));
+
+  // Details: project, counterparty, how it was made; open while the triage asks something here.
   const asks = (!task.project && task.project_options?.length) || (!task.counterparty && (task.counterparty_options?.length || task.counterparty_hint));
   const more = [projectLine(task, { projects, save })];
   if (checklist && !task.items?.length) more.push(checklist);
   if (directory && !task.filed) more.push(counterpartyLine(task, { ...directory, save }));
-  const roles = rolesBlock(task, views);
-  if (roles) more.push(roles);
   const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
   more.push(element('p', 'details-meta', `${origin} · ${clock.format(new Date(task.createdAt))}`));
   if (task.note) more.push(element('p', 'details-meta', task.note));
