@@ -49,3 +49,16 @@ test('directory events are not messages: no bubble, no conversation', async () =
   assert.deepEqual(project(events), []);
   assert.deepEqual(events.map(conversationOf), [null, null]);
 });
+
+test('/api/directory gives every person, counterparty and project event, whatever the feed page', async () => {
+  const { fixture } = await import('./helpers.ts');
+  const f = await fixture();
+  try {
+    const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal((await post(contact({ op: 'create', name: 'Анна Тестова' }))).status, 201);
+    assert.equal((await post(counterparty({ op: 'create', kind: 'org', title: 'ООО Пример' }))).status, 201);
+    assert.equal((await post(event({ payload: { text: 'просто сообщение' } }))).status, 201);
+    const body = await (await f.request('/api/directory')).json();
+    assert.deepEqual(body.events.map((item: any) => item.kind).sort(), ['contact_change', 'counterparty_change']);
+  } finally { await f.stop(); }
+});

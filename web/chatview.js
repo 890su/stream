@@ -82,7 +82,9 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   $('#chat-close').onclick = leave;
   $('#chat-back').onclick = leave;
   // «Контакт»: the person of this conversation from the directory, or a new one from the chat or the number.
+  let creatingPerson = false; // a double tap must not make two people: the directory updates on the next render
   $('#chat-person').onclick = async () => {
+    if (creatingPerson) return;
     const conversation = feed.conversation();
     const draft = personFromConversation(conversation);
     if (!draft) { notify('Это не беседа с человеком'); return; }
@@ -90,7 +92,8 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     const known = personOf(party, feed.people());
     if (known) { openPerson(known.id); return; }
     const id = crypto.randomUUID();
-    try { await composer.queue(makePersonChange(id, { op: 'create', ...draft })); } catch (error) { notify(error.message); return; }
+    creatingPerson = true;
+    try { await composer.queue(makePersonChange(id, { op: 'create', ...draft })); } catch (error) { notify(error.message); return; } finally { setTimeout(() => { creatingPerson = false; }, 1500); }
     openPerson(id);
   };
   // «+ Задача»: a new task for this conversation, from its latest message, titled by the conversation.

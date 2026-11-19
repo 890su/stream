@@ -29,7 +29,7 @@ export function counterpartyChoices(task, counterparties) {
 
 // The change that creates a counterparty from the form, or null without a name. An address is its own title.
 export function newCounterparty({ kind, title, side }) {
-  const name = String(title ?? '').trim();
+  const name = String(title ?? '').trim().slice(0, 120); // the contract's limit
   if (!name) return null;
   return { op: 'create', kind, title: name, ...(kind === 'address' ? { address: name } : {}), side: side ?? null };
 }
@@ -71,7 +71,7 @@ export function counterpartyLine(task, ctx) {
     let side = null;
     const field = Object.assign(document.createElement('input'), { className: 'details-input', value: title, placeholder: 'Название' });
     field.setAttribute('aria-label', 'Название или адрес');
-    const go = button('chip on', 'Создать', () => { holding(choice, false); void create({ kind, title: field.value, side }); });
+    const go = button('chip on', 'Создать', () => { if (go.disabled) return; go.disabled = true; holding(choice, false); void create({ kind, title: field.value, side }); });
     const sync = () => { go.disabled = !newCounterparty({ kind, title: field.value, side }); };
     field.oninput = sync;
     const kinds = element('div', 'chips');

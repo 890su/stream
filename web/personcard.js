@@ -4,6 +4,7 @@
 import { ROLE_KEYS } from './parties.js';
 import { isOpen } from './taskfold.js';
 import { holding } from './holdrender.js';
+import { pointsOf } from './contacts.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -21,11 +22,19 @@ function button(className, text, onClick, label) {
 
 // A new person from a conversation: a Telegram chat gives its user id, a number gives the phone; own notes and split
 // conversations are not a person.
+// A group chat and a short service number are not a person: they would give no point and a new record on every tap.
 export function personFromConversation(conversation) {
   const key = conversation?.key ?? '';
-  if (key.startsWith('tg:')) return { name: conversation.title, phones: [], telegram: [key.slice(3)] };
-  if (key.startsWith('tel:')) return { name: conversation.title, phones: [key.slice(4)], telegram: [] };
-  return null;
+  const name = String(conversation?.title ?? '').trim().slice(0, 120) || key;
+  const draft = key.startsWith('tg:') && !conversation.group ? { name, phones: [], telegram: [key.slice(3)] }
+    : key.startsWith('tel:') ? { name, phones: [key.slice(4)], telegram: [] } : null;
+  return draft && pointsOf(draft).length ? draft : null;
+}
+
+// Other active people who share a point with this one: the triage takes the first one made (contacts.js personOf).
+export function samePoints(person, people) {
+  const points = new Set(person.points);
+  return people.filter((other) => other.id !== person.id && other.status !== 'deleted' && other.points.some((point) => points.has(point)));
 }
 
 // A list typed in one field: split by commas, semicolons and new lines; trimmed, no blanks or repeats.
@@ -68,6 +77,11 @@ export function personCard(person, ctx) {
   for (const [key, label] of FIELDS) box.append(field(label, person[key].join(', '), (text) => save({ [key]: splitList(text) }), { multiline: key === 'addresses' }));
   box.append(field('Заметка', person.note, (note) => save({ note: note.slice(0, 1000) }), { multiline: true }));
 
+  const twins = samePoints(person, ctx.people ?? []);
+  if (twins.length) {
+    box.append(element('p', 'picker-section', 'Тот же номер или Telegram у'));
+    for (const twin of twins) box.append(button('link-button card-link', twin.name, () => ctx.onOpenPerson?.(twin.id)));
+  }
   const byId = new Map(ctx.counterparties.map((item) => [item.id, item]));
   const roles = person.roles.filter((role) => byId.has(role.counterparty));
   if (roles.length) {
