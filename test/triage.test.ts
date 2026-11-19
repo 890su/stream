@@ -148,7 +148,7 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v8').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v9').length, 4);
   } finally { s.cleanup(); }
 });
 
@@ -368,5 +368,27 @@ test('a request about a filed note becomes a new task; the note stays as it was'
     assert.equal(work.title, 'Клиент: настройка принтера');
     assert.deepEqual(work.messages, [later.id]);
     assert.deepEqual(work.items.map((item) => item.text), ['настроить принтер']);
+  } finally { s.cleanup(); }
+});
+
+test('«готово» with what was done drafts the report; the owner still confirms the closing', async () => {
+  let round = 0;
+  const base = { responsible: 'me', executors: [], author: null, template: null, due: null, confidence: 0.9, note: null, filed: false, alternatives: [], items: [], rename: null };
+  const s = setup((input) => {
+    round += 1;
+    const ids = [input.messages[0]!.id];
+    if (round === 1) return { tasks: [{ ...base, task_id: null, title: 'Настроить принтер', done: false, message_ids: ids }] };
+    return { tasks: [{ ...base, task_id: input.open_tasks[0]!.id, title: 'Настроить принтер', done: true, message_ids: ids,
+      report: { note: 'Настроил печать из дома на офисный принтер', duration_min: 30, cost: 120, expenses: -5, currency: 'XYZ' } }] };
+  });
+  try {
+    s.add(telegram('7004', 'настройте принтер'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.add(telegram('7004', 'готово, настроил печать из дома, полчаса, 120 злотых', 'me'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const [task] = s.tasks();
+    assert.equal(task!.status, 'todo', 'not closed silently');
+    assert.equal(task!.proposed, 'done');
+    assert.deepEqual((task as any).report, { note: 'Настроил печать из дома на офисный принтер', duration_min: 30, cost: 120 }, 'only valid fields; a made-up currency and a negative sum are dropped');
   } finally { s.cleanup(); }
 });

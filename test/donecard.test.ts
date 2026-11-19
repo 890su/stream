@@ -19,3 +19,12 @@ test('the report: durations in several forms, sums, tags; empty fields are missi
   const tasks = { reports: { lead: ['cost'] }, report_default: ['note'] };
   assert.deepEqual([reportKeys({ template: 'lead' }, tasks), reportKeys({}, tasks)], [['cost'], ['note']]);
 });
+
+test('a drafted report reads as one line on «Задача выполнена?»', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { reportLine } = await import('../web/donecard.js');
+  assert.equal(reportLine({ note: 'Настроил принтер', duration_min: 90, cost: 120, currency: 'PLN' }), 'Настроил принтер · 1 ч 30 мин · 120 PLN');
+  assert.equal(reportLine({ duration_min: 30 }), '30 мин');
+  assert.equal(reportLine(null), '');
+  assert.equal(reportLine({ missing: ['note'] }), '');
+});

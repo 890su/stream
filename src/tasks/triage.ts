@@ -94,6 +94,23 @@ function from(event: JournalEvent): string {
   return telegram?.from_name || telegram?.chat_title || event.author;
 }
 
+// A report draft from what the conversation says was done (task manager spec §11): only valid fields — a known
+// currency, sums and minutes not below zero, the result line up to 500 characters. A task the owner already
+// reported on keeps its report. Closing stays the owner's: «Задача выполнена?» → «Да» keeps these values.
+export function reportDraft(planned: PlannedTask, task?: Task): { report?: Record<string, unknown> } {
+  const draft = planned.report;
+  if (!draft || (task as { report?: unknown } | undefined)?.report) return {};
+  const report: Record<string, unknown> = {};
+  const note = draft.note?.trim();
+  if (note) report.note = note.slice(0, 500);
+  for (const key of ['duration_min', 'cost', 'expenses'] as const) {
+    const value = draft[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) report[key] = key === 'duration_min' ? Math.round(value) : value;
+  }
+  if ((report.cost !== undefined || report.expenses !== undefined) && draft.currency && tasksConfig.currencies.includes(draft.currency)) report.currency = draft.currency;
+  return Object.keys(report).length ? { report } : {};
+}
+
 export class Triage {
   #store: JournalStore;
   #live: LiveFeed;
@@ -234,7 +251,7 @@ export class Triage {
       const taskId = existing ?? nameId(`task|${batchKey}|${index}`);
       const confidence = Math.max(0, Math.min(1, planned.confidence));
       // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
-      const proposal = planned.done && !planned.filed ? { proposed: 'done' } : {};
+      const proposal = planned.done && !planned.filed ? { proposed: 'done', ...reportDraft(planned, existing ? taskById.get(existing) : undefined) } : {};
       const checklist = checklistChange(taskId, planned, existing ? taskById.get(existing) : undefined);
       const placed = projectChange(planned, existing ? taskById.get(existing) : undefined, projects, defaultProject(projects, streamOf(batch[0]!)));
       const change: Record<string, unknown> = existing

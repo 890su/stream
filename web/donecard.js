@@ -66,6 +66,15 @@ export function buildReport(keys, values, fields, currency) {
 const INPUT = { minutes: { type: 'text', inputMode: 'decimal', placeholder: '90 или 1:30' }, money: { type: 'text', inputMode: 'decimal', placeholder: '0' },
   datetime: { type: 'datetime-local' }, tags: { type: 'text', placeholder: '#метка' }, text: { type: 'text', placeholder: '' } };
 
+// A report (or the triage's draft of it) in one line: result · time · price. '' when nothing is filled.
+export function reportLine(report) {
+  if (!report) return '';
+  const time = report.duration_min === undefined ? '' : report.duration_min < 60 ? `${report.duration_min} мин`
+    : `${Math.floor(report.duration_min / 60)} ч${report.duration_min % 60 ? ` ${report.duration_min % 60} мин` : ''}`;
+  const money = report.cost === undefined ? '' : `${report.cost}${report.currency ? ` ${report.currency}` : ''}`;
+  return [report.note ?? '', time, money].filter(Boolean).join(' · ');
+}
+
 export function createDoneCards({ config, queue, notify, onChange = () => {}, close = () => {}, drop = null }) {
   const tasks = config.tasks ?? {};
   const cards = new Map(); // task id -> { node, step, task, manual }
@@ -77,6 +86,7 @@ export function createDoneCards({ config, queue, notify, onChange = () => {}, cl
     const body = [];
     if (entry.step === 'ask') {
       body.push(element('p', 'done-card-title', 'Задача выполнена?'), element('p', 'done-card-text', `«${task.title}» — по сообщениям похоже, что готово.`));
+      if (reportLine(task.report)) body.push(element('p', 'done-card-text', `Отчёт: ${reportLine(task.report)}`));
       const actions = element('div', 'done-card-actions');
       actions.append(button('primary', 'Да, готово', () => { cards.delete(task.id); close(task); }), button('link-button', 'Ещё нет', () => (drop ? drop(task) : save(task, { op: 'update', proposed: null }))));
       body.push(actions);

@@ -34,7 +34,10 @@ export interface PlannedTask {
   project?: string | null; // the project of the task (an id from projects), or null when unsure or none
   section?: string | null; // a section of that project
   project_options?: string[]; // when unsure: up to three candidate projects, the owner is asked
+  report?: PlannedReport | null; // with done: what the messages say was done — a draft of the closing report
 }
+// A report draft from the conversation (task manager spec §11): the result in one line and the numbers named.
+export interface PlannedReport { note: string | null; duration_min: number | null; cost: number | null; expenses: number | null; currency: string | null }
 export interface PlanOutput { tasks: PlannedTask[]; usage?: { input_tokens: number; output_tokens: number } }
 
 export type Planner = (input: PlanInput) => Promise<PlanOutput>;
@@ -50,7 +53,7 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options', 'report'],
         properties: {
           task_id: { type: ['string', 'null'] },
           title: { type: 'string' },
@@ -70,6 +73,10 @@ export const PLAN_SCHEMA = {
           project: { type: ['string', 'null'] },
           section: { type: ['string', 'null'] },
           project_options: { type: 'array', items: { type: 'string' } },
+          report: {
+            type: ['object', 'null'], additionalProperties: false, required: ['note', 'duration_min', 'cost', 'expenses', 'currency'],
+            properties: { note: { type: ['string', 'null'] }, duration_min: { type: ['number', 'null'] }, cost: { type: ['number', 'null'] }, expenses: { type: ['number', 'null'] }, currency: { type: ['string', 'null'] } },
+          },
         },
       },
     },
@@ -90,6 +97,10 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
 - filed: false — настоящее дело, которое кто-то должен сделать.
 - done: true — сообщения говорят, что дело сделано («готово», «сделал», «закончил», «установил, работает»).
   Задачу это не закрывает: владельца спросят и попросят отчёт. У filed-задач done всегда false.
+- report — только при done: true, иначе null. Черновик отчёта из того, что написано в беседе: note — что сделано,
+  одной строкой («Настроил печать из дома на офисный принтер»); duration_min — сколько заняло в минутах, если
+  названо («полчаса» = 30, «1,5 ч» = 90); cost — сколько стоит работа для клиента, expenses — затраты, currency —
+  PLN, BYN, EUR или USD, если названы. Чего нет в сообщениях — null; не выдумывай.
 - Если сообщение уточняет или продолжает открытую задачу, верни эту задачу с её task_id и id сообщения, title — как у неё.
   Дело может длиться много дней: сверяй собеседника (chats — откуда сообщения задачи), предмет и last_at.
 - Если сообщение явно продолжает задачу из closed_tasks (то же дело снова ожило: «опять не работает», «а ещё…»),
