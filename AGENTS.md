@@ -2,11 +2,10 @@
 
 @CONTEXT.md
 @PLAN.md
-@CONCEPT.md
 
 ## Agent Rules (Codex)
 
-- `CONTEXT.md` is the canonical AI entrypoint. Read it, then `PLAN.md`, then `CONCEPT.md`.
+- `CONTEXT.md` is the canonical AI entrypoint. Read it, then `PLAN.md`, then the `CONCEPT.md` sections the task touches (index in `CONTEXT.md`).
 - `docs/CODEMAP.md` maps the code; read it before exploring files, update it when files are added, moved or split.
 - Each file starts with a one-line English comment saying its job; keep files near 300 lines (split by job).
 - `CONCEPT.md` is the source of truth. If a task changes the idea, edit `CONCEPT.md` first, then code.
