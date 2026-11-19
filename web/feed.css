@@ -185,7 +185,7 @@ body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix
 #messages { overflow-x: hidden; } /* entering or leaving a conversation slides sideways */
 .conv-row { align-self: stretch; display: grid; gap: 3px; margin: 3px 6px; padding: 10px 12px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); text-align: left; color: var(--bar-text); }
 .conv-row:active, .conv-row:hover { background: var(--press); }
-.conv-row { touch-action: pan-y; transition: transform .18s ease-out, background-color .12s ease-out; }
+.conv-row { position: relative; touch-action: pan-y; transition: transform .18s ease-out, background-color .12s ease-out; }
 .conv-row.swiping { transition: none; }
 .conv-row[data-swipe="archive"].armed { background: color-mix(in srgb, var(--ok) 22%, var(--panel)); }
 .conv-row[data-swipe="task"].armed { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }

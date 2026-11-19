@@ -49,7 +49,7 @@ export function createConvQuick({ queue, notify, openTask }) {
   }
 
   // Adds both swipes to a conversation row.
-  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'archive', onRight: () => task(conversation), onLeft: () => archive(conversation) });
+  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'archive', labels: { right: { icon: '☑', text: 'Задача' }, left: { icon: '🗄', text: 'В архив' } }, onRight: () => task(conversation), onLeft: () => archive(conversation) });
 
   return { decorate };
 }

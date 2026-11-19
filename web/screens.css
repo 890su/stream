@@ -172,3 +172,14 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .card-field { display: grid; gap: 2px; }
 .card-value, .card-link { justify-self: start; min-height: 40px; text-align: left; }
 .details-card textarea.details-input, .details-card .details-input { min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; }
+
+/* What a swipe reveals (swipe.js, task card design §2): the action's icon and label on the place the item left;
+   pale before the threshold, bright and a little larger after it. */
+.swipe-under { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; gap: 6px; overflow: hidden;
+  border-radius: 12px; color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; opacity: .55; transition: opacity .12s ease-out; }
+.swipe-under.right { background: var(--ok); }
+.swipe-under.left { background: var(--accent-strong); }
+.swipe-under.armed { opacity: 1; }
+.swipe-under .swipe-icon { font-size: 18px; transition: transform .12s ease-out; }
+.swipe-under.armed .swipe-icon { transform: scale(1.25); }
+@media (prefers-reduced-motion: reduce) { .swipe-under, .swipe-under .swipe-icon { transition: none; } }

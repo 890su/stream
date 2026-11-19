@@ -76,7 +76,7 @@ export function createTaskQuick({ queue, notify, config }) {
     }, isOpen ? `Готово: ${task.title}` : `Вернуть в работу: ${task.title}`);
     mark.append(element('span', 'task-check-ring'));
     item.prepend(mark);
-    if (isOpen) swipe(item, { right: 'done', left: 'when', skip: (event) => Boolean(event.target.closest('.task-when')), onRight: () => { item.classList.add('closing'); done(task); }, onLeft: () => whenRow(item, task) });
+    if (isOpen) swipe(item, { right: 'done', left: 'when', labels: { right: { icon: '✓', text: 'Готово' }, left: { icon: '🕒', text: 'Когда?' } }, skip: (event) => Boolean(event.target.closest('.task-when')), onRight: () => { item.classList.add('closing'); done(task); }, onLeft: () => whenRow(item, task) });
     if (isOpen && whenFor === task.id) whenRow(item, task, false);
   }
 
