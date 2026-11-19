@@ -124,3 +124,12 @@ test('project health: overdue red, a goal without a next step yellow, moving gre
   const b = pulseBlocks({ tasks, conversations: [], projects, now, config });
   assert.deepEqual(b.projects.map((item: any) => item.project.title), ['Поток', 'Сайт', 'Переезд']);
 });
+
+test('the pulse counter is what burns plus what is for today', () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  return import('../web/pulse.js').then(({ pulseCount }) => {
+    const b = blocks([create('горит', { roles: mine, due: '2026-11-18' }), create('завтра', { roles: mine, due: '2026-11-20' }), create('потом', { roles: mine })],
+      [conversation('Клиент А', 'mine', '2026-11-19T09:00:00')]);
+    assert.equal(pulseCount(b), 3);
+  });
+});

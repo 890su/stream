@@ -77,9 +77,8 @@ test('an unknown field or op matches nothing and never throws', () => {
   assert.equal(matchesFilter(task, undefined, { now }), false);
 });
 
-test('the registry: «Сегодня» first; the pinned chips; ids are unique', () => {
-  assert.equal(filtersConfig.filters[0]?.id, 'today');
-  assert.deepEqual(filtersConfig.filters.filter((item) => item.pinned).map((item) => item.title), ['Сегодня', 'Разобрать', 'Жду', 'Контроль']);
+test('the registry: the pinned chips; ids are unique', () => {
+  assert.deepEqual(filtersConfig.filters.filter((item) => item.pinned).map((item) => item.title), ['Пульт', 'Сегодня', 'Разобрать', 'Жду', 'Контроль']);
   assert.equal(new Set(filtersConfig.filters.map((item) => item.id)).size, filtersConfig.filters.length);
 });
 
@@ -140,4 +139,10 @@ test('«Другой…»: a typed number is a phone party, anything else a name
   assert.equal(personParty(' +48 500-100-200 '), 'tel:+48500100200');
   assert.equal(personParty('Ян'), 'name:Ян');
   assert.equal(personParty('   '), null);
+});
+
+test('the first saved filter is the pulse — the default of «Задачи» (task manager spec §5)', () => {
+  assert.equal(filtersConfig.filters[0]?.id, 'pulse');
+  assert.equal((filtersConfig.filters[0] as { view?: string }).view, 'pulse');
+  assert.ok(filtersConfig.filters[0]?.pinned);
 });

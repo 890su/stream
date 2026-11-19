@@ -145,3 +145,22 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .details-project { display: grid; gap: 6px; }
 .details-project-pick { justify-self: start; }
 .project-ask { align-items: center; }
+
+/* The pulse — the default of «Задачи» (task manager spec §5, pulseview.js). */
+.pulse-work { align-self: stretch; display: grid; gap: 4px; margin: 8px 6px 4px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: var(--shadow); }
+.pulse-work.paused { background: var(--panel); }
+.pulse-work-label { color: var(--muted); font-size: 13px; font-weight: 600; }
+.pulse-work-title { justify-self: start; min-height: 44px; font-size: 18px; font-weight: 600; text-align: left; }
+.pulse-work-facts { color: var(--muted); font-size: 14px; }
+.pulse-work-actions { display: flex; gap: 8px; margin-top: 4px; }
+.pulse-work-actions .chip { min-height: 44px; padding: 0 16px; }
+.pulse-head { margin-top: 14px; }
+.pulse-quiet { align-self: stretch; margin: 10px 18px 2px; color: var(--muted); font-size: 14px; }
+.pulse-more { align-self: stretch; min-height: 44px; margin: 0 6px; color: var(--accent-strong); font-size: 14px; text-align: left; padding-left: 16px; }
+.pulse-start { flex: none; width: 44px; height: 44px; margin-right: 4px; border-radius: 50%; color: var(--accent-strong); font-size: 16px; }
+.pulse-person, .pulse-project { min-height: 52px; padding: 6px 14px; gap: 10px; justify-content: space-between; text-align: left; }
+.pulse-project { justify-content: flex-start; }
+.pulse-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+.pulse-dot.yellow { background: #d9a400; }
+.pulse-dot.red { background: var(--danger, #d33); }
+.pulse-note { color: var(--muted); }

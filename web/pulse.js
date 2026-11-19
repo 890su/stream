@@ -95,3 +95,6 @@ export function pulseBlocks({ tasks, conversations = [], projects = [], now = ne
     later: later.sort(order),
   };
 }
+
+// The counter of the pulse (its chip and the view switch): what burns plus what is for today.
+export const pulseCount = (blocks) => blocks.hot.length + blocks.today.length;

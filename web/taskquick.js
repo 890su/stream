@@ -6,6 +6,7 @@ import { reportKeys } from './donecard.js';
 import { makeTaskChange } from './shared.js';
 import { reduced } from './motion.js';
 import { swipe } from './swipe.js';
+import { startWork, pauseWork } from './focus.js';
 
 
 function element(tag, className, text) {
@@ -79,8 +80,22 @@ export function createTaskQuick({ queue, notify, config }) {
     if (isOpen && whenFor === task.id) whenRow(item, task, false);
   }
 
+  // Several tasks changed by one tap (focus.js: «▶ В работу» pauses the current task) — saved in order, and
+  // «Вернуть» puts every one back. `parts` — [{ id, change }]; `byId` — the tasks as they were.
+  function actAll(parts, byId, message) {
+    const undos = parts.map(({ id, change }) => ({ id, change: { op: 'update', ...undoOf(byId.get(id), change) } }));
+    const save = (list) => list.reduce((chain, { id, change }) => chain.then(() => queue(makeTaskChange(id, change))), Promise.resolve());
+    return save(parts)
+      .then(() => notify(message, { label: 'Вернуть', run: () => save([...undos].reverse()).catch((error) => notify(error.message)) }))
+      .catch((error) => notify(error.message));
+  }
+  const byIdOf = (...tasks) => new Map(tasks.filter(Boolean).map((task) => [task.id, task]));
+  // «▶ В работу» / «Вернуться»: this task in work, the current one paused with where I stopped.
+  const start = (task, current) => actAll(startWork(task, current), byIdOf(task, current), `В работе: «${task.title}»`);
+  const pause = (task) => actAll([pauseWork(task)], byIdOf(task), `На паузе: «${task.title}»`);
+
   // A list or view change closes an open «Когда?» row (it would come back later out of context).
   const reset = () => { whenFor = null; };
 
-  return { decorate, done, act, reset };
+  return { decorate, done, act, reset, start, pause };
 }

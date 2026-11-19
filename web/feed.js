@@ -9,6 +9,7 @@ import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } fr
 import { questionOptions } from './question.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
+import { pulseBlocks, pulseCount } from './pulse.js';
 import { foldProjects, markNext, projectScope } from './projects.js';
 import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
@@ -23,7 +24,7 @@ const MODES = ['conversations', 'tasks', 'feed'];
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
 const DEFAULT_CONVERSATIONS = { quiet_days: 7, urgent_tags: [], states: ['urgent', 'mine', 'theirs', 'quiet', 'done'] };
 
-export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null, onGoConversation = null }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -49,7 +50,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
   let mode = 'conversations';
   const taskFilters = limits.filters?.length ? limits.filters : [{ id: 'all', title: 'Все', all: [] }]; // saved filters (registry/filters.json)
-  let taskFilterId = (() => { try { return localStorage.getItem('stream.taskFilter.v2'); } catch { return null; } })();
+  let taskFilterId = (() => { try { return localStorage.getItem('stream.taskFilter.v3'); } catch { return null; } })();
   const taskFilter = () => taskFilters.find((item) => item.id === taskFilterId) ?? taskFilters[0]; // the first one is the default
   let groupNodes = new Map(); // 'done' -> rows under that header, for smooth folding
   let grouping = (() => { try { return localStorage.getItem('stream.taskGrouping') ?? 'due'; } catch { return 'due'; } })();
@@ -160,7 +161,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
       children.push(...taskViewNodes({ tasks: taskList, viewsOf, now, filters: taskFilters, filter: taskFilter(), matches: taskMatches(), grouping, onGroup: nextGrouping,
         onPick: (id) => setTaskFilter(id), onMore: onMoreLists, onOpen: onOpenTask, quick, showDone,
         isOpenSection: (key) => openSections.has(key), toggle: (key, open) => toggleGroup(key, open, () => { if (open) openSections.delete(key); else openSections.add(key); }),
-        keepRows: (key, rows) => groupNodes.set(key, rows), project: currentProject(), projects: projectList, projectActions }));
+        keepRows: (key, rows) => groupNodes.set(key, rows), project: currentProject(), projects: projectList, projectActions,
+        conversations: convList, pulseConfig: limits.pulse, onOpenConversation: (key) => onGoConversation?.(key), onOpenProject: (id) => setProject(id) }));
     } else if (mode === 'conversations' && !inside) {
       // The list (CONCEPT.md §5): by state; finished, then archived ones folded at the end («Архив» on top unfolds it).
       const { active, done, archived } = splitDone(convList.filter((item) => item.views.some(tagged)));
@@ -273,13 +275,16 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     quick?.reset?.();
     projectId = null;
     taskFilterId = id;
-    try { localStorage.setItem('stream.taskFilter.v2', id); } catch { /* storage may be blocked */ }
+    try { localStorage.setItem('stream.taskFilter.v3', id); } catch { /* storage may be blocked */ }
     return render({ top: true });
   }
   // Messages of one task, oldest first, for its details (details.js).
   const taskViews = (taskId) => { const task = taskList.find((item) => item.id === taskId); return task ? taskMembers(task, viewList) : []; };
 
-  return { refresh, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
+  // The pulse counter (the view switch on Беседы): what burns plus what is for today (pulse.js).
+  const pulseTotal = () => (limits.pulse ? pulseCount(pulseBlocks({ tasks: taskList, conversations: convList, projects: projectList, now: new Date(), config: limits.pulse })) : 0);
+
+  return { pulseCount: pulseTotal, refresh, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),
     openConversation, conversation: () => current, conversationKey: () => conversationKey, conversations: () => convList,
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,

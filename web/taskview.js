@@ -3,9 +3,12 @@
 import { visibleTasks } from './filters.js';
 import { taskRow, emptyTasks, sectionsOf, sectionHeader, listChips, listCount, groupsOf } from './tasklist.js';
 import { projectHead, projectSectionHead, projectSections } from './projectview.js';
+import { pulseNodes } from './pulseview.js';
+import { pulseBlocks, pulseCount } from './pulse.js';
 
 // ctx: { tasks, viewsOf(task), now, filters, filter, matches, grouping, onGroup, onPick, onMore, onOpen, quick,
-//   isOpenSection(key), toggle(key, open), keepRows(key, rows), project, projects, projectActions }
+//   isOpenSection(key), toggle(key, open), keepRows(key, rows), project, projects, projectActions,
+//   conversations, pulseConfig, onOpenConversation(key), onOpenProject(id) } — the last four for the pulse (pulseview.js)
 export function taskViewNodes(ctx) {
   const { tasks, viewsOf, now, filter, matches, quick } = ctx;
   const nodes = [];
@@ -21,8 +24,14 @@ export function taskViewNodes(ctx) {
     return nodes;
   }
   const counts = new Map(ctx.filters.filter((item) => item.pinned || item.id === filter.id)
-    .map((item) => [item.id, listCount(visibleTasks(tasks, { filter: item, matches, now }), item, now)]));
+    .map((item) => [item.id, item.view === 'pulse' && ctx.pulseConfig
+      ? pulseCount(pulseBlocks({ tasks: tasks.filter(matches), conversations: ctx.conversations, projects: ctx.projects, now, config: ctx.pulseConfig }))
+      : listCount(visibleTasks(tasks, { filter: item, matches, now }), item, now)]));
   nodes.push(listChips(ctx.filters, filter, counts, { onPick: ctx.onPick, onMore: ctx.onMore, grouping: ctx.grouping, onGroup: ctx.onGroup }));
+  if (filter.view === 'pulse' && ctx.pulseConfig) {
+    nodes.push(...pulseNodes({ ...ctx, tasks: tasks.filter(matches), config: ctx.pulseConfig }));
+    return nodes;
+  }
   const shown = visibleTasks(tasks, { filter, matches, now });
   const grouped = ctx.grouping === 'due' ? sectionsOf(shown, filter, now) : groupsOf(shown, ctx.grouping, viewsOf);
   for (const section of grouped) {

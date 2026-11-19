@@ -35,6 +35,7 @@ let drawer;
 let system;
 let chatView; // { open(key), close(), sync() } — one conversation (CONCEPT.md §2.5)
 let viewSwitch; // the «Беседы» / «Задачи» button of the input row
+let goView; // switches the view and opens a conversation (setupViews)
 
 // «Беседы» / «Задачи» (CONCEPT.md §5): the switch at the right end of the input row (viewswitch.js); the choice is
 // remembered on this device. The technical Лента opens from ⋮ («Лента сообщений») and is not remembered. Views saved
@@ -55,9 +56,12 @@ function setupViews(feed) {
     if (next === 'conversations' && key && key !== chatView?.key()) await chatView.open(key);
     after();
   }
+  goView = go;
+  // The counter on Беседы: the pulse when it is the default of Задачи, else the first list.
   const todayCount = () => {
-    const today = feed.taskFilters()[0];
-    return today ? listCount(visibleTasks(feed.tasks(), { filter: today }), today) : 0;
+    const first = feed.taskFilters()[0];
+    if (first?.view === 'pulse') return feed.pulseCount();
+    return first ? listCount(visibleTasks(feed.tasks(), { filter: first }), first) : 0;
   };
   viewSwitch = setupViewSwitch({ feed, todayCount, taskId: () => (details?.current()?.kind === 'task' ? details.current().id : null), go });
   update();
@@ -178,11 +182,12 @@ async function main() {
   setAccounts(config.telegram?.accounts);
   const onQueue = setupStatus();
   let quick = null; // task actions where a task is seen (taskquick.js), once the composer's queue exists
-  const quickRef = { decorate: (item, task) => quick?.decorate(item, task), done: (task) => quick?.done(task), act: (...args) => quick?.act(...args), reset: () => quick?.reset() };
+  const quickRef = { decorate: (item, task) => quick?.decorate(item, task), done: (task) => quick?.done(task), act: (...args) => quick?.act(...args), reset: () => quick?.reset(),
+    start: (task, current) => quick?.start(task, current), pause: (task) => quick?.pause(task) };
   let convQuick = null; // swipes on conversation rows (convquick.js), once the composer's queue exists
   const convQuickRef = { decorate: (row, conversation) => convQuick?.decorate(row, conversation) };
   const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
-    quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open(),
+    quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open(), onGoConversation: (key) => goView?.('conversations', key),
     // The open project (CONCEPT.md §2.11): its changes and a task added to one of its sections.
     projectActions: {
       saveProject: (change) => { const project = feedRef.project(); if (project) composerRef.queue(makeProjectChange(project.id, { op: 'update', ...change })).catch((error) => notify(error.message)); },
@@ -196,7 +201,7 @@ async function main() {
     linkContext: () => {
       const open = details?.current()?.kind === 'task' ? details.current().id : null;
       const key = feed.conversationKey();
-      const today = feed.taskFilters()[0];
+      const today = feed.taskFilters().find((item) => item.id === 'today');
       return { conversations: feed.conversations(), tasks: feed.tasks(), openConversation: key, openTask: open,
         conversationTasks: feed.conversations().find((item) => item.key === key)?.tasks ?? [],
         today: today ? visibleTasks(feed.tasks(), { filter: today }) : [] };

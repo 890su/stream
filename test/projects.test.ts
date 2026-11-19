@@ -45,7 +45,7 @@ test('a next action of an active goal project is in «Сегодня»; a paused
   const goal = foldProjects([change(P1, { op: 'create', title: 'Сайт', kind: 'goal', sections: defaultSections('goal') })]);
   const tasks = markNext([task('a', { project: P1, section: 'next' }), task('b', { project: P1, section: 'ideas' }), task('c', { project: P1, section: 'next', status: 'done' })], goal);
   assert.deepEqual(tasks.map((item: any) => item.next), [true, false, false]);
-  const today = filtersConfig.filters[0]!;
+  const today = filtersConfig.filters.find((item) => item.id === 'today')!;
   assert.ok(matchesFilter(tasks[0], today.sections!.find((section) => section.id === 'next')!));
   const paused = foldProjects([change(P1, { op: 'create', title: 'Сайт', kind: 'goal', status: 'paused', sections: defaultSections('goal') })]);
   assert.equal(markNext([task('a', { project: P1, section: 'next' })], paused)[0].next, false);
@@ -76,7 +76,7 @@ test('a task in a project\'s ideas is an idea and stays out of «Сегодня�
   assert.deepEqual(goal[0].sources, ['tg:by']);
   const [idea, loose] = markNext([task('a', { project: P1, section: 'ideas', roles: { executors: ['me'], responsible: 'me' } }), task('b', { roles: { executors: ['me'], responsible: 'me' } })], goal);
   assert.equal(idea.idea, true);
-  const today = filtersConfig.filters[0]!;
+  const today = filtersConfig.filters.find((item) => item.id === 'today')!;
   assert.equal(matchesFilter(idea, today), false);
   assert.equal(matchesFilter(loose, today), true);
 });

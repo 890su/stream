@@ -81,3 +81,20 @@ test('worked minutes sum the spans in doing', () => {
   );
   assert.equal(workedMinutes(task, new Date('2026-11-19T11:15:00Z')), 45);
 });
+
+test('«▶ В работу» saves both changes and «Вернуть» undoes both', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { createTaskQuick } = await import('../web/taskquick.js');
+  const queued: any[] = [];
+  let toast: any = null;
+  const quick = createTaskQuick({ queue: async (entry: any) => { queued.push(entry.event.payload); }, notify: (text: string, action: any) => { toast = { text, action }; }, config: {} });
+  const tasks = fold(
+    change('cur', '2026-11-19T09:00:00Z', { op: 'create', title: 'Сеть', status: 'doing', roles: mine }),
+    change('new', '2026-11-19T09:20:00Z', { op: 'create', title: 'Принтер', status: 'todo', roles: mine }),
+  );
+  await quick.start(byId(tasks, 'new'), byId(tasks, 'cur'));
+  assert.deepEqual(queued.map((p) => [p.ref.id, p.data.task.status]), [['cur', 'todo'], ['new', 'doing']]);
+  assert.equal(toast.text, 'В работе: «Принтер»');
+  await toast.action.run();
+  assert.deepEqual(queued.slice(2).map((p) => [p.ref.id, p.data.task.status, p.data.task.resume_note]), [['new', 'todo', ''], ['cur', 'doing', '']], 'undone in reverse: never two tasks in work at once');
+});
