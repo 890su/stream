@@ -644,3 +644,15 @@ conversations, convlist, drawer, app, index.html, стили), новые `web/l
 **Affected:** `CONCEPT.md` §2.5, §5; `src/contracts/correction.ts`; `src/tasks/`; `registry/tasks.json`,
 `registry/filters.json`; `web/conversations.js`, `projection.js`, `actions.js`, `details.js`, `chatview.js`,
 `taskview.js`, `tasklist.js`, `pulse.js`, `focus.js`, `donecard.js`
+
+## 2026-11-19 — П7: люди и контрагенты в журнале; контрагент задачи
+**What:** Проект `docs/plans/2026-11-19-contacts-design.md` утверждён: люди в Stream синхронизируются с аккаунтами
+Google в обе стороны (шаги 2–3), поле «Где хранится», сторона аккаунта PL / BY — в настройках; контрагент —
+организация или адрес частного клиента, только в Stream; должности связывают людей с контрагентами. Шаг 1 — справочник
+без Google: события `contact_change` (ref `person`) и `counterparty_change` (ref `counterparty`), у задачи
+`counterparty`, `counterparty_options`, `counterparty_hint`.
+**Why:** Владелец: в задаче — контрагент или адрес и суть; люди — в Google, польские и белорусские раздельно;
+контакты телефона разобрать по аккаунтам; напарникам данные — из Stream с задачей.
+**Boundary:** Event v1: новые виды и необязательные поля задачи; старые читатели их пропускают (лента и беседы не
+показывают события справочника). Закрывает «К обсуждению — справочник контрагентов и контактов».
+**Affected:** `contracts/event.schema.json`, `src/contracts/task.ts`, `web/projection.js`, `web/conversations.js`

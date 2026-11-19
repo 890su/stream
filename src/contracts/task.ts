@@ -8,6 +8,8 @@ import type { JournalEvent } from './validate.ts';
 // payload.data.task. The JSON Schema checks the shape; this checks the pairing and what a creation needs.
 export function checkTask(event: JournalEvent): void {
   checkProject(event);
+  checkDirectory(event, 'contact_change', 'contact', 'person', 'name', 'У нового человека нет имени');
+  checkDirectory(event, 'counterparty_change', 'counterparty', 'counterparty', 'title', 'У нового контрагента нет названия');
   const task = event.payload.data?.task as { op: string; title?: string } | undefined;
   if (task && event.kind !== 'task_change') throw new HttpError(400, 'payload.data.task бывает только у task_change');
   if (event.kind !== 'task_change') return;
@@ -34,6 +36,18 @@ function checkProject(event: JournalEvent): void {
   if (ref?.type !== 'project' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref.id)) throw new HttpError(400, 'project_change ссылается на проект: payload.ref {type: project, id}');
   if (project.op === 'create' && !project.title?.trim()) throw new HttpError(400, 'У нового проекта нет названия');
   if (project.parent && project.parent === ref.id) throw new HttpError(400, 'Проект не может быть внутри самого себя');
+}
+
+// People and counterparties (contacts design §3): `kind` carries payload.data.<field> about payload.ref {type, id};
+// something new needs a name.
+function checkDirectory(event: JournalEvent, kind: string, field: string, refType: string, nameKey: string, missing: string): void {
+  const data = event.payload.data?.[field] as Record<string, unknown> | undefined;
+  if (data && event.kind !== kind) throw new HttpError(400, `payload.data.${field} бывает только у ${kind}`);
+  if (event.kind !== kind) return;
+  if (!data) throw new HttpError(400, `У ${kind} нет payload.data.${field}`);
+  const ref = event.payload.ref;
+  if (ref?.type !== refType || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref.id)) throw new HttpError(400, `${kind} ссылается на payload.ref {type: ${refType}, id}`);
+  if (data.op === 'create' && !String(data[nameKey] ?? '').trim()) throw new HttpError(400, missing);
 }
 
 // Roles of a task (P14): only ROLE_KEYS; every value is a party (lists for executors and watchers) or null.

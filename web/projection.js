@@ -36,7 +36,8 @@ export function project(events, pendingIds = new Set()) {
   const deliveries = new Map(); // reply event id -> the latest action_result for it
   for (const event of events) {
     if (event.kind === 'correction') { corrections.push(event); continue; }
-    if (event.kind === 'task_change' || event.kind === 'project_change') continue; // folded separately (taskfold.js, projects.js)
+    // Folded separately (taskfold.js, projects.js, contacts.js).
+    if (['task_change', 'project_change', 'contact_change', 'counterparty_change'].includes(event.kind)) continue;
     if (event.kind === 'action_result') {
       const action = event.payload?.data?.action;
       const previous = action?.source_event && deliveries.get(action.source_event);

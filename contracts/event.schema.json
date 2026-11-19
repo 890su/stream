@@ -56,6 +56,8 @@
         "correction",
         "task_change",
         "project_change",
+        "contact_change",
+        "counterparty_change",
         "proposal",
         "action_result",
         "system",
@@ -109,6 +111,8 @@
                 "interpretation",
                 "task",
                 "project",
+                "person",
+                "counterparty",
                 "action",
                 "question"
               ]
@@ -497,6 +501,45 @@
                 }
               }
             },
+            "contact": {
+              "type": "object",
+              "description": "On kind: contact_change (payload.ref -> {type: person, id}). Creates or changes a person of the directory (contacts design 3); the person is the fold of these events.",
+              "required": ["op"],
+              "additionalProperties": false,
+              "properties": {
+                "op": { "enum": ["create", "update"] },
+                "name": { "type": "string", "pattern": "^\\S[^\\n]{0,119}$" },
+                "phones": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+                "emails": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+                "telegram": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+                "addresses": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+                "note": { "type": "string", "maxLength": 1000 },
+                "status": { "enum": ["active", "deleted"] },
+                "roles": {
+                  "type": "array",
+                  "description": "Job titles at counterparties: the link person - counterparty.",
+                  "items": {
+                    "type": "object", "required": ["counterparty", "title"], "additionalProperties": false,
+                    "properties": { "counterparty": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }, "title": { "type": "string", "maxLength": 60 } }
+                  }
+                }
+              }
+            },
+            "counterparty": {
+              "type": "object",
+              "description": "On kind: counterparty_change (payload.ref -> {type: counterparty, id}). An organization or an address of a private client (contacts design 3).",
+              "required": ["op"],
+              "additionalProperties": false,
+              "properties": {
+                "op": { "enum": ["create", "update"] },
+                "kind": { "enum": ["org", "address"] },
+                "title": { "type": "string", "pattern": "^\\S[^\\n]{0,119}$" },
+                "address": { "type": "string", "maxLength": 200 },
+                "side": { "type": ["string", "null"], "enum": ["pl", "by", null] },
+                "tax_id": { "type": "string", "maxLength": 30 },
+                "status": { "enum": ["active", "archived"] }
+              }
+            },
             "task": {
               "type": "object",
               "description": "On kind: task_change (payload.ref → {type: task, id}). Creates or changes a task (CONCEPT.md 2.8); the task is the fold of these events.",
@@ -638,6 +681,9 @@
                   },
                   "description": "Other tasks the added messages may belong to: the owner is asked on the message (CONCEPT.md 2.8)."
                 },
+                "counterparty": { "type": ["string", "null"], "description": "The counterparty of the task (contacts design 6).", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+                "counterparty_options": { "type": "array", "description": "When the triage is unsure: up to three counterparties to choose from.", "items": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" } },
+                "counterparty_hint": { "type": ["string", "null"], "maxLength": 120, "description": "The triage's name for a new counterparty: a firm or an address." },
                 "report": {
                   "type": "object",
                   "description": "What the owner reported on closing: fields from registry/tasks.json report_fields, currency, missing (fields left empty)."
