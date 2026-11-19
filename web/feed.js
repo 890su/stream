@@ -10,6 +10,7 @@ import { questionOptions } from './question.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
+import { foldPeople, foldCounterparties } from './contacts.js';
 import { foldProjects, markNext, projectScope } from './projects.js';
 import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
@@ -43,6 +44,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let listTop = 0; // where the list was when a conversation opened: «назад» returns there
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   let projectList = []; // all projects (CONCEPT.md §2.11)
+  let peopleList = []; let counterpartyList = []; // the directory (contacts.js)
   let projectId = null; // the project open in Задачи, or null
   const currentProject = () => (mode === 'tasks' && projectList.find((item) => item.id === projectId)) || null;
   const openSections = new Set(); // Задачи: folded sections («Дальше») the owner unfolded
@@ -75,6 +77,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const projected = project([...events.values()], new Set(pending.keys()));
     taskList = foldTasks([...events.values()], { filedTemplates: limits.tasks?.filed_templates ?? [] });
     projectList = foldProjects([...events.values()]);
+    peopleList = foldPeople([...events.values()]);
+    counterpartyList = foldCounterparties([...events.values()]);
     markNext(taskList, projectList); // next actions of projects for «Сегодня»; project titles for rows
     const byMessage = tasksByMessage(taskList);
     const tasksById = new Map(taskList.map((task) => [task.id, task]));
@@ -289,7 +293,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     task: (id) => taskList.find((task) => task.id === id),
     openConversation, conversation: () => current, conversationKey: () => conversationKey, conversations: () => convList,
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,
-    projects: () => projectList, project: currentProject, setProject,
+    projects: () => projectList, project: currentProject, setProject, people: () => peopleList, counterparties: () => counterpartyList,
     setShowDone, showDone: () => showDone,
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
     view: (id) => views.get(id), views: () => viewList,
