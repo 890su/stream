@@ -342,3 +342,31 @@ test('triage puts tasks into projects: the planner\'s choice, the source default
     assert.equal(s.tasks().find((task) => task.id === printer.id)!.project, P1);
   } finally { s.cleanup(); }
 });
+
+test('a request about a filed note becomes a new task; the note stays as it was', async () => {
+  let round = 0;
+  const base = { responsible: 'me', executors: [], author: null, template: null, due: null, confidence: 0.9, note: null, done: false, alternatives: [] };
+  const s = setup((input) => {
+    round += 1;
+    const ids = [input.messages[0]!.id];
+    if (round === 1) return { tasks: [{ ...base, task_id: null, title: 'Записать: принтер у клиента офисный', template: 'note', filed: true, message_ids: ids, items: [], rename: null }] };
+    const note = input.closed_tasks[0]!;
+    return { tasks: [{ ...base, task_id: note.id, title: 'Клиент: настройка принтера', filed: false, message_ids: ids, items: ['настроить принтер'], rename: 'Клиент: настройка принтера' }] };
+  });
+  try {
+    s.add(telegram('7003', 'печатаю из дома на офисный принтер'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const later = s.add(telegram('7003', 'настройте мне принтер, пожалуйста'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const tasks = s.tasks();
+    const note = tasks.find((task) => task.template === 'note')!;
+    assert.equal(note.title, 'Записать: принтер у клиента офисный', 'the note is not renamed');
+    assert.deepEqual(note.items, [], 'no work items in a filed note');
+    const work = tasks.find((task) => task.id !== note.id)!;
+    assert.ok(work, 'the request is a task of its own');
+    assert.equal(work.status, 'todo');
+    assert.equal(work.title, 'Клиент: настройка принтера');
+    assert.deepEqual(work.messages, [later.id]);
+    assert.deepEqual(work.items.map((item) => item.text), ['настроить принтер']);
+  } finally { s.cleanup(); }
+});

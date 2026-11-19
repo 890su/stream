@@ -222,9 +222,12 @@ export class Triage {
     outcomes.forEach((planned, index) => {
       const add = planned.message_ids.filter((id) => batchIds.has(id));
       if (!add.length) return;
-      const existing = planned.task_id && known.has(planned.task_id) ? planned.task_id : null;
-      // A closed case the messages continue comes back to work; a filed one (diary, note) just gets the message.
-      const filedTask = existing && closedById.has(existing) && filedTemplates.has(closedById.get(existing)!.template ?? '');
+      const target = planned.task_id && known.has(planned.task_id) ? planned.task_id : null;
+      // A closed case the messages continue comes back to work; a filed one (diary, note) just gets the message —
+      // but work asked about a filed note (a request, items) is a task of its own: the note stays as it was.
+      const isFiled = (id: string) => closedById.has(id) && (filedTemplates.has(closedById.get(id)!.template ?? '') || Boolean(closedById.get(id)!.filed));
+      const existing = target && isFiled(target) && !planned.filed ? null : target;
+      const filedTask = existing && isFiled(existing);
       const reopened = existing && closedById.has(existing) && !planned.filed && !filedTask ? { status: 'todo' } : {};
       const alternatives = [...new Set(planned.alternatives ?? [])].filter((id) => known.has(id) && id !== existing).slice(0, 3);
       const asked = alternatives.length ? { alternatives } : {};
