@@ -196,9 +196,15 @@ request and the job given to a partner).
 An owner link beats automation; an automatic link is a recomputable layer with a processor version. Time alone is
 not a link. Two matters in one message give two tasks (§2.8); the source stays unchanged.
 
-**Counterparties and contacts** — with a directory. Its structure (a separate store, many-to-many with job
-titles, contact details whose owner can change, Google sync) is open (`decisions.md`, P7). Until P7 a "person" is
-a minimal record (name, Telegram user id, number) from chats and the task bot. Matching by content: one
+**Counterparties and contacts** — the directory (P7, `docs/plans/2026-11-19-contacts-design.md`, 2026-11-19).
+People and counterparties are journal events (`contact_change`, `counterparty_change`) folded like tasks. A
+counterparty is an organization or the address of a private client, with a side (PL / BY); job titles link people to
+counterparties. A person's points (`tel:`, `tg:`) tie them to conversations and task roles. A task has one
+counterparty (`counterparty`); the triage sets it, or asks «Кто контрагент?» with options and a name for a new one;
+the title starts with it. Cards of a person and a counterparty open on the right; «Контакт» in a conversation bar
+opens or creates its person. Next steps: two Google accounts both ways («Где хранится», sides in settings), phone
+contacts, the task card for partners. Until then a "person" from chats is also a minimal record (name, Telegram user
+id, number). Matching by content: one
 candidate — linked; two or three — offered to choose; ambiguous or not found — stored as said (name or number);
 an unknown number creates a new person.
 

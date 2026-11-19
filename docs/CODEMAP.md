@@ -57,6 +57,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `messages.ts` | a journal message as the AI reads it: text after edits, a call or file in words, who it is from | `describe`, `from` |
 | `fold.ts` | tasks as fold of `task_change` (server side, checklist `items`, `owner_titled`); old tasks get roles from `assignee` | `foldTasks`, `isOpen` |
 | `projects.ts` | projects as fold of `project_change` (server side), the default project of a stream (`defaultProject`, by `sources`) | `foldProjects`, `defaultProject` |
+| **contacts/** (P7) | | |
+| `fold.ts` | people and counterparties as folds of `contact_change` / `counterparty_change`; points `tel:` / `tg:` | `foldPeople`, `foldCounterparties`, `personOf`, `peopleOf` |
 | `parties.ts` | parties and roles: pattern, author → party, incoming call / SMS → caller, phone number form, default controller (client copy `web/parties.js`) | `isParty`, `partyOf`, `partyOfEvent`, `phoneNumber`, `defaultController` |
 
 ## Client — `web/` (plain ES modules, no bundler; new module → `VERSIONED` in `src/server/static.ts` and `web/sw.js`)
@@ -75,6 +77,9 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `taskview.js` | the «Задачи» centre: a saved list (chips, sections or groups), the pulse (a filter with `view: 'pulse'`) or one project (`taskViewNodes`) |
 | `pulse.js` / `pulseview.js` | the pulse — the default of «Задачи»: pure blocks (`pulseBlocks`: in work, paused, hot incl. conversations waiting for me, today, watch with alerts, projects, later), `importance`, `projectHealth`, `pulseCount`; and its DOM (`pulseNodes`) |
 | `focus.js` | pure: one task of mine in work (`inWork`, `isMineToDo`), «▶ В работу» / «Пауза» changes with `resume_note` (`startWork`, `pauseWork`, `resumeNoteOf`), `workedMinutes` from the status history |
+| `contacts.js` | pure: the directory (mirror of `src/contacts/fold.ts`), `markCounterparties` (titles for rows) |
+| `counterpartyline.js` | «Контрагент» / «Кто контрагент?» in task details: options, «+ Создать» by the hint, «+ Новый» (organization or address, side), linking the author with a job title |
+| `personcard.js` / `counterpartycard.js` | the directory's cards in the right panel: fields edited in place, job titles, open tasks; side and archive of a counterparty |
 | `projects.js` | pure: projects from `project_change` (`foldProjects`), tree with counts, scope, sections of a project, next actions (`markNext` sets `task.next`, `task.projectTitle`) |
 | `projectview.js` / `projectpanel.js` | one project's header (kind, status, «Нет следующего шага», «Изменить») and section heads with «+»; the project tree in the left panel and «Проект» in task details |
 | `checklist.js` | the checklist in task details: tick, add, «Отдельной задачей», «В дело…» (this task as an item of another) |
