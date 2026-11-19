@@ -50,8 +50,11 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
         if (url.pathname === '/api/recipients' && request.method === 'GET') { json(response, 200, { recipients: store.recipients.list() }); return; }
         if (url.pathname === '/api/events') return await events(request, response, url, store, live);
-        // The directory and projects whole: long-lived records the device must have, not just the latest feed page.
-        if (url.pathname === '/api/directory' && request.method === 'GET') { json(response, 200, { events: [...store.triage.contactEvents(), ...store.triage.projectEvents()] }); return; }
+        // Long-lived records whole — people, counterparties, projects and task changes: a new device needs all of them,
+        // not just the latest feed page (messages stay paged).
+        if (url.pathname === '/api/directory' && request.method === 'GET') {
+          json(response, 200, { events: [...store.triage.contactEvents(), ...store.triage.projectEvents(), ...store.triage.taskEvents()] }); return;
+        }
         if (url.pathname.startsWith('/api/media/')) return await media(request, response, url.pathname.slice('/api/media/'.length), store);
         if (url.pathname === '/share-target') return await share(request, response, store, live);
         throw new HttpError(404, 'Маршрут не найден');

@@ -32,7 +32,7 @@ export function createPager({ scroller, historyState, notify, render, readsDown 
     if (!response.ok) throw new Error(response.status === 401 ? 'Токен не принят. Откройте ⋮ → Доступ' : 'Лента временно недоступна');
     const page = await response.json();
     await cacheEvents(page.events);
-    // People, counterparties and projects in full (contacts design §3): older ones may lie beyond the first page.
+    // People, counterparties, projects and task changes in full: older ones may lie beyond the first page.
     if (!older) {
       const directory = await fetch('/api/directory', { headers: { Authorization: `Bearer ${token}` } });
       if (directory.ok) await cacheEvents((await directory.json()).events);

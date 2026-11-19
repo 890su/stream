@@ -62,3 +62,15 @@ test('/api/directory gives every person, counterparty and project event, whateve
     assert.deepEqual(body.events.map((item: any) => item.kind).sort(), ['contact_change', 'counterparty_change']);
   } finally { await f.stop(); }
 });
+
+test('/api/directory also gives every task change: old tasks are there on a new device without scrolling', async () => {
+  const { fixture } = await import('./helpers.ts');
+  const f = await fixture();
+  try {
+    const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal((await post(taskChange({ op: 'create', title: 'Старая задача', status: 'todo' }))).status, 201);
+    assert.equal((await post(event({ payload: { text: 'просто сообщение' } }))).status, 201);
+    const body = await (await f.request('/api/directory')).json();
+    assert.deepEqual(body.events.map((item: any) => item.kind), ['task_change']);
+  } finally { await f.stop(); }
+});
