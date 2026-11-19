@@ -6,6 +6,7 @@ import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow, leadButtons } from './tagrow.js';
 import { outboundData } from './outbound.js';
 import { createRecipients } from './recipients.js';
+import { createDraftFiles } from './draftfiles.js';
 import { conceal, toggleHidden } from './motion.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
@@ -20,7 +21,6 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   const attachButton = $('#attach-button');
   const tagPanel = $('#tag-panel');
   const attachMenu = $('#attach-menu');
-  const draft = $('#draft');
   const recordingBar = $('#recording-bar');
   const inputs = { camera: $('#camera-input'), gallery: $('#gallery-input'), file: $('#file-input') };
   inputs.file.accept = config.mime_types.join(',');
@@ -42,7 +42,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   });
   // «кому»: no recipient — a note to myself (CONCEPT.md §2.9).
   const recipients = createRecipients({ config, getViews, notify, queue: (entry) => queue(entry), onChange: () => updateAction() });
-  let files = [];
+  const draftFiles = createDraftFiles(config, { notify, onChange: () => updateAction() });
   let pendingVoice; // a finished recording that could not be queued yet
   let pressedAt = 0;
   let locked = false;
@@ -51,7 +51,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   // While one messenger chat is shown (chat bar), that chat is the default recipient (CONCEPT.md §8.2).
   let chatDefault = null;
 
-  const hasDraft = () => Boolean(text.value.trim() || files.length);
+  const hasDraft = () => Boolean(text.value.trim() || draftFiles.list().length);
 
   function updateAction() {
     const send = hasDraft() || recorder.active() || pendingVoice || mode?.type === 'edit' || Boolean(recipients.selected());
@@ -75,37 +75,8 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     button.setAttribute('aria-expanded', String(open));
   }
 
-  function renderDraft() {
-    const fileRow = $('#draft-files');
-    for (const image of fileRow.querySelectorAll('img')) URL.revokeObjectURL(image.src);
-    fileRow.replaceChildren(...files.map((file, index) => {
-      const item = document.createElement('div');
-      item.className = 'draft-file';
-      if (file.type.startsWith('image/')) {
-        const image = document.createElement('img'); image.src = URL.createObjectURL(file); image.alt = ''; item.append(image);
-      } else item.textContent = file.name || 'Файл';
-      const remove = document.createElement('button');
-      remove.type = 'button'; remove.textContent = '×'; remove.setAttribute('aria-label', 'Убрать вложение');
-      remove.onclick = () => { files.splice(index, 1); renderDraft(); };
-      item.append(remove);
-      return item;
-    }));
-    toggleHidden(draft, !files.length);
-    updateAction();
-  }
-
   // A fresh draft: tags start from suggestions again (edit mode starts from the message's own tags).
   function resetTags(initial = []) { tagRow.reset(initial); tagRow.update(text.value); }
-
-  function accept(list) {
-    for (const file of list) {
-      if (file.size > config.max_media_bytes) { notify(`«${file.name}» слишком большой для отправки`); continue; }
-      const allowed = config.mime_types.some((type) => type.endsWith('/*') ? file.type.startsWith(type.slice(0, -1)) : file.type === type);
-      if (!allowed) { notify(`Формат «${file.name}» не поддерживается`); continue; }
-      files.push(file);
-    }
-    renderDraft();
-  }
 
   async function queue(entry) {
     await enqueue(entry);
@@ -130,10 +101,10 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
       $('#context-snippet').textContent = snippet(mode.view);
     }
     if (mode?.type === 'edit') {
-      text.value = mode.view.text; files = [];
+      text.value = mode.view.text; draftFiles.clear();
       resetTags(mode.view.tags);
     } else if (leavingEdit) { text.value = ''; resetTags(); } else resetTags(tagRow.active());
-    autosize(); renderDraft();
+    autosize(); draftFiles.render();
     if (mode) text.focus();
     updateAction();
   }
@@ -141,7 +112,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
   // Sending to a recipient is the confirmation (class C, CONCEPT.md §8.2): text only, a personal chat within 24 hours.
   async function sendOutbound(chat) {
     const message = text.value.trim();
-    if (files.length) { notify('В Telegram уходит только текст: уберите вложения или адресата'); return; }
+    if (draftFiles.list().length) { notify('В Telegram уходит только текст: уберите вложения или адресата'); return; }
     if (!message) { notify('Напишите текст: в Telegram уходит только текст'); return; }
     if (!recipients.isOpen(chat)) {
       notify(`«${chat.title}»: окно 24 часа закрыто — ответьте в Telegram`, { label: 'Открыть', run: () => { location.href = `tg://user?id=${chat.chat_id}`; } });
@@ -185,14 +156,14 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     if (!hasDraft()) return;
     busy = true;
     const message = text.value.trim();
-    const attached = files;
+    const attached = draftFiles.list();
     const kind = !attached.length ? 'text' : attached.every((file) => file.type.startsWith('image/')) ? 'photo' : 'file';
     try {
       await queue(await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
         replyTo: mode?.type === 'reply' ? mode.view.id : undefined }));
-      text.value = ''; files = [];
+      text.value = ''; draftFiles.clear();
       if (mode) setMode(null);
-      autosize(); resetTags(); renderDraft(); togglePanel(tagPanel, tagButton, false);
+      autosize(); resetTags(); togglePanel(tagPanel, tagButton, false);
     } catch (error) { notify(`Сообщение не сохранено. ${error.message}`); }
     finally { busy = false; updateAction(); }
   }
@@ -284,7 +255,7 @@ export function setupComposer(config, { notify, onSent, getViews, onPickRequest 
     button.onclick = () => { togglePanel(attachMenu, attachButton, false); inputs[button.dataset.attach].click(); };
   }
   for (const input of Object.values(inputs)) {
-    input.addEventListener('change', () => { accept(Array.from(input.files)); input.value = ''; text.focus(); });
+    input.addEventListener('change', () => { draftFiles.accept(Array.from(input.files)); input.value = ''; text.focus(); });
   }
   window.addEventListener('beforeunload', (event) => {
     if (recorder.active() || pendingVoice || hasDraft()) { event.preventDefault(); event.returnValue = ''; }

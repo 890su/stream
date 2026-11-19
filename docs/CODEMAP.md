@@ -65,7 +65,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `layout.js` | the wide-screen breakpoint the panels follow (docked or sliding) |
 | `app.js` | entry: wires everything, message action dispatch, «Беседы · Задачи · Лента» switch (old saved views map to new) |
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
-| `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter; paging |
+| `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter |
+| `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history) |
 | `tasklist.js` / `days.js` | the «Задачи» view: list chips (`pinned`), sections of a list (`sectionsOf`, `listCount`), a task row (mark, title, facts, due word — `dueLabel`); day pill labels |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`) |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
@@ -75,7 +76,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
-| `composer.js` | input: text, voice, files, tags, recipient, modes (reply, edit, continue) |
+| `composer.js` / `draftfiles.js` | input: text, voice, tags, recipient, modes (reply, edit, continue); attachments of the draft (checks, previews) |
 | `outbound.js` | pure: Telegram reply data, 24 h window |
 | `tagrow.js` / `suggest.js` | tag side of the row above the input; tag suggestions |
 | `recipients.js` | «кому» side of the row: address book, chosen recipient, full list with search and pins |
@@ -119,4 +120,4 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md` |
 | `test/` | `node --test`: one file per area (api, phone, telegram-bot, triage, taskfold, projection, …) |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |
-| `docs/plans/` | active package plans; `docs/archive/` — done plans, superseded decisions, old Done items |
+| `docs/plans/` | active package plans; `archive/` (local, outside git) — done plans, superseded decisions, old Done items |

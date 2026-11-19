@@ -4,6 +4,7 @@
 .claude/
 .tmp/
 .cache/
+.safe/
 .venv/
 venv/
 __pycache__/
@@ -15,6 +16,8 @@ coverage/
 logs/
 old/
 archive/
+.impeccable/
+.superpowers/
 data/
 *.log
 *.pyc

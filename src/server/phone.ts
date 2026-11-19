@@ -7,7 +7,7 @@ import { HttpError } from './errors.ts';
 import { json, readBody } from './body.ts';
 import type { LiveFeed } from './live.ts';
 
-// Calls and SMS from the Android companion (CONCEPT.md §8.1, docs/plans/2026-11-17-p10-calls.md).
+// Calls and SMS from the Android companion (CONCEPT.md §8.1, archive/plans/2026-11-17-p10-calls.md).
 // Plain bodies in, ordinary journal events out. Ids come from the call or SMS itself, so a retry or a
 // reinstall of the companion never writes the same call twice; PhoneIds.kt derives them the same way.
 

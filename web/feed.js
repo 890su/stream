@@ -1,7 +1,8 @@
 // The centre of the screen (CONCEPT.md §5) in three views: Беседы (the list by state; a tap opens one
 // conversation — its task plaques on top, its messages in a row), Задачи (a task list by a saved filter) and
 // Лента (all messages in a row: bursts, chains, day pills); filters, paging and live updates.
-import { listEntries, cachedEvents, cacheEvents, getSetting } from './db.js';
+import { listEntries, cachedEvents, cacheEvents } from './db.js';
+import { createMediaLoader, createPager } from './feedpage.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey } from './projection.js';
 import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } from './taskfold.js';
@@ -25,10 +26,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
   const nodes = new Map(); // event id -> { node, signature }
-  const mediaUrls = new Map(); // media id -> object URL, kept for the page lifetime
-  let before;
-  let loadingOlder = false;
-  let refreshing;
   let rendered = false;
   let showArchive = false;
   let views = new Map(); // message id -> current view, for the action panel
@@ -51,19 +48,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let groupNodes = new Map(); // 'done' -> rows under that header, for smooth folding
   // Lists read from the top; a conversation and the Лента read from the bottom, like a chat.
   const readsDown = () => mode === 'tasks' || (mode === 'conversations' && !conversationKey);
-
-  async function load(reference, queued) {
-    if (mediaUrls.has(reference.media_id)) return mediaUrls.get(reference.media_id);
-    let blob = queued?.files.find((file) => file.id === reference.media_id)?.blob;
-    if (!blob) {
-      const response = await fetch(`/api/media/${reference.media_id}`, { headers: { Authorization: `Bearer ${await getSetting('ownerToken')}` } });
-      if (!response.ok) throw new Error('Файл пока недоступен. Проверьте сеть и токен');
-      blob = await response.blob();
-    }
-    const url = URL.createObjectURL(blob);
-    mediaUrls.set(reference.media_id, url);
-    return url;
-  }
+  const load = createMediaLoader();
+  const { refresh, loadOlder } = createPager({ scroller, historyState, notify, render, readsDown });
 
   // `keep` — { key, top }: the header that was tapped stays where it was; `quiet` — no animation of new rows;
   // `top` — a list goes to the top (true) or to a remembered position (a number).
@@ -232,42 +218,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     if (!node?.isConnected) { notify('Исходное сообщение скрыто или ещё не загружено'); return; }
     node.scrollIntoView({ block: 'center', behavior: reduced() ? 'auto' : 'smooth' });
     node.classList.remove('flash'); void node.offsetWidth; node.classList.add('flash');
-  }
-
-  async function fetchPage(older) {
-    const token = await getSetting('ownerToken');
-    if (!token || !navigator.onLine) return false;
-    const query = older && before ? `?before=${encodeURIComponent(before)}` : '';
-    const response = await fetch(`/api/events${query}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!response.ok) throw new Error(response.status === 401 ? 'Токен не принят. Откройте ⋮ → Доступ' : 'Лента временно недоступна');
-    const page = await response.json();
-    await cacheEvents(page.events);
-    if (older || before === undefined) before = page.next_before;
-    return true;
-  }
-
-  function refresh() {
-    refreshing ??= (async () => {
-      try { await fetchPage(false); } catch (error) { notify(error.message); }
-      await render();
-      // A short feed cannot be scrolled to the top, so fetch older history right away.
-      if (before && scroller.scrollHeight <= scroller.clientHeight) await loadOlder();
-    })().finally(() => { refreshing = undefined; });
-    return refreshing;
-  }
-
-  async function loadOlder() {
-    if (loadingOlder || !before) return;
-    loadingOlder = true;
-    historyState.hidden = false;
-    historyState.textContent = 'Загружаем раньше…';
-    const anchor = scroller.scrollHeight - scroller.scrollTop;
-    try {
-      await fetchPage(true);
-      await render({ quiet: true });
-      if (!readsDown()) scroller.scrollTop = scroller.scrollHeight - anchor; // keep the reading position
-    } catch (error) { notify(error.message); }
-    finally { loadingOlder = false; historyState.hidden = true; }
   }
 
   let stick = true; // the reader is at the bottom: keep them there when photos finish loading

@@ -20,7 +20,15 @@ __pycache__/
 .library/
 .tmp/
 .cache/
+.safe/
 *.log
+
+# archive: superseded decisions, finished plans, old Done items — local only, not indexed (.aiignore)
+archive/
+
+# tool scratch (design critiques, agent runs)
+.impeccable/
+.superpowers/
 
 # personal source notes: kept locally, repository is public
 attachments/
