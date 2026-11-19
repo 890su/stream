@@ -5,6 +5,7 @@ import { actionBar } from './taskbar.js';
 import { inWork, isMineToDo } from './focus.js';
 import { backStack } from './backclose.js';
 import { reveal } from './motion.js';
+import { answerable } from './participants.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -13,8 +14,7 @@ function element(tag, className, text) {
   return node;
 }
 
-// A personal chat of a participant switched off in the card (participants.js) is not answered from the task.
-export const answerable = (conversation, muted = []) => Boolean(conversation.reply) && (conversation.reply.group || !muted.includes(`tg:${conversation.reply.chat_id}`));
+export { answerable }; // a switched-off participant's personal chat is not answered from the task
 
 // What the bar needs about a task: is it mine to do, the task in work, its messages, the chat to answer in.
 export function barContext(task, { feed, quick, openConversation }) {

@@ -2,8 +2,9 @@
 // icon opens the roles (Участник — no role, shown without a label; Постановщик, Контрагент, Исполнитель, then the
 // rest); a tap on the name switches the participant off and on (an answer from the task does not go to a switched-off
 // one); × takes them out. The directory's counterparty of the task is a tile too (◆ / ⌂). Up to four rows of tiles;
-// more — the cloud widens and scrolls sideways. «+» without a label adds a participant (as Участник). Pure helpers
-// are tested in node.
+// more — the cloud widens and scrolls sideways. «+» without a label adds a participant (as Участник). The same tiles
+// in one sideways line over the tags of an open conversation (`strip`, peoplerow.js): the conversation's task is
+// edited, so a conversation and its task have one set of participants. Pure helpers are tested in node.
 import { partyName, LIST_ROLES } from './parties.js';
 import { delegateOptions } from './taskactions.js';
 import { personForm } from './taskbar.js';
@@ -63,6 +64,9 @@ export function removeParticipant(roles, party) {
 // The muted list after a tap on the name.
 export const toggleMuted = (task, party) => ((task.muted ?? []).includes(party) ? task.muted.filter((item) => item !== party) : [...(task.muted ?? []), party]);
 
+// A personal chat of a switched-off participant gets no answer from the task or the conversation by default.
+export const answerable = (conversation, muted = []) => Boolean(conversation.reply) && (conversation.reply.group || !muted.includes(`tg:${conversation.reply.chat_id}`));
+
 // The tile's label: «Участник» is not shown; several roles are joined.
 export const roleLabel = (roles) => roles.map((role) => ROLE_TITLES[role]).join(', ');
 
@@ -82,7 +86,7 @@ function button(className, text, onClick, label) {
 const PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>';
 
 // A tile: icon (a button), role | (when there is one), name (a button), ×.
-function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = false, onRemove, removeLabel }) {
+function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = false, onRemove = null, removeLabel }) {
   const node = element('span', `person-tile${role ? ' with-role' : ''}${off ? ' off' : ''}`);
   const glyph = button('person-tile-icon', '', onIcon, iconLabel);
   if (icon) glyph.textContent = icon; else glyph.innerHTML = PERSON;
@@ -90,7 +94,8 @@ function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = fa
   if (role) node.append(element('span', 'person-tile-role', role), element('span', 'person-tile-divider'));
   const label = button('person-tile-name', name, onName, nameLabel);
   if (off !== null) label.setAttribute('aria-pressed', String(!off));
-  node.append(label, button('person-tile-remove', '×', onRemove, removeLabel));
+  node.append(label);
+  if (onRemove) node.append(button('person-tile-remove', '×', onRemove, removeLabel));
   return node;
 }
 
@@ -114,10 +119,11 @@ function fitRows(cloud, inner) {
 let openMenu = null;
 
 // ctx: { views (the task's messages), people, counterparties (the directory), save(change), savePerson, saveCounterparty,
-//   onOpenCounterparty(id), onOpenPerson(id) }
+//   onOpenCounterparty(id), strip (one sideways line, no counterparty question), readOnly(text) — no task: the tiles
+//   only show who is there, a tap says `text` }
 export function participantsBlock(task, ctx) {
   const { views = [], people = [], save } = ctx;
-  const box = element('div', 'card-people');
+  const box = element('div', `card-people${ctx.strip ? ' strip' : ''}`);
   const menu = element('div', 'chips card-people-menu');
   const nameOf = (party) => people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name ?? partyName(party, views);
   const setRoles = (change) => { openMenu = null; holding(menu, false); save({ op: 'update', roles: change }); };
@@ -143,6 +149,7 @@ export function participantsBlock(task, ctx) {
   for (const { party, roles, muted } of participants(task)) {
     const key = `${task.id}|${party}`;
     const name = nameOf(party);
+    if (ctx.readOnly) { inner.append(tile({ role: '', name, off: null, iconLabel: name, nameLabel: name, onIcon: () => ctx.readOnly(), onName: () => ctx.readOnly() })); continue; }
     inner.append(tile({ role: roleLabel(roles), name, off: muted,
       iconLabel: `${name}: роль`, onIcon: () => (openMenu === key ? show(null) : show(key, rolesMenu(party, roles))),
       nameLabel: muted ? `${name}: отключён, включить` : `${name}: включён, отключить`,
@@ -176,12 +183,13 @@ export function participantsBlock(task, ctx) {
   };
   const plus = button('people-add', '+', () => (openMenu === addKey ? show(null) : show(addKey, addMenu())), 'Добавить участника');
   const row = element('div', 'people-row');
-  row.append(cloud, plus);
+  row.append(cloud);
+  if (!ctx.readOnly) row.append(plus);
   box.append(row, menu);
   if (!inner.childElementCount) cloud.append(element('p', 'drawer-empty', 'Участников нет'));
 
   // No counterparty yet: the triage's question or a choice, under the cloud.
-  if (!counterparty && !task.filed && ctx.counterparties) box.append(counterpartyLine(task, directory));
+  if (!counterparty && !task.filed && ctx.counterparties && !ctx.strip) box.append(counterpartyLine(task, directory));
 
   // A menu open before the redraw comes back.
   if (openMenu === addKey) show(addKey, addMenu());
@@ -192,6 +200,6 @@ export function participantsBlock(task, ctx) {
     else if (found) show(openMenu, rolesMenu(party, found.roles));
     else openMenu = null;
   }
-  fitRows(cloud, inner);
+  if (!ctx.strip) fitRows(cloud, inner);
   return box;
 }

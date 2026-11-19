@@ -53,6 +53,14 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 
 /* Row above the composer: «связь» (the link window), chosen conversation or task, recipient, tags; the view switch */
 .tag-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px 2px; }
+/* Participants of the open conversation (peoplerow.js): one sideways line of the card's tiles over the tags. */
+.people-strip { padding: 6px 10px 0; }
+.card-people.strip { gap: 6px; }
+.card-people.strip .people-cloud-inner { flex-wrap: nowrap; }
+.card-people.strip .person-tile { flex: none; min-height: 32px; }
+.card-people.strip .person-tile-icon, .card-people.strip .person-tile-name, .card-people.strip .person-tile-remove { height: 32px; min-height: 32px; }
+.card-people.strip .people-add { width: 32px; height: 32px; font-size: 20px; }
+.card-people.strip .people-row { align-items: center; }
 .tag-row .row-end { flex: none; }
 .tag-row .row-end[aria-expanded="true"], .tag-row .row-end.active { background: var(--accent-strong); color: #fff; box-shadow: none; }
 .row-chips {

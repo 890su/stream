@@ -4,6 +4,8 @@ import { makeTaskChange, makePersonChange, ownTask } from './shared.js';
 import { personOf } from './contacts.js';
 import { personFromConversation } from './personcard.js';
 import { reveal, conceal } from './motion.js';
+import { setupPeopleRow, conversationTask } from './peoplerow.js';
+import { answerable } from './participants.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -12,17 +14,22 @@ const $ = (selector) => document.querySelector(selector);
 // The composer's recipient is the conversation's reply chat. Without one (a phone number, a chat with only my
 // messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
 // plain notes. «Не отслеживать» for Telegram conversations.
-export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {} }) {
+export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {}, openCounterparty = () => {} }) {
   const bar = $('#chat-bar');
+  // Participants over the tags: the same set as the conversation's task (peoplerow.js).
+  const people = setupPeopleRow({ feed, queue: composer.queue, notify, openCounterparty });
   let key = null;
   let applied = null; // the reply chat this view put into the composer
   const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
 
   // The composer follows the conversation: its reply chat once known (unless another recipient was chosen), else
-  // a continuation of its last message. The details panel's task topic wins while it is open.
+  // a continuation of its last message. The details panel's task topic wins while it is open. A participant switched
+  // off in the conversation (its task's `muted`) is not the recipient by default.
   function steer() {
     const conversation = feed.conversation();
-    const reply = conversation?.reply ?? null;
+    const muted = !conversation?.reply || !answerable(conversation, conversationTask(conversation)?.muted ?? []);
+    const reply = muted ? null : conversation.reply;
+    if (muted && applied && composer.recipient()?.key === applied.key) { composer.chat(null); applied = null; }
     if (reply && !applied && !composer.recipient()) { composer.chat(reply); applied = reply; }
     const wanted = Boolean(key && key !== 'me' && !reply && conversation);
     if (wanted && !composer.topic()) composer.enterTopic(topic, 'Сообщение в беседу');
@@ -45,6 +52,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     app.href = chat && !chat.group ? `tg://user?id=${chat.chat_id}` : '#';
     $('#chat-untrack').hidden = !key.startsWith('tg:');
     $('#chat-person').hidden = !personFromConversation(conversation ?? { key });
+    people.render(conversation);
     steer();
   };
 
@@ -72,6 +80,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     key = null;
     applied = null;
     conceal(bar, 'translateY(-8px)');
+    people.render(null);
     composer.chat(null);
     if (composer.topic() === topic) composer.leaveTopic();
     await feed.openConversation(null);

@@ -92,6 +92,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `taskcard.js` | the top of the task card (`headline`, `nextStep`, `contactLinks` — call and map), folding sections (`section`) and the card's tabs Переписка · Участники · Подробности · Лог (`cardTabs`, remembered on the device) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows), only from the middle column: follow, arm, act; not a tap |
+| `peoplerow.js` | the participants line of an open conversation over the tags: the card's tiles in one sideways line, the conversation's task edited (`conversationTask`), read-only without a task (`chatParties`) |
 | `swipezones.js` | screen swipes by columns 25 / 50 / 25: tabs Беседы · Задачи, the left panel before them, the right one after; in the right panel — the card's tabs, close before the first (`zoneOf`, `swipeAction`) |
 | `convquick.js` | swipes on a «Беседы» row: left — to the archive (`answered` correction), right — its most urgent task or a new one (`pickTask`, `anchorOf`, `sourceOf`) |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
