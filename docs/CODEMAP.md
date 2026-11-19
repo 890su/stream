@@ -69,6 +69,9 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter |
 | `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history) |
 | `tasklist.js` / `days.js` | the «Задачи» view: list chips (`pinned`) and the grouping chip, sections of a list (`sectionsOf`, `listCount`) or groups by tag / person (`groupsOf`), a task row (mark, title, facts with checklist progress, due word — `dueLabel`); day pill labels |
+| `taskview.js` | the «Задачи» centre: a saved list (chips, sections or groups) or one project (`taskViewNodes`) |
+| `projects.js` | pure: projects from `project_change` (`foldProjects`), tree with counts, scope, sections of a project, next actions (`markNext` sets `task.next`, `task.projectTitle`) |
+| `projectview.js` / `projectpanel.js` | one project's header (kind, status, «Нет следующего шага», «Изменить») and section heads with «+»; the project tree in the left panel and «Проект» in task details |
 | `checklist.js` | the checklist in task details: tick, add, «Отдельной задачей», «В дело…» (this task as an item of another) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`) |
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows): follow, arm, act; not a tap |

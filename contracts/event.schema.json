@@ -55,6 +55,7 @@
         "answer",
         "correction",
         "task_change",
+        "project_change",
         "proposal",
         "action_result",
         "system",
@@ -107,6 +108,7 @@
                 "event",
                 "interpretation",
                 "task",
+                "project",
                 "action",
                 "question"
               ]
@@ -463,6 +465,33 @@
                 }
               }
             },
+            "project": {
+              "type": "object",
+              "description": "On kind: project_change (payload.ref -> {type: project, id}). Creates or changes a project (CONCEPT.md 2.11); the project is the fold of these events.",
+              "required": ["op"],
+              "additionalProperties": false,
+              "properties": {
+                "op": { "enum": ["create", "update"] },
+                "title": { "type": "string", "pattern": "^\\S[^\\n]{0,119}$" },
+                "parent": { "type": ["string", "null"], "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+                "kind": { "enum": ["stream", "goal"] },
+                "status": { "enum": ["active", "paused", "done", "archived"] },
+                "sections": {
+                  "type": "array",
+                  "description": "The project's sections in order; role next - its next actions (shown in Сегодня), ideas - its backlog.",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "title"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": { "type": "string", "pattern": "^[0-9a-z-]{1,64}$" },
+                      "title": { "type": "string", "pattern": "^\\S[^\\n]{0,59}$" },
+                      "role": { "enum": ["next", "ideas"] }
+                    }
+                  }
+                }
+              }
+            },
             "task": {
               "type": "object",
               "description": "On kind: task_change (payload.ref → {type: task, id}). Creates or changes a task (CONCEPT.md 2.8); the task is the fold of these events.",
@@ -552,6 +581,8 @@
                   ],
                   "description": "A handler thinks the work is finished and asks the owner (CONCEPT.md 2.9); null withdraws the question."
                 },
+                "project": { "type": ["string", "null"], "description": "The one project the task lives in (CONCEPT.md 2.11); null - Входящие.", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+                "section": { "type": ["string", "null"], "pattern": "^[0-9a-z-]{1,64}$" },
                 "items_add": {
                   "type": "array",
                   "description": "Checklist items added to the task (CONCEPT.md 2.8): id and one line of text.",

@@ -122,3 +122,25 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .checklist-add input:focus { border-bottom-color: var(--accent); }
 .checklist-into { margin-top: 4px; }
 .checklist > .link-button { justify-self: start; }
+
+/* Projects (projectview.js, projectpanel.js) */
+.project-head { align-self: stretch; display: grid; gap: 4px; margin: 4px 6px 6px; padding: 10px 12px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
+.project-top { display: flex; align-items: center; gap: 6px; }
+.project-title { flex: 1; min-width: 0; margin: 0; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.project-meta { margin: 0; color: var(--muted); font-size: 13px; }
+.project-warn { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 16%, var(--panel)); font-size: 14px; }
+.project-warn .link-button, .project-head > .link-button, .project-edit > .link-button { justify-self: start; }
+.project-edit { display: grid; gap: 8px; }
+.project-edit[hidden] { display: none; }
+.project-section { display: flex; align-items: center; }
+.project-section.next .task-section-title { color: var(--accent-strong); }
+.project-section-tools { margin-left: auto; display: inline-flex; }
+.project-section-tools .icon-button { width: 36px; height: 36px; font-size: 18px; text-transform: none; }
+.project-form { align-self: stretch; display: flex; align-items: center; gap: 8px; margin: 2px 6px 6px; padding: 4px 8px 4px 12px; border-radius: 10px; background: var(--panel); }
+.project-form input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 8px 2px; outline: none; font: inherit; }
+.project-form input:focus { border-bottom-color: var(--accent); }
+.drawer-projects { display: grid; gap: 2px; }
+.drawer-projects .chips { margin: 6px 6px 4px; }
+.project-row.muted .drawer-title { color: var(--muted); }
+.details-project { display: grid; gap: 6px; }
+.details-project-pick { justify-self: start; }

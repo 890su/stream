@@ -37,6 +37,17 @@ export function makeTaskChange(taskId, task) {
   };
 }
 
+// A project change by the owner (CONCEPT.md §2.11): create or update.
+export function makeProjectChange(projectId, project) {
+  return {
+    event: {
+      id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'project_change',
+      payload: { ref: { type: 'project', id: projectId }, data: { project } },
+    },
+    files: [],
+  };
+}
+
 // «Сделать задачей» / «Новое дело» by the owner: a task of mine from one message (P14 roles, no old `assignee`).
 export function ownTask(title, messageId) {
   return { op: 'create', title, roles: { author: 'me', responsible: 'me', executors: ['me'] }, status: 'todo', add: [messageId] };

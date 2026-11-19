@@ -6,9 +6,10 @@ import { createMediaLoader, createPager } from './feedpage.js';
 import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey } from './projection.js';
 import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } from './taskfold.js';
-import { visibleTasks } from './filters.js';
 import { questionOptions } from './question.js';
-import { taskRow, emptyTasks, sectionsOf, sectionHeader, listChips, listCount, groupsOf, GROUPINGS } from './tasklist.js';
+import { GROUPINGS } from './tasklist.js';
+import { taskViewNodes } from './taskview.js';
+import { foldProjects, markNext, projectScope } from './projects.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
 import { convRow, foldRow, splitDone } from './convlist.js';
@@ -21,7 +22,7 @@ const MODES = ['conversations', 'tasks', 'feed'];
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
 const DEFAULT_CONVERSATIONS = { quiet_days: 7, urgent_tags: [], states: ['urgent', 'mine', 'theirs', 'quiet', 'done'] };
 
-export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {} }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -39,6 +40,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let convKeys = new Map(); // message id -> conversation key (conversations.js)
   let listTop = 0; // where the list was when a conversation opened: «назад» returns there
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
+  let projectList = []; // all projects (CONCEPT.md §2.11)
+  let projectId = null; // the project open in Задачи, or null
+  const currentProject = () => (mode === 'tasks' && projectList.find((item) => item.id === projectId)) || null;
   const openSections = new Set(); // Задачи: folded sections («Дальше») the owner unfolded
   let showArchivedConversations = false; // Беседы: the «Архив · N» fold unfolded
   let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
@@ -68,6 +72,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     for (const entry of queued) events.set(entry.event.id, entry.event);
     const projected = project([...events.values()], new Set(pending.keys()));
     taskList = foldTasks([...events.values()], { filedTemplates: limits.tasks?.filed_templates ?? [] });
+    projectList = foldProjects([...events.values()]);
+    markNext(taskList, projectList); // next actions of projects for «Сегодня»; project titles for rows
     const byMessage = tasksByMessage(taskList);
     const tasksById = new Map(taskList.map((task) => [task.id, task]));
     const now = new Date();
@@ -148,30 +154,12 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };
     const filtered = Boolean((mode === 'feed' && sourceFilter) || tagFilter.size || conversationKey);
     if (mode === 'tasks') {
-      // The chips of the main lists on top, then the list by its sections (CONCEPT.md §5).
-      const filter = taskFilter();
-      const matches = taskMatches();
-      const counts = new Map(taskFilters.filter((item) => item.pinned || item.id === filter.id)
-        .map((item) => [item.id, listCount(visibleTasks(taskList, { filter: item, matches, now }), item, now)]));
-      children.push(listChips(taskFilters, filter, counts, { onPick: (id) => setTaskFilter(id), onMore: onMoreLists, grouping, onGroup: nextGrouping }));
-      const shownTasks = visibleTasks(taskList, { filter, matches, now });
-      const row = (task) => taskRow(task, task.messages.map((id) => views.get(id)).filter(Boolean), { onOpen: onOpenTask, showAssignee: filter.id !== taskFilters[0].id, quick });
-      const grouped = grouping === 'due' ? sectionsOf(shownTasks, filter, now) : groupsOf(shownTasks, grouping, (task) => task.messages.map((id) => views.get(id)).filter(Boolean));
-      for (const section of grouped) {
-        const key = `section:${filter.id}:${section.id}`;
-        const open = !section.folded || openSections.has(key);
-        if (section.title) {
-          const head = sectionHeader(section, { open, onToggle: () => toggleGroup(key, open, () => { if (open) openSections.delete(key); else openSections.add(key); }) });
-          head.dataset.group = key;
-          children.push(head);
-        }
-        if (open) {
-          const rows = section.tasks.map(row);
-          if (section.folded) groupNodes.set(key, rows);
-          children.push(...rows);
-        }
-      }
-      if (!shownTasks.length) children.push(emptyTasks(filter));
+      // A saved list, or one project by its sections (taskview.js, CONCEPT.md §5, §2.11).
+      const viewsOf = (task) => task.messages.map((id) => views.get(id)).filter(Boolean);
+      children.push(...taskViewNodes({ tasks: taskList, viewsOf, now, filters: taskFilters, filter: taskFilter(), matches: taskMatches(), grouping, onGroup: nextGrouping,
+        onPick: (id) => setTaskFilter(id), onMore: onMoreLists, onOpen: onOpenTask, quick, showDone,
+        isOpenSection: (key) => openSections.has(key), toggle: (key, open) => toggleGroup(key, open, () => { if (open) openSections.delete(key); else openSections.add(key); }),
+        keepRows: (key, rows) => groupNodes.set(key, rows), project: currentProject(), projects: projectList, projectActions }));
     } else if (mode === 'conversations' && !inside) {
       // The list (CONCEPT.md §5): by state; finished, then archived ones folded at the end («Архив» on top unfolds it).
       const { active, done, archived } = splitDone(convList.filter((item) => item.views.some(tagged)));
@@ -271,12 +259,16 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     return render({ bottom: !readsDown(), top: true, quiet: true });
   }
   // Contact and tag filters match a task through any of its messages.
-  const taskMatches = () => (task) => (!conversationKey && !tagFilter.size) || task.messages.some((id) => {
+  const taskMatches = () => { const scope = currentProject() && projectScope(projectList, projectId); return (task) => (!scope || scope.has(task.project)) && byMessages(task); };
+  const byMessages = (task) => (!conversationKey && !tagFilter.size) || task.messages.some((id) => {
     const view = views.get(id);
     return view && !view.deleted && (!conversationKey || convKeys.get(id) === conversationKey) && [...tagFilter].every((tag) => view.tags.includes(tag));
   });
+  // A project in Задачи (null — back to the lists).
+  function setProject(id) { quick?.reset?.(); projectId = id || null; return render({ top: true, quiet: true }); }
   function setTaskFilter(id) {
     quick?.reset?.();
+    projectId = null;
     taskFilterId = id;
     try { localStorage.setItem('stream.taskFilter.v2', id); } catch { /* storage may be blocked */ }
     return render({ top: true });
@@ -288,6 +280,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     task: (id) => taskList.find((task) => task.id === id),
     openConversation, conversation: () => current, conversationKey: () => conversationKey, conversations: () => convList,
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,
+    projects: () => projectList, project: currentProject, setProject,
     setShowDone, showDone: () => showDone,
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
     view: (id) => views.get(id), views: () => viewList,

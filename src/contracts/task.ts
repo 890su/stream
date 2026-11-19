@@ -7,6 +7,7 @@ import type { JournalEvent } from './validate.ts';
 // Task changes (CONCEPT.md §2.8): `task_change` events name their task in payload.ref and carry
 // payload.data.task. The JSON Schema checks the shape; this checks the pairing and what a creation needs.
 export function checkTask(event: JournalEvent): void {
+  checkProject(event);
   const task = event.payload.data?.task as { op: string; title?: string } | undefined;
   if (task && event.kind !== 'task_change') throw new HttpError(400, 'payload.data.task бывает только у task_change');
   if (event.kind !== 'task_change') return;
@@ -20,6 +21,19 @@ export function checkTask(event: JournalEvent): void {
   if (extra.roles) checkRoles(extra.roles);
   if (extra.waiting_for && !isParty(extra.waiting_for.party)) throw new HttpError(400, 'Задача ждёт неизвестную сторону');
   if (extra.promise && !isParty(extra.promise.by)) throw new HttpError(400, 'Обещание дано неизвестной стороной');
+}
+
+// Project changes (CONCEPT.md §2.11): `project_change` names its project in payload.ref, carries payload.data.project;
+// a new project needs a title; a project is not its own parent.
+function checkProject(event: JournalEvent): void {
+  const project = event.payload.data?.project as { op: string; title?: string; parent?: string | null } | undefined;
+  if (project && event.kind !== 'project_change') throw new HttpError(400, 'payload.data.project бывает только у project_change');
+  if (event.kind !== 'project_change') return;
+  if (!project) throw new HttpError(400, 'У project_change нет payload.data.project');
+  const ref = event.payload.ref;
+  if (ref?.type !== 'project' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref.id)) throw new HttpError(400, 'project_change ссылается на проект: payload.ref {type: project, id}');
+  if (project.op === 'create' && !project.title?.trim()) throw new HttpError(400, 'У нового проекта нет названия');
+  if (project.parent && project.parent === ref.id) throw new HttpError(400, 'Проект не может быть внутри самого себя');
 }
 
 // Roles of a task (P14): only ROLE_KEYS; every value is a party (lists for executors and watchers) or null.

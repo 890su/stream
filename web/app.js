@@ -6,7 +6,7 @@ import { setupFeed } from './feed.js';
 import { startSync } from './outbox.js';
 import { startLive } from './live.js';
 import { setupActions } from './actions.js';
-import { makeCorrection } from './shared.js';
+import { makeCorrection, makeProjectChange, makeTaskChange } from './shared.js';
 import { setupPicker } from './picker.js';
 import { setupBulk } from './bulk.js';
 import { setupStatus, setupSettings, registerWorker } from './settings.js';
@@ -124,6 +124,7 @@ function setupMessageActions(feed, composer, config) {
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
+    onCreateProject: (project) => composer.queue(makeProjectChange(crypto.randomUUID(), { op: 'create', status: 'active', ...project })).catch((error) => notify(error.message)),
     onContact: (key) => chatView.open(key),
     onFilterChange: updateFilter,
   });
@@ -182,6 +183,12 @@ async function main() {
   const convQuickRef = { decorate: (row, conversation) => convQuick?.decorate(row, conversation) };
   const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
     quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open(),
+    // The open project (CONCEPT.md §2.11): its changes and a task added to one of its sections.
+    projectActions: {
+      saveProject: (change) => { const project = feedRef.project(); if (project) composerRef.queue(makeProjectChange(project.id, { op: 'update', ...change })).catch((error) => notify(error.message)); },
+      addTask: (title, section) => { const project = feedRef.project(); if (project) composerRef.queue(makeTaskChange(crypto.randomUUID(), { op: 'create', title, roles: { author: 'me', responsible: 'me', executors: ['me'] }, status: 'todo', project: project.id, section })).catch((error) => notify(error.message)); },
+      leave: () => { feedRef.setProject(null); drawer?.render(); },
+    },
     taskCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); chatView?.sync(); composerRef?.refreshTags(); viewSwitch?.update(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),

@@ -34,8 +34,9 @@ export function dueLabel(task, now = new Date()) {
 
 // The facts of a row under its title, in order: status (not for plain «сделать»), «готово?», who does it (every
 // list but the first, `showAssignee`), with whom, «проверьте». Pure (tested in node).
-export function rowParts(task, views, { showAssignee = false } = {}) {
+export function rowParts(task, views, { showAssignee = false, showProject = true } = {}) {
   const parts = [];
+  if (showProject && task.projectTitle) parts.push(`▸ ${task.projectTitle}`);
   if (task.status !== 'todo') parts.push(STATUSES[task.status] ?? task.status);
   if (task.proposed === 'done') parts.push('готово?');
   if (task.items?.length) parts.push(`☑ ${itemsProgress(task)}`);
@@ -65,14 +66,14 @@ export function listCount(tasks, filter, now = new Date()) {
 }
 
 // One task row: «Готово» mark · title and facts · due date. `quick` (taskquick.js) adds the mark and the swipes.
-export function taskRow(task, views, { onOpen, showAssignee, quick }) {
+export function taskRow(task, views, { onOpen, showAssignee, showProject = true, quick }) {
   const item = element('div', `task-item ${task.status}${task.proposed === 'done' ? ' proposed' : ''}`);
   item.dataset.task = task.id;
   const main = element('button', 'task-main');
   main.type = 'button';
   const text = element('span', 'task-text');
   text.append(element('span', 'task-title', task.title));
-  const parts = rowParts(task, views, { showAssignee });
+  const parts = rowParts(task, views, { showAssignee, showProject });
   if (parts.length) text.append(element('span', 'task-meta', parts.join(' · ')));
   main.append(text);
   const due = dueLabel(task);

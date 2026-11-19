@@ -81,7 +81,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       // «В дело…» offers the tasks of the same conversations first, then the latest changed.
       const mine = new Set(feed.conversations().filter((item) => item.tasks.some((other) => other.id === task.id)).flatMap((item) => item.tasks.map((other) => other.id)));
       const others = [...feed.tasks()].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || b.updatedAt.localeCompare(a.updatedAt));
-      body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save, others, notify,
+      body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save, others, notify, projects: feed.projects(),
         doneCards, quick, reportKeys: reportKeys(task, config.tasks ?? {}), fields: config.tasks?.report_fields ?? {} }));
     } else {
       const view = feed.view(current.id);

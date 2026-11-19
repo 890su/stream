@@ -3,6 +3,7 @@ import { accountTitle } from './tgbubble.js';
 import { visibleTasks } from './filters.js';
 import { listCount } from './tasklist.js';
 import { isWide, onWideChange } from './layout.js';
+import { projectTreeBlock } from './projectpanel.js';
 
 // Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
 // view changes); Беседы — «Завершённые»; Лента — «Завершённые» and sources; Задачи — the saved task filters.
@@ -20,7 +21,8 @@ function age(ts) {
   return days <= 0 ? 'сегодня' : `${days} дн. назад`;
 }
 
-export function setupDrawer({ feed, onContact, onFilterChange }) {
+export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject = () => {} }) {
+  let allProjects = false; // finished and archived projects in the tree too
   const drawer = document.querySelector('#drawer');
   const backdrop = document.querySelector('#drawer-backdrop');
   const contactsBox = document.querySelector('#drawer-contacts');
@@ -161,7 +163,11 @@ export function setupDrawer({ feed, onContact, onFilterChange }) {
       row.onclick = async () => { await feed.setTaskFilter(filter.id); onFilterChange(); render(); if (!isWide()) close(); };
       return row;
     });
-    modeBox.replaceChildren(element('h3', 'drawer-section', 'Списки'), ...rows);
+    // Projects (CONCEPT.md §2.11): a tap opens one in the centre.
+    const tree = projectTreeBlock({ projects: feed.projects(), tasks: feed.tasks(), current: feed.project()?.id ?? null, all: allProjects,
+      onAll: () => { allProjects = !allProjects; render(); },
+      onOpen: async (id) => { await feed.setProject(id); render(); if (!isWide()) close(); }, onCreate: onCreateProject });
+    modeBox.replaceChildren(element('h3', 'drawer-section', 'Проекты'), tree, element('h3', 'drawer-section', 'Списки'), ...rows);
   }
   // In Задачи the lists come first, above the contacts; elsewhere the view's filters follow the contacts.
   const contactsHead = contactsBox.previousElementSibling;

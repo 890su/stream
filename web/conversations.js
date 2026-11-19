@@ -8,7 +8,7 @@ import { phoneNumber } from './parties.js';
 // The conversation a message belongs to: one Telegram chat across both accounts, one phone number, own notes.
 export function conversationOf(event) {
   const data = event?.payload?.data ?? {};
-  if (event?.kind === 'system' || event?.kind === 'correction' || event?.kind === 'task_change') return null;
+  if (event?.kind === 'system' || event?.kind === 'correction' || event?.kind === 'task_change' || event?.kind === 'project_change') return null;
   const chat = data.telegram?.chat_id ?? data.outbound?.chat_id;
   if (chat !== undefined && chat !== null) return `tg:${chat}`;
   if (event?.kind === 'call' || event?.kind === 'sms') {

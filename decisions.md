@@ -594,3 +594,14 @@ conversations, convlist, drawer, app, index.html, стили), новые `web/l
 личные (Google Задачи, Календарь) могут выбирать фильтрами. Шаблон `plan` («раскладывать идею») меняется вместе с
 проектами.
 **Affected:** `CONCEPT.md` §2.2, §2.3, §2.8, §2.10, §2.11, §5; позже `contracts/event.schema.json`, `src/tasks/`, `web/`
+
+## 2026-11-19 — П15, первый шаг: проекты в журнале, следующее действие в «Сегодня»
+**What:** Новый вид события `project_change` (`payload.ref = {type: project, id}`, `data.project`: название,
+родитель, вид `stream` / `goal`, статус, разделы с ролями `next` / `ideas`). У `task_change` — необязательные
+`project` и `section`. Проект с целью получает разделы «Идеи · Следующее · Позже»; открытые задачи раздела
+`next` активного проекта — следующие действия: поле фильтра `next`, раздел «Следующее по проектам» в «Сегодня».
+**Why:** Решение владельца о проектах (§2.11): задача в одном проекте, проекты не забрасываются.
+**Boundary:** Event v1: новый `kind` и необязательные поля, старые события валидны. Зеркала, разбор с проектом,
+проект беседы по умолчанию, доска и дорожная карта — следующими шагами П15.
+**Affected:** `contracts/event.schema.json`, `src/contracts/task.ts`, `src/tasks/fold.ts`, `registry/filters.json`,
+`web/projects.js`, `web/projectview.js`, `web/projectpanel.js`, `web/taskview.js`, `web/feed.js`, `web/drawer.js`

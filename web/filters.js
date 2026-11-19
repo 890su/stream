@@ -5,6 +5,7 @@
 // Condition: { field, op, value? }, or a nested group { all: [...] } / { any: [...] } as an element of a list.
 // Fields: status, role.<key> (role.executors / role.watchers are arrays), involves_me, due, filed,
 //   report_missing (array of unfilled report fields), updated_days (whole days since the last change),
+//   next (an open task in the «next» section of an active goal project, CONCEPT.md §2.11),
 //   snoozed (deferred and its `remind_at` still ahead — hidden until then, back by itself after).
 //   `due` values: today, overdue, none, later, and `week` — due today or within the next 7 days
 //   (today .. today + 7, inclusive; overdue and later dates are not «week»).
@@ -38,6 +39,7 @@ function read(task, field, now) {
     case 'filed': return { known: true, value: !!task.filed };
     case 'due': return { known: true, due: true, value: dueState(task, now) };
     case 'report_missing': return { known: true, value: task.report?.missing ?? [] };
+    case 'next': return { known: true, value: Boolean(task.next) }; // a next action of a project (projects.js)
     case 'snoozed': return { known: true, value: task.status === 'deferred' && Boolean(task.remindAt) && Date.parse(task.remindAt) > now.getTime() };
     case 'updated_days': return { known: true, value: Math.floor((now.getTime() - Date.parse(task.updatedAt)) / DAY) };
     default: return { known: false };
