@@ -235,3 +235,38 @@ test('a conversation is archived until a newer message, theirs or mine', () => {
   assert.equal(run([...marked, tg('by', '501', '2026-11-18T10:00:00', 'ещё')])[0].archived, false);
   assert.equal(run([...marked, mine('501', '2026-11-18T10:00:00', 'отвечу')])[0].archived, false);
 });
+
+test('an own note in a task of its own is a conversation named by the task; filed or untriaged notes stay in «Заметки»', () => {
+  const note = (ts: string, text: string, extra: Record<string, unknown> = {}) => ({ id: `n${++n}`, schema_version: 1, source: 'app', author: 'me', ts, kind: 'text', payload: { text, data: {} }, ...extra });
+  const a = note('2026-11-18T09:00:00', 'купить кабель');
+  const b = note('2026-11-18T09:05:00', 'и коннекторы');
+  const c = note('2026-11-18T09:10:00', 'заказ на Dzika 11');
+  const mood = note('2026-11-18T09:20:00', 'выспался');
+  const loose = note('2026-11-18T09:30:00', 'мысль');
+  const events = [a, b, c, mood, loose,
+    change('t-cable', '2026-11-18T09:06:00', { op: 'create', title: 'Купить кабель и коннекторы', status: 'todo', add: [a.id, b.id] }),
+    change('t-order', '2026-11-18T09:11:00', { op: 'create', title: 'Заказ Dzika 11', status: 'todo', add: [c.id] }),
+    change('t-mood', '2026-11-18T09:21:00', { op: 'create', title: 'Самочувствие', status: 'done', template: 'chatter', add: [mood.id] })];
+  const byKey = new Map<string, any>(run(events).map((item: any) => [item.key, item]));
+  assert.deepEqual(byKey.get('task:t-cable').views.map((view: any) => view.id), [a.id, b.id]);
+  assert.equal(byKey.get('task:t-cable').title, 'Купить кабель и коннекторы');
+  assert.deepEqual(byKey.get('task:t-order').views.map((view: any) => view.id), [c.id]);
+  assert.deepEqual(byKey.get('me').views.map((view: any) => view.id), [mood.id, loose.id]);
+  assert.equal(byKey.get('me').title, 'Заметки');
+});
+
+test('a message split off its chat is a conversation of its own, with what continues it; the chat keeps the rest', () => {
+  const first = tg('by', '777', '2026-11-18T09:00:00', 'привет');
+  const ask = tg('by', '777', '2026-11-18T09:01:00', 'настройте принтер');
+  const more = tg('by', '777', '2026-11-18T09:02:00', 'модель 426', { reply_to: ask.id });
+  const split = { id: `s${++n}`, schema_version: 1, source: 'app', author: 'me', ts: '2026-11-18T09:05:00', kind: 'correction', payload: { ref: { type: 'event', id: ask.id }, data: { op: 'split' } } };
+  const events = [first, ask, { ...more, reply_to: ask.id }, split, change('t-print', '2026-11-18T09:06:00', { op: 'create', title: 'Анна: настройка принтера', status: 'todo', add: [ask.id] })];
+  const byKey = new Map<string, any>(run(events).map((item: any) => [item.key, item]));
+  assert.deepEqual(byKey.get('tg:777').views.map((view: any) => view.id), [first.id]);
+  const own = byKey.get(`split:${ask.id}`);
+  assert.deepEqual(own.views.map((view: any) => view.id), [ask.id, more.id]);
+  assert.equal(own.title, 'Анна: настройка принтера', 'named by its task');
+  assert.equal(own.reply.chat_id, '777', 'answers still go to the chat');
+  const unsplit = { ...split, id: `s${++n}`, ts: '2026-11-18T09:10:00', payload: { ...split.payload, data: { op: 'unsplit' } } };
+  assert.ok(run([...events, unsplit]).every((item: any) => !item.key.startsWith('split:')), '«Вернуть в беседу» puts it back');
+});

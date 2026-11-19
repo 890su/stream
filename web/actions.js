@@ -4,6 +4,9 @@ const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 10;
 const GAP_PX = 8;
 
+// A message of a chat with people (Telegram, a reply sent there, a call or an SMS), not an own note.
+export const inChat = (view) => Boolean(view.event.payload?.data?.telegram || view.event.payload?.data?.outbound || view.event.kind === 'call' || view.event.kind === 'sms');
+
 export function setupActions({ list, getView, onAction }) {
   const layer = document.querySelector('#action-layer');
   const panel = document.querySelector('#action-panel');
@@ -37,6 +40,11 @@ export function setupActions({ list, getView, onAction }) {
     const telegram = view.event.payload?.data?.telegram;
     panel.querySelector('[data-op="edit"]').hidden = view.event.kind === 'call' || view.event.kind === 'sms' || Boolean(telegram && view.event.author !== 'me')
       || Boolean(view.event.payload?.data?.outbound);
+    // A chat message can go into a conversation of its own and back; own notes split by their tasks.
+    const splitButton = panel.querySelector('[data-op="split"]');
+    splitButton.hidden = !inChat(view);
+    splitButton.querySelector('span').textContent = view.split ? 'В беседу' : 'Отдельно';
+    splitButton.setAttribute('aria-label', view.split ? 'Вернуть в беседу' : 'Отдельной беседой');
     const linkButton = panel.querySelector('[data-op="link"]');
     linkButton.querySelector('span').textContent = view.continues ? 'Отделить' : 'Связать';
     linkButton.setAttribute('aria-label', view.continues ? 'Отделить от предыдущего' : 'Связать с предыдущим сообщением');

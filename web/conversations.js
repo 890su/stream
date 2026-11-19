@@ -20,13 +20,23 @@ export function conversationOf(event) {
 }
 
 const channelOf = (event, key) => {
-  if (key === 'me') return 'me';
+  if (key === 'me' || key.startsWith('task:')) return 'me';
+  if (key.startsWith('split:')) return channelOf(event, conversationOf(event) ?? 'me');
   if (key.startsWith('tel:')) return 'phone';
   return chatOf(event)?.account ?? null;
 };
 
-const titleOf = (view, key) => {
+// A task that names a conversation: the first one of the message that is not filed away.
+const workOf = (view, taskById) => (view?.taskIds ?? []).map((id) => taskById.get(id)).find((task) => task && !task.filed) ?? null;
+const snippetOf = (view) => (view?.text ?? view?.event?.payload?.text ?? '').trim().split(/\r?\n/)[0].slice(0, 60) || 'Сообщение';
+
+const titleOf = (view, key, taskById = new Map(), views = []) => {
   if (key === 'me') return 'Заметки';
+  if (key.startsWith('task:')) return taskById.get(key.slice(5))?.title ?? 'Заметка';
+  if (key.startsWith('split:')) {
+    const anchor = views.find((item) => item.id === key.slice(6)) ?? view;
+    return workOf(anchor, taskById)?.title ?? snippetOf(anchor);
+  }
   const event = view.event;
   if (key.startsWith('tel:')) {
     const data = event.kind === 'call' ? event.payload?.data?.call : event.payload?.data?.sms;
@@ -102,11 +112,24 @@ export function conversationState(conversation, { now = new Date(), config }) {
 
 // message id -> conversation key. An own note that continues or answers a message joins that message's
 // conversation (a call description, a reply written without a recipient), through chains of such notes.
-export function conversationKeys(views) {
+// A message split off its chat (and what continues or answers it) is its own conversation `split:<id>`; an own
+// note in a task that is not filed away is the conversation of that task `task:<id>` (task manager spec, 2026-11-19).
+// `tasksById` — folded tasks by id; without it notes stay in «Заметки».
+export function conversationKeys(views, { tasksById = new Map() } = {}) {
   const byId = new Map(views.map((view) => [view.id, view]));
   const keys = new Map();
+  const splitOf = (view) => {
+    const seen = new Set();
+    for (let current = view; current && !seen.has(current.id); current = byId.get(current.continues ?? current.event.reply_to)) {
+      if (current.split) return `split:${current.id}`;
+      seen.add(current.id);
+    }
+    return null;
+  };
   const resolve = (view) => {
     if (keys.has(view.id)) return keys.get(view.id);
+    const split = splitOf(view);
+    if (split) { keys.set(view.id, split); return split; }
     const seen = new Set();
     let current = view;
     let key = conversationOf(current.event);
@@ -118,6 +141,10 @@ export function conversationKeys(views) {
       if (parentKey && parentKey !== 'me') { key = parentKey; break; }
       current = parent;
     }
+    if (key === 'me') {
+      const work = workOf(view, tasksById) ?? workOf(current, tasksById);
+      if (work) key = `task:${work.id}`;
+    }
     keys.set(view.id, key);
     return key;
   };
@@ -127,7 +154,7 @@ export function conversationKeys(views) {
 
 // All conversations, ordered by `config.states`, newest first inside a state. `keys` — conversationKeys of a wider
 // set of views (the feed passes all live ones, so a note keeps its conversation when its parent is archived).
-export function conversations(views, tasks, { now = new Date(), config, keys = conversationKeys(views) }) {
+export function conversations(views, tasks, { now = new Date(), config, keys = conversationKeys(views, { tasksById: new Map(tasks.map((task) => [task.id, task])) }) }) {
   const groups = new Map();
   for (const view of views) {
     if (view.deleted) continue;
@@ -145,7 +172,7 @@ export function conversations(views, tasks, { now = new Date(), config, keys = c
     const ids = new Set(sorted.flatMap((view) => view.taskIds ?? []));
     const incoming = sorted.filter(incomingChat).at(-1);
     const conversation = {
-      key, title: titleOf(own, key), group: sorted.some((view) => chatOf(view.event)?.group),
+      key, title: titleOf(own, key, taskById, sorted), group: sorted.some((view) => chatOf(view.event)?.group),
       channels: [...new Set(sorted.map((view) => channelOf(view.event, key)).filter(Boolean))],
       views: sorted, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
       reply: incoming ? chatOf(incoming.event) : null,

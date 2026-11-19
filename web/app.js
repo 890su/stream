@@ -123,7 +123,7 @@ function setupMessageActions(feed, composer, config) {
     notify('Связано', { label: 'Отменить', run: () => correct(view, 'unlink') });
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
-  chatView = setupChatView({ feed, composer, correct, notify });
+  chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id) });
   details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update() });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
@@ -138,6 +138,11 @@ function setupMessageActions(feed, composer, config) {
     onAction: async (op, view) => {
       if (op === 'reply') composer.reply(view);
       else if (op === 'task') details.createFrom(view);
+      else if (op === 'split') {
+        const back = view.split ? 'split' : 'unsplit';
+        await correct(view, view.split ? 'unsplit' : 'split');
+        notify(view.split ? 'Сообщение возвращено в беседу' : 'Сообщение — отдельной беседой', { label: 'Отменить', run: () => correct(view, back) });
+      }
       else if (op === 'chat-open') chatView.open(conversationOf(view.event));
       else if (op === 'system') system.open();
       else if (op === 'retry') { if (view.delivery?.action) system.retry(view.delivery.action); }

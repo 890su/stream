@@ -1,5 +1,6 @@
 import { accountTitle } from './tgbubble.js';
-import { chatOf } from './projection.js';
+import { chatOf, snippet } from './projection.js';
+import { makeTaskChange, ownTask } from './shared.js';
 import { reveal, conceal } from './motion.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -9,7 +10,7 @@ const $ = (selector) => document.querySelector(selector);
 // The composer's recipient is the conversation's reply chat. Without one (a phone number, a chat with only my
 // messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
 // plain notes. «Не отслеживать» for Telegram conversations.
-export function setupChatView({ feed, composer, correct, notify }) {
+export function setupChatView({ feed, composer, correct, notify, openTask = () => {} }) {
   const bar = $('#chat-bar');
   let key = null;
   let applied = null; // the reply chat this view put into the composer
@@ -77,6 +78,17 @@ export function setupChatView({ feed, composer, correct, notify }) {
   window.addEventListener('popstate', () => { if (key && !history.state?.conversation) close(); });
   $('#chat-close').onclick = leave;
   $('#chat-back').onclick = leave;
+  // «+ Задача»: a new task for this conversation, from its latest message, titled by the conversation.
+  $('#chat-task').onclick = async () => {
+    const conversation = feed.conversation();
+    const source = conversation?.views.filter((view) => !view.deleted).at(-1);
+    if (!source) return;
+    const id = crypto.randomUUID();
+    const title = `${conversation.title}: ${snippet(source)}`.slice(0, 120);
+    try { await composer.queue(makeTaskChange(id, ownTask(title, source.id))); } catch (error) { notify(error.message); return; }
+    openTask(id);
+    notify(`Задача по беседе «${conversation.title}»`, { label: 'Вернуть', run: () => composer.queue(makeTaskChange(id, { op: 'update', status: 'cancelled' })).catch((error) => notify(error.message)) });
+  };
   // «Не отслеживать»: Stream stops writing this chat; what is already written may go to the archive.
   const dialog = $('#untrack');
   $('#chat-untrack').onclick = () => {

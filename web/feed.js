@@ -93,7 +93,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const kept = live.filter((view) => showArchive || (!view.archived && !inArchivedTopic(view)));
     const tagged = (view) => [...tagFilter].every((tag) => view.tags.includes(tag));
     const inSource = (view) => !sourceFilter || sourceKey(view.event) === sourceFilter;
-    convKeys = conversationKeys(live);
+    convKeys = conversationKeys(live, { tasksById });
     const inConversation = (view) => !conversationKey || convKeys.get(view.id) === conversationKey;
     // Лента: messages whose tasks are all finished only with «Завершённые» (CONCEPT.md §5).
     const finished = (view) => view.taskIds.length > 0 && view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' }));

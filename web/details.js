@@ -1,7 +1,8 @@
 // Right panel «Подробности» (CONCEPT.md §5): what was chosen by a tap — a task or a message. Opens only by
 // a tap (task plaque in a conversation, task row, task mark, history icon, chain title); a left-to-right swipe closes it.
 // While a task is open, the composer writes into it.
-import { makeTaskChange, ownTask } from './shared.js';
+import { makeTaskChange, makeCorrection, ownTask } from './shared.js';
+import { inChat } from './actions.js';
 import { reportKeys } from './donecard.js';
 import { snippet, chatOf, sourceKey } from './projection.js';
 import { STATUSES, taskOfMessage } from './taskfold.js';
@@ -138,9 +139,11 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   }
 
   // «Сделать задачей»: a task of mine with this message; its details open to rename or reassign.
+  // A message of a chat goes into a conversation of its own, named by this task (an own note does so by itself).
   async function createFrom(view) {
     const id = crypto.randomUUID();
     await save(id, ownTask(snippet(view).slice(0, 120), view.id));
+    if (inChat(view) && !view.split) await composer.queue(makeCorrection(view.id, 'split')).catch((error) => notify(error.message));
     openTask(id);
   }
 

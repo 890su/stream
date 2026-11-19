@@ -15,7 +15,7 @@ test('owner corrections reference an accepted message and carry a known operatio
     const photo = event({ kind: 'photo', payload: { text: 'подпись' } });
     assert.equal((await post(photo)).status, 201);
 
-    for (const op of ['archive', 'unarchive', 'delete', 'restore', 'answered', 'unanswered']) assert.equal((await post(correction(original.id, { op }))).status, 201, op);
+    for (const op of ['archive', 'unarchive', 'delete', 'restore', 'answered', 'unanswered', 'split', 'unsplit']) assert.equal((await post(correction(original.id, { op }))).status, 201, op);
     const edit = correction(original.id, { op: 'edit' }, { text: 'купить кабель UTP', tags: ['#закупка'] });
     assert.equal((await post(edit)).status, 201);
     assert.equal((await post(edit)).status, 200, 'retry is idempotent');

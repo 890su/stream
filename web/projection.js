@@ -76,6 +76,9 @@ export function project(events, pendingIds = new Set()) {
       // «Отвечено» on a conversation (CONCEPT.md §2.5): nothing up to this message waits for me.
       case 'answered': view.answered = true; break;
       case 'unanswered': view.answered = false; break;
+      // A message split off its chat into a conversation of its own (task manager spec; «Вернуть в беседу» undoes).
+      case 'split': view.split = true; break;
+      case 'unsplit': view.split = false; break;
       default: break;
     }
   }
