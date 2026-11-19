@@ -6,6 +6,7 @@ import { actionsFor, actionLabel, changeFor, dueChips, delegateOptions } from '.
 import { partyName } from './parties.js';
 import { checklistBlock } from './checklist.js';
 import { projectLine } from './projectpanel.js';
+import { counterpartyLine } from './counterpartyline.js';
 import { holding } from './holdrender.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -97,7 +98,7 @@ const MESSAGES = { done: 'Готово', verify: 'Проверено', accept: '
 
 // `ctx`: { views (the task's messages), bubble(view), save(change), saveTo(id, change), others (open tasks), notify,
 // doneCards, quick (taskquick.js), reportKeys, fields }.
-export function taskDetails(task, { views, bubble, save, saveTo, others, notify, projects = [], doneCards, quick, reportKeys = [], fields }) {
+export function taskDetails(task, { views, bubble, save, saveTo, others, notify, projects = [], doneCards, quick, reportKeys = [], fields, directory = null }) {
   const box = element('div', 'details-task');
   box.append(titleBlock(task, save));
   const origin = task.createdBy === 'me' ? 'создано вами' : `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
@@ -157,6 +158,7 @@ export function taskDetails(task, { views, bubble, save, saveTo, others, notify,
   }
 
   box.append(projectLine(task, { projects, save })); // CONCEPT.md §2.11
+  if (directory && !task.filed) box.append(counterpartyLine(task, { ...directory, save })); // contacts design §6
   const checklist = checklistBlock(task, { save, saveTo, others, notify });
   if (checklist) box.append(checklist);
 

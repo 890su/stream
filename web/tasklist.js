@@ -36,8 +36,11 @@ export function dueLabel(task, now = new Date()) {
 // list but the first, `showAssignee`), with whom, «проверьте». Pure (tested in node).
 export function rowParts(task, views, { showAssignee = false, showProject = true } = {}) {
   const parts = [];
-  if (showProject && task.projectTitle) parts.push(`▸ ${task.projectTitle}`);
+  // With whom the matter is (contacts design §6) says more than the project; the project shows without it.
+  if (task.counterpartyTitle) parts.push(`◆ ${task.counterpartyTitle}`);
+  else if (showProject && task.projectTitle) parts.push(`▸ ${task.projectTitle}`);
   else if (showProject && task.project_options?.length && !task.project) parts.push('проект?');
+  if (!task.counterparty && task.counterparty_options?.length) parts.push('кто?');
   if (task.status !== 'todo') parts.push(STATUSES[task.status] ?? task.status);
   if (task.proposed === 'done') parts.push('готово?');
   if (task.items?.length) parts.push(`☑ ${itemsProgress(task)}`);

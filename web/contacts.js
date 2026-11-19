@@ -61,3 +61,10 @@ export function peopleOf(counterpartyId, people) {
   return people.filter((person) => person.status !== 'deleted')
     .flatMap((person) => person.roles.filter((role) => role.counterparty === counterpartyId).map((role) => ({ person, title: role.title })));
 }
+
+// Puts the counterparty's title on tasks for rows (`task.counterpartyTitle`); in place, returns tasks.
+export function markCounterparties(tasks, counterparties) {
+  const byId = new Map(counterparties.map((item) => [item.id, item.title]));
+  for (const task of tasks) task.counterpartyTitle = (task.counterparty && byId.get(task.counterparty)) || null;
+  return tasks;
+}

@@ -48,6 +48,16 @@ export function makeProjectChange(projectId, project) {
   };
 }
 
+// A person or a counterparty of the directory (contacts design §3), changed by the owner.
+export function makePersonChange(personId, contact) {
+  return { event: { id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'contact_change',
+    payload: { ref: { type: 'person', id: personId }, data: { contact } } }, files: [] };
+}
+export function makeCounterpartyChange(counterpartyId, counterparty) {
+  return { event: { id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'counterparty_change',
+    payload: { ref: { type: 'counterparty', id: counterpartyId }, data: { counterparty } } }, files: [] };
+}
+
 // «Сделать задачей» / «Новое дело» by the owner: a task of mine from one message (P14 roles, no old `assignee`).
 export function ownTask(title, messageId) {
   return { op: 'create', title, roles: { author: 'me', responsible: 'me', executors: ['me'] }, status: 'todo', add: [messageId] };

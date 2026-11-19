@@ -10,7 +10,7 @@ import { questionOptions } from './question.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
-import { foldPeople, foldCounterparties } from './contacts.js';
+import { foldPeople, foldCounterparties, markCounterparties } from './contacts.js';
 import { foldProjects, markNext, projectScope } from './projects.js';
 import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
@@ -79,6 +79,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     projectList = foldProjects([...events.values()]);
     peopleList = foldPeople([...events.values()]);
     counterpartyList = foldCounterparties([...events.values()]);
+    markCounterparties(taskList, counterpartyList);
     markNext(taskList, projectList); // next actions of projects for «Сегодня»; project titles for rows
     const byMessage = tasksByMessage(taskList);
     const tasksById = new Map(taskList.map((task) => [task.id, task]));

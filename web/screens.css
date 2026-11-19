@@ -143,6 +143,10 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .details-project { display: grid; gap: 6px; }
 .details-project-pick { justify-self: start; }
 .project-ask { align-items: center; }
+.details-counterparty { display: grid; gap: 6px; }
+.details-counterparty-line { display: flex; align-items: center; gap: 4px; }
+.counterparty-ask { align-items: center; }
+.details-counterparty .details-input { min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; }
 
 /* The pulse — the default of «Задачи» (task manager spec §5, pulseview.js). */
 .pulse-work { align-self: stretch; display: grid; gap: 4px; margin: 8px 6px 4px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); box-shadow: var(--shadow); }
