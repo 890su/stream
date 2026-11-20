@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { fixture, token, viberToken } from './helpers.ts';
 import { partyOf } from '../src/tasks/parties.ts';
 import { streamOf } from '../src/tasks/triage.ts';
@@ -53,6 +53,26 @@ test('an incoming Viber message is written once; the phone makes its author the 
     assert.equal((await bridge(f, '/api/viber/messages', { ...message, key: 'n3', phone: '8029' })).status, 400);
     assert.equal((await bridge(f, '/api/viber/messages', { ...message, key: 'n4', text: ' ' })).status, 400);
     assert.equal((await bridge(f, '/api/viber/messages', { ...message, key: '' })).status, 400);
+  } finally { await f.stop(); }
+});
+
+test('a photo from Viber: the bridge uploads the file, the message is a photo without the placeholder text', async () => {
+  const f = await fixture();
+  try {
+    const bytes = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4fd0000000049454e44ae426082', 'hex');
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    const put = await fetch(`${f.base}/api/viber/media/${sha}`, { method: 'PUT', headers: { Authorization: `Bearer ${viberToken}`, 'Content-Type': 'image/png' }, body: bytes });
+    assert.ok([200, 201].includes(put.status), String(put.status));
+    const sent = await bridge(f, '/api/viber/messages', { key: 'p1', chat: 'Пётр', phone: '+375290000001', text: '', received_at: '2026-11-20T09:13:59+01:00',
+      media: [{ media_id: sha, mime: 'image/png', size_bytes: bytes.length }] });
+    assert.equal(sent.status, 201);
+    const stored = f.store.getEvent((await sent.json() as { id: string }).id)!;
+    assert.equal(stored.kind, 'photo');
+    assert.equal(stored.payload.text, undefined);
+    assert.equal(stored.payload.media?.[0]?.media_id, sha);
+    const missing = await bridge(f, '/api/viber/messages', { key: 'p2', chat: 'Пётр', text: '', received_at: '2026-11-20T09:14:00+01:00',
+      media: [{ media_id: 'a'.repeat(64), mime: 'image/png' }] });
+    assert.ok(missing.status >= 400, 'a file that was not uploaded is refused');
   } finally { await f.stop(); }
 });
 

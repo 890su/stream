@@ -6,7 +6,7 @@
 #  · replies: while the channel is healthy, actions written in the feed are taken one by one, sent with viber-send
 #    (by phone only) and reported back. A send is never retried here: a failure goes back to the feed.
 # Env: STREAM_URL (default http://stream:3790), STREAM_VIBER_TOKEN. State: ~/inbox/bridge-state.json.
-import hashlib, json, os, subprocess, sys, time, urllib.error, urllib.request
+import hashlib, json, mimetypes, os, subprocess, sys, time, urllib.error, urllib.request
 
 HOME = os.path.expanduser('~')
 INBOX = os.path.join(HOME, 'inbox')
@@ -17,6 +17,13 @@ URL = os.environ.get('STREAM_URL', 'http://stream:3790').rstrip('/')
 TOKEN = os.environ.get('STREAM_VIBER_TOKEN', '')
 ISOLATES = '⁨⁩⁦⁧'
 UNKNOWN_RETRY_S = 86400   # a name without a phone is looked up again after a day (the owner may add the contact)
+# Photos, files and voice Viber saves on the desktop the moment the message comes (seen 2026-11-20: same second).
+DOWNLOADS = [os.path.join(HOME, 'Documents', 'ViberDownloads'), os.path.join(HOME, 'Documents', 'ViberDownloads', 'PTT')]
+SETTLE_S = 15             # a message waits this long for its file before it goes to Stream
+FILE_WINDOW = (-5, 30)    # a file belongs to a message saved this many seconds before / after its notification
+# Notification texts that only stand for an attachment (dropped when the file is attached); reactions are not messages.
+PLACEHOLDERS = {'Фотосообщение', 'Видеосообщение', 'Файл', 'Голосовое сообщение', 'Стикер', 'GIF'}
+SKIP_PREFIXES = ('Реакция:',)
 PULSE_S = 60
 HEALTH_STALE_S = 12 * 60
 
@@ -57,7 +64,7 @@ def message_of(record):
     if record.get('app') != 'ViberPC' or record.get('hints', {}).get('category') != 'im.received':
         return None
     summary, body = record.get('summary', ''), record.get('body', '')
-    if not any(mark in summary for mark in ISOLATES) or not body.strip():
+    if not any(mark in summary for mark in ISOLATES) or not body.strip() or body.strip().startswith(SKIP_PREFIXES):
         return None
     name = ''.join(ch for ch in summary if ch not in ISOLATES).strip()
     if not name:
@@ -66,21 +73,78 @@ def message_of(record):
     return {'key': f"{record.get('ts')}|{record.get('id')}|{digest}", 'chat': name[:200], 'text': body, 'received_at': record.get('ts')}
 
 
+class NotYet(Exception):
+    """The desktop cannot look the phone up right now (Viber starting, another scenario running): wait, so that
+    a message never goes to Stream without a phone only because Viber was not ready."""
+
+
 def phone_of(name, state):
     known = state['phones'].get(name)
     if known and (known.get('phone') or time.time() - known.get('at', 0) < UNKNOWN_RETRY_S):
         return known.get('phone')
+    if health().get('state') not in ('ok', 'unverified'):
+        raise NotYet('Viber не готов')
     try:
         done = subprocess.run(['viber-whois', name], capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired as error:
+        raise NotYet(f'whois: {error}')
+    if done.returncode not in (0, 3):       # 3: the chat found is not this name — no phone, not an error
+        raise NotYet(f'whois {done.returncode}: {done.stderr.strip()[-200:]}')
+    try:
         phone = json.loads(done.stdout).get('phone') if done.returncode == 0 and done.stdout.strip() else None
-        if done.returncode not in (0, 3):   # 3: the chat found is not this name — no phone, not an error
-            log('whois failed', done.returncode, done.stderr.strip()[-200:])
-            return None                       # not cached: tried again with the next message
-    except (subprocess.TimeoutExpired, ValueError) as error:
-        log('whois error', error)
-        return None
+    except ValueError:
+        phone = None
     state['phones'][name] = {'phone': phone, 'at': time.time()}
     return phone
+
+
+def notified_at(message):
+    try:
+        return time.mktime(time.strptime(message['received_at'], '%Y-%m-%dT%H:%M:%S%z'))
+    except (ValueError, KeyError):
+        return time.time()
+
+
+def upload(path):
+    """PUT the file to Stream; returns its media reference, or None if Stream does not take it."""
+    with open(path, 'rb') as source:
+        data = source.read()
+    sha = hashlib.sha256(data).hexdigest()
+    mime = mimetypes.guess_type(path)[0] or 'application/octet-stream'
+    request = urllib.request.Request(f'{URL}/api/viber/media/{sha}', data=data, method='PUT',
+                                     headers={'Authorization': f'Bearer {TOKEN}', 'Content-Type': mime})
+    try:
+        with urllib.request.urlopen(request, timeout=120):
+            return {'media_id': sha, 'mime': mime, 'size_bytes': len(data)}
+    except urllib.error.HTTPError as error:
+        log('file not taken', error.code, os.path.basename(path))
+        return None
+
+
+def files_for(message, state):
+    """Files Viber saved around the notification and not yet given to another message."""
+    at = notified_at(message)
+    used = set(state.setdefault('files', []))
+    found = []
+    for folder in DOWNLOADS:
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            continue
+        for name in names:
+            path = os.path.join(folder, name)
+            if path in used or not os.path.isfile(path):
+                continue
+            if FILE_WINDOW[0] <= os.path.getmtime(path) - at <= FILE_WINDOW[1]:
+                found.append(path)
+    refs = []
+    for path in sorted(found, key=os.path.getmtime):
+        ref = upload(path)
+        state['files'].append(path)
+        if ref:
+            refs.append(ref)
+    state['files'] = state['files'][-500:]
+    return refs
 
 
 def forward_incoming(state):
@@ -102,8 +166,19 @@ def forward_incoming(state):
                 message = message_of(json.loads(raw))
             except ValueError:
                 message = None
+            if message and time.time() - notified_at(message) < SETTLE_S:
+                return                         # its photo or file may still be saving: next round
             if message:
-                phone = phone_of(message['chat'], state)
+                media = files_for(message, state)
+                if media:
+                    message['media'] = media
+                    if message['text'].strip() in PLACEHOLDERS:
+                        message['text'] = ''
+                try:
+                    phone = phone_of(message['chat'], state)
+                except NotYet as reason:
+                    log('waiting:', reason)
+                    return                     # the offset stays: this line is tried again next round
                 if phone:
                     message['phone'] = phone
                 status, _ = api('messages', message)

@@ -1,18 +1,20 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { nameId } from '../ids.ts';
 import type { JournalStore } from '../store/store.ts';
-import type { JournalEvent } from '../contracts/validate.ts';
+import type { JournalEvent, MediaRef } from '../contracts/validate.ts';
 import type { SourceState } from '../store/status.ts';
 import { VIBER_CONNECTOR } from '../contracts/viber.ts';
 import { captureConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json, readBody } from './body.ts';
+import { media } from './media.ts';
 import { actionChanged, stateChanged } from './system.ts';
 import type { LiveFeed } from './live.ts';
 
 // The Viber bridge on the agent desktop (deploy/desktop/bin/viber-bridge, deploy/DESKTOP.md) talks to Stream here:
-// incoming messages become journal events, the channel's state is a pulse (its changes are `system` events), and
-// replies written in the feed are handed out one by one as actions and reported back.
+// incoming messages become journal events (photos and files Viber saved on the desktop are uploaded first, PUT
+// media/<sha256>), the channel's state is a pulse (its changes are `system` events), and replies written in the feed
+// are handed out one by one as actions and reported back.
 // The bridge holds STREAM_VIBER_TOKEN, which opens only /api/viber/*.
 
 type Body = Record<string, unknown>;
@@ -29,26 +31,42 @@ async function readJson(request: IncomingMessage): Promise<Body> {
 }
 const str = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 
+// Attached files: { media_id, mime, size_bytes? } of files already uploaded (the store checks they exist).
+function attachments(value: unknown): MediaRef[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 10) throw new HttpError(400, 'media — список до 10 файлов');
+  return value.map((item) => {
+    const ref = item as Record<string, unknown>;
+    if (typeof ref.media_id !== 'string' || !/^[a-f0-9]{64}$/.test(ref.media_id) || typeof ref.mime !== 'string') throw new HttpError(400, 'media: media_id и mime');
+    return { media_id: ref.media_id, mime: ref.mime, ...(Number.isSafeInteger(ref.size_bytes) ? { size_bytes: ref.size_bytes as number } : {}) };
+  });
+}
+
 // One incoming message. `key` is the bridge's own id of the notification, so a retry writes nothing new.
 // The author is the phone when Viber shows it (the same person as their calls and SMS), else the chat's name.
+// With files: kind photo (images) or file; the text is then optional.
 export function viberMessage(body: Body): JournalEvent {
   const key = str(body.key); const chat = str(body.chat).slice(0, 200); const phone = str(body.phone);
   const text = typeof body.text === 'string' ? body.text : '';
+  const files = attachments(body.media);
   const ms = Date.parse(str(body.received_at));
   if (!key) throw new HttpError(400, 'Нет key');
   if (!chat) throw new HttpError(400, 'Нет chat');
   if (phone && !PHONE.test(phone)) throw new HttpError(400, 'phone — номер вида +375…');
-  if (!text.trim()) throw new HttpError(400, 'Пустое сообщение');
+  if (!text.trim() && !files.length) throw new HttpError(400, 'Пустое сообщение');
   if (!Number.isFinite(ms)) throw new HttpError(400, 'received_at — некорректное время');
   const at = new Date(ms).toISOString();
   const viber = { chat, ...(phone ? { phone } : {}), ...(body.group === true ? { group: true } : {}), received_at: at };
+  const kind = !files.length ? 'text' : files.every((file) => file.mime.startsWith('image/')) ? 'photo' : 'file';
   return {
-    id: nameId(`viber|${key}`), schema_version: 1, source: 'viber', author: `contact:viber:${phone || chat}`, ts: at, kind: 'text',
-    payload: { text, data: { viber } },
+    id: nameId(`viber|${key}`), schema_version: 1, source: 'viber', author: `contact:viber:${phone || chat}`, ts: at, kind,
+    payload: { ...(text.trim() ? { text } : {}), ...(files.length ? { media: files } : {}), data: { viber } },
   };
 }
 
 export async function viber(request: IncomingMessage, response: ServerResponse, path: string, store: JournalStore, live: LiveFeed): Promise<void> {
+  const upload = /^media\/([a-f0-9]{64})$/.exec(path);
+  if (upload && request.method === 'PUT') return media(request, response, upload[1]!, store);
   if (request.method !== 'POST') throw new HttpError(405, 'Метод не поддерживается');
   if (path === 'messages') {
     const result = store.appendEvent(viberMessage(await readJson(request)));

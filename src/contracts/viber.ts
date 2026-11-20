@@ -11,7 +11,7 @@ export function checkViber(event: JournalEvent): void {
   const data = event.payload.data ?? {};
   if ('viber' in data) {
     if (event.source !== 'viber') throw new HttpError(400, 'payload.data.viber бывает только у source: viber');
-    if (event.kind !== 'text') throw new HttpError(400, 'Сообщение Viber — это text');
+    if (!['text', 'photo', 'file'].includes(event.kind)) throw new HttpError(400, 'Сообщение Viber — это text, photo или file');
     if (!(data.viber as { chat?: string }).chat?.trim()) throw new HttpError(400, 'У сообщения Viber нет чата');
   } else if (event.source === 'viber' && event.kind !== 'correction') {
     throw new HttpError(400, 'У сообщения Viber нет payload.data.viber');
