@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { participants, toggleRole, removeParticipant, toggleMuted, roleLabel, ROLE_TITLES } from '../web/participants.js';
+import { participants, taskParties, toggleRole, removeParticipant, toggleMuted, roleLabel, ROLE_TITLES } from '../web/participants.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { whenChoices } from '../web/taskbar.js';
 
@@ -19,6 +19,12 @@ test('participants: each party once with its roles, plain members too, me first;
   assert.equal(ROLE_TITLES.counterparty, 'Контрагент');
   assert.equal(roleLabel([]), '', '«Участник» is not shown on the tile');
   assert.equal(roleLabel(['author', 'executors']), 'Постановщик, Исполнитель');
+});
+
+test('the task keeps the owner, AI and system above its conversation participants', () => {
+  const task = { roles: { ...roles, members: ['system', 'tg:8'] }, history: [{ author: 'system', change: { processor: 'triage-test' } }] };
+  assert.deepEqual(taskParties(task, []), { internal: ['me', 'ai', 'system'], external: ['tg:501', 'tg:7', 'tg:8'] });
+  assert.deepEqual(taskParties({ roles: { author: 'tg:501' } }, []), { internal: ['me'], external: ['tg:501'] });
 });
 
 test('a single role moves to the new party, the former holder stays as a participant; a list role is added or taken away', () => {

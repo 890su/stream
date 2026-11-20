@@ -122,3 +122,17 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .drawer-queue:active, .drawer-queue:hover { background: var(--press); }
 #drawer-search-toggle[aria-expanded="true"] { background: var(--chip); color: var(--link); }
 #drawer-search { margin: 8px 6px 0; }
+
+/* The add-participant dialog is positioned next to the task card's plus. */
+#task-participant-picker { position: fixed; inset: auto; width: min(310px, calc(100vw - 16px)); margin: 0; padding: 8px 10px 10px; border: 1px solid var(--line); }
+#task-participant-picker::backdrop { background: rgb(0 0 0 / .22); }
+.participant-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.participant-picker-head h2#participant-picker-title { margin: 0; padding-inline-start: 4px; font-size: 16px; }
+#task-participant-picker input { min-height: 42px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; }
+.participant-results-label { margin: 10px 4px 4px; color: var(--muted); font-size: 13px; }
+.participant-results { max-height: min(228px, 40dvh); overflow-y: auto; overscroll-behavior: contain; padding: 4px 2px; }
+.participant-result { display: grid; gap: 2px; width: 100%; min-height: 42px; padding: 6px 8px; text-align: start; border-radius: 8px; }
+.participant-result:hover { background: var(--press); }
+.participant-result-name, .participant-result-channel { overflow-wrap: anywhere; }
+.participant-result-channel, .participant-empty { color: var(--muted); font-size: 13px; }
+.participant-empty { margin: 8px 6px; }

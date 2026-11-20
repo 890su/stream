@@ -5,7 +5,7 @@
 // more — the cloud widens and scrolls sideways. «+» without a label adds a participant (as Участник). The same tiles
 // in one sideways line over the tags of an open conversation (`strip`, peoplerow.js): the conversation's task is
 // edited, so a conversation and its task have one set of participants. Pure helpers are tested in node.
-import { partyName, LIST_ROLES } from './parties.js';
+import { partyName, partyOfEvent, LIST_ROLES, PARTY_LABELS } from './parties.js';
 import { delegateOptions } from './taskactions.js';
 import { personForm } from './taskbar.js';
 import { holding } from './holdrender.js';
@@ -28,6 +28,21 @@ export function participants(task) {
   const muted = new Set(task.muted ?? []);
   return [...byParty.entries()].map(([party, roles]) => ({ party, roles, muted: muted.has(party) }))
     .sort((a, b) => Number(b.party === 'me') - Number(a.party === 'me'));
+}
+
+export function taskParties(task, views) {
+  const parties = participants(task).map((item) => item.party);
+  const internal = new Set(['me', ...parties.filter((party) => Object.hasOwn(PARTY_LABELS, party))]);
+  for (const view of views) {
+    const party = partyOfEvent(view.event);
+    if (Object.hasOwn(PARTY_LABELS, party)) internal.add(party);
+  }
+  for (const entry of task.history ?? []) {
+    if (entry.change?.processor) internal.add('ai');
+    else if (Object.hasOwn(PARTY_LABELS, entry.author)) internal.add(entry.author);
+  }
+  return { internal: Object.keys(PARTY_LABELS).filter((party) => internal.has(party)),
+    external: parties.filter((party) => !Object.hasOwn(PARTY_LABELS, party)) };
 }
 
 // The roles change that switches `role` for `party`. Nobody drops out with it: the party, and the former holder of a
@@ -87,14 +102,20 @@ const PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="
 
 // A tile: icon (a button), role | (when there is one), name (a button), × — on the chosen tile of the card 📣 (the
 // conversation under the line is with this one).
-function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = false, onRemove = null, removeLabel, selected = false }) {
+function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = false, onRemove = null, removeLabel, selected = false, selectable = false }) {
   const node = element('span', `person-tile${role ? ' with-role' : ''}${off ? ' off' : ''}${selected ? ' selected' : ''}`);
   const glyph = button('person-tile-icon', '', onIcon, iconLabel);
   if (icon) glyph.textContent = icon; else glyph.innerHTML = PERSON;
   node.append(glyph);
-  if (role) node.append(element('span', 'person-tile-role', role), element('span', 'person-tile-divider'));
-  const label = button('person-tile-name', name, onName, nameLabel);
-  if (off !== null) label.setAttribute('aria-pressed', String(!off));
+  const label = button(selectable ? 'person-tile-body' : 'person-tile-name', selectable ? '' : name, onName, nameLabel);
+  const roleNodes = role ? [element('span', 'person-tile-role', role), element('span', 'person-tile-divider')] : [];
+  if (selectable) {
+    label.append(...roleNodes, element('span', 'person-tile-caption', name));
+    label.setAttribute('aria-pressed', String(selected));
+  } else {
+    node.append(...roleNodes);
+    if (off !== null) label.setAttribute('aria-pressed', String(!off));
+  }
   node.append(label);
   if (selected) node.append(element('span', 'person-tile-speaker', '📣'));
   else if (onRemove) node.append(button('person-tile-remove', '×', onRemove, removeLabel));
@@ -128,6 +149,7 @@ export function participantsBlock(task, ctx) {
   const { views = [], people = [], save } = ctx;
   const box = element('div', `card-people${ctx.strip ? ' strip' : ''}`);
   const menu = element('div', 'chips card-people-menu');
+  const prefix = `${task.id}|${ctx.menuGroup ?? 'default'}|`;
   const nameOf = ctx.nameOf ?? ((party) => people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name ?? partyName(party, views));
   const setRoles = (change) => { openMenu = null; holding(menu, false); save({ op: 'update', roles: change }); };
   const show = (key, nodes) => {
@@ -141,7 +163,7 @@ export function participantsBlock(task, ctx) {
     const off = (task.muted ?? []).includes(party);
     return button('chip suggest', off ? 'Отвечать ему' : 'Не отвечать ему', () => { show(null); save({ op: 'update', muted: toggleMuted(task, party) }); });
   };
-  const rolesMenu = (party, held) => [element('span', 'picker-section', nameOf(party)), ...(ctx.select && party !== 'me' ? [muteChip(party)] : []),
+  const rolesMenu = (party, held) => [element('span', 'picker-section', nameOf(party)), ...(ctx.select && !Object.hasOwn(PARTY_LABELS, party) ? [muteChip(party)] : []),
     button(`chip ${held.length ? 'suggest' : 'on'}`, ROLE_TITLES.members, () => setRoles(toggleRole(task.roles, party, 'members'))),
     ...ROLES.map((role) => {
       const chip = button(`chip ${held.includes(role) ? 'on' : 'suggest'}`, ROLE_TITLES[role], () => setRoles(toggleRole(task.roles, party, role)));
@@ -154,21 +176,22 @@ export function participantsBlock(task, ctx) {
   const inner = element('div', 'people-cloud-inner');
   cloud.append(inner);
   const listed = participants(task);
-  const ordered = ctx.select ? ctx.select.order.map((party) => listed.find((item) => item.party === party) ?? (party === 'me' ? { party, roles: [], muted: false, notes: true } : null)).filter(Boolean) : listed;
+  const ordered = ctx.select ? ctx.select.order.map((party) => listed.find((item) => item.party === party) ?? (Object.hasOwn(PARTY_LABELS, party) ? { party, notes: true } : null)).filter(Boolean) : listed;
   for (const { party, roles, muted, notes } of ordered) {
-    const key = `${task.id}|${party}`;
+    const key = prefix + party;
     const name = nameOf(party);
     if (notes) {
       const open = () => ctx.select.onSelect(party);
-      inner.append(tile({ icon: '✎', iconLabel: 'Заметки задачи', name, nameLabel: 'Заметки задачи', off: null, selected: ctx.select.selected === party, onIcon: open, onName: open }));
+      inner.append(tile({ icon: '✎', iconLabel: name, name, nameLabel: `Лента: ${name}`, off: null, selected: ctx.select.selected === party, selectable: true, onIcon: open, onName: open }));
       continue;
     }
     if (ctx.readOnly) { inner.append(tile({ role: '', name, off: null, iconLabel: name, nameLabel: name, onIcon: () => ctx.readOnly(), onName: () => ctx.readOnly() })); continue; }
     const selected = ctx.select?.selected === party;
-    inner.append(tile({ role: roleLabel(roles), name, off: muted, selected,
-      iconLabel: `${name}: роль`, onIcon: () => (openMenu === key ? show(null) : show(key, rolesMenu(party, roles))),
-      nameLabel: ctx.select ? (selected ? `${name}: беседа открыта` : `Беседа с ${name}`) : muted ? `${name}: отключён, включить` : `${name}: включён, отключить`,
-      onName: ctx.select ? () => ctx.select.onSelect(party) : () => save({ op: 'update', muted: toggleMuted(task, party) }),
+    const label = roleLabel(roles);
+    inner.append(tile({ role: ctx.compactRoles ? '' : label, name, off: muted, selected, selectable: Boolean(ctx.select),
+      iconLabel: label ? `${name}: ${label}. Изменить роли` : `${name}: изменить роли`, onIcon: () => (openMenu === key ? show(null) : show(key, rolesMenu(party, roles))),
+      nameLabel: ctx.select ? `${Object.hasOwn(PARTY_LABELS, party) ? 'Лента' : 'Беседа'}: ${name}` : muted ? `${name}: отключён, включить` : `${name}: включён, отключить`,
+      onName: ctx.select ? () => { show(null); ctx.select.onSelect(party); } : () => save({ op: 'update', muted: toggleMuted(task, party) }),
       removeLabel: `Убрать ${name}`, onRemove: () => save({ op: 'update', roles: removeParticipant(task.roles, party), ...(muted ? { muted: toggleMuted(task, party) } : {}) }) }));
   }
 
@@ -176,7 +199,7 @@ export function participantsBlock(task, ctx) {
   const counterparty = task.counterparty ? (ctx.counterparties ?? []).find((item) => item.id === task.counterparty) : null;
   const directory = { people, counterparties: ctx.counterparties ?? [], save, savePerson: ctx.savePerson, saveCounterparty: ctx.saveCounterparty, onOpen: ctx.onOpenCounterparty };
   if (counterparty) {
-    const key = `${task.id}|counterparty`;
+    const key = prefix + 'counterparty';
     const change = () => [counterpartyLine(task, { ...directory, picking: true }), button('chip suggest muted', 'Закрыть', () => show(null))];
     inner.append(tile({ icon: counterparty.kind === 'address' ? '⌂' : '◆', iconLabel: 'Сменить контрагента', role: 'Контрагент',
       onIcon: () => (openMenu === key ? show(null) : show(key, change())), off: null,
@@ -185,7 +208,7 @@ export function participantsBlock(task, ctx) {
   }
 
   // «+»: me, the people of the task's conversations, the directory, «Другой…» — added as Участник.
-  const addKey = `${task.id}|+`;
+  const addKey = prefix + '+';
   const addMenu = () => {
     const known = new Set(participants(task).map((item) => item.party));
     const candidates = [{ party: 'me', name: 'Я' }, ...delegateOptions(views),
@@ -196,21 +219,26 @@ export function participantsBlock(task, ctx) {
       button('chip suggest', 'Другой…', () => show(addKey, [personForm(add)])),
       button('chip suggest muted', 'Закрыть', () => show(null))];
   };
-  const plus = button('people-add', '+', () => (openMenu === addKey ? show(null) : show(addKey, addMenu())), 'Добавить участника');
+  const plus = button('people-add', '+', (event) => {
+    if (ctx.onAdd) { show(null); ctx.onAdd(event.currentTarget); }
+    else if (openMenu === addKey) show(null);
+    else show(addKey, addMenu());
+  }, 'Добавить участника');
+  if (ctx.onAdd) { plus.setAttribute('aria-haspopup', 'dialog'); plus.setAttribute('aria-expanded', 'false'); }
   const row = element('div', 'people-row');
   row.append(cloud);
-  if (!ctx.readOnly) row.append(plus);
+  if (!ctx.readOnly && !ctx.hideAdd) row.append(plus);
   box.append(row, menu);
-  if (!inner.childElementCount) cloud.append(element('p', 'drawer-empty', 'Участников нет'));
+  if (!inner.childElementCount) cloud.append(element('p', 'drawer-empty', ctx.emptyLabel ?? 'Участников нет'));
 
   // No counterparty yet: the triage's question or a choice, under the cloud.
   if (!counterparty && !task.filed && ctx.counterparties && !ctx.strip) box.append(counterpartyLine(task, directory));
 
   // A menu open before the redraw comes back.
-  if (openMenu === addKey) show(addKey, addMenu());
-  else if (openMenu?.startsWith(`${task.id}|`)) {
-    const party = openMenu.slice(task.id.length + 1);
-    const found = participants(task).find((item) => item.party === party);
+  if (!ctx.onAdd && openMenu === addKey) show(addKey, addMenu());
+  else if (openMenu?.startsWith(prefix)) {
+    const party = openMenu.slice(prefix.length);
+    const found = ordered.find((item) => item.party === party && !item.notes);
     if (party === 'counterparty' && counterparty) show(openMenu, [counterpartyLine(task, { ...directory, picking: true }), button('chip suggest muted', 'Закрыть', () => show(null))]);
     else if (found) show(openMenu, rolesMenu(party, found.roles));
     else openMenu = null;

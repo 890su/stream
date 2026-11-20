@@ -361,9 +361,8 @@ cases: no tags, low confidence, several candidate tasks. The same applies to tag
 
 Triage chooses the shape from the source, the open and recently closed tasks and their items. A checklist item
 is text with «сделано»; it has no roles or dates. Items live in `task_change` (`items_add`, `items_set`,
-`items_remove`). Triage never renames a task the owner named. The owner corrects: «Отдельной задачей» on an item
-makes it a task of its own; «В дело…» on a task moves it into another task's checklist (the moved task is
-cancelled). Corrections are golden examples.
+`items_remove`). Triage never renames a task the owner named. «Отдельной задачей» on an item makes it a task of its
+own. The add field uses a circled plus. Corrections are golden examples.
 
 **Filed outcomes stay tasks** with `filed`: they do not affect conversation state and are excluded from default
 filters, processes and mirrors.
@@ -535,9 +534,13 @@ below holds until its stage ships): the queue of conversations is the root scree
 there; the left panel has one layout for «Беседы» and «Задачи», with a queue shortcut, conversation search, task
 filters and pinned conversations. A task opens in the centre with a completion mark, title, editable
 chips for planned time, due, project and repeat, a counterparty link, description, open checklist and folded details.
-The participants line opens a separate conversation screen; arrows and edge swipes change the participant. Under
-«Я» the task's messages and history share a timeline. A contact's conversation dims or folds other tasks' messages
-with «◐». The input adds a task note in the card and addresses the selected chat in the conversation screen.
+The task groups «Я», «ИИ» and «Система» above the other participants. Tapping a participant's tile keeps the title,
+folds the task fields and expands the selected conversation in the same card. Messages linked to the task are
+highlighted; «◐» can fold the rest. «Я» shows the task timeline, and AI and system have their own entries when
+involved. Tapping the chosen tile, the task title or Back restores the card. A flat conversation control opens the
+last participant. The plus at the right opens a small modal beside it, with a search field above pinned and frequent
+contacts and chats. Typing replaces suggestions with matches. Picking a result adds a participant. The input adds
+a task note in the card and addresses the selected chat in the conversation when it can be answered.
 The header menu opens the task's action bar; message details — a bottom
 sheet; the right panel is a day planner (day · 4 days · week · 2 weeks; Stream tasks, Google Calendar later) that
 also picks dates and durations; forwarding to other conversations and merging conversations into a task (stage 5);
@@ -596,7 +599,7 @@ swipes belong to rows), closed by a swipe right-to-left, the backdrop or «на�
 **Right panel** opens only on a tap: a task plaque, a task row, the task or history icon under a message, the
 title over a message. A swipe left-to-right closes it.
 - **Task:** title (tap — rename), status and actions (§2.8, «Готово» closes at once, §2.9; «Отменить»,
-  «Вернуть», «В дело…»), due next to the actions, the checklist (tick, add, «Отдельной задачей»), roles in one
+  «Вернуть»), due next to the actions, the checklist (tick, add, «Отдельной задачей»), roles in one
   folded line, triage note and confidence, report, «Задача
   выполнена?», the task's messages (× removes from the task), its conversations, change history.
 - **Message:** versions down to the source, tags, where from and when, its tasks (tap — task details) or

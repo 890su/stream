@@ -94,11 +94,12 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `personcard.js` / `counterpartycard.js` | the directory's cards in the right panel: fields edited in place, job titles, open tasks; side and archive of a counterparty |
 | `projects.js` | pure: projects from `project_change` (`foldProjects`), tree with counts, scope, sections of a project, next actions (`markNext` sets `task.next`, `task.projectTitle`) |
 | `projectview.js` / `projectpanel.js` | one project's header (kind, status, «Нет следующего шага», «Изменить») and section heads with «+»; the project tree in the left panel and «Проект» in task details |
-| `checklist.js` | the checklist in task details: tick, add, «Отдельной задачей», «В дело…» (this task as an item of another) |
+| `checklist.js` | checklist editing, circled add button and «Отдельной задачей» |
 | `taskbar.js` | one action bar for a task: ✓ Готово · ▶ В работу · 🕒 Когда · 👤 Поручить · 💬 Ответить · ⋯ Ещё with a second level (`barActions`, `moreActions`, `actionBar`, `personForm`) |
 | `tasksheet.js` | the sheet a long press (right click) on a task row opens: title + action bar; `barContext` for the card too |
-| `participants.js` | participants tiles 👤 · role · name · × — in the task card one line where the name chooses whose conversation shows (`select`: the chosen leftmost, 📣 instead of ×; «Не отвечать ему» in the roles), over an open conversation the same line; the icon picks the role, «+» adds a plain participant (`roles.members`), the counterparty as a tile; `participants`, `toggleRole`, `removeParticipant`, `toggleMuted` |
-| `taskcard.js` / `cardtalk.js` | task card links and folding sections (`contactLinks`, `section`); task conversations: `partyConversation`, `cardOrder` (recent first), `pagerOrder` (stable while open), `talkItems` (other tasks' messages dimmed or folded by «◐»), `withLog`, `talkPane` |
+| `participants.js` | participant tiles, role editing, muting and removal; `taskParties` splits owner, AI and system from contacts, the task tile body selects the conversation, the icon edits roles |
+| `participantpicker.js` | participant dialog anchored to the card's plus; pinned and frequent entries in an empty search, all matching eligible contacts and conversations on input |
+| `taskcard.js` / `cardtalk.js` | card contact links and folding sections; inline conversation lookup, recent and swipe order, highlighted task messages and activity timelines |
 | `taskchips.js` | editable planned start, duration, deadline and repeat beside project and counterparty (`taskChips`, `chipFacts`) |
 | `dayplan.js` | the right panel by default: my open tasks by days — «День · 4 дня · 7 дней», overdue first (`plannerDays`, `dayPlan`) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
@@ -128,7 +129,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `taskfold.js` | pure: tasks from `task_change` (with history, roles, checklist — `foldItems`, `itemsProgress`, `ownerTitled`), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter` (fields incl. `snoozed`), `visibleTasks` |
 | `conversations.js` / `queue.js` | pure: messages → conversations (one per chat or number), each with `queue` — waiting for the owner and since when (`queueOf`: only the owner's reply, own task link, `answered`, `snooze` take it out; `requeue` and a snooze's end lift its moment; nothing before `queue.since` waits), `queueList` (newest moment on top), `ownerLinked`; `isArchived`; `conversationKeys` (an own note joins the conversation it continues or answers; else a note in a task of its own → `task:<id>`; a split message and its chain → `split:<id>`); `withWhom` |
-| `details.js` / `taskdetails.js` | the task card in the centre (`#task-screen`): completion mark, title, editable chips, description, checklist, participants and folded details; a separate conversation screen, with messages and history under «Я»; the right panel: the day plan, a message, a person, a counterparty |
+| `details.js` / `taskdetails.js` | task card fields and inline conversation, title stays visible and restores the fields; Back closes the conversation before the card; the right panel: the day plan, a message, a person, a counterparty |
 | `taskactions.js` | pure: actions a task offers by status (`actionsFor`; «Готово» in every open status), the change of each (`changeFor`, `closeChange` — done at once, report fields to `missing`), its undo (`undoOf`), due chips, delegate and «Жду…» options (callers included) |
 | `parties.js` | pure: parties and roles (mirror of `src/tasks/parties.ts`) and `partyName` — a party in words for rows, plaques and details |
 | `chatview.js` | the bar of an open conversation: title, ⏱ ↥ 🗄 (then back to the queue), «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «+ Задача» (a task for the conversation), «Не отслеживать» |
@@ -150,7 +151,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/whatsapp.json` | WhatsApp accounts (connector `whatsapp_<account>`), file limit, oldest live message written, history window at linking, reconnect ceiling, QR refresh, pulse |
-| `registry/tasks.json` | triage settings, task templates, closing report fields, card duration and repeat choices |
+| `registry/tasks.json` | triage settings, task templates, closing report fields, duration and repeat choices, participant suggestion limit |
 | `registry/conversations.json` | the queue: `since` (its start date), «⏱ Отложить» presets by the time of day |
 | `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Пульт», `view: 'pulse'`) is the default |
 | `registry/pulse.json` | dashboard settings and weights, plus `hot_wait_hours` for highlighting wait time on conversation tiles |
@@ -166,5 +167,6 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` / `viber-whois` (search by phone or name, the chat checked by its title menu), `viber-selftest`, `viber-health`, `viber-bridge` (Viber ⇄ Stream), `viber-read-out` + `viber_outgoing.py` (the owner's own outgoing messages, copied from the chat window), `notify-log` (desktop notifications → JSON lines) |
 | `test/` | `node --test`: one file per area (api, phone, telegram-bot, triage, taskfold, projection, …) |
 | `test/taskchips.test.ts` / `test/repeat.test.ts` | card date labels and recurring task events through the API |
+| `test/participantpicker.test.ts` | picker suggestion ordering, search and supported task participant ids |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |
 | `docs/plans/` | active package plans; `archive/` (local, outside git) — done plans, superseded decisions, old Done items |

@@ -1,5 +1,5 @@
 // What was chosen by a tap (CONCEPT.md §5). A task opens on the main screen, over the list (#task-screen, design
-// 2026-11-20 stage 2): its card and a separate conversation screen; the system back steps through both.
+// 2026-11-20 stage 2): its card and an inline conversation; the system back steps through both.
 // The right panel is the day plan (dayplan.js: tasks by days — a day, 4 or 7) by default — the 📅 button, a swipe from
 // the right, the column of a wide screen; a message, a person or a counterparty opens there too; a left-to-right
 // swipe closes it.
@@ -14,12 +14,14 @@ import { snippet, chatOf, sourceKey } from './projection.js';
 import { STATUSES, taskOfMessage } from './taskfold.js';
 import { accountTitle } from './tgbubble.js';
 import { versionCard } from './versioncard.js';
-import { taskDetails, taskTalk } from './taskdetails.js';
+import { taskDetails } from './taskdetails.js';
 import { bindTalkSwipe, writeOrder } from './cardtalk.js';
 import { slideIn } from './swipezones.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
 import { dayPlan } from './dayplan.js';
+import { participants } from './participants.js';
+import { participantOptions, setupParticipantPicker } from './participantpicker.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const SOURCES = { me: 'мои заметки', phone: 'телефон', system: 'система' };
@@ -39,15 +41,15 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   let current = null; // the right panel: { kind: 'planner' | 'message' | 'person' | 'counterparty', id }
   const screen = document.querySelector('#task-screen');
   const screenBody = document.querySelector('#task-screen-body');
-  const screenHeading = document.querySelector('#task-screen-heading');
   const moreButton = document.querySelector('#task-screen-more');
   let taskId = null; // the task open on the main screen
-  let talk = null; // the conversations of the task open over its card: { party, order }
+  let talk = null; // the open conversation, with the expanded card's scroll position
   let showBar = false; // ⋯ in the head: the action bar shown in the card
   let replyKey; // the chat the card put into the composer as the recipient (undefined — none yet: the first steer applies)
   let before = null; // the composer's recipient when the card opened, given back when it closes
+  const openParticipantPicker = setupParticipantPicker(document.querySelector('#task-participant-picker'));
 
-  const save = (taskId, change) => composer.queue(makeTaskChange(taskId, change)).catch((error) => notify(error.message));
+  const save = (taskId, change) => composer.queue(makeTaskChange(taskId, change)).then(() => true, (error) => { notify(error.message); return false; });
   const tasksById = () => new Map(feed.tasks().map((task) => [task.id, task]));
   // The directory for «Кто контрагент?» and the cards (contacts design §6).
   const queue = (entry) => composer.queue(entry).catch((error) => { notify(error.message); throw error; });
@@ -95,68 +97,83 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   const render = () => { holdPanel(); holdTask(); };
   const redrawTask = () => drawTask();
 
+  function addParticipant(task, anchor) {
+    const options = participantOptions({ conversations: feed.conversations(), recipients: composer.knownRecipients(),
+      people: feed.people(), exclude: participants(task).map((item) => item.party) });
+    openParticipantPicker(anchor, {
+      options, limit: config.tasks?.card?.participant_suggestions ?? 6,
+      onPick(party) {
+        const current = feed.task(task.id);
+        if (!current || participants(current).some((item) => item.party === party)) return;
+        save(task.id, { op: 'update', roles: { members: [...(current.roles?.members ?? []), party] } });
+      },
+      onClose() {
+        drawTask();
+        screenBody.querySelector('.task-external-people .people-add')?.focus({ preventScroll: true });
+      },
+    });
+  }
+
   // The task card on the main screen.
   function drawTask() {
     if (!taskId || screen.hidden) return;
     const task = feed.task(taskId);
     if (!task) { closeTask(); return; }
     const scroll = screenBody.scrollTop;
-    const typing = Boolean(document.activeElement?.closest?.('.checklist-add'));
-    // «В дело…» offers the tasks of the same conversations first, then the latest changed.
-    const mine = new Set(feed.conversations().filter((item) => item.tasks.some((other) => other.id === task.id)).flatMap((item) => item.tasks.map((other) => other.id)));
-    const others = [...feed.tasks()].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || b.updatedAt.localeCompare(a.updatedAt));
-    const views = feed.taskViews(task.id);
-    screenHeading.textContent = talk ? 'Беседы задачи' : 'Задача';
+    const draft = document.activeElement?.matches('.checklist-add input') && screenBody.contains(document.activeElement) ? document.activeElement.value : null;
     moreButton.hidden = Boolean(talk);
     moreButton.setAttribute('aria-expanded', String(showBar));
+    const drawn = taskDetails(task, {
+      views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save,
+      notify, projects: feed.projects(), doneCards, fields: config.tasks?.report_fields ?? {}, cardSettings: config.tasks?.card,
+      directory: directory(), bar: showBar && quick ? barContext(task, { feed, quick, openConversation }) : null,
+      conversations: feed.conversations(), talk, redraw: redrawTask, onConversation: steer, onTalk: openTalk, onExpand: leaveTalk,
+      onAdd: (anchor) => addParticipant(task, anchor),
+      onDone: () => { if (['done', 'cancelled'].includes(task.status)) quick?.act(task, { status: 'todo' }, `Снова в работе: «${task.title}»`); else quick?.done(task); },
+    });
     if (talk) {
-      // The conversations: the answer goes to the chosen participant when they have a chat.
-      const drawn = taskTalk(task, { views, bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), conversations: feed.conversations(), directory: directory(),
-        party: talk.party, previousOrder: talk.order, redraw: redrawTask, onConversation: steer, onSelect: (party, dir) => moveTalk(task, party, dir) });
       talk.order = drawn.order;
       talk.party = drawn.selected;
-      screenBody.replaceChildren(drawn.node);
-    } else {
-      steer(null); // the card's messages are notes in the task
-      screenBody.replaceChildren(taskDetails(task, { views, save: (change) => save(task.id, change), saveTo: save, others, notify, projects: feed.projects(),
-        doneCards, fields: config.tasks?.report_fields ?? {}, cardSettings: config.tasks?.card, directory: directory(), showBar,
-        bar: quick ? barContext(task, { feed, quick, openConversation }) : null,
-        conversations: feed.conversations(), onTalk: (party) => openTalk(party),
-        onDone: () => { if (['done', 'cancelled'].includes(task.status)) quick?.act(task, { status: 'todo' }, `Снова в работе: «${task.title}»`); else quick?.done(task); } }));
     }
+    screenBody.replaceChildren(drawn.node);
     screenBody.scrollTop = scroll;
-    if (typing) screenBody.querySelector('.checklist-add input')?.focus({ preventScroll: true });
+    const input = screenBody.querySelector('.checklist-add input');
+    if (input && draft !== null) {
+      input.value = draft;
+      input.dispatchEvent(new Event('input'));
+      input.focus({ preventScroll: true });
+    }
     requestAnimationFrame(place); // the input row changes height (its participants line hides under the card)
   }
 
-  // The conversations of the task over its card: an entry of their own, so the system back returns to the card.
+  // Keep one history step while a conversation is expanded inside the card.
   function openTalk(party) {
-    const task = feed.task(taskId);
-    if (!task) return;
-    const was = Boolean(talk);
-    talk = { party: party ?? null, order: talk?.order ?? [] };
-    if (!was) history.pushState({ task: true, talk: true }, '');
+    if (!taskId) return;
+    if (talk && (!party || party === talk.party)) { leaveTalk(); return; }
+    if (!talk) {
+      talk = { scroll: screenBody.scrollTop, order: [] };
+      history.pushState({ task: true, talk: true }, '');
+    }
+    talk.party = party;
     screenBody.scrollTop = 0;
     drawTask();
-    if (party) rememberTalk(task.id, party);
+    if (talk.order.includes(talk.party)) writeOrder(taskId, [talk.party, ...talk.order.filter((item) => item !== talk.party)]);
+    const match = [...screenBody.querySelectorAll('.details-message.task-linked')].at(-1)
+      ?? [...screenBody.querySelectorAll('.details-message')].at(-1);
+    const header = screenBody.querySelector('.task-chat-head');
+    if (match && header) screenBody.scrollTop = Math.max(0, match.getBoundingClientRect().top - header.getBoundingClientRect().bottom - 8);
+    screenBody.querySelector('.person-tile.selected .person-tile-body')?.focus({ preventScroll: true });
   }
-  function rememberTalk(id, party) {
-    writeOrder(id, [party, ...talk.order.filter((item) => item !== party)]);
-  }
-  // To another participant: the chosen one stands leftmost; the conversation slides in from the side.
-  function moveTalk(task, party, dir = 'next') {
-    const navButton = document.activeElement?.closest('.task-talk-nav button')?.getAttribute('aria-label');
-    rememberTalk(task.id, party);
-    talk = { ...talk, party };
-    screenBody.scrollTop = 0;
-    drawTask();
-    if (navButton) [...screenBody.querySelectorAll('.task-talk-nav button')].find((node) => node.getAttribute('aria-label') === navButton)?.focus({ preventScroll: true });
-    slideIn(screenBody.querySelector('.card-talk'), dir);
+  function leaveTalk() {
+    if (!talk) return;
+    if (history.state?.talk) history.back(); else closeTalk();
   }
   function closeTalk() {
     if (!talk) return;
+    const scroll = talk.scroll;
     talk = null;
     drawTask();
+    screenBody.scrollTop = scroll;
   }
 
   // The answer goes to the participant chosen in the conversations when they have a chat; else it is a note in the task.
@@ -322,14 +339,14 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     else if (taskId && talk && !history.state?.talk) closeTalk(); // back from the conversations to the card
   });
   // «назад» in the head: from the conversations to the card, from the card to where it was opened.
-  document.querySelector('#task-screen-back').onclick = () => { if (talk && history.state?.talk) history.back(); else if (talk) closeTalk(); else closeTask(); };
+  document.querySelector('#task-screen-back').onclick = () => { if (talk) leaveTalk(); else closeTask(); };
   moreButton.onclick = () => { showBar = !showBar; drawTask(); };
   bindTalkSwipe(screen, () => Boolean(talk), (step) => {
     const { order, party } = talk;
     const index = order.indexOf(party);
     if (order.length < 2 || index < 0) return;
-    const task = feed.task(taskId);
-    if (task) moveTalk(task, order[(index + step + order.length) % order.length], step > 0 ? 'next' : 'prev');
+    openTalk(order[(index + step + order.length) % order.length]);
+    slideIn(screenBody.querySelector('.card-talk'), step > 0 ? 'next' : 'prev');
   });
   // Crossing the breakpoint: a column of its own, or a panel that slides over the feed.
   const dock = (wide) => {

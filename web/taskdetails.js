@@ -1,20 +1,16 @@
-// The task card on the main screen (owner, 2026-11-20, after reviewing task managers): ○ and the title; chips — when I
-// do it, the due date, the project, the counterparty, the repeat (taskchips.js); the description (the task's note);
-// the checklist, open; the participants line with «💬» on the left — the conversations of the task in a window of
-// their own (taskTalk), a tap on a name opens that one; «Подробности» folded (how it was made, the report). Rarer
-// actions are under ⋯ in the screen's head (the action bar, taskbar.js).
+// Renders the task card and its inline participant conversation.
 import { checklistBlock } from './checklist.js';
 import { projectLine } from './projectpanel.js';
 import { personOf } from './contacts.js';
 import { actionBar } from './taskbar.js';
 import { contactLinks, section } from './taskcard.js';
 import { counterpartyLine } from './counterpartyline.js';
-import { participants, participantsBlock } from './participants.js';
-import { partyName } from './parties.js';
-import { describeChange, STATUSES } from './taskfold.js';
+import { taskParties, participantsBlock } from './participants.js';
+import { partyName, PARTY_LABELS } from './parties.js';
+import { STATUSES } from './taskfold.js';
 import { dueChips } from './taskactions.js';
 import { taskChips } from './taskchips.js';
-import { partyConversation, cardOrder, pagerOrder, readOrder, talkPane, lastSpeaker } from './cardtalk.js';
+import { partyConversation, cardOrder, pagerOrder, readOrder, talkPane, lastSpeaker, taskActivity } from './cardtalk.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -87,21 +83,40 @@ export { personParty } from './parties.js'; // moved: the action bar types peopl
 
 // A participant's name: the directory's, else their conversation's title, else as the messages say.
 const namer = (directory, conversations, views) => (party) => directory?.people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name
-  ?? (party !== 'me' ? partyConversation(party, conversations)?.title : null) ?? partyName(party, views);
+  ?? (!Object.hasOwn(PARTY_LABELS, party) ? partyConversation(party, conversations)?.title : null) ?? partyName(party, views);
 
-// The participants in the order of the line: the recent ones first, at first whoever wrote last.
-function talkOrder(task, views) {
-  const parties = [...new Set(['me', ...participants(task).map((item) => item.party)])];
-  return cardOrder(parties, { stored: readOrder(task.id), lastAuthor: lastSpeaker(views, parties, task.muted ?? []) });
+function peopleRows(task, { directory, conversations, views, save, onTalk, onAdd }, groups, order, selected) {
+  const node = element('div', 'task-people');
+  const options = { strip: true, views, nameOf: namer(directory, conversations, views), people: directory?.people ?? [],
+    save, savePerson: directory?.savePerson };
+  const select = (parties) => ({ order: parties, selected, onSelect: onTalk });
+  if (!selected || groups.internal.includes(selected)) {
+    const internal = participantsBlock(task, { ...options, hideAdd: true, compactRoles: true, menuGroup: 'internal', select: select(groups.internal) });
+    internal.classList.add('task-internal-people');
+    node.append(internal);
+  }
+  const front = order.includes(selected) ? [selected, ...order.filter((party) => party !== selected)] : order;
+  const external = participantsBlock(task, { ...options, onAdd, menuGroup: 'chat', emptyLabel: 'Нет собеседников', select: select(front) });
+  external.classList.add('task-external-people');
+  const toggle = button('icon-button card-talk-open', '', () => onTalk(null), selected ? 'Свернуть переписку' : 'Беседы задачи');
+  toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 3V7a2 2 0 0 1 1-2Z"/><path d="M8 10h8m-8 3h5"/></svg>';
+  toggle.setAttribute('aria-expanded', String(Boolean(selected)));
+  external.querySelector('.people-row').prepend(toggle);
+  node.append(external);
+  return node;
 }
 
-// `ctx`: { views (the task's messages), save(change), saveTo(id, change), others (open tasks), notify, doneCards,
-// projects, fields, directory (contacts), bar (the action bar's context), showBar (⋯ open), conversations,
-// onDone(), onTalk(party) — open the conversations at that participant (null — the first) }.
-export function taskDetails(task, { views, save, saveTo, others, notify, projects = [], doneCards, fields, cardSettings, directory = null, bar = null, showBar = false,
-  conversations = [], onDone = () => {}, onTalk = () => {}, now = new Date() }) {
+export function taskDetails(task, ctx) {
+  const { views, save, saveTo, notify, projects, doneCards, fields, cardSettings, directory, bar,
+    conversations, onDone, onExpand, onConversation, talk, bubble, redraw, now = new Date() } = ctx;
   const box = element('div', 'details-task');
-  if (bar && showBar) {
+  const groups = taskParties(task, views);
+  const recent = cardOrder(groups.external, { stored: readOrder(task.id), lastAuthor: lastSpeaker(views, groups.external, task.muted ?? []) });
+  const order = pagerOrder(recent, talk?.order);
+  const selected = !talk ? null : [...groups.internal, ...groups.external].includes(talk.party) ? talk.party
+    : recent.find((party) => !(task.muted ?? []).includes(party)) ?? recent[0] ?? 'me';
+  const people = peopleRows(task, ctx, groups, recent, selected);
+  if (bar && !selected) {
     const actions = element('div', 'card-bar');
     actions.append(actionBar(task, bar));
     box.append(actions);
@@ -111,7 +126,19 @@ export function taskDetails(task, { views, save, saveTo, others, notify, project
   const closed = ['done', 'cancelled'].includes(task.status);
   const mark = button(`task-check icon-button card-done${closed ? ' checked' : ''}`, '', onDone, closed ? 'Вернуть в работу' : task.status === 'review' ? 'Проверил' : 'Готово');
   mark.append(element('span', 'task-check-ring'));
-  head.append(mark, titleBlock(task, save));
+  head.append(mark, selected
+    ? button('details-title card-expand', task.title, onExpand, `Развернуть карточку: ${task.title}`) : titleBlock(task, save));
+
+  if (selected) {
+    const sticky = element('div', 'task-chat-head');
+    sticky.append(head, people);
+    const conversation = Object.hasOwn(PARTY_LABELS, selected) ? null : partyConversation(selected, conversations);
+    box.append(sticky, talkPane({ task, party: selected, conversation, taskViews: views, bubble, name: namer(directory, conversations, views)(selected),
+      log: taskActivity(task), unlink: (id) => save({ op: 'update', remove: [id] }), onMode: redraw }));
+    onConversation((task.muted ?? []).includes(selected) || selected.startsWith('name:') ? null : conversation);
+    return { node: box, order, selected };
+  }
+  onConversation(null);
   box.append(head);
   if (task.status !== 'todo') box.append(element('p', 'card-headline', STATUSES[task.status]));
   if (task.resumeNote && task.resumeNote !== 'в работе') box.append(element('p', 'card-next', `дальше: ${task.resumeNote}`));
@@ -140,15 +167,9 @@ export function taskDetails(task, { views, save, saveTo, others, notify, project
   }
 
   // The checklist, open: items, ticks, «+ пункт».
-  const checklist = checklistBlock(task, { save, saveTo, others, notify });
+  const checklist = checklistBlock(task, { save, saveTo, notify });
   if (checklist) box.append(checklist);
 
-  // The participants line: «💬» on the left opens the conversations of the task; a name opens that participant's.
-  const order = talkOrder(task, views);
-  const people = participantsBlock(task, { strip: true, views, nameOf: namer(directory, conversations, views), people: directory?.people ?? [],
-    save, savePerson: directory?.savePerson,
-    select: { order, selected: null, onSelect: (party) => onTalk(party) } });
-  people.querySelector('.people-row')?.prepend(button('card-talk-open', '💬', () => onTalk(null), 'Беседы задачи'));
   box.append(people);
 
   // «Подробности», folded: how it was made, the report of a closed task. The changes are in «Я» of the conversations.
@@ -162,33 +183,5 @@ export function taskDetails(task, { views, save, saveTo, others, notify, project
     if (task.report.missing?.length && !card) more.push(button('link-button', 'Заполнить отчёт', () => doneCards.start(task)));
   }
   box.append(section('more', 'Подробности', more));
-  return box;
-}
-
-// The conversations of the task, one participant at a time (owner, 2026-11-20): the participants line (the chosen one
-// leftmost with 📣), ‹ n из N › to move, and the conversation. ctx: { views, bubble, save, conversations, directory,
-// party (the chosen one), onSelect(party, dir), redraw(), onConversation(conversation | null) }.
-export function taskTalk(task, { views, bubble, save, conversations = [], directory = null, party, previousOrder, onSelect, redraw, onConversation = () => {} }) {
-  const box = element('div', 'task-talk');
-  const order = pagerOrder(talkOrder(task, views), previousOrder);
-  const selected = order.includes(party) ? party : order[0] ?? 'me';
-  const index = order.indexOf(selected);
-  const nameOf = namer(directory, conversations, views);
-  box.append(participantsBlock(task, { strip: true, views, nameOf, people: directory?.people ?? [], counterparties: directory?.counterparties ?? null,
-    save, savePerson: directory?.savePerson, saveCounterparty: directory?.saveCounterparty, onOpenCounterparty: directory?.onOpen,
-    select: { order: [selected, ...order.filter((item) => item !== selected)], selected, onSelect } }));
-  if (order.length > 1) {
-    const nav = element('div', 'task-talk-nav');
-    const go = (step) => onSelect(order[(index + step + order.length) % order.length], step > 0 ? 'next' : 'prev');
-    nav.append(button('icon-button', '‹', () => go(-1), 'Предыдущая беседа'), element('span', 'task-talk-where', `${index + 1} из ${order.length}`), button('icon-button', '›', () => go(1), 'Следующая беседа'));
-    box.append(nav);
-  }
-  const conversation = selected === 'me' ? null : partyConversation(selected, conversations);
-  const log = (task.history ?? []).map((item) => ({ ts: item.ts, text: `${item.author === 'me' ? 'вы' : item.change?.processor ? 'разбор' : 'система'}: ${describeChange(item.change ?? {})}` }));
-  const pane = talkPane({ task, party: selected, conversation, taskViews: views, bubble, name: nameOf(selected), log,
-    unlink: (id) => save({ op: 'update', remove: [id] }), onMode: redraw });
-  box.append(pane);
-  // A switched-off participant gets no answer from the task: the message stays a note (PLAN 2026-11-20).
-  onConversation((task.muted ?? []).includes(selected) ? null : conversation);
   return { node: box, order, selected };
 }

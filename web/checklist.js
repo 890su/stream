@@ -1,8 +1,5 @@
-// The checklist of a task in its details (CONCEPT.md §2.8, 2026-11-19): tick an item, add one, «Отдельной задачей»
-// (the item becomes a task of its own and leaves the list), and «В дело…» — this whole task becomes an item of
-// another open task (its messages go there, this one is cancelled). Every change is one task_change.
+// Renders and edits checklist items in a task card.
 import { isOpen, itemsProgress } from './taskfold.js';
-import { holding } from './holdrender.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -21,8 +18,7 @@ function button(className, text, onClick, label) {
 
 const line = (text) => text.replace(/\s+/g, ' ').trim().slice(0, 200);
 
-// `save(change)` — this task; `saveTo(id, change)` — another task; `others` — open tasks it may join, likely first.
-export function checklistBlock(task, { save, saveTo, others = [], notify }) {
+export function checklistBlock(task, { save, saveTo, notify }) {
   const open = isOpen(task);
   const box = element('div', 'checklist');
   if (!open && !task.items?.length) return null;
@@ -35,7 +31,8 @@ export function checklistBlock(task, { save, saveTo, others = [], notify }) {
     if (open && !item.done) {
       row.append(button('icon-button checklist-out', '↗', async () => {
         const id = crypto.randomUUID();
-        await saveTo(id, { op: 'create', title: item.text, roles: { author: 'me', responsible: 'me', executors: ['me'] }, status: 'todo', add: task.messages.slice(-1) });
+        const added = await saveTo(id, { op: 'create', title: item.text, roles: { author: 'me', responsible: 'me', executors: ['me'] }, status: 'todo', add: task.messages.slice(-1) });
+        if (added === false) return;
         save({ op: 'update', items_remove: [item.id] });
         notify(`Отдельной задачей: «${item.text}»`);
       }, `Отдельной задачей: ${item.text}`));
@@ -47,28 +44,27 @@ export function checklistBlock(task, { save, saveTo, others = [], notify }) {
   const form = element('form', 'checklist-add');
   const input = Object.assign(document.createElement('input'), { maxLength: 200, enterKeyHint: 'done', placeholder: 'Пункт' });
   input.setAttribute('aria-label', 'Новый пункт чеклиста');
-  form.append(input, button('link-button', 'Добавить', () => form.requestSubmit()));
-  form.onsubmit = (event) => {
+  const add = element('button', 'icon-button checklist-plus');
+  add.type = 'submit';
+  add.setAttribute('aria-label', 'Добавить пункт чеклиста');
+  add.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8m-4-4h8"/></svg>';
+  add.disabled = true;
+  input.oninput = () => { add.disabled = !line(input.value); };
+  form.append(input, add);
+  form.onsubmit = async (event) => {
     event.preventDefault();
-    const text = line(input.value);
-    if (text) save({ op: 'update', items_add: [{ id: crypto.randomUUID(), text }] });
+    const draft = input.value;
+    const text = line(draft);
+    if (!text) return;
+    input.value = '';
+    add.disabled = true;
+    input.focus();
+    if (await save({ op: 'update', items_add: [{ id: crypto.randomUUID(), text }] }) === false && input.isConnected && !input.value) {
+      input.value = draft;
+      input.oninput();
+    }
   };
   box.append(form);
 
-  // «В дело…»: this task as an item of another one.
-  const targets = others.filter((other) => other.id !== task.id && isOpen(other) && !other.filed).slice(0, 6);
-  if (targets.length) {
-    const choice = element('div', 'chips checklist-into');
-    const into = button('link-button', 'В дело…', () => {
-      holding(choice);
-      choice.replaceChildren(...targets.map((other) => button('chip suggest', other.title, async () => {
-        holding(choice, false);
-        await saveTo(other.id, { op: 'update', add: task.messages, items_add: [{ id: crypto.randomUUID(), text: line(task.title) }] });
-        save({ op: 'update', status: 'cancelled' });
-        notify(`«${task.title}» — пункт дела «${other.title}»`);
-      })));
-    }, 'Сделать эту задачу пунктом другого дела');
-    box.append(into, choice);
-  }
   return box;
 }

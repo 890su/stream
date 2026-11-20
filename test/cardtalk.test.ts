@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { partyConversation, cardOrder, talkItems, foldLabel } from '../web/cardtalk.js';
+import { partyConversation, cardOrder, talkItems, foldLabel, taskActivity } from '../web/cardtalk.js';
 
 // The conversation in the task card (design 2026-11-20, stage 2). Names are made up.
 const conversations = [{ key: 'tg:501' }, { key: 'tg:-900' }, { key: 'tel:+48600100200' }];
@@ -12,6 +12,13 @@ test('a participant\'s conversation: a Telegram user, a group, a number; others 
   assert.equal(partyConversation('tel:+48600100200', conversations).key, 'tel:+48600100200');
   assert.equal(partyConversation('name:Стас', conversations), null);
   assert.equal(partyConversation('tg:777', conversations), null);
+});
+
+test('name-only messenger chats are matched only when the name is unambiguous', () => {
+  const chat = { key: 'wa:123@lid', title: 'Собеседник' };
+  assert.equal(partyConversation('name:Собеседник', [chat]), chat);
+  assert.equal(partyConversation('name:Собеседник', [chat, { key: 'viber:Собеседник', title: 'Собеседник' }]), null);
+  assert.equal(partyConversation('name:Собеседник', [{ key: 'tel:+48500000002', title: 'Собеседник' }]), null);
 });
 
 test('tile order: the chosen one leftmost, recent next; at first whoever wrote last, else «Я»', () => {
@@ -27,6 +34,16 @@ test('other tasks\' messages: dimmed one by one, or folded in runs', () => {
   assert.deepEqual(talkItems(views, 't1', 'dim').map((item: any) => [item.view.id, item.other]), [['a', false], ['b', true], ['c', true], ['d', false], ['e', true]]);
   assert.deepEqual(talkItems(views, 't1', 'fold').map((item: any) => (item.kind === 'fold' ? item.views.map((x: any) => x.id).join('') : item.view.id)), ['a', 'bc', 'd', 'e']);
   assert.deepEqual([foldLabel(1), foldLabel(3), foldLabel(5)], ['· 1 сообщение по другим делам ·', '· 3 сообщения по другим делам ·', '· 5 сообщений по другим делам ·']);
+  assert.deepEqual(talkItems(views, 't1', 'dim', new Set(['c'])).filter((item: any) => !item.other).map((item: any) => item.view.id), ['a', 'c', 'd'], 'continuations in the task are highlighted too');
+});
+
+test('the activity log separates owner, AI and system entries', () => {
+  const history = [
+    { ts: '2026-11-20T09:00:00Z', author: 'system', change: { processor: 'triage-test', op: 'create' } },
+    { ts: '2026-11-20T10:00:00Z', author: 'me', change: { status: 'done' } },
+    { ts: '2026-11-20T11:00:00Z', author: 'system', change: { status: 'todo' } },
+  ];
+  assert.deepEqual(taskActivity({ history }).map((item: { party: string }) => item.party), ['ai', 'me', 'system']);
 });
 
 test('the first tile: who wrote last — a group as the group, a muted participant skipped — else «Я»', async () => {

@@ -121,8 +121,8 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .checklist-add { display: flex; align-items: center; gap: 8px; padding-left: 12px; }
 .checklist-add input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--line); background: transparent; color: var(--bar-text); padding: 8px 2px; outline: none; font: inherit; }
 .checklist-add input:focus { border-bottom-color: var(--accent); }
-.checklist-into { margin-top: 4px; }
-.checklist > .link-button { justify-self: start; }
+.checklist-plus { flex: none; width: 44px; height: 44px; color: var(--link); }
+.checklist-plus:disabled { color: var(--muted); opacity: .55; }
 
 /* Projects (projectview.js, projectpanel.js) */
 .project-head { align-self: stretch; display: grid; gap: 4px; margin: 4px 6px 6px; padding: 10px 12px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
@@ -283,14 +283,28 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .card-description:active, .card-description:hover { background: var(--press); }
 .card-description-form textarea { flex: 1; min-height: 72px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; resize: vertical; }
 .task-screen .card-section { margin: 6px 0; }
-.task-screen .card-people.strip { margin: 8px -12px 0; padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); position: sticky; top: -4px; z-index: 1; }
+.task-people { margin: 8px 0 0; }
+.task-people .card-people.strip { padding: 4px 0; }
+.task-people .task-internal-people.strip { margin-bottom: 2px; }
+.task-external-people { border-top: 1px solid var(--line); }
+.task-external-people .drawer-empty { margin: 4px 0; }
+.task-people .person-tile-body { display: flex; align-items: center; min-width: 0; min-height: 36px; text-align: start; }
+.person-tile-caption { min-width: 0; max-width: 12em; padding-right: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bar-text); }
+.task-people .person-tile-role { max-width: 6.5em; }
+.person-tile.off .person-tile-caption { color: var(--muted); text-decoration: line-through; }
+.task-people .card-people.strip .people-add { width: 40px; height: 40px; border: 1px solid var(--line); background: var(--panel); color: var(--link); }
+.task-people .people-add:hover { background: var(--chip); }
+.task-chat-head { position: sticky; top: -4px; z-index: 2; padding: 4px 0; background: var(--panel); border-bottom: 1px solid var(--line); }
+.card-expand { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card-expand::after { content: '⌄'; flex: none; color: var(--muted); }
 .person-tile.selected { background: color-mix(in srgb, var(--accent) 22%, var(--chip)); box-shadow: inset 0 0 0 1.5px var(--accent-strong); }
 .person-tile-speaker { padding: 0 6px 0 2px; font-size: 14px; }
 .card-talk { margin: 4px 0 0; }
-.card-talk-head { display: flex; align-items: baseline; gap: 8px; padding: 6px 2px; }
+.card-talk-head { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; padding: 2px; }
 .card-talk-title { flex: 1; min-width: 0; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-talk-mode { flex: none; font-size: 13px; }
-.details-message.other-task { opacity: .45; }
+.details-message.other-task { opacity: .78; }
+.details-message.task-linked > .bubble { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow); }
 .card-talk-fold { align-self: center; margin: 2px 0; padding: 4px 10px; border: 0; border-radius: 12px; background: var(--chip); color: var(--chip-text); font: inherit; font-size: 12.5px; }
 /* While a task card is open its own participants line is shown; the open conversation's one under it is not. */
 body:has(#task-screen:not([hidden])) #people-row { display: none; }
@@ -323,7 +337,7 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 .task-chip.late { background: color-mix(in srgb, var(--danger) 18%, var(--chip)); color: var(--danger); }
 .task-chip-editor:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; padding: 8px; border-radius: 12px; background: var(--chip); }
 .task-chip-editor input { min-height: 38px; padding: 0 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; }
-.card-talk-open { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--accent-strong); color: #fff; font-size: 18px; }
-.task-talk-nav { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 2px 0; }
-.task-talk-where { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.card-talk-open { flex: none; width: 36px; height: 40px; color: var(--muted); }
+.card-talk-open svg { width: 20px; height: 20px; }
+.card-talk-open[aria-expanded="true"] { color: var(--link); background: var(--chip); }
 .talk-log { align-self: center; max-width: 90%; padding: 1px 8px; color: var(--muted); font-size: 12px; text-align: center; }

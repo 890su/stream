@@ -121,6 +121,16 @@
     <button id="pick-cancel" type="button" class="link-button">Отмена</button>
   </div>
 
+  <dialog id="task-participant-picker" aria-labelledby="participant-picker-title">
+    <div class="participant-picker-head">
+      <h2 id="participant-picker-title">Добавить собеседника</h2>
+      <button type="button" class="icon-button participant-close" aria-label="Закрыть" autofocus>×</button>
+    </div>
+    <input type="search" aria-label="Имя или номер собеседника" placeholder="Имя или номер" autocomplete="off">
+    <p class="participant-results-label">Избранные и частые</p>
+    <div class="participant-results" aria-live="polite"></div>
+  </dialog>
+
   <dialog id="picker" class="sheet" aria-labelledby="picker-heading">
     <header class="sheet-head">
       <h2 id="picker-heading">Связать с…</h2>

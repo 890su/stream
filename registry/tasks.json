@@ -33,6 +33,7 @@
     "person"
   ],
   "card": {
+    "participant_suggestions": 6,
     "default_duration_min": 60,
     "durations_min": [15, 30, 60, 90, 120, 240],
     "repeats": [

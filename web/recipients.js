@@ -67,7 +67,7 @@ export function createRecipients({ getViews, notify, queue, onChange }) {
   }
 
   return {
-    choose, load, chip, items, togglePin, isOpen,
+    choose, load, chip, items, togglePin, isOpen, known: () => list,
     selected: () => (enabled ? chosen : null),
     // Back to no recipient after sending, or a conversation's default recipient.
     reset: (item = null) => choose(item),

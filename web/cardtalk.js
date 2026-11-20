@@ -1,17 +1,25 @@
-// The conversations of a task (owner, 2026-11-20): «💬» in the card's participants line opens them, one participant
-// at a time, a swipe from the screen's side edges (or ‹ ›) moves between them; the chosen tile stands leftmost. Each is
-// the whole conversation with that participant — this task's messages as they are, other tasks' dimmed or folded by
-// «◐». «Я» is the task's own feed: its messages and its changes as grey lines (instead of a separate log, like Linear
-// and Asana). Pure helpers (tested in node) and the DOM of the pane.
+// Resolves task conversations and renders their messages and activity.
 
-import { partyOfEvent } from './parties.js';
+import { isParty, partyOfEvent, PARTY_LABELS } from './parties.js';
 import { chatOf } from './projection.js';
 import { TRIGGER_PX, zoneOf } from './swipezones.js';
+import { describeChange } from './taskfold.js';
 
-// The conversation of a participant: a Telegram user or group → its chat, a number → `tel:`; others have none.
+export function conversationParty(conversation) {
+  const { key, group, title } = conversation;
+  const party = key.startsWith('tg:') && (group || key.startsWith('tg:-')) ? `group:${key}` : key;
+  if ((party.startsWith('tg:') || party.startsWith('group:tg:') || party.startsWith('tel:')) && isParty(party)) return party;
+  if (/^(?:wa|viber|tel):/.test(key)) {
+    const name = (key.startsWith('tel:') ? key.slice(4) : title ?? '').trim().slice(0, 115);
+    return name ? `name:${name}` : null;
+  }
+  return null;
+}
+
+// Name-only chats can be read when unambiguous. Callers never use such a match as a recipient.
 export function partyConversation(party, conversations) {
-  const key = party.startsWith('group:tg:') ? `tg:${party.slice(9)}` : party.startsWith('tg:') || party.startsWith('tel:') ? party : null;
-  return key ? conversations.find((item) => item.key === key) ?? null : null;
+  const matches = conversations.filter((item) => conversationParty(item) === party);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 // Who wrote last among the participants: a group message counts for the group tile when the group is a participant;
@@ -65,10 +73,10 @@ export function bindTalkSwipe(screen, active, move) {
 
 // The pane's items: each message, and in «fold» mode runs of other tasks' messages as one fold.
 // [{ kind: 'message', view, other } | { kind: 'fold', views }]
-export function talkItems(views, taskId, mode = 'dim') {
+export function talkItems(views, taskId, mode = 'dim', linked = new Set()) {
   const items = [];
   for (const view of views) {
-    const other = !(view.taskIds ?? []).includes(taskId);
+    const other = !linked.has(view.id) && !(view.taskIds ?? []).includes(taskId);
     const last = items.at(-1);
     if (other && mode === 'fold') {
       if (last?.kind === 'fold') last.views.push(view); else items.push({ kind: 'fold', views: [view] });
@@ -94,6 +102,14 @@ export const readMode = () => { try { return localStorage.getItem(MODE_KEY) === 
 const writeMode = (mode) => { try { localStorage.setItem(MODE_KEY, mode); } catch { /* storage may be blocked */ } };
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+export function taskActivity(task) {
+  return (task.history ?? []).map(({ author, change, ts }) => {
+    const party = author === 'me' ? 'me' : change?.processor || author === 'ai' ? 'ai' : 'system';
+    const who = { me: 'вы', ai: 'ИИ', system: 'система' }[party];
+    return { ts, party, text: `${who}: ${describeChange(change ?? {})}` };
+  });
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -106,10 +122,14 @@ function element(tag, className, text) {
 export function talkPane({ task, party, conversation, taskViews, bubble, unlink, name, onMode, log = [] }) {
   const box = element('div', 'card-talk');
   const mode = readMode();
-  const views = party === 'me' ? taskViews : (conversation?.views ?? []).filter((view) => !view.deleted);
+  const internal = Object.hasOwn(PARTY_LABELS, party);
+  const views = party === 'me' ? taskViews : internal ? taskViews.filter((view) => partyOfEvent(view.event) === party)
+    : (conversation?.views ?? []).filter((view) => !view.deleted);
   const head = element('div', 'card-talk-head');
-  head.append(element('span', 'card-talk-title', party === 'me' ? 'Сообщения задачи' : conversation ? `Переписка с ${name}` : `${name}: переписки нет`));
-  if (party !== 'me' && conversation) {
+  if (internal || !conversation) head.append(element('span', 'card-talk-title', internal ? (party === 'me' ? 'Лента задачи' : name) : `${name}: переписки нет`));
+  if (!internal && conversation) {
+    box.setAttribute('role', 'region');
+    box.setAttribute('aria-label', `Переписка: ${name}`);
     const toggle = element('button', 'link-button card-talk-mode', mode === 'fold' ? '◐ другие дела: свёрнуты' : '◐ другие дела: бледнее');
     toggle.type = 'button';
     toggle.setAttribute('aria-label', mode === 'fold' ? 'Показать сообщения по другим делам бледнее' : 'Свернуть сообщения по другим делам');
@@ -119,7 +139,7 @@ export function talkPane({ task, party, conversation, taskViews, bubble, unlink,
   box.append(head);
   const list = element('div', 'details-talk');
   const message = (view, other) => {
-    const item = element('div', `details-message${other ? ' other-task' : ''}`);
+    const item = element('div', `details-message${other ? ' other-task' : internal ? '' : ' task-linked'}`);
     item.append(bubble(view));
     if (task.messages.includes(view.id)) {
       const remove = element('button', 'icon-button details-unlink', '×');
@@ -130,8 +150,9 @@ export function talkPane({ task, party, conversation, taskViews, bubble, unlink,
     }
     return item;
   };
-  if (party === 'me') {
-    for (const item of withLog(views, log)) {
+  if (internal) {
+    const activity = party === 'me' ? log : log.filter((item) => item.party === party);
+    for (const item of withLog(views, activity)) {
       if (item.kind === 'message') list.append(message(item.view, false));
       else {
         const time = element('time', null, clock.format(new Date(item.ts)));
@@ -141,18 +162,18 @@ export function talkPane({ task, party, conversation, taskViews, bubble, unlink,
         list.append(line);
       }
     }
-    if (!views.length && !log.length) list.append(element('p', 'drawer-empty', 'Сообщений нет'));
+    if (!views.length && !activity.length) list.append(element('p', 'drawer-empty', 'Записей пока нет'));
     box.append(list);
     return box;
   }
-  for (const item of talkItems(views, task.id, mode)) {
+  for (const item of talkItems(views, task.id, mode, new Set(taskViews.map((view) => view.id)))) {
     if (item.kind === 'message') { list.append(message(item.view, item.other)); continue; }
     const fold = element('button', 'card-talk-fold', foldLabel(item.views.length));
     fold.type = 'button';
     fold.onclick = () => fold.replaceWith(...item.views.map((view) => message(view, true)));
     list.append(fold);
   }
-  if (!views.length) list.append(element('p', 'drawer-empty', party === 'me' ? 'Сообщений нет' : 'Сообщений с этим участником пока нет'));
+  if (!views.length) list.append(element('p', 'drawer-empty', 'Сообщений с этим участником пока нет'));
   box.append(list);
   return box;
 }
