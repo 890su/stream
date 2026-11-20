@@ -35,6 +35,12 @@ for (const [key, account] of Object.entries(whatsappConfig.accounts)) {
   if (account.connector !== `whatsapp_${key}`) throw new Error(`registry/whatsapp.json: коннектор аккаунта ${key} должен быть whatsapp_${key}`);
 }
 
+// Google Calendar (docs/plans/2026-11-20-google-calendar-design.md): how often calendars are read, how far ahead,
+// the backoff ceiling, calendars hidden until the owner shows them (id patterns), the name of the synced calendar.
+export const googleConfig = JSON.parse(readFileSync(new URL('../registry/google.json', import.meta.url), 'utf8')) as {
+  version: number; poll_s: number; window_days: number; reconnect_max_s: number; hidden_by_default: string[]; stream_calendar: string;
+};
+
 // Task triage (CONCEPT.md §2.8): quiet window, AI model and budget, task templates.
 export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.json', import.meta.url), 'utf8')) as {
   version: number; quiet_s: number; quiet_s_by_stream: Record<string, number>; lookback_h: number; max_batch: number; context_messages: number; open_tasks_in_context: number; closed_tasks_in_context: number; reopen_days: number; job_days: number; low_confidence: number;

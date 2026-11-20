@@ -72,6 +72,15 @@ connectors:
       send_message — класс C, только после подтверждения; только ответы и только по номеру (params.chat_id = +номер),
       сомнительная отправка не повторяется. Сфера — работа PL.
 
+  google_calendar:
+    status: planned
+    title: Google Календарь (два аккаунта владельца)
+    operations: []
+    irreversible: []
+    notes: >-
+      Вход через Google в своём проекте Google Cloud (deploy/GOOGLE.md). Этап 1 — календари владельца видны в «Плане»;
+      этап 2 — календарь «Stream» синхронизируется с задачами (docs/plans/2026-11-20-google-calendar-design.md).
+
   google_reviews:
     status: later
     title: Отзывы Google Business Profile

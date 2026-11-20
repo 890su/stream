@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "poll_s": 60,
+  "window_days": 14,
+  "reconnect_max_s": 120,
+  "hidden_by_default": ["#holiday@group.v.calendar.google.com"],
+  "stream_calendar": "Stream"
+}
