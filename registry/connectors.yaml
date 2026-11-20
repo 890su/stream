@@ -62,6 +62,16 @@ connectors:
     irreversible: [send_message]
     notes: Как telegram_by, бот «Stream PL»; сфера — работа PL.
 
+  whatsapp_pl:
+    status: planned
+    title: WhatsApp PL (связанное устройство)
+    operations: [send_message]
+    irreversible: [send_message]
+    notes: >-
+      Baileys связанным устройством на номере владельца, в процессе Stream (docs/plans/2026-11-20-whatsapp-baileys-design.md).
+      send_message — класс C, только после подтверждения; только ответы и только по номеру (params.chat_id = +номер),
+      сомнительная отправка не повторяется. Сфера — работа PL.
+
   google_reviews:
     status: later
     title: Отзывы Google Business Profile

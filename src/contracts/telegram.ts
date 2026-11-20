@@ -1,6 +1,7 @@
 import { HttpError } from '../server/errors.ts';
 import { telegramConfig } from '../config.ts';
 import type { JournalEvent } from './validate.ts';
+import { whatsappAccountOf } from './whatsapp.ts';
 
 // Telegram messages and replies (CONCEPT.md §8.2). The JSON Schema checks the shapes of
 // payload.data.telegram / outbound / action / system; this checks where each may appear.
@@ -25,7 +26,7 @@ export function checkTelegram(event: JournalEvent): void {
     if (event.kind !== 'text' || event.author !== 'me') throw new HttpError(400, 'Ответ наружу — только текст владельца');
     if (!event.payload.text?.trim()) throw new HttpError(400, 'Пустой ответ');
     const connector = (data.outbound as { connector: string }).connector;
-    if (!connectorAccount(connector) && connector !== 'viber') throw new HttpError(400, 'Неизвестный коннектор ответа');
+    if (!connectorAccount(connector) && connector !== 'viber' && !whatsappAccountOf(connector)) throw new HttpError(400, 'Неизвестный коннектор ответа');
   }
   if ('action' in data && event.kind !== 'action_result') throw new HttpError(400, 'payload.data.action бывает только у action_result');
   if ('system' in data && event.kind !== 'system') throw new HttpError(400, 'payload.data.system бывает только у system');

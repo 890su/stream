@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "accounts": {
+    "pl": {
+      "title": "WhatsApp PL",
+      "connector": "whatsapp_pl",
+      "sphere": "work_pl",
+      "timezone": "Europe/Warsaw"
+    }
+  },
+  "media_max_bytes": 20971520,
+  "max_age_h": 48,
+  "reconnect_max_s": 120,
+  "qr_refresh_s": 15
+}

@@ -25,7 +25,7 @@
     },
     "source": {
       "type": "string",
-      "description": "Where the event came from. Known values: app, share, system, analyst, email, telegram, viber, android_notifications, android_phone.",
+      "description": "Where the event came from. Known values: app, share, system, analyst, email, telegram, viber, whatsapp, android_notifications, android_phone.",
       "pattern": "^[a-z][a-z0-9_]*$"
     },
     "author": {
@@ -405,9 +405,44 @@
                 }
               }
             },
+            "whatsapp": {
+              "type": "object",
+              "description": "A WhatsApp message received by the linked device (docs/plans/2026-11-20-whatsapp-baileys-design.md): the account, the chat as WhatsApp names it, its address (a phone address or an anonymous LID), the phone when known. Only with source: whatsapp.",
+              "required": [
+                "account",
+                "chat",
+                "jid",
+                "received_at"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "account": {
+                  "type": "string",
+                  "pattern": "^[a-z]{2,8}$"
+                },
+                "chat": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The sender's name in WhatsApp, else the phone or the address."
+                },
+                "jid": {
+                  "type": "string",
+                  "pattern": "^[0-9]+@(s\\.whatsapp\\.net|lid)$"
+                },
+                "phone": {
+                  "type": "string",
+                  "pattern": "^\\+[0-9]{6,15}$"
+                },
+                "received_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
             "outbound": {
               "type": "object",
-              "description": "The owner's reply to be sent outside (CONCEPT.md 8.2): writing it creates a class C action for the connector. Only on kind: text by me. Telegram: chat_id is the chat's number; Viber (connector viber): the phone.",
+              "description": "The owner's reply to be sent outside (CONCEPT.md 8.2): writing it creates a class C action for the connector. Only on kind: text by me. Telegram: chat_id is the chat's number; Viber (connector viber) and WhatsApp (connectors whatsapp_*): the phone.",
               "required": [
                 "connector",
                 "chat_id"

@@ -1,4 +1,4 @@
-// Registry files loaded once at start: capture limits, tag dictionary, Telegram accounts, task triage settings.
+// Registry files loaded once at start: capture limits, tag dictionary, Telegram and WhatsApp accounts, task triage settings.
 import { readFileSync } from 'node:fs';
 
 export const captureConfig = JSON.parse(readFileSync(new URL('../registry/capture.json', import.meta.url), 'utf8')) as {
@@ -21,6 +21,17 @@ export const telegramConfig = JSON.parse(readFileSync(new URL('../registry/teleg
   media_max_bytes: number; silent_after_s: number; reply_window_h: number;
   address_book: { frequent_days: number; row_size: number };
 };
+
+// WhatsApp linked devices (docs/plans/2026-11-20-whatsapp-baileys-design.md): accounts, file limit, oldest message
+// written, reconnect ceiling, QR refresh. An account's connector is always `whatsapp_<account>` (the web client derives it).
+export const whatsappConfig = JSON.parse(readFileSync(new URL('../registry/whatsapp.json', import.meta.url), 'utf8')) as {
+  version: number;
+  accounts: Record<string, { title: string; connector: string; sphere: string; timezone: string }>;
+  media_max_bytes: number; max_age_h: number; reconnect_max_s: number; qr_refresh_s: number;
+};
+for (const [key, account] of Object.entries(whatsappConfig.accounts)) {
+  if (account.connector !== `whatsapp_${key}`) throw new Error(`registry/whatsapp.json: коннектор аккаунта ${key} должен быть whatsapp_${key}`);
+}
 
 // Task triage (CONCEPT.md §2.8): quiet window, AI model and budget, task templates.
 export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.json', import.meta.url), 'utf8')) as {
