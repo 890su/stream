@@ -10,8 +10,9 @@ import type { SocketFactory, WaFiles, WaMessage, WaSocket, WaUpdate } from './ty
 
 // One WhatsApp account as a linked device, inside the server like the Telegram bots
 // (docs/plans/2026-11-20-whatsapp-baileys-design.md): keeps the connection, shows the linking QR as the channel's
-// state, writes incoming messages and the owner's own messages from the phone to the journal. Nothing that happens
-// on the connection may stop the server: every handler is isolated, and only ids and states reach the log.
+// state, writes incoming messages and the owner's own messages from the phone to the journal, and sends the owner's
+// replies from the feed — by phone, one at a time, never twice. Nothing that happens on the connection may stop
+// the server: every handler is isolated, and only ids and states reach the log.
 
 type Info = Record<string, unknown>;
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 200);
@@ -31,6 +32,9 @@ export class WhatsAppClient {
   #running = false;
   #state: [SourceState, string | null, Info] | null = null;
   #timers = new Set<ReturnType<typeof setTimeout>>();
+  #open = false;
+  #sent = new Set<string>();            // ids of replies sent from the feed: their echo is not a new message
+  #wakers = new Set<() => void>();
 
   constructor({ account, store, live, authDir, factory, retryMs = 5_000, pulseMs = whatsappConfig.pulse_s * 1000 }: {
     account: string; store: JournalStore; live: LiveFeed; authDir: string; factory: SocketFactory; retryMs?: number; pulseMs?: number;
@@ -58,13 +62,16 @@ export class WhatsAppClient {
     const beat = setInterval(() => { if (this.#state) this.#health(...this.#state); }, this.#pulseMs);
     beat.unref();
     this.#timers.add(beat);
+    void this.#sendLoop();
     await this.#connect();
   }
 
   stop(): void {
     this.#running = false;
+    this.#open = false;
     for (const timer of this.#timers) clearTimeout(timer);
     this.#timers.clear();
+    for (const wake of [...this.#wakers]) wake();
     this.#socket?.end();
     this.#socket = null;
   }
@@ -95,11 +102,13 @@ export class WhatsAppClient {
     }
     if (update.connection === 'open') {
       this.#qr = null;
+      this.#open = true;
       this.#delay = this.#retryMs;
       console.log(`WhatsApp ${this.account}: connected`);
       this.#health('ok', null, { qr: false });
     }
     if (update.connection !== 'close') return;
+    this.#open = false;
     this.#socket = null;
     socket.end();
     if (update.loggedOut) {
@@ -126,6 +135,7 @@ export class WhatsAppClient {
         id = message.key?.id ?? '?';
         const item = await toItem(message, files, (lid) => socket.pnForLid(lid));
         if (!item || Date.parse(item.date) < oldest) continue;
+        if (item.out && this.#sent.has(item.id)) continue;   // the echo of a reply sent from the feed
         const event = toEvent(item, this.account);
         if (this.#store.getEvent(event.id)) continue;   // delivered again (reconnect, `append` after `notify`)
         const result = this.#store.appendEvent(event);
@@ -137,6 +147,47 @@ export class WhatsAppClient {
         console.error(`WhatsApp ${this.account}: message failed (${id}) — ${error instanceof Error ? error.name : 'error'}`);
       }
     }
+  }
+
+  // One approved reply. While the connection is coming back, replies wait in the queue; while the channel needs the
+  // owner (QR, unlinked), they fail with a hint — nothing goes out late after relinking. A send is not idempotent on
+  // WhatsApp's side, so a doubtful one is never repeated.
+  async #send(): Promise<boolean> {
+    const needsOwner = this.#state?.[0] === 'login_required';
+    if (!this.#open && !needsOwner) return false;
+    const action = this.#store.actions.take(this.connector);
+    if (!action) return false;
+    const params = action.params as { chat_id: string; text: string };
+    const finish = (status: 'done' | 'failed', externalId: string | null, error: string | null) => {
+      console.log(`WhatsApp ${this.account}: reply ${action.id} ${status === 'done' ? 'sent' : 'failed'}`);
+      actionChanged(this.#store, this.#live, this.#store.actions.finish(action.id, this.connector, status, externalId, error).action);
+    };
+    const socket = this.#socket;
+    if (!this.#open || !socket) { finish('failed', null, 'WhatsApp не подключён — отсканируйте QR на экране «Система»'); return true; }
+    let id: string;
+    try { id = await socket.sendText(`${params.chat_id.slice(1)}@s.whatsapp.net`, params.text); }
+    catch { finish('failed', null, 'Нет ответа от WhatsApp — проверьте в WhatsApp, ушло ли сообщение'); return true; }
+    this.#sent.add(id);
+    if (this.#sent.size > 500) this.#sent.delete(this.#sent.values().next().value!);
+    finish('done', `${params.chat_id}:${id}`, null);
+    return true;
+  }
+
+  async #sendLoop(): Promise<void> {
+    while (this.#running) {
+      try { if (await this.#send()) continue; }
+      catch (error) { console.error(`WhatsApp ${this.account}: send failed — ${messageOf(error)}`); }
+      await this.#sleep(1_000);
+    }
+  }
+
+  #sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const wake = () => { clearTimeout(timer); this.#wakers.delete(wake); resolve(); };
+      const timer = setTimeout(wake, ms);
+      timer.unref();
+      this.#wakers.add(wake);
+    });
   }
 
   #files(socket: WaSocket): WaFiles {

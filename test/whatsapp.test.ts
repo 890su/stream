@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fixture, temporaryStore } from './helpers.ts';
+import { randomUUID } from 'node:crypto';
+import { event, fixture, temporaryStore } from './helpers.ts';
 import { fakeWa, waitFor } from './fakewa.ts';
 import { WhatsAppClient } from '../src/whatsapp/client.ts';
 import { LiveFeed } from '../src/server/live.ts';
+import { nameId } from '../src/ids.ts';
 import type { WaMessage } from '../src/whatsapp/types.ts';
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -158,4 +160,99 @@ test('an idle connection keeps its pulse', async () => {
     await waitFor(() => storage.store.status.get('whatsapp_pl')?.pulse_at !== first);
     assert.equal(storage.store.status.get('whatsapp_pl')?.state, 'ok');
   } finally { client.stop(); storage.cleanup(); }
+});
+
+// Replies from the feed (Task 5).
+const reply = (chat_id: string, text = 'Dzień dobry') => ({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'text',
+  payload: { text, data: { outbound: { connector: 'whatsapp_pl', chat_id, chat_title: 'Anna' } } } });
+async function postReply(f: F, body: ReturnType<typeof reply>) {
+  return f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+const actionOf = (f: F, replyId: string) => f.store.actions.get(nameId(`action|${replyId}`));
+
+test('a reply goes by phone and is reported', async () => {
+  const { wa, f } = await linked();
+  try {
+    wa.last().emitUpdate({ connection: 'open' });
+    const body = reply('+48500000001');
+    assert.equal((await postReply(f, body)).status, 201);
+    await waitFor(() => actionOf(f, body.id)?.status === 'done', 3000);
+    assert.deepEqual(wa.last().sent, [{ jid: '48500000001@s.whatsapp.net', text: 'Dzień dobry' }]);
+    assert.equal(actionOf(f, body.id)?.external_id, '+48500000001:SENT1');
+  } finally { await f.stop(); }
+});
+
+test('my reply does not come back as a second message', async () => {
+  const { wa, f } = await linked();
+  try {
+    wa.last().emitUpdate({ connection: 'open' });
+    const body = reply('+48500000001');
+    await postReply(f, body);
+    await waitFor(() => actionOf(f, body.id)?.status === 'done', 3000);
+    await wa.last().emitMessages([{ key: { remoteJid: '48500000001@s.whatsapp.net', id: 'SENT1', fromMe: true }, message: { conversation: 'Dzień dobry' }, messageTimestamp: now() }]);
+    assert.equal(waEvents(f).length, 0);
+  } finally { await f.stop(); }
+});
+
+test('a reply while not connected fails with a hint', async () => {
+  const { wa, f } = await linked();
+  try {
+    wa.last().emitUpdate({ qr: '2@abc' });          // the channel waits for the owner to link the device
+    const body = reply('+48500000001');
+    await postReply(f, body);
+    await waitFor(() => actionOf(f, body.id)?.status === 'failed', 3000);
+    assert.match(actionOf(f, body.id)?.error ?? '', /не подключён/);
+    assert.equal(wa.last().sent.length, 0);
+  } finally { await f.stop(); }
+});
+
+test('a reply written during a reconnect waits and goes out', async () => {
+  const { wa, f } = await linked();
+  try {
+    const body = reply('+48500000001');
+    await postReply(f, body);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal(actionOf(f, body.id)?.status, 'approved');
+    wa.last().emitUpdate({ connection: 'open' });
+    await waitFor(() => actionOf(f, body.id)?.status === 'done', 3000);
+    assert.equal(wa.last().sent.length, 1);
+  } finally { await f.stop(); }
+});
+
+test('a failed send is not repeated', async () => {
+  const { wa, f } = await linked();
+  try {
+    wa.last().emitUpdate({ connection: 'open' });
+    wa.last().failSend = true;
+    const body = reply('+48500000001');
+    await postReply(f, body);
+    await waitFor(() => actionOf(f, body.id)?.status === 'failed', 3000);
+    assert.match(actionOf(f, body.id)?.error ?? '', /проверьте в WhatsApp/);
+    wa.last().failSend = false;
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    assert.equal(wa.last().sent.length, 0);
+    assert.equal(actionOf(f, body.id)?.status, 'failed');
+  } finally { await f.stop(); }
+});
+
+test('a send left running by a restart fails on start', async () => {
+  const storage = temporaryStore();
+  const wa = fakeWa();
+  const body = event(reply('+48500000001') as Parameters<typeof event>[0]);
+  storage.store.appendEvent(body);
+  assert.equal(storage.store.actions.take('whatsapp_pl')?.status, 'running');
+  const client = new WhatsAppClient({ account: 'pl', store: storage.store, live: new LiveFeed(), authDir: join(storage.directory, 'wa'), factory: wa.factory, retryMs: 10 });
+  try {
+    await client.start();
+    const action = storage.store.actions.get(nameId(`action|${body.id}`));
+    assert.equal(action?.status, 'failed');
+    assert.match(action?.error ?? '', /Сервер перезапустился/);
+  } finally { client.stop(); storage.cleanup(); }
+});
+
+test('a reply by name is refused', async () => {
+  const { f } = await linked();
+  try {
+    assert.equal((await postReply(f, reply('Anna'))).status, 400);
+  } finally { await f.stop(); }
 });
