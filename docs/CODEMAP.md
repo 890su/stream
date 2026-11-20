@@ -87,7 +87,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `viewstate.js` | pure: the view of «Задачи» — when (`WHEN`) · whose (`WHOSE`) · where (project, counterparty, person); `applyView`, `countsFor`, `viewTitle`, `dueGroups` |
 | `viewstore.js` | the view kept on the device: current view, «Мои виды», panel layout; listeners redraw (`viewStore`, `LAYOUTS`) |
 | `viewpanel.js` | the left panel of «Задачи»: three layouts over one view — «Оси», «Списки» (TickTick), «Дерево» (Things) — and the gear ⚙ at the bottom |
-| `pulse.js` / `pulseview.js` | the pulse — the default of «Задачи»: pure blocks (`pulseBlocks`: in work, paused, hot incl. conversations waiting for me, today, watch with alerts, projects, later), `importance`, `projectHealth`, `pulseCount`; and its DOM (`pulseNodes`) |
+| `pulse.js` / `pulseview.js` | the «Задачи» dashboard: in work, paused, today (incl. overdue work), watch with alerts, projects, later; `pulseBlocks`, `importance`, `projectHealth`, `pulseCount`, and `pulseNodes` |
 | `focus.js` | pure: one task of mine in work (`inWork`, `isMineToDo`), «▶ В работу» / «Пауза» changes with `resume_note` (`startWork`, `pauseWork`, `resumeNoteOf`), `workedMinutes` from the status history |
 | `contacts.js` | pure: the directory (mirror of `src/contacts/fold.ts`), `markCounterparties` (titles for rows) |
 | `counterpartyline.js` | «Контрагент» / «Кто контрагент?» in task details: options, «+ Создать» by the hint, «+ Новый» (organization or address, side), linking the author with a job title |
@@ -153,7 +153,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `registry/tasks.json` | triage settings, task templates, closing report fields, card duration and repeat choices |
 | `registry/conversations.json` | the queue: `since` (its start date), «⏱ Отложить» presets by the time of day |
 | `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Пульт», `view: 'pulse'`) is the default |
-| `registry/pulse.json` | the pulse: rows per block, `hot_wait_hours`, `watch_alert_days`, `stale_days`, `paused_remind_hours`, money templates, importance weights |
+| `registry/pulse.json` | dashboard settings and weights, plus `hot_wait_hours` for highlighting wait time on conversation tiles |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |
 
 ## Elsewhere

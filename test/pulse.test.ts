@@ -1,3 +1,4 @@
+// Checks how the task dashboard groups and counts work.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
@@ -5,7 +6,7 @@ import { foldTasks } from '../web/taskfold.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { foldProjects, markNext } from '../web/projects.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { importance, pulseBlocks, projectHealth } from '../web/pulse.js';
+import { importance, pulseBlocks, pulseCount, projectHealth } from '../web/pulse.js';
 import { pulseConfig } from '../src/config.ts';
 
 // The pulse — the default of «Задачи» (task manager spec §5). Names, chats and projects are made up.
@@ -24,17 +25,8 @@ const projectEvent = (id: string, data: Record<string, unknown>) => ({
   id: `e${++n}`, schema_version: 1, source: 'app', author: 'me', ts: at('2026-11-01T09:00:00'), kind: 'project_change',
   payload: { ref: { type: 'project', id }, data: { project: { op: 'create', ...data } } },
 });
-// A conversation in the queue (queue.js) since `moment`, or out of it.
-const conversation = (key: string, waiting: boolean, moment: string, extra: Record<string, unknown> = {}) => ({
-  key, title: key, queue: { waiting, moment: waiting ? at(moment) : null, snoozedUntil: null }, archived: false, tasks: [],
-  views: [{ id: `${key}-1`, event: { ts: at(moment), kind: 'text', author: 'tg:5', payload: { text: 'когда?' } } }], ...extra,
-});
-const blocks = (events: unknown[], conversations: unknown[] = [], projectEvents: unknown[] = []) => {
-  const projects = foldProjects(projectEvents);
-  const tasks = markNext(foldTasks(events), projects);
-  return pulseBlocks({ tasks, conversations, projects, now, config });
-};
-const titles = (list: any[]) => list.map((item) => item.task?.title ?? item.title);
+const blocks = (events: unknown[]) => pulseBlocks({ tasks: foldTasks(events), now, config });
+const titles = (list: { title: string }[]) => list.map((item) => item.title);
 
 test('every task lands in exactly one block; team, filed, snoozed and ideas are not on the pulse', () => {
   const b = blocks([
@@ -52,30 +44,23 @@ test('every task lands in exactly one block; team, filed, snoozed and ideas are 
   ]);
   assert.equal(b.work.title, 'в работе');
   assert.deepEqual(titles(b.paused), ['на паузе']);
-  assert.deepEqual(titles(b.hot), ['просрочено']);
-  assert.deepEqual(titles(b.today), ['разобрать'], '«До конца дня»: what is for today, not tomorrow');
+  assert.deepEqual(titles(b.today), ['просрочено', 'разобрать'], '«До конца дня»: overdue first, tomorrow elsewhere');
   assert.deepEqual(titles(b.watch).sort(), ['жду адрес', 'поручено']);
   assert.deepEqual(titles(b.later), ['завтра', 'потом'], 'tomorrow leads «Дальше»');
-  const all = [b.work, ...b.paused, ...b.hot.map((item: any) => item.task), ...b.today, ...b.watch, ...b.later].filter(Boolean).map((task: any) => task.title);
+  const all = [b.work, ...b.paused, ...b.today, ...b.watch, ...b.later].filter(Boolean).map((task: any) => task.title);
   assert.equal(new Set(all).size, all.length, 'no task twice');
 });
 
-test('overdue mine and overdue delegated both burn, not in today or watch', () => {
+test('deadlines keep my tasks in today and tasks I am waiting for in watch', () => {
   const b = blocks([
-    create('моё', { roles: mine, due: '2026-11-17' }),
-    create('поручено', { roles: delegated, due: '2026-11-19' }),
+    create('мой просроченный срок', { roles: mine, due: '2026-11-17' }),
+    create('мой срок сегодня', { roles: mine, due: '2026-11-19' }),
+    create('жду', { status: 'waiting', roles: mine, due: '2026-11-18' }),
+    create('поручено', { roles: delegated, due: '2026-11-18' }),
+    create('моя проверка', { status: 'review', roles: delegated }),
   ]);
-  assert.deepEqual(titles(b.hot).sort(), ['моё', 'поручено']);
-  assert.deepEqual([b.today.length, b.watch.length], [0, 0]);
-});
-
-test('a conversation waiting in the queue over the threshold burns (from its queue moment); under it or out of the queue does not', () => {
-  const b = blocks([], [
-    conversation('Клиент А', true, '2026-11-19T09:00:00'),
-    conversation('Клиент Б', true, '2026-11-19T11:30:00'),
-    conversation('Клиент Г', false, '2026-11-19T07:00:00'),
-  ]);
-  assert.deepEqual(b.hot.map((item: any) => [item.kind, item.conversation.key, item.waitingHours]), [['conversation', 'Клиент А', 3]]);
+  assert.deepEqual(titles(b.today), ['мой просроченный срок', 'мой срок сегодня', 'моя проверка']);
+  assert.deepEqual(titles(b.watch).sort(), ['жду', 'поручено']);
 });
 
 test('a partner\'s doing goes to watch, not to work', () => {
@@ -121,36 +106,29 @@ test('project health: overdue red, a goal without a next step yellow, moving gre
   assert.equal(health('pg').health, 'yellow');
   assert.equal(health('pm').health, 'green');
   assert.equal(health('pm').next.title, 'шаг');
-  const b = pulseBlocks({ tasks, conversations: [], projects, now, config });
+  const b = pulseBlocks({ tasks, projects, now, config });
   assert.deepEqual(b.projects.map((item: any) => item.project.title), ['Поток', 'Сайт', 'Переезд']);
 });
 
-test('the pulse counter is what burns plus what is for today', () => {
-  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  return import('../web/pulse.js').then(({ pulseCount }) => {
-    const b = blocks([create('горит', { roles: mine, due: '2026-11-18' }), create('разобрать', { roles: mine, status: 'inbox' }), create('потом', { roles: mine })],
-      [conversation('Клиент А', true, '2026-11-19T09:00:00')]);
-    assert.equal(pulseCount(b), 3);
-  });
+test('the task counter counts due and new work for today without counting conversations', () => {
+  const tasks = foldTasks([create('просрочено', { roles: mine, due: '2026-11-18' }),
+    create('разобрать', { roles: mine, status: 'inbox' }), create('потом', { roles: mine })]);
+  const legacyInput = { tasks, now, config, conversations: [{ key: 'tg:5', queue: { waiting: true, moment: at('2026-11-19T08:00:00') } }] };
+  const b = pulseBlocks(legacyInput);
+  assert.equal(pulseCount(b), 2);
+  assert.equal(Object.hasOwn(b, 'hot'), false);
 });
 
-test('review fixes: paused stack holds only plain paused tasks; a burning paused one burns; reminders come back to today', () => {
+test('paused tasks with due dates and active reminders come back to today', () => {
   const b = blocks([
     create('в работе', { status: 'doing', roles: mine }),
     create('пауза', { roles: mine, resume_note: 'дальше' }),
     create('пауза и отложено', { status: 'deferred', remind_at: at('2026-11-25T09:00:00'), roles: mine, resume_note: 'дальше' }),
     create('пауза и жду', { status: 'waiting', roles: mine, resume_note: 'дальше' }),
-    create('пауза и горит', { roles: mine, resume_note: 'дальше', due: '2026-11-19' }),
+    create('пауза и срок сегодня', { roles: mine, resume_note: 'дальше', due: '2026-11-19' }),
     create('напоминание пришло', { status: 'deferred', remind_at: at('2026-11-19T08:00:00'), roles: mine }),
   ]);
   assert.deepEqual(titles(b.paused), ['пауза']);
-  assert.deepEqual(titles(b.hot), ['пауза и горит']);
   assert.deepEqual(titles(b.watch), ['пауза и жду']);
-  assert.deepEqual(titles(b.today), ['напоминание пришло']);
-});
-
-test('a snoozed conversation never burns, however long it waited', () => {
-  const snoozed = { ...conversation('Клиент Д', false, '2026-11-19T06:00:00'), queue: { waiting: false, moment: null, snoozedUntil: at('2026-11-19T18:00:00') } };
-  const b = blocks([], [conversation('Клиент Е', true, '2026-11-19T08:00:00'), snoozed]);
-  assert.deepEqual(b.hot.map((item: any) => item.conversation.key), ['Клиент Е']);
+  assert.deepEqual(titles(b.today), ['пауза и срок сегодня', 'напоминание пришло']);
 });

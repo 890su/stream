@@ -562,10 +562,11 @@ root; the paragraphs on «Беседы» states, «Завершённые» and 
 - **«Задачи»** — the pulse fills the screen; there are no list chips (2026-11-19). The saved lists («Сегодня ·
   Разобрать · Жду · Контроль · …») are in the left panel; one opened there shows «← Пульт», its name, count and the
   grouping. **Default — «Пульт»** (2026-11-19, `docs/plans/2026-11-19-task-manager-spec.md` §5): the task in work
-  («Готово», «⏸ Пауза») or «Вернуться к…», then blocks «⏸ Ждут возврата · 🔥 Горит (overdue, due today, a
-  conversation waiting for my answer over `hot_wait_hours`) · ▶ Сегодня · 👁 Слежу (waiting and delegated, ⚠ —
-  no change for `watch_alert_days`) · 📊 Проекты (done and new over 7 days, health) · ⏭ Дальше». Every task is in
-  one block; order is a computed importance (burns, money, blocks others, due tomorrow, stale) — weights in
+  («Готово», «⏸ Пауза») or «Вернуться к…», then blocks «⏸ Ждут возврата · ▶ До конца дня · 👁 Слежу · 📊 Проекты
+  · ⏭ Дальше». My overdue tasks and tasks due today are at the top of «До конца дня». Delegated tasks and tasks
+  waiting on someone stay in «Слежу» with their due dates and inactivity alerts (`watch_alert_days`). Conversations
+  awaiting my reply appear in the «Беседы» queue and its counter. Each task belongs to one block; order is a
+  computed importance (due or overdue, money, blocks others, due tomorrow, stale) — weights in
   `registry/pulse.json`; «▶» on a row takes it into work. «Сегодня» as a list: my open tasks in sections «Просрочено · Сегодня · Проверить · Разобрать · Дальше»
   (`sections`, data; «Дальше» folded). Waiting — in «Жду», delegated — in «Контроль»; a deferred task is hidden until
   its date and returns by itself. A row: the «Готово» mark, title, with whom and what, checklist progress (2/5); due on the right. The

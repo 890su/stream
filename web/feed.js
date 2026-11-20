@@ -29,7 +29,7 @@ const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved b
 const DEFAULT_CONVERSATIONS = { queue: { since: '2026-11-13T00:00:00Z', snooze: { minutes: [15, 60, 180], noon: { hour: 12, until_hour: 11 }, evening: { hour: 18, until_hour: 17 },
   tomorrow_day: { hour: 13, from_hour: 17 }, morning: { hour: 9 } } } };
 
-export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null, onGoConversation = null }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -174,7 +174,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         flip: (key, hiding) => toggleGroup(key, hiding, () => { if (openSections.has(key)) openSections.delete(key); else openSections.add(key); }),
         keepRows: (key, rows) => groupNodes.set(key, rows), project: currentProject(), projects: projectList, projectActions,
         view: viewStore.get(), people: peopleList, counterparties: counterpartyList, onResetView: () => viewStore.reset(),
-        conversations: convList, pulseConfig: limits.pulse, onOpenConversation: (key) => onGoConversation?.(key), onOpenProject: (id) => setProject(id) }));
+        pulseConfig: limits.pulse, onOpenProject: (id) => setProject(id) }));
     } else if (mode === 'conversations' && !inside) {
       // The queue (CONCEPT.md §2.5, §5): the newest moment on top, the oldest at the bottom by the input.
       const waiting = queueList(convList.filter((item) => item.views.some(tagged)));
@@ -296,8 +296,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   // Messages of one task, oldest first, for its details (details.js).
   const taskViews = (taskId) => { const task = taskList.find((item) => item.id === taskId); return task ? taskMembers(task, viewList) : []; };
 
-  // The pulse counter (the view switch on Беседы): what burns plus what is for today (pulse.js).
-  const pulseTotal = () => pulseCount(pulseBlocks({ tasks: taskList, conversations: convList, projects: projectList, now: new Date(), config: limits.pulse ?? PULSE_DEFAULTS }));
+  // The view switch on «Беседы» counts tasks for today.
+  const pulseTotal = () => pulseCount(pulseBlocks({ tasks: taskList, now: new Date(), config: limits.pulse ?? PULSE_DEFAULTS }));
 
   return { pulseCount: pulseTotal, refresh, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),

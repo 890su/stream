@@ -219,7 +219,7 @@ async function main() {
   const convQuickRef = { decorate: (row, conversation) => convQuick?.decorate(row, conversation), newTask: (...args) => convQuick?.newTask(...args),
     snooze: (...args) => convQuick?.snooze(...args), requeue: (...args) => convQuick?.requeue(...args) };
   const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
-    quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open(), onGoConversation: (key) => goView?.('conversations', key),
+    quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open(),
     // The open project (CONCEPT.md §2.11): its changes and a task added to one of its sections.
     projectActions: {
       saveProject: (change) => { const project = feedRef.project(); if (project) composerRef.queue(makeProjectChange(project.id, { op: 'update', ...change })).catch((error) => notify(error.message)); },

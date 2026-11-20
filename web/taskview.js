@@ -16,7 +16,7 @@ function element(tag, className, text) {
 
 // ctx: { tasks, viewsOf(task), now, matches (tags / a conversation), view, projects, people, counterparties, grouping,
 //   onGroup, onResetView, onOpen, quick, isOpenSection(key), toggle(key, open), keepRows(key, rows), project,
-//   projectActions, showDone, conversations, pulseConfig, onOpenConversation(key), onOpenProject(id) }
+//   projectActions, showDone, pulseConfig, onOpenProject(id) }
 export function taskViewNodes(ctx) {
   const { viewsOf, now, quick } = ctx;
   const view = ctx.view ?? DEFAULT_VIEW;

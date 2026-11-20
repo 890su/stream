@@ -1,5 +1,5 @@
 // The pulse on screen (task manager spec §5): the task in work with «Готово» / «Пауза», «Вернуться к…» when
-// nothing is in work, then blocks «Горит · Сегодня · Слежу · Проекты · Дальше» — a head with a count, up to
+// nothing is in work, then the remaining task blocks — a head with a count, up to
 // `rows` lines, «ещё N» unfolds; an empty block is one quiet line. Data: pulse.js; actions: taskquick.js.
 import { pulseBlocks } from './pulse.js';
 import { workedMinutes, isMineToDo } from './focus.js';
@@ -25,11 +25,11 @@ const minutes = (value) => (value < 60 ? `${value} мин` : `${Math.floor(value
 const nextOf = (task) => (task.resumeNote && task.resumeNote !== 'в работе' ? task.resumeNote : '') || task.items?.find((item) => !item.done)?.text || '';
 const HEALTH = { red: 'горит', yellow: 'внимание', green: 'идёт' };
 
-// ctx: taskViewNodes' context plus { conversations, projects, config (registry/pulse.json), onOpenConversation,
+// ctx: taskViewNodes' context plus { projects, config (registry/pulse.json),
 //   onOpenProject, isOpenSection(key), toggle(key, open) }.
 export function pulseNodes(ctx) {
   const { tasks, viewsOf, now, quick, config } = ctx;
-  const b = pulseBlocks({ tasks, conversations: ctx.conversations ?? [], projects: ctx.projects ?? [], now, config });
+  const b = pulseBlocks({ tasks, projects: ctx.projects ?? [], now, config });
   const nodes = [];
   const row = (task, { start = true } = {}) => {
     const item = taskRow(task, viewsOf(task), { onOpen: ctx.onOpen, showAssignee: !isMineToDo(task), quick });
@@ -66,13 +66,6 @@ export function pulseNodes(ctx) {
       return item;
     } });
 
-  const hotRow = (entry) => {
-    if (entry.kind === 'task') return row(entry.task, { start: true });
-    const item = button('pulse-person task-item', '', () => ctx.onOpenConversation?.(entry.conversation.key));
-    item.append(element('span', 'task-title', `Ответить: ${entry.conversation.title}`), element('span', 'task-due-label overdue', `ждёт ${entry.waitingHours} ч`));
-    return item;
-  };
-  block(nodes, ctx, { key: 'hot', title: '🔥 Горит', items: b.hot, draw: hotRow, quiet: 'Ничего не горит' });
   // Without a calendar the window is the rest of the working day (task manager spec §5.1).
   block(nodes, ctx, { key: 'today', title: '▶ До конца дня', items: b.today, draw: (task) => row(task), quiet: 'На сегодня всё сделано' });
   block(nodes, ctx, { key: 'watch', title: '👁 Слежу', folded: true, count: b.watchAlerts.length ? `${b.watch.length} · ⚠ ${b.watchAlerts.length}` : null,
@@ -82,7 +75,7 @@ export function pulseNodes(ctx) {
     items: b.projects, draw: (health) => projectRow(health, ctx), quiet: 'Нет активных проектов' });
   block(nodes, ctx, { key: 'later', title: '⏭ Дальше', items: b.later, draw: (task) => row(task), folded: true, quietWhenEmpty: false });
 
-  if (!b.work && !b.paused.length && !b.hot.length && !b.today.length && !b.watch.length && !b.projects.length && !b.later.length) {
+  if (!b.work && !b.paused.length && !b.today.length && !b.watch.length && !b.projects.length && !b.later.length) {
     nodes.splice(0, nodes.length, element('div', 'empty', 'Всё спокойно.'));
   }
   return nodes;
@@ -105,7 +98,7 @@ function projectRow(health, ctx) {
 }
 
 // A block: head with a count; a tap on the head folds or unfolds it — `folded` blocks start closed (Ждут возврата,
-// Слежу, Проекты, Дальше), the others open (Горит, До конца дня). Up to `rows` items, «ещё N» unfolds the rest. An
+// Слежу, Проекты, Дальше); «До конца дня» starts open. Up to `rows` items, «ещё N» unfolds the rest. An
 // empty block is one quiet line (or nothing, `quietWhenEmpty: false`). The fold is kept for this session (feed.js).
 function block(nodes, ctx, { key, title, items, draw, count = null, quiet = '', folded = false, quietWhenEmpty = true }) {
   if (!items.length) {
