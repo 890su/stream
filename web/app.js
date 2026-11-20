@@ -23,7 +23,7 @@ import { createDoneCards } from './donecard.js';
 import { createTaskQuick } from './taskquick.js';
 import { createConvQuick } from './convquick.js';
 import { setupQuestions } from './question.js';
-import { setupViewSwitch, rootBack } from './viewswitch.js';
+import { setupViewSwitch, rootBack, toQueue } from './viewswitch.js';
 import { isWide } from './layout.js';
 import { listCount } from './tasklist.js';
 import { setupSwipeZones, slideIn } from './swipezones.js';
@@ -52,15 +52,23 @@ function setupViews(feed) {
   // A reload (an app update) keeps the entry's old state — a panel, a conversation, a view: none of them is open now.
   if (history.state?.view || history.state?.drawer || history.state?.conversation || history.state?.details) history.replaceState(null, '');
   const after = () => { chatView?.sync(); updateFilter(); drawer?.render(); update(); };
+  let opening = null; // a conversation to open once the view's entry is popped (go → history.back → popstate)
   const enter = (next) => {
-    if (next === 'conversations') { if (history.state?.view) history.replaceState(null, ''); return; }
+    if (next === 'conversations') return;
     // An open conversation's or the left panel's entry becomes the view's: one back from there goes to the queue.
     const state = history.state;
     if (state?.view || state?.conversation || state?.drawer) history.replaceState({ view: next }, ''); else history.pushState({ view: next }, '');
   };
-  window.addEventListener('popstate', () => { if (rootBack(feed.mode(), history.state)) go('conversations'); });
+  window.addEventListener('popstate', () => {
+    if (!rootBack(feed.mode(), history.state)) return;
+    const key = opening;
+    opening = null;
+    go('conversations', key);
+  });
   // `key` — a conversation to open (from a task or a conversation filter); Задачи keep an open conversation as a filter.
   async function go(next, key = null) {
+    // Back to the queue from Задачи or Лента: pop their entry; the popstate above comes back here.
+    if (next === 'conversations' && feed.mode() !== 'conversations' && toQueue(history.state) === 'back') { opening = key; history.back(); return; }
     if (next === 'conversations' && details?.current()?.kind === 'task' && !isWide()) details.close();
     if (next !== feed.mode()) enter(next);
     await feed.setMode(next);

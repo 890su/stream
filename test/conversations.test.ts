@@ -8,7 +8,7 @@ import { project } from '../web/projection.js';
 import { foldTasks, tasksByMessage } from '../web/taskfold.js';
 
 // Conversations: one per chat or number (P14). Names and texts are made up.
-const config = { queue: { max_age_days: 7 } };
+const config = { queue: { since: '2026-11-10T00:00:00' } };
 const now = new Date('2026-11-18T12:00:00');
 let n = 0;
 const tg = (account: string, chat: string, ts: string, text: string, extra: Record<string, unknown> = {}, who = `contact:tg:${account}:${chat.replace('-', '')}`, type = 'private') => ({

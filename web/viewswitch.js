@@ -15,6 +15,10 @@ export function rootBack(mode, state) {
   if (state?.view === mode || state?.drawer || state?.details || state?.conversation) return null;
   return 'conversations';
 }
+
+// Going back to the queue from a view with its own history entry: pop that entry ('back'), so no dead entry is left
+// for the system back to step through at the root; else switch in place ('stay').
+export const toQueue = (state) => (state?.view ? 'back' : 'stay');
 const waiting = (conversation) => Boolean(conversation.queue?.waiting); // in the queue (queue.js)
 
 // What the switch leads to and its number: { target: 'tasks' | 'conversations', count, open (conversation key) }.

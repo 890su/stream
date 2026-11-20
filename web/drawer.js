@@ -22,12 +22,13 @@ function age(ts) {
   return days <= 0 ? 'сегодня' : `${days} дн. назад`;
 }
 
-import { favourites } from './favourites.js';
+import { favourites, recent } from './favourites.js';
 
 export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () => {}, pinned = () => [], onFilterChange, onCreateProject = () => {} }) {
   const drawer = document.querySelector('#drawer');
   const backdrop = document.querySelector('#drawer-backdrop');
   const contactsBox = document.querySelector('#drawer-contacts');
+  const recentBox = document.querySelector('#drawer-recent');
   const tagsBox = document.querySelector('#drawer-tags');
   const modeBox = document.querySelector('#drawer-mode');
 
@@ -119,6 +120,18 @@ export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () 
       return row;
     });
     contactsBox.replaceChildren(...(rows.length ? rows : [element('p', 'drawer-empty', 'Закрепите чат звёздочкой в окне «связь» — он появится здесь')]));
+    // «Недавние»: every conversation by its latest message — also those out of the queue (answered, archived, snoozed).
+    const CHANNELS = { phone: 'телефон', viber: 'Viber', whatsapp: 'WhatsApp' };
+    recentBox.replaceChildren(...recent(feed.conversations()).map((item) => {
+      const row = element('button', `drawer-contact${active === item.key ? ' on' : ''}`);
+      row.type = 'button';
+      const channels = item.channels.map((channel) => CHANNELS[channel] ?? accountTitle(channel)).join(', ');
+      const where = item.queue?.waiting ? 'в очереди' : item.queue?.snoozedUntil ? 'отложена' : item.archived ? 'в архиве' : '';
+      row.append(element('span', 'drawer-title', item.title), element('span', 'drawer-count', [channels, item.group ? 'группа' : '', where, age(item.last)].filter(Boolean).join(' · ')));
+      row.setAttribute('aria-pressed', String(active === item.key));
+      row.onclick = () => { close(); onContact(item.key); };
+      return row;
+    }));
   }
 
   // Sources (CONCEPT.md §8.2): my notes, each messenger account, the phone, the system. One at a time.

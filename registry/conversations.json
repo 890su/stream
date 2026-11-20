@@ -1,7 +1,7 @@
 {
   "version": 2,
   "queue": {
-    "max_age_days": 7,
+    "since": "2026-11-13T00:00:00Z",
     "snooze": {
       "minutes": [15, 60, 180],
       "noon": { "hour": 12, "until_hour": 11 },

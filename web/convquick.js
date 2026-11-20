@@ -52,7 +52,8 @@ export function createConvQuick({ queue, notify, openTask }) {
     const id = crypto.randomUUID();
     const change = { ...ownTask(title, plan.add[0]), add: plan.add };
     try { await queue(makeTaskChange(id, change)); } catch (error) { fail(error); return; }
-    notify(`Задача: «${title}»`, { label: 'Вернуть', run: () => queue(makeTaskChange(id, { op: 'update', status: 'cancelled' })).catch(fail) });
+    // «Вернуть» cancels the task and takes the messages out of it: the conversation is back in its place.
+    notify(`Задача: «${title}»`, { label: 'Вернуть', run: () => queue(makeTaskChange(id, { op: 'update', status: 'cancelled', remove: plan.add })).catch(fail) });
   }
 
   async function task(conversation) {
@@ -67,7 +68,7 @@ export function createConvQuick({ queue, notify, openTask }) {
     const id = crypto.randomUUID();
     try { await queue(makeTaskChange(id, { ...ownTask(snippet(plan.source).slice(0, 120), plan.source.id), add: plan.add })); } catch (error) { fail(error); return; }
     openTask(id);
-    notify(`Задача из беседы «${conversation.title}»`, { label: 'Вернуть', run: () => queue(makeTaskChange(id, { op: 'update', status: 'cancelled' })).catch(fail) });
+    notify(`Задача из беседы «${conversation.title}»`, { label: 'Вернуть', run: () => queue(makeTaskChange(id, { op: 'update', status: 'cancelled', remove: plan.add })).catch(fail) });
   }
 
   // Adds both swipes to a tile.

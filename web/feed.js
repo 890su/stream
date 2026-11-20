@@ -26,7 +26,7 @@ const NEAR_BOTTOM = 120;
 const NEAR_TOP = 160;
 const MODES = ['conversations', 'tasks', 'feed'];
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
-const DEFAULT_CONVERSATIONS = { queue: { max_age_days: 7, snooze: { minutes: [15, 60, 180], noon: { hour: 12, until_hour: 11 }, evening: { hour: 18, until_hour: 17 },
+const DEFAULT_CONVERSATIONS = { queue: { since: '2026-11-13T00:00:00Z', snooze: { minutes: [15, 60, 180], noon: { hour: 12, until_hour: 11 }, evening: { hour: 18, until_hour: 17 },
   tomorrow_day: { hour: 13, from_hour: 17 }, morning: { hour: 9 } } } };
 
 export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null, onGoConversation = null }) {

@@ -57,3 +57,20 @@ test('favourites in the left panel: pinned chats, opened as their conversations'
   const items = [{ key: 'by:501', title: 'Анна', pinned: true, item: { chat_id: '501' } }, { key: 'pl:7', title: 'Борис', pinned: false, item: { chat_id: '7' } }];
   assert.deepEqual(favourites(items), [{ key: 'tg:501', title: 'Анна' }]);
 });
+
+test('back to the queue takes the view\'s history entry away instead of leaving a dead one', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { toQueue } = await import('../web/viewswitch.js');
+  assert.equal(toQueue({ view: 'tasks' }), 'back', 'Задачи → the queue pops the entry Задачи pushed');
+  assert.equal(toQueue(null), 'stay');
+  assert.equal(toQueue({ drawer: true }), 'stay');
+});
+
+test('«Недавние» in the left panel: every conversation with someone, latest first, also archived and snoozed ones', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { recent } = await import('../web/favourites.js');
+  const list = [conv('tg:1', null, [], '2026-11-19T08:00:00'), conv('me', null, [], '2026-11-19T12:00:00'), conv('task:x', null, [], '2026-11-19T12:00:00'),
+    { ...conv('tel:+48', null, [], '2026-11-19T10:00:00'), archived: true }, conv('wa:9@lid', '2026-11-19T09:00:00', [], '2026-11-19T09:00:00')];
+  assert.deepEqual(recent(list, 3).map((item: any) => item.key), ['tel:+48', 'wa:9@lid', 'tg:1']);
+  assert.equal(recent(list, 2).length, 2);
+});

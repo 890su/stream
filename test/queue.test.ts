@@ -10,7 +10,7 @@ import { project } from '../web/projection.js';
 import { foldTasks, tasksByMessage } from '../web/taskfold.js';
 
 // The queue of conversations (CONCEPT.md §2.5, design 2026-11-20). Names and texts are made up.
-const config = { queue: { max_age_days: 7 } };
+const config = { queue: { since: '2026-11-10T00:00:00' } };
 const now = new Date('2026-11-18T12:00:00');
 let n = 0;
 const tg = (chat: string, ts: string, text: string, extra: Record<string, unknown> = {}, who = `contact:tg:by:${chat.replace('-', '')}`, type = 'private') => ({
@@ -110,11 +110,22 @@ test('a new incoming during a snooze brings it back at once with that message as
   assert.deepEqual([queue.waiting, queue.moment, queue.since], [true, again.ts, ask.ts]);
 });
 
-test('older than max_age_days does not wait; a requeue within the window does', () => {
+test('messages before the queue started do not wait; one waiting long stays; an old unanswered one does not hide a fresh one', () => {
   const old = tg('501', '2026-11-01T09:00:00', 'давнее');
   assert.equal(queueOf([old]).waiting, false);
-  const lift = mark(old.id, '2026-11-18T08:00:00', 'requeue');
-  assert.deepEqual([queueOf([old, lift]).waiting, queueOf([old, lift]).moment], [true, lift.ts]);
+  const fresh = tg('501', '2026-11-18T11:00:00', 'вы тут?');
+  const queue = queueOf([old, fresh]);
+  assert.deepEqual([queue.waiting, queue.moment, queue.since, queue.pending.length], [true, fresh.ts, fresh.ts, 1]);
+  const long = tg('502', '2026-11-11T09:00:00', 'ждёт неделю');
+  assert.equal(queueOf([long], new Date('2026-11-25T12:00:00')).waiting, true, 'waiting long never drops out');
+});
+
+test('«Вернуть» after a task made from the tile brings the conversation back: removed messages are not owner links', () => {
+  const ask = tg('501', '2026-11-18T09:00:00', 'вопрос');
+  const made = change('t1', '2026-11-18T09:10:00', { op: 'create', title: 'Задача', status: 'todo', add: [ask.id] }, 'me');
+  assert.equal(queueOf([ask, made]).waiting, false);
+  const undo = change('t1', '2026-11-18T09:11:00', { op: 'update', status: 'cancelled', remove: [ask.id] }, 'me');
+  assert.equal(queueOf([ask, made, undo]).waiting, true);
 });
 
 test('a group waits only for a message answering me or in my task', () => {

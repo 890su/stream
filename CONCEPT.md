@@ -177,8 +177,8 @@ request and the job given to a partner).
   last one it touches. A conversation's place is its queue moment: the first waiting incoming, or a later `requeue`
   («↥ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back at once). The
   oldest is at the bottom by the input, new ones arrive on top; a new message in a queued conversation and opening
-  it without an action do not move it. No urgency order for now (owner, 2026-11-20). Waiting incoming older than
-  `max_age_days` (`registry/queue.json`) does not enter the queue. Calls: a missed or rejected call waits, an
+  it without an action do not move it. No urgency order for now (owner, 2026-11-20). Incoming from before the queue started (`queue.since`, `registry/conversations.json`) waits for nobody — the history
+  imported with the channels; after it nothing drops out of the queue by age. Calls: a missed or rejected call waits, an
   answered one does not; my outgoing call or SMS is a reply.
 - «ждёт меня» uses the triage outcome, not just the last message: an incoming "ok, thanks" filed as «без дела»
   waits for nothing. In a group a message waits for me only when addressed to me or part of my task. My reply in

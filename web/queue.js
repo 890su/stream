@@ -10,11 +10,17 @@ const time = (ts) => Date.parse(ts);
 const later = (a, b) => (time(b) > time(a) ? b : a);
 const NONE = { waiting: false, moment: null, since: null, pending: [], snoozedUntil: null };
 
-// Message ids the owner put into a task (a change authored `me` that adds them): those messages are handled.
+// Message ids the owner put into a task (a change authored `me` that adds them) and that are still there: those
+// messages are handled. A later `remove` (as «Вернуть» on a task made from a tile does) undoes it.
 export function ownerLinked(tasks) {
   const ids = new Set();
   for (const task of tasks) {
-    for (const entry of task.history ?? []) if (entry.author === 'me') for (const id of entry.change?.add ?? []) ids.add(id);
+    const owned = new Set();
+    for (const entry of task.history ?? []) {
+      if (entry.author === 'me') for (const id of entry.change?.add ?? []) owned.add(id);
+      for (const id of entry.change?.remove ?? []) owned.delete(id);
+    }
+    for (const id of owned) ids.add(id);
   }
   return ids;
 }
@@ -47,7 +53,9 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
     const mine = directionOf(view.event) === 'out' && !note(view);
     if (mine || view.answered || owner.has(view.id) || answeredCall(view)) handled = Math.max(handled, time(view.event.ts));
   }
-  const pending = views.filter((view) => time(view.event.ts) > handled && directionOf(view.event) === 'in'
+  // Messages from before the queue started (`queue.since`) wait for nobody: the history imported with the channels.
+  const start = time(config.queue.since);
+  const pending = views.filter((view) => time(view.event.ts) > handled && time(view.event.ts) >= start && directionOf(view.event) === 'in'
     && !answeredCall(view) && !note(view) && meaningful(view) && matters(view));
   if (!pending.length) return NONE;
 
@@ -61,7 +69,6 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
     else if (now.getTime() < time(snooze.until)) return { ...NONE, pending, snoozedUntil: snooze.until };
     else moment = later(moment, snooze.until);
   }
-  if (now.getTime() - time(moment) > config.queue.max_age_days * 86_400_000) return { ...NONE, pending };
   return { waiting: true, moment, since: pending[0].event.ts, pending, snoozedUntil: null };
 }
 
