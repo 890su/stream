@@ -24,6 +24,7 @@ import { createTaskQuick } from './taskquick.js';
 import { createConvQuick } from './convquick.js';
 import { setupQuestions } from './question.js';
 import { setupViewSwitch, rootBack, toQueue } from './viewswitch.js';
+import { googleNotice } from './googlebox.js';
 import { isWide } from './layout.js';
 import { listCount } from './tasklist.js';
 import { setupSwipeZones, slideIn } from './swipezones.js';
@@ -269,6 +270,9 @@ async function main() {
   // The pulse counts time (waiting hours, minutes in work, midnight): redraw it each minute while it is on screen.
   setInterval(() => { if (!document.hidden && feed.mode() === 'tasks') feed.render(); }, 60_000);
 
+  // Back from Google's sign-in (googlebox.js): say how it went, then drop the mark from the address.
+  const googleResult = googleNotice(location.search);
+  if (googleResult) { notify(googleResult); const clean = new URL(location.href); clean.searchParams.delete('google'); history.replaceState(history.state, '', clean); }
   const mode = new URL(location.href).searchParams.get('mode');
   if (new URL(location.href).searchParams.has('shared')) feed.scrollToBottom();
   if (mode === 'voice') await composer.record();

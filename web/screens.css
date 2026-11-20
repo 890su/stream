@@ -341,3 +341,8 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 .card-talk-open svg { width: 20px; height: 20px; }
 .card-talk-open[aria-expanded="true"] { color: var(--link); background: var(--chip); }
 .talk-log { align-self: center; max-width: 90%; padding: 1px 8px; color: var(--muted); font-size: 12px; text-align: center; }
+
+/* Google on the System screen (googlebox.js): a switch per calendar. */
+.system-calendar { cursor: pointer; }
+.system-calendar input { flex: none; width: 20px; height: 20px; margin: 0; }
+.system-google-connect { display: block; margin: 8px 0; min-height: 44px; }

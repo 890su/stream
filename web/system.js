@@ -3,6 +3,7 @@
 // «Не отслеживать».
 import { getSetting } from './db.js';
 import { accountTitle } from './tgbubble.js';
+import { googleBox } from './googlebox.js';
 
 const STATE = { ok: 'работает', silent: 'молчит', login_required: 'нужен вход', error: 'ошибка' };
 const ACTION = { proposed: 'ждёт', approved: 'в очереди', running: 'отправляется', done: 'отправлено', failed: 'не отправлено', rejected: 'отменено' };
@@ -37,6 +38,7 @@ export function setupSystem({ notify, onTrack }) {
   const actions = document.querySelector('#system-actions');
   const exclusions = document.querySelector('#system-exclusions');
   const telegramBox = document.querySelector('#system-telegram');
+  const googleSlot = document.querySelector('#system-google');
 
   async function call(path, init = {}) {
     const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${await getSetting('ownerToken')}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
@@ -159,6 +161,7 @@ export function setupSystem({ notify, onTrack }) {
       stopQr();
       sources.replaceChildren(...data.sources.map(sourceRow));
       telegramBox.replaceChildren(...telegramRows(data.telegram ?? {}));
+      googleSlot.replaceChildren(...await googleBox({ call, notify, rerender: render }));
       actions.replaceChildren(...(data.actions.length ? data.actions.map(actionRow) : [element('p', 'system-empty', 'Ответов наружу ещё не было')]));
       exclusions.replaceChildren(...(data.exclusions.length ? data.exclusions.map(exclusionRow) : [element('p', 'system-empty', 'Все чаты отслеживаются')]));
     } catch (error) {
