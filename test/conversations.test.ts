@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { conversationOf, conversations, conversationState } from '../web/conversations.js';
+import { conversationOf, conversations } from '../web/conversations.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { project } from '../web/projection.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { foldTasks, tasksByMessage } from '../web/taskfold.js';
 
 // Conversations: one per chat or number (P14). Names and texts are made up.
-const config = { quiet_days: 7, urgent_tags: ['#срочно'], states: ['urgent', 'mine', 'theirs', 'quiet', 'done'] };
+const config = { queue: { max_age_days: 7 } };
 const now = new Date('2026-11-18T12:00:00');
 let n = 0;
 const tg = (account: string, chat: string, ts: string, text: string, extra: Record<string, unknown> = {}, who = `contact:tg:${account}:${chat.replace('-', '')}`, type = 'private') => ({
@@ -51,79 +51,8 @@ test('keys: chats, numbers, own notes, and events that are not messages', () => 
   for (const kind of ['system', 'correction', 'task_change']) assert.equal(conversationOf({ source: 'system', author: 'system', kind, payload: {} }), null);
 });
 
-test('«спасибо» filed as chatter does not wait for me; an untriaged message does', () => {
-  const base = [tg('by', '501', '2026-11-18T09:00:00', 'нужен счёт'), mine('501', '2026-11-18T09:10:00', 'пришлю')];
-  const thanks = tg('by', '501', '2026-11-18T10:00:00', 'спасибо');
-  const filed = [...base, thanks,
-    change('t1', '2026-11-18T10:01:00', { op: 'create', title: 'без дела', template: 'chatter', status: 'done', add: [thanks.id] })];
-  assert.equal(run(filed)[0].state, 'theirs');
-  assert.equal(run([...base, thanks])[0].state, 'mine');
-});
-
-test('my last message → theirs; a delegated task I control → theirs', () => {
-  assert.equal(run([tg('by', '501', '2026-11-18T09:00:00', 'вопрос'), mine('501', '2026-11-18T09:10:00', 'ответ')])[0].state, 'theirs');
-  const ask = mine('502', '2026-11-18T09:00:00', 'привези кабель');
-  const ok = tg('by', '502', '2026-11-18T09:01:00', 'ок');
-  const events = [ask, ok, change('f1', '2026-11-18T09:02:00', { op: 'create', title: 'без дела', template: 'chatter', status: 'done', add: [ok.id] }), change('d1', '2026-11-18T09:05:00', { op: 'create', title: 'Привезти кабель', status: 'todo', add: [ask.id], roles: { author: 'me', executors: ['tg:502'], controller: 'me' } })];
-  assert.equal(build(events).tasks.find((t: any) => t.id === 'd1').roles.controller, 'me');
-  assert.equal(run(events)[0].state, 'theirs');
-});
-
-test('overdue task of mine → urgent; a team task without me changes nothing', () => {
-  const m = tg('by', '501', '2026-11-18T09:00:00', 'починить');
-  const overdue = [m, change('u1', '2026-11-18T09:05:00', { op: 'create', title: 'Починить', status: 'todo', due: '2026-11-17', add: [m.id], roles: { responsible: 'me', executors: ['me'] } })];
-  assert.equal(run(overdue)[0].state, 'urgent');
-  const team = [m, mine('501', '2026-11-18T09:30:00', 'ок'), change('u2', '2026-11-18T09:05:00', { op: 'create', title: 'Чужое', status: 'todo', due: '2026-11-10', add: [m.id], roles: { responsible: 'tg:7', executors: ['tg:8'] } })];
-  assert.equal(run(team)[0].state, 'theirs');
-  assert.equal(run([tg('by', '503', '2026-11-18T09:00:00', 'ломается', { tags: ['#срочно'] })])[0].state, 'urgent');
-});
-
-test('quiet and done: open tasks or a fresh last message keep it quiet', () => {
-  const old = tg('by', '501', '2026-11-01T09:00:00', 'ок');
-  const reply = mine('501', '2026-11-01T09:30:00', 'ага');
-  assert.equal(run([old, reply])[0].state, 'theirs');
-  const chat = tg('by', '-900', '2026-11-10T09:00:00', 'болтовня', {}, 'contact:tg:by:7', 'group');
-  const team = [chat, change('w1', '2026-11-10T10:00:00', { op: 'create', title: 'Чужое дело', status: 'todo', add: [chat.id], roles: { responsible: 'tg:9', executors: ['tg:9'] } })];
-  assert.equal(run(team)[0].state, 'quiet', 'an open team task without me, and nothing addressed to me');
-  const closed = [old, reply, change('w2', '2026-11-01T10:00:00', { op: 'create', title: 'Готово', status: 'done', add: [old.id, reply.id] })];
-  const c = run(closed)[0];
-  assert.equal(conversationState({ ...c, views: c.views.slice(0, 1) }, { now, config }), 'mine', 'incoming last message, even if old');
-  assert.equal(conversationState({ ...c, views: [], last: '2026-11-01T09:30:00' }, { now, config }), 'done');
-  assert.equal(conversationState({ ...c, views: [], last: '2026-11-17T09:30:00' }, { now, config }), 'quiet');
-});
-
-test('order: urgent, mine, theirs, quiet, done; newest first inside', () => {
-  const events = [
-    tg('by', '1', '2026-11-18T08:00:00', 'a'),
-    tg('by', '2', '2026-11-18T09:00:00', 'b'),
-    mine('3', '2026-11-18T07:00:00', 'c'),
-    mine('4', '2026-11-18T07:30:00', 'd'),
-    tg('by', '5', '2026-11-18T06:00:00', 'e', { tags: ['#срочно'] }),
-  ];
-  assert.deepEqual(run(events).map((c: any) => c.key), ['tg:5', 'tg:2', 'tg:1', 'tg:4', 'tg:3']);
-  assert.deepEqual(run(events).map((c: any) => c.state), ['urgent', 'mine', 'mine', 'theirs', 'theirs']);
-});
-
-test('a busy group waits for me only when it answers me or is in my task', () => {
-  const my = mine('-900', '2026-11-18T08:00:00', 'кто свободен?');
-  const chatter = tg('by', '-900', '2026-11-18T09:00:00', 'всем привет', {}, 'contact:tg:by:7', 'group');
-  assert.equal(run([my, chatter])[0].state, 'theirs');
-  const answer = { ...tg('by', '-900', '2026-11-18T09:30:00', 'я свободен', {}, 'contact:tg:by:8', 'group'), reply_to: my.id };
-  assert.equal(run([my, chatter, answer])[0].state, 'mine');
-  const task = [my, chatter, change('g1', '2026-11-18T09:05:00', { op: 'create', title: 'Моё', status: 'todo', add: [chatter.id], roles: { responsible: 'me', executors: ['me'] } })];
-  assert.equal(run(task)[0].state, 'mine');
-});
-
 const phone = (kind: 'sms' | 'call', direction: string, ts: string, number = '+48 600 100 200') => ({
   id: `p${++n}`, schema_version: 1, source: 'android_phone', author: 'me', ts, kind, payload: { text: kind === 'sms' ? 'текст' : undefined, data: { [kind]: { number, direction } } },
-});
-
-test('phone events are all authored by me: direction decides who spoke last', () => {
-  assert.equal(run([phone('sms', 'in', '2026-11-18T09:00:00')])[0].state, 'mine');
-  assert.equal(run([phone('sms', 'out', '2026-11-18T08:00:00'), phone('call', 'missed', '2026-11-18T09:00:00')])[0].state, 'mine', 'a missed call waits for me');
-  assert.equal(run([phone('call', 'rejected', '2026-11-18T08:00:00')])[0].state, 'mine');
-  assert.equal(run([phone('sms', 'in', '2026-11-18T08:00:00'), phone('sms', 'out', '2026-11-18T09:00:00')])[0].state, 'theirs');
-  assert.equal(run([phone('sms', 'out', '2026-11-18T08:00:00'), phone('call', 'unknown', '2026-11-18T09:00:00')])[0].state, 'theirs', 'unknown is neither');
 });
 
 test('a leading 00 is a plus; digits without a prefix stay as they are', () => {
@@ -133,9 +62,9 @@ test('a leading 00 is a plus; digits without a prefix stay as they are', () => {
   assert.equal(conversationOf(phone('sms', 'in', '2026-11-18T08:00:00', '600 100 200')), 'tel:600100200');
 });
 
-test('a list row: last message, open tasks, the state in words; finished ones fold away', async () => {
+test('a list row: last message, open tasks, channels', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { rowFacts, splitDone, tasksLabel } = await import('../web/convlist.js');
+  const { rowFacts, tasksLabel } = await import('../web/convlist.js');
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   const { withWhom } = await import('../web/conversations.js');
   const ask = tg('by', '777', '2026-11-18T09:00:00', 'когда приедете?');
@@ -148,13 +77,8 @@ test('a list row: last message, open tasks, the state in words; finished ones fo
   assert.equal(facts.snippet, 'завтра утром');
   assert.equal(facts.mine, true, 'my reply reads «Вы: …»');
   assert.equal(facts.tasks, 1, 'open, not filed');
-  assert.equal(facts.label, 'ждёт меня', 'a reply filed as chatter does not answer');
   assert.deepEqual(facts.channels, ['BY']);
-  assert.equal(rowFacts({ ...person, state: 'quiet' }, now).label, '', 'quiet has no label');
   assert.deepEqual([1, 3, 5, 21].map(tasksLabel), ['1 задача', '3 задачи', '5 задач', '21 задача']);
-  const { active, done, archived } = splitDone([{ state: 'mine' }, { state: 'done' }, { state: 'quiet' }, { state: 'quiet', archived: true }, { state: 'done', archived: true }]);
-  assert.equal(archived.length, 2, 'archived ones leave both the list and «Завершённые»');
-  assert.deepEqual([active.length, done.length], [2, 1]);
   assert.deepEqual(withWhom(person.views), ['Анна Тестова']);
 });
 
@@ -178,7 +102,7 @@ test('task plaques: open tasks only, executor in words, due date', async () => {
 });
 
 test('own notes that continue or answer a message join its conversation, through chains', () => {
-  const call = phone('call', 'in', '2026-11-18T09:00:00', '+48 600 300 400');
+  const call = phone('call', 'missed', '2026-11-18T09:00:00', '+48 600 300 400');
   const note = (ts: string, extra: Record<string, unknown>, target?: string) => ({ id: `n${++n}`, schema_version: 1, source: 'app', author: 'me', ts, kind: 'text',
     payload: { text: 'заметка', data: target ? { continuation: { on: true, target } } : {} }, ...extra });
   const describe = note('2026-11-18T09:10:00', {}, call.id); // «Описать» continues the call
@@ -191,19 +115,9 @@ test('own notes that continue or answer a message join its conversation, through
   const byKey = new Map<string, any>(list.map((item: any) => [item.key, item]));
   assert.deepEqual(byKey.get('tel:+48600300400').views.map((view: any) => view.id), [call.id, describe.id, more.id], 'the description and its follow-up stay with the call');
   assert.equal(byKey.get('tel:+48600300400').title, '+48600300400', 'the title comes from the call, not the note');
-  assert.equal(byKey.get('tel:+48600300400').state, 'mine', 'a description is not an answer to the caller');
+  assert.equal(byKey.get('tel:+48600300400').queue.waiting, true, 'a description is not an answer to the caller');
   assert.deepEqual(byKey.get('tg:880').views.map((view: any) => view.id), [ask.id, answer.id], 'a reply without a recipient stays in the chat');
   assert.deepEqual(byKey.get('me').views.map((view: any) => view.id), [plain.id]);
-});
-
-test('an urgent tag counts while its message is untriaged or in an open task', () => {
-  const hot = tg('by', '504', '2026-11-18T09:00:00', 'течёт', { tags: ['#срочно'] });
-  const reply = mine('504', '2026-11-18T09:10:00', 'еду');
-  assert.equal(run([hot, reply])[0].state, 'urgent', 'untriaged');
-  const open = change('h1', '2026-11-18T09:05:00', { op: 'create', title: 'Течь', status: 'todo', add: [hot.id], roles: { responsible: 'me', executors: ['tg:504'], controller: 'me' } });
-  assert.equal(run([hot, reply, open])[0].state, 'urgent', 'in an open task');
-  const closed = change('h1', '2026-11-18T09:20:00', { op: 'update', status: 'done' });
-  assert.equal(run([hot, reply, open, closed])[0].state, 'theirs', 'its task is done');
 });
 
 const answered = (target: string, ts: string, op = 'answered') => ({
@@ -213,17 +127,11 @@ const answered = (target: string, ts: string, op = 'answered') => ({
 test('the archive mark on the latest message stops a conversation waiting for me; a newer message brings it back', () => {
   const ask = tg('by', '501', '2026-11-18T09:00:00', 'можно сегодня?');
   const task = change('t1', '2026-11-18T09:05:00', { op: 'create', title: 'ответить', status: 'inbox', roles: { author: 'tg:501', responsible: 'me', executors: [] }, add: [ask.id] });
-  assert.equal(run([ask, task])[0].state, 'mine');
+  assert.equal(run([ask, task])[0].queue.waiting, true);
   const marked = [ask, task, answered(ask.id, '2026-11-18T09:30:00')];
-  assert.equal(run(marked)[0].state, 'quiet');
-  assert.equal(run([...marked, answered(ask.id, '2026-11-18T09:40:00', 'unanswered')])[0].state, 'mine');
-  assert.equal(run([...marked, tg('by', '501', '2026-11-18T10:00:00', 'алло?')])[0].state, 'mine');
-});
-
-test('the archive mark does not take away urgency by a due date', () => {
-  const ask = tg('by', '501', '2026-11-18T09:00:00', 'срочно счёт');
-  const task = change('t1', '2026-11-18T09:05:00', { op: 'create', title: 'счёт', status: 'todo', due: '2026-11-18', roles: { author: 'tg:501', responsible: 'me', executors: ['me'] }, add: [ask.id] });
-  assert.equal(run([ask, task, answered(ask.id, '2026-11-18T09:30:00')])[0].state, 'urgent');
+  assert.equal(run(marked)[0].queue.waiting, false);
+  assert.equal(run([...marked, answered(ask.id, '2026-11-18T09:40:00', 'unanswered')])[0].queue.waiting, true);
+  assert.equal(run([...marked, tg('by', '501', '2026-11-18T10:00:00', 'алло?')])[0].queue.waiting, true);
 });
 
 test('a conversation is archived until a newer message, theirs or mine', () => {

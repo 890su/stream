@@ -1,6 +1,13 @@
 {
-  "version": 1,
-  "quiet_days": 7,
-  "urgent_tags": ["#срочно"],
-  "states": ["urgent", "mine", "theirs", "quiet", "done"]
+  "version": 2,
+  "queue": {
+    "max_age_days": 7,
+    "snooze": {
+      "minutes": [15, 60, 180],
+      "noon": { "hour": 12, "until_hour": 11 },
+      "evening": { "hour": 18, "until_hour": 17 },
+      "tomorrow_day": { "hour": 13, "from_hour": 17 },
+      "morning": { "hour": 9 }
+    }
+  }
 }

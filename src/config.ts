@@ -45,9 +45,11 @@ export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.js
   unsorted: { title: string; note: string };
 };
 
-// Conversations (CONCEPT.md, P14): quiet period, urgent tags, order of states in the list.
+// Conversations (CONCEPT.md §2.5): the queue — how old a waiting message may be, the «⏱ Отложить» presets.
+type SnoozeAt = { hour: number; until_hour?: number; from_hour?: number };
 export const conversationsConfig = JSON.parse(readFileSync(new URL('../registry/conversations.json', import.meta.url), 'utf8')) as {
-  version: number; quiet_days: number; urgent_tags: string[]; states: string[];
+  version: number;
+  queue: { max_age_days: number; snooze: { minutes: number[]; noon: SnoozeAt; evening: SnoozeAt; tomorrow_day: SnoozeAt; morning: SnoozeAt } };
 };
 
 // Saved task filters (P14): conditions over folded tasks; the first one is the default (web/filters.js).

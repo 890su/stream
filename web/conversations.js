@@ -1,9 +1,9 @@
-// Conversations (P14): messages grouped by chat or phone number, with a state (urgent / mine / theirs / quiet / done)
-// and an order, all from the registry. Pure — no DOM. Views must already carry `taskIds`.
+// Conversations (P14): messages grouped by chat or phone number, each with its place in the queue (queue.js,
+// CONCEPT.md §2.5). Pure — no DOM. Views must already carry `taskIds`.
 import { chatOf } from './projection.js';
-import { isOpen, involvesMe, dueState } from './taskfold.js';
 import { phoneLabel } from './phonebubble.js';
 import { phoneNumber } from './parties.js';
+import { ownerLinked, queueOf } from './queue.js';
 
 // The conversation a message belongs to: one Telegram chat across both accounts, one phone number, own notes.
 // A Viber chat with a phone is that number's conversation (with its calls and SMS); without one — `viber:<name>`.
@@ -66,7 +66,6 @@ export function directionOf(event) {
   }
   return event.author === 'me' ? 'out' : 'in';
 }
-const isMine = (view) => directionOf(view.event) === 'out';
 const isIncoming = (view) => directionOf(view.event) === 'in';
 const incomingChat = (view) => isIncoming(view) && (view.event.payload?.data?.telegram || view.event.payload?.data?.viber || view.event.payload?.data?.whatsapp);
 
@@ -78,48 +77,6 @@ export function isArchived(conversation) {
   const views = conversation.views.filter((view) => !view.deleted);
   const mark = archiveMark(views);
   return Boolean(mark) && !views.some((view) => view.event.ts > mark.event.ts);
-}
-
-// 'urgent' | 'mine' | 'theirs' | 'quiet' | 'done' — `conversation` needs views, tasks, last, key, group.
-export function conversationState(conversation, { now = new Date(), config }) {
-  const views = conversation.views.filter((view) => !view.deleted);
-  const byId = new Map(views.map((view) => [view.id, view]));
-  const taskOf = new Map(conversation.tasks.map((task) => [task.id, task]));
-  const open = conversation.tasks.filter((task) => isOpen(task) && !task.filed);
-  const mineOpen = open.filter(involvesMe);
-  // An urgent tag counts while its message is untriaged or in an open task: done with, it no longer burns.
-  const live = (view) => !view.taskIds?.length || view.taskIds.some((id) => { const task = taskOf.get(id); return task && isOpen(task); });
-  if (mineOpen.some((task) => ['today', 'overdue'].includes(dueState(task, now)))
-    || views.some((view) => view.tags?.some((tag) => config.urgent_tags.includes(tag)) && live(view))) return 'urgent';
-
-  // A message is meaningful unless it belongs only to filed tasks; untriaged is meaningful.
-  const meaningful = (view) => {
-    const tasks = (view.taskIds ?? []).map((id) => taskOf.get(id)).filter(Boolean);
-    return !tasks.length || tasks.some((task) => !task.filed);
-  };
-  // In a group, someone else's message matters to me only when it answers mine or is in a task where I have a role.
-  const matters = (view) => {
-    if (directionOf(view.event) !== 'in' || !conversation.group) return true;
-    const parent = view.event.reply_to && byId.get(view.event.reply_to);
-    if (parent && isMine(parent)) return true;
-    return (view.taskIds ?? []).some((id) => { const task = taskOf.get(id); return task && involvesMe(task); });
-  };
-  // An own note pulled into a chat or a number (a call description, a reply not sent) is not an answer.
-  const note = (view) => conversation.key !== 'me' && conversationOf(view.event) === 'me';
-  // The archive mark (CONCEPT.md §2.5): messages up to the marked one, and tasks with no message after it, wait for nobody.
-  const mark = archiveMark(views);
-  const after = (view) => !mark || view.event.ts > mark.event.ts;
-  const fresh = (task) => !mark || views.some((view) => after(view) && task.messages?.includes(view.id));
-  const candidates = views.filter((view) => after(view) && directionOf(view.event) !== 'unknown' && !note(view) && meaningful(view) && matters(view));
-  const last = candidates.reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);
-
-  if (conversation.key !== 'me') {
-    if ((last && isIncoming(last)) || mineOpen.some((task) => fresh(task) && (task.status === 'inbox' || task.status === 'review'))) return 'mine';
-    if ((last && isMine(last)) || open.some((task) => fresh(task) && task.status === 'waiting')
-      || open.some((task) => fresh(task) && task.roles.controller === 'me' && task.roles.executors.length && !task.roles.executors.includes('me'))) return 'theirs';
-  }
-  const age = (now.getTime() - Date.parse(conversation.last)) / 86_400_000;
-  return open.length || age < config.quiet_days ? 'quiet' : 'done';
 }
 
 // message id -> conversation key. An own note that continues or answers a message joins that message's
@@ -164,7 +121,8 @@ export function conversationKeys(views, { tasksById = new Map() } = {}) {
   return keys;
 }
 
-// All conversations, ordered by `config.states`, newest first inside a state. `keys` — conversationKeys of a wider
+// All conversations, the latest message first, each with `queue` (queue.js; the list's order is queueList's job).
+// `keys` — conversationKeys of a wider
 // set of views (the feed passes all live ones, so a note keeps its conversation when its parent is archived).
 export function conversations(views, tasks, { now = new Date(), config, keys = conversationKeys(views, { tasksById: new Map(tasks.map((task) => [task.id, task])) }) }) {
   const groups = new Map();
@@ -176,6 +134,7 @@ export function conversations(views, tasks, { now = new Date(), config, keys = c
     groups.get(key).push(view);
   }
   const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const owner = ownerLinked(tasks);
   const list = [];
   for (const [key, group] of groups) {
     const sorted = [...group].sort((a, b) => a.event.ts.localeCompare(b.event.ts));
@@ -189,10 +148,9 @@ export function conversations(views, tasks, { now = new Date(), config, keys = c
       views: sorted, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
       reply: incoming ? chatOf(incoming.event) : null,
     };
-    list.push({ ...conversation, state: conversationState(conversation, { now, config }), archived: isArchived(conversation) });
+    list.push({ ...conversation, queue: queueOf(conversation, { now, config, owner }), archived: isArchived(conversation) });
   }
-  const rank = (state) => config.states.indexOf(state);
-  return list.sort((a, b) => rank(a.state) - rank(b.state) || b.last.localeCompare(a.last));
+  return list.sort((a, b) => Date.parse(b.last) - Date.parse(a.last));
 }
 
 // With whom: chat titles and phone contacts of the messages, in order of appearance (task rows).

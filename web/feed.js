@@ -24,7 +24,8 @@ const NEAR_BOTTOM = 120;
 const NEAR_TOP = 160;
 const MODES = ['conversations', 'tasks', 'feed'];
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
-const DEFAULT_CONVERSATIONS = { quiet_days: 7, urgent_tags: [], states: ['urgent', 'mine', 'theirs', 'quiet', 'done'] };
+const DEFAULT_CONVERSATIONS = { queue: { max_age_days: 7, snooze: { minutes: [15, 60, 180], noon: { hour: 12, until_hour: 11 }, evening: { hour: 18, until_hour: 17 },
+  tomorrow_day: { hour: 13, from_hour: 17 }, morning: { hour: 9 } } } };
 
 export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null, onGoConversation = null }) {
   const scroller = document.querySelector('#messages');
@@ -103,7 +104,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const inConversation = (view) => !conversationKey || convKeys.get(view.id) === conversationKey;
     // Лента: messages whose tasks are all finished only with «Завершённые» (CONCEPT.md §5).
     const finished = (view) => view.taskIds.length > 0 && view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' }));
-    convList = conversations(kept, taskList, { now, config: limits.conversations ?? DEFAULT_CONVERSATIONS, keys: convKeys });
+    convList = conversations(kept, taskList, { now, config: limits.conversations?.queue ? limits.conversations : DEFAULT_CONVERSATIONS, keys: convKeys });
     current = conversationKey ? convList.find((item) => item.key === conversationKey) ?? null : null;
     const inside = mode === 'conversations' && Boolean(conversationKey);
     const visible = inside ? kept.filter(inConversation)
