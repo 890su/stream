@@ -1,6 +1,8 @@
 // What was chosen by a tap (CONCEPT.md §5). A task opens on the main screen, over the list (#task-screen, design
 // 2026-11-20 stage 2): its card with the participants line and the conversation under it; the system back closes it.
-// A message, a person or a counterparty opens in the right panel «Подробности»; a left-to-right swipe closes it.
+// The right panel is the day plan (dayplan.js: tasks by days — a day, 4 or 7) by default — the 📅 button, a swipe from
+// the right, the column of a wide screen; a message, a person or a counterparty opens there too; a left-to-right
+// swipe closes it.
 // While a task is open, the composer writes into it — to the participant chosen in the card when they have a chat.
 import { makeTaskChange, makeCorrection, makePersonChange, makeCounterpartyChange, ownTask } from './shared.js';
 import { inChat } from './actions.js';
@@ -15,6 +17,7 @@ import { versionCard } from './versioncard.js';
 import { taskDetails } from './taskdetails.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
+import { dayPlan } from './dayplan.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const SOURCES = { me: 'мои заметки', phone: 'телефон', system: 'система' };
@@ -31,7 +34,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   const backdrop = document.querySelector('#details-backdrop');
   const body = document.querySelector('#details-body');
   const heading = document.querySelector('#details-heading');
-  let current = null; // the right panel: { kind: 'message' | 'person' | 'counterparty', id }
+  let current = null; // the right panel: { kind: 'planner' | 'message' | 'person' | 'counterparty', id }
   const screen = document.querySelector('#task-screen');
   const screenBody = document.querySelector('#task-screen-body');
   let taskId = null; // the task open on the main screen
@@ -115,9 +118,12 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     taskId = id;
     place();
     screen.hidden = false;
-    if (!history.state?.task) history.pushState({ task: true }, '');
+    // On a phone the right panel gives way to the card, and its history entry becomes the card's (a back of its own
+    // would race the card's entry and close the card).
+    if (!isWide() && history.state?.details) { hide(); history.replaceState({ task: true }, ''); }
+    else if (!history.state?.task) history.pushState({ task: true }, '');
+    if (!isWide() && current) hide();
     composer.enterTopic({ last: () => feed.taskViews(id).at(-1) }, 'Сообщение в задачу');
-    if (!isWide() && current) hide(); // the right panel does not cover the card on a phone
     onRender();
     drawTask();
     if (!same) screenBody.scrollTop = 0;
@@ -144,9 +150,14 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
 
   function draw() {
     onRender(); // the view switch counts the open task's conversations
-    if (!current) {
-      // On a wide screen the column stays: a hint until something is chosen.
-      if (isWide()) { heading.textContent = 'Подробности'; body.replaceChildren(element('p', 'details-empty', 'Выберите сообщение, человека или контрагента: здесь появятся его свойства. Задача открывается в центре.')); }
+    // The day plan: what is open there when nothing else is; on a wide screen the column shows it by default.
+    if (!current || current.kind === 'planner') {
+      if (!current && !isWide()) return;
+      if (panel.hidden) return;
+      heading.textContent = 'План';
+      const scroll = body.scrollTop;
+      body.replaceChildren(dayPlan({ tasks: feed.tasks(), onOpenTask: (id) => openTask(id), redraw: draw }));
+      body.scrollTop = scroll;
       return;
     }
     if (panel.hidden) return;
@@ -190,7 +201,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
 
   // The screen swipe from the right (swipezones.js): what was open here last.
   let last = null;
-  const reopen = () => { if (!last || current) return Boolean(current); show(last); return true; };
+  const openPlanner = () => show({ kind: 'planner', id: 'plan' });
+  const reopen = () => { if (current) return true; openPlanner(); return true; };
   const openTask = (id) => showTask(id);
   const openMessage = (id) => show({ kind: 'message', id });
   const openPerson = (id) => show({ kind: 'person', id });
@@ -248,7 +260,9 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   if (isWide()) dock(true);
   window.addEventListener('resize', () => { if (!panel.hidden || !screen.hidden) place(); });
 
-  return { render, openTask, openMessage, openPerson, openCounterparty, openFor, createFrom, close, closeTask, reopen,
+  document.querySelector('#planner-button').onclick = () => (current?.kind === 'planner' && !isWide() ? close() : openPlanner());
+
+  return { render, openTask, openMessage, openPerson, openCounterparty, openPlanner, openFor, createFrom, close, closeTask, reopen,
     current: () => (taskId ? { kind: 'task', id: taskId } : current), taskOpen: () => Boolean(taskId), screen,
     panel, isOpen: () => !isWide() && panel.classList.contains('open') };
 }

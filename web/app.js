@@ -250,12 +250,7 @@ async function main() {
   setupSwipeZones({ isWide, notify, drawer, details,
     tabs: { index: () => (feed.mode() === 'tasks' ? 1 : 0), count: () => 2,
       go: async (index, dir) => { await goView(index === 1 ? 'tasks' : 'conversations'); slideIn(document.querySelector('#feed-list'), dir); } },
-    openRight: () => {
-      const key = chatView?.key();
-      const task = key ? feed.conversations().find((item) => item.key === key)?.tasks.at(-1) : null;
-      if (task) { details.openTask(task.id); return true; }
-      return details.reopen();
-    } });
+    openRight: () => details.reopen() }); // the day plan, or what was open there
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({
     getToken: () => getSetting('ownerToken'),

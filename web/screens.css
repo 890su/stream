@@ -285,3 +285,16 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .card-talk-fold { align-self: center; margin: 2px 0; padding: 4px 10px; border: 0; border-radius: 12px; background: var(--chip); color: var(--chip-text); font: inherit; font-size: 12.5px; }
 /* While a task card is open its own participants line is shown; the open conversation's one under it is not. */
 body:has(#task-screen:not([hidden])) #people-row { display: none; }
+
+/* The day plan in the right panel (dayplan.js): a day, 4 or 7 days of my tasks. */
+.day-plan-range { margin: 4px 0 8px; }
+.day-plan-day { display: flex; align-items: baseline; gap: 8px; margin: 12px 4px 4px; padding-bottom: 3px; border-bottom: 1px solid var(--line); }
+.day-plan-label { flex: 1; font-weight: 600; font-size: 14.5px; }
+.day-plan-count { color: var(--muted); font-size: 12.5px; }
+.day-plan-day.late .day-plan-label { color: var(--danger); }
+.day-plan-row { display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 8px; width: 100%; text-align: left; }
+.day-plan-row .task-title { grid-column: 2; }
+.day-plan-row .task-meta { grid-column: 2; }
+.day-plan-row .task-meta:empty { display: none; }
+.day-plan-time { grid-row: 1 / 3; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; padding-top: 1px; }
+.day-plan-note { margin-top: 16px; }
