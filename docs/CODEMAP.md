@@ -7,8 +7,8 @@
 ## Data flow in one paragraph
 
 Every input becomes an **event** in an append-only journal (`src/store/store.ts`, SQLite). Sources write events:
-the PWA (`/api/events`, outbox on the device), the share target, the Android companion (`/api/phone/*`) and the
-Telegram bots (`src/telegram/`). Owner actions are `correction` events; tasks (with roles: owner, executors, controller, author, watchers, counterparty) are `task_change` events; replies to
+the PWA (`/api/events`, outbox on the device), the share target, the Android companion (`/api/phone/*`), the
+Telegram bots (`src/telegram/`), WhatsApp linked devices (`src/whatsapp/`) and the Viber bridge (`/api/viber/*`). Owner actions are `correction` events; tasks (with roles: owner, executors, controller, author, watchers, counterparty) are `task_change` events; replies to
 Telegram (a recipient chosen in the «кому» row) are events with `payload.data.outbound` that create **actions** (`src/store/actions.ts`) executed by the
 bots. The **triage** (`src/tasks/triage.ts`) batches new messages per stream after a quiet window and asks the
 planner (AI, `src/tasks/anthropic.ts`) to split them into tasks. Everything shown is a **projection** computed on
@@ -18,21 +18,22 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 
 | File | Job | Key exports |
 |---|---|---|
-| `main.ts` | entry: `.env`, store, HTTP, bots, triage | — |
-| `config.ts` | registry files loaded at start | `captureConfig`, `tagConfig`, `telegramConfig`, `tasksConfig`, `conversationsConfig`, `filtersConfig` |
+| `main.ts` | entry: `.env`, store, HTTP, bots, WhatsApp (`STREAM_WA_<ACCOUNT>_ENABLED`), triage | — |
+| `config.ts` | registry files loaded at start | `captureConfig`, `tagConfig`, `telegramConfig`, `whatsappConfig`, `tasksConfig`, `conversationsConfig`, `filtersConfig` |
 | `ids.ts` | name-based UUIDs (idempotent ids) | `nameId` |
 | `backup.ts` | nightly copy of DB and media | — |
 | **contracts/** | | |
 | `validate.ts` | Event type + JSON Schema interpreter | `JournalEvent`, `validateEvent` |
 | `correction.ts` | owner corrections: ops, link targets | `CORRECTION_OPS`, `checkCorrection*` |
-| `tagging.ts` / `phone.ts` / `telegram.ts` / `viber.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry; Viber: replies by phone only) | `check*` |
+| `tagging.ts` / `phone.ts` / `telegram.ts` / `viber.ts` / `whatsapp.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry; Viber and WhatsApp: replies by phone only) | `check*`, `whatsappAccountOf` |
 | **server/** | | |
-| `http.ts` | auth, routing, starts bots and triage | `createApp` |
+| `http.ts` | auth, routing, starts bots, WhatsApp clients and triage | `createApp` |
 | `events.ts` | `/api/events` POST/GET | `events` |
 | `media.ts` | `/api/media/<sha256>` | `media` |
 | `share.ts` | Android share target | `share` |
 | `phone.ts` | `/api/phone/*` calls, SMS, notes (§8.1) | `phone`, `phoneEventId` |
 | `viber.ts` | `/api/viber/*` for the Viber bridge on the agent desktop: messages, pulse, reply actions one by one, hello (deploy/DESKTOP.md) | `viber`, `viberMessage` |
+| `whatsapp.ts` | `/api/whatsapp/<account>/qr`: the linking QR as a PNG while WhatsApp waits (System screen) | `whatsappQr` |
 | `system.ts` | `/api/system`, retries, trust; state notes | `system`, `stateChanged`, `actionChanged`, `watchSilence` |
 | `live.ts` | SSE `/api/live` | `LiveFeed` |
 | `static.ts` | versioned client files `/v/<build>/` | `VERSIONED`, `staticFile` |
@@ -50,6 +51,12 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `bot.ts` | one account bot: `getUpdates` loop, update handling, sending (personal chats via business connection, groups as the bot), health | `TelegramBot`, `sendError` |
 | `convert.ts` | Bot API message → ingest item (files, forwards, service text) | `toItem` |
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
+| **whatsapp/** (deploy/WHATSAPP.md) | Baileys as a linked device on the owner's number, in this process | |
+| `client.ts` | one account: connection and reconnects, QR and pulse as the channel's state, incoming and own messages, replies by phone (never twice) | `WhatsAppClient` |
+| `convert.ts` | Baileys message → item: personal chats only, phone from the address, `remoteJidAlt` or the LID cache, files | `toItem`, `bareJid`, `phoneOfJid` |
+| `ingest.ts` | item → journal event (id by WhatsApp message id and direction) | `toEvent` |
+| `socket.ts` | the only file importing Baileys: auth state, no online presence, quiet logger | `createSocket`, `updateOf` |
+| `types.ts` | the narrow shapes the rest works with (`WaSocket`, `WaMessage`, `WaItem`) | types |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
 | `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
@@ -138,6 +145,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `registry/capture.json` | input limits, MIME types, page sizes |
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
+| `registry/whatsapp.json` | WhatsApp accounts (connector `whatsapp_<account>`), file limit, oldest message written, reconnect ceiling, QR refresh, pulse |
 | `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», closing reports (`report_fields`, per-template `report`, currencies) |
 | `registry/conversations.json` | conversations: quiet days, urgent tags, order of states |
 | `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Пульт», `view: 'pulse'`) is the default |
@@ -150,7 +158,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 |---|---|
 | `docs/BUSINESS-PROCESS-ARCHITECT.md` | Business process analysis, modeling and local BPMN tool setup |
 | `android/` | «Stream · телефон» (Kotlin): call log and SMS sync, after-call note (§8.1, `deploy/PHONE.md`) |
-| `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md`, `DESKTOP.md` |
+| `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md`, `DESKTOP.md`, `WHATSAPP.md` |
 | `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` / `viber-whois` (search by phone or name, the chat checked by its title menu), `viber-selftest`, `viber-health`, `viber-bridge` (Viber ⇄ Stream), `viber-read-out` + `viber_outgoing.py` (the owner's own outgoing messages, copied from the chat window), `notify-log` (desktop notifications → JSON lines) |
 | `test/` | `node --test`: one file per area (api, phone, telegram-bot, triage, taskfold, projection, …) |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |

@@ -61,6 +61,8 @@ for KEY in STREAM_TG_BY_BOT_TOKEN STREAM_TG_PL_BOT_TOKEN; do
   elif grep -qi "$KEY" "$ENV_FILE"; then echo "Telegram: $KEY found, but not at the start of a line or with spaces around ="
   else echo "Telegram: $KEY is missing in $ENV_FILE (deploy/TELEGRAM.md)"; fi
 done
+# WhatsApp linked devices (deploy/WHATSAPP.md): on with STREAM_WA_<ACCOUNT>_ENABLED=1; the session keys stay in the data volume.
+grep -Eq '^STREAM_WA_PL_ENABLED=1[[:space:]]*$' "$ENV_FILE" && echo "WhatsApp: PL enabled" || echo "WhatsApp: PL off (set STREAM_WA_PL_ENABLED=1 in $ENV_FILE, deploy/WHATSAPP.md)"
 chmod 600 "$ENV_FILE"
 ln -sfn "$ENV_FILE" "$APP/deploy/.env"   # compose reads variables from the project directory
 

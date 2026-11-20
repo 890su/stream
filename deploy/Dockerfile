@@ -1,4 +1,5 @@
-# Stream runtime image. Node 24 runs the TypeScript sources directly; one runtime dependency (@anthropic-ai/sdk).
+# Stream runtime image. Node 24 runs the TypeScript sources directly; runtime dependencies: @anthropic-ai/sdk (task
+# triage), baileys and qrcode (WhatsApp, deploy/WHATSAPP.md).
 # Build context is the repository root (see deploy/docker-compose.yml).
 FROM node:24-slim
 
@@ -8,7 +9,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data
 
 WORKDIR /app
-# Runtime dependencies only (the Anthropic SDK for the task triage), exactly as locked.
+# Runtime dependencies only, exactly as locked.
 COPY package.json pnpm-lock.yaml tsconfig.json ./
 RUN corepack enable && pnpm install --prod --frozen-lockfile && corepack disable
 COPY src ./src

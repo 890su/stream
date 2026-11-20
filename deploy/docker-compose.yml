@@ -27,7 +27,7 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
-    mem_limit: 256m
+    mem_limit: 384m   # WhatsApp (Baileys) adds ~40-70 MB and more while linking (deploy/WHATSAPP.md)
     cpus: 0.5
     pids_limit: 100
     logging:

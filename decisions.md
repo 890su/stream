@@ -740,3 +740,25 @@ Stream не попадают».
 **Affected:** `src/server/viber.ts` (`mine` → автор `me`), `deploy/desktop/bin/viber-read-out`,
 `deploy/desktop/bin/viber-read-out.py`, `deploy/desktop/bin/viber_outgoing.py`, `deploy/desktop/bin/viber-bridge`,
 `deploy/desktop/Dockerfile` (numpy, PIL), `test/viber.test.ts`
+
+## 2026-11-20 — WhatsApp PL — Baileys связанным устройством в процессе Stream
+**What:** WhatsApp подключается к номеру владельца связанным устройством (библиотека Baileys 7, без браузера) внутри
+процесса Stream, как боты Telegram: источник `whatsapp`, коннектор `whatsapp_pl` (по аккаунту — BY встанет рядом),
+`payload.data.whatsapp = {account, chat, jid, phone?, received_at}`. Входящие и **свои сообщения с телефона**
+(мультидевайс-синхронизация) — в беседе номера; ответ из ленты — только по номеру, класс C, без повторов
+сомнительной отправки; пока соединение восстанавливается, ответы ждут, пока канал ждёт привязки — падают с
+подсказкой. Привязка — QR на экране «Система» (`/api/whatsapp/<account>/qr`); отвязали на телефоне — ключи
+стираются, новый QR. Включение — `STREAM_WA_<ACCOUNT>_ENABLED=1`, ключи сессии — `<DATA_DIR>/whatsapp/<account>`.
+**Why:** Владелец 2026-11-20: подключить WhatsApp, первым PL. Официальный Cloud API требует увести номер из
+обычного приложения, Meta Business, верификацию и оплату; отдельный сервис-сайдкар — лишний процесс без причины
+(правило 10); whatsapp-web.js тянет браузер, на сервере не помещается.
+**Boundary:** Неофициально — правила WhatsApp такое не разрешают, номер теоретически могут заблокировать: только
+ответы, без рассылок; Stream не показывается «в сети» (`markOnlineOnConnect: false` — иначе телефон перестаёт
+показывать уведомления), не получает свои отправки эхом (`emitOwnEvents: false`), не тянет историю. С 2025 года
+WhatsApp может давать адрес анонимно (LID): номер — из `remoteJidAlt` или кэша Baileys, иначе беседа без номера
+`wa:<адрес>` и ответ только с телефона. Шаг 1 — без групп, статусов, правок, реакций; старше 48 ч не пишем. Baileys
+грузит только `src/whatsapp/socket.ts`; `sharp` помечен необязательным (картинки при отправке не нужны). Содержимое
+сообщений в журнал сервера не пишется.
+**Affected:** `src/whatsapp/*`, `src/server/whatsapp.ts`, `src/server/http.ts`, `src/main.ts`, `src/config.ts`,
+`src/contracts/whatsapp.ts`, `contracts/event.schema.json`, `registry/whatsapp.json`, `registry/connectors.yaml`,
+`web/projection.js`, `web/conversations.js`, `web/outbound.js`, `web/tgbubble.js`, `web/system.js`, `deploy/WHATSAPP.md`
