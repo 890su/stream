@@ -2,11 +2,16 @@
 // details or the centre, which would throw away a half-typed name or an open list of choices. While an input or a
 // list of choices inside `box` is in use, `run()` is held and done once, when the owner leaves it.
 // The checklist's item field is left out: it keeps focus to add items one after another and wants every redraw.
-const BUSY = 'input:focus:not(.checklist-add input), textarea:focus, [data-holding]';
+// The active field is asked directly (document.activeElement), not by `:focus`, which does not match while the
+// window itself is not focused (another app on top, a split screen) — the redraw would throw the text away then.
+const TYPED = 'input:not(.checklist-add input), textarea, select';
 
 export function holdRender(box, render) {
   let held = false;
-  const busy = () => Boolean(box.querySelector(BUSY));
+  const busy = () => {
+    const active = document.activeElement;
+    return Boolean(box.querySelector('[data-holding]')) || Boolean(active && active !== document.body && box.contains(active) && active.matches(TYPED));
+  };
   const release = () => {
     // Focus moves after focusout; check on the next turn.
     setTimeout(() => { if (held && !busy()) { held = false; render(); } }, 0);

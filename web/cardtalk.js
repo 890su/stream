@@ -3,10 +3,28 @@
 // is the whole conversation with that participant — messages of this task as they are, of other tasks dimmed or
 // folded by «◐». «Я» shows the task's own messages. Pure helpers (tested in node) and the DOM of the pane.
 
+import { partyOfEvent } from './parties.js';
+import { chatOf } from './projection.js';
+
 // The conversation of a participant: a Telegram user or group → its chat, a number → `tel:`; others have none.
 export function partyConversation(party, conversations) {
   const key = party.startsWith('group:tg:') ? `tg:${party.slice(9)}` : party.startsWith('tg:') || party.startsWith('tel:') ? party : null;
   return key ? conversations.find((item) => item.key === key) ?? null : null;
+}
+
+// Who wrote last among the participants: a group message counts for the group tile when the group is a participant;
+// a muted participant (no answers go to them) is skipped. null — nobody but me.
+export function lastSpeaker(views, parties, muted = []) {
+  const known = new Set(parties);
+  const off = new Set(muted);
+  for (const view of [...views].reverse()) {
+    const chat = chatOf(view.event);
+    const group = chat?.group || view.event?.payload?.data?.telegram?.chat_type === 'group' || view.event?.payload?.data?.telegram?.chat_type === 'supergroup';
+    const candidates = [group ? `group:tg:${view.event.payload.data.telegram?.chat_id ?? chat?.chat_id}` : null, partyOfEvent(view.event)];
+    const party = candidates.find((item) => item && item !== 'me' && known.has(item) && !off.has(item));
+    if (party) return party;
+  }
+  return null;
 }
 
 // The order of the tiles: the remembered recent ones first (the chosen one leftmost), then the rest as the task names

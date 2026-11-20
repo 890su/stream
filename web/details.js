@@ -38,7 +38,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   const screen = document.querySelector('#task-screen');
   const screenBody = document.querySelector('#task-screen-body');
   let taskId = null; // the task open on the main screen
-  let replyKey = null; // the chat the card put into the composer as the recipient
+  let replyKey; // the chat the card put into the composer as the recipient (undefined — none yet: the first steer applies)
+  let before = null; // the composer's recipient when the card opened, given back when it closes
 
   const save = (taskId, change) => composer.queue(makeTaskChange(taskId, change)).catch((error) => notify(error.message));
   const tasksById = () => new Map(feed.tasks().map((task) => [task.id, task]));
@@ -82,7 +83,10 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   }
 
   // While a name is typed or a list of choices is open in the panel, a live update waits (holdrender.js).
-  const render = holdRender(document.querySelector('#details'), () => { draw(); drawTask(); });
+  // Each box holds its own redraws while something is typed or chosen in it (holdrender.js).
+  const holdPanel = holdRender(panel, () => draw());
+  const holdTask = holdRender(screen, () => drawTask());
+  const render = () => { holdPanel(); holdTask(); };
   const redrawTask = () => drawTask();
 
   // The task card on the main screen.
@@ -115,12 +119,14 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
 
   function showTask(id) {
     const same = taskId === id;
+    const wasOpen = Boolean(taskId);
+    if (!wasOpen) { before = composer.recipient() ?? null; replyKey = undefined; }
     taskId = id;
     place();
     screen.hidden = false;
-    // On a phone the right panel gives way to the card, and its history entry becomes the card's (a back of its own
-    // would race the card's entry and close the card).
-    if (!isWide() && history.state?.details) { hide(); history.replaceState({ task: true }, ''); }
+    // On a phone the right panel gives way to the card. Over an open card its entry is popped (the card's own entry
+    // stays under it); else it becomes the card's — a back of its own would race the card's entry and close the card.
+    if (!isWide() && history.state?.details) { hide(); if (wasOpen) history.back(); else history.replaceState({ task: true }, ''); }
     else if (!history.state?.task) history.pushState({ task: true }, '');
     if (!isWide() && current) hide();
     composer.enterTopic({ last: () => feed.taskViews(id).at(-1) }, 'Сообщение в задачу');
@@ -135,17 +141,30 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     screen.hidden = true;
     screenBody.replaceChildren();
     composer.leaveTopic();
-    if (replyKey) { replyKey = null; composer.chat(null); }
+    // The recipient goes back to what it was before the card (an open conversation's chat, one chosen by hand).
+    if (replyKey !== undefined) composer.chat(before);
+    replyKey = undefined;
+    before = null;
     onRender();
     feed.render(); // a completion card shown in the card goes back to the feed
   }
 
-  // `quiet` — another view takes the screen: the card's history entry is given to it instead of popped.
-  function closeTask({ quiet = false } = {}) {
+  function closeTask() {
     const had = Boolean(taskId);
     hideTask();
-    if (!had || !history.state?.task) return;
-    if (quiet) history.replaceState(null, ''); else history.back();
+    if (had && history.state?.task) history.back();
+  }
+
+  // Another view takes the screen: the card closes and its entry is popped first; resolves once that is done.
+  function leaveTask() {
+    if (!taskId) return Promise.resolve();
+    if (!history.state?.task) { hideTask(); return Promise.resolve(); }
+    return new Promise((resolve) => {
+      const done = () => { window.removeEventListener('popstate', done); clearTimeout(timer); resolve(); };
+      const timer = setTimeout(done, 400);
+      window.addEventListener('popstate', done);
+      closeTask();
+    });
   }
 
   function draw() {
@@ -185,7 +204,6 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   function show(next) {
     const same = current?.kind === next.kind && current?.id === next.id;
     current = next;
-    last = next;
     panel.hidden = false;
     if (!isWide()) {
       place();
@@ -199,8 +217,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     if (!same) body.scrollTop = 0;
   }
 
-  // The screen swipe from the right (swipezones.js): what was open here last.
-  let last = null;
+  // The screen swipe from the right (swipezones.js): what is open here, else the day plan.
   const openPlanner = () => show({ kind: 'planner', id: 'plan' });
   const reopen = () => { if (current) return true; openPlanner(); return true; };
   const openTask = (id) => showTask(id);
@@ -262,7 +279,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
 
   document.querySelector('#planner-button').onclick = () => (current?.kind === 'planner' && !isWide() ? close() : openPlanner());
 
-  return { render, openTask, openMessage, openPerson, openCounterparty, openPlanner, openFor, createFrom, close, closeTask, reopen,
+  return { render, openTask, openMessage, openPerson, openCounterparty, openPlanner, openFor, createFrom, close, closeTask, leaveTask, reopen,
     current: () => (taskId ? { kind: 'task', id: taskId } : current), taskOpen: () => Boolean(taskId), screen,
     panel, isOpen: () => !isWide() && panel.classList.contains('open') };
 }

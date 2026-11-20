@@ -77,7 +77,9 @@ export function dayPlan({ tasks, now = new Date(), onOpenTask, redraw }) {
   const row = ({ task, time, key }) => {
     const node = element('button', `task-row day-plan-row ${task.status}`);
     node.type = 'button';
-    node.append(element('span', 'day-plan-time', time ?? (key ? dayMonth.format(new Date(`${key}T12:00`)) : '—')),
+    // An overdue one shows its date (with the time under it when there is one); a day's row its time.
+    const date = key ? dayMonth.format(new Date(`${key}T12:00`)) : null;
+    node.append(element('span', 'day-plan-time', date ? [date, time].filter(Boolean).join(' ') : time ?? '—'),
       element('span', 'task-title', task.title), element('span', 'task-meta', task.counterpartyTitle ?? ''));
     node.onclick = () => onOpenTask(task.id);
     return node;

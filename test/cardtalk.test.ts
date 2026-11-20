@@ -28,3 +28,13 @@ test('other tasks\' messages: dimmed one by one, or folded in runs', () => {
   assert.deepEqual(talkItems(views, 't1', 'fold').map((item: any) => (item.kind === 'fold' ? item.views.map((x: any) => x.id).join('') : item.view.id)), ['a', 'bc', 'd', 'e']);
   assert.deepEqual([foldLabel(1), foldLabel(3), foldLabel(5)], ['· 1 сообщение по другим делам ·', '· 3 сообщения по другим делам ·', '· 5 сообщений по другим делам ·']);
 });
+
+test('the first tile: who wrote last — a group as the group, a muted participant skipped — else «Я»', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { lastSpeaker } = await import('../web/cardtalk.js');
+  const tg = (author: string, chat: string, type = 'private') => ({ event: { author, kind: 'text', payload: { data: { telegram: { account: 'by', chat_id: chat, chat_type: type } } } } });
+  const views = [tg('contact:tg:by:501', '501'), tg('contact:tg:by:7', '-900', 'group')];
+  assert.equal(lastSpeaker(views, ['me', 'tg:501', 'group:tg:-900'], []), 'group:tg:-900');
+  assert.equal(lastSpeaker(views, ['me', 'tg:501', 'group:tg:-900'], ['group:tg:-900']), 'tg:501', 'muted is skipped');
+  assert.equal(lastSpeaker(views, ['me'], []), null);
+});

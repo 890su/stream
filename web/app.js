@@ -50,7 +50,7 @@ function setupViews(feed) {
   // entry of their own, so the system back returns to the queue (rootBack, viewswitch.js).
   feed.setMode('conversations');
   // A reload (an app update) keeps the entry's old state — a panel, a conversation, a view: none of them is open now.
-  if (history.state?.view || history.state?.drawer || history.state?.conversation || history.state?.details) history.replaceState(null, '');
+  if (history.state?.view || history.state?.drawer || history.state?.conversation || history.state?.details || history.state?.task) history.replaceState(null, '');
   const after = () => { chatView?.sync(); updateFilter(); drawer?.render(); update(); };
   let opening = null; // a conversation to open once the view's entry is popped (go → history.back → popstate)
   const enter = (next) => {
@@ -67,9 +67,10 @@ function setupViews(feed) {
   });
   // `key` — a conversation to open (from a task or a conversation filter); Задачи keep an open conversation as a filter.
   async function go(next, key = null) {
+    // The card gives the screen to the view: its entry is popped first, so no dead entry stays behind.
+    if (details?.taskOpen()) await details.leaveTask();
     // Back to the queue from Задачи or Лента: pop their entry; the popstate above comes back here.
     if (next === 'conversations' && feed.mode() !== 'conversations' && toQueue(history.state) === 'back') { opening = key; history.back(); return; }
-    if (details?.taskOpen()) details.closeTask({ quiet: true }); // the card gives the screen to the view
     if (next !== feed.mode()) enter(next);
     await feed.setMode(next);
     if (next === 'conversations' && key && key !== chatView?.key()) await chatView.open(key);

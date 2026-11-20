@@ -10,8 +10,8 @@ import { personOf } from './contacts.js';
 import { actionBar } from './taskbar.js';
 import { headline, nextStep, contactLinks, section } from './taskcard.js';
 import { participants, participantsBlock } from './participants.js';
-import { partyOfEvent, partyName } from './parties.js';
-import { partyConversation, cardOrder, readOrder, writeOrder, talkPane } from './cardtalk.js';
+import { partyName } from './parties.js';
+import { partyConversation, cardOrder, readOrder, writeOrder, talkPane, lastSpeaker } from './cardtalk.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -143,7 +143,7 @@ export function taskDetails(task, { views, bubble, save, saveTo, others, notify,
 
   // The participants line, always shown; the chosen one leftmost; under it the conversation with them.
   const parties = participants(task).map((item) => item.party);
-  const lastAuthor = [...views].reverse().map((view) => partyOfEvent(view.event)).find((party) => party && party !== 'me') ?? null;
+  const lastAuthor = lastSpeaker(views, parties, task.muted ?? []);
   const order = cardOrder(parties, { stored: readOrder(task.id), lastAuthor });
   const selected = order[0] ?? 'me';
   const conversation = selected === 'me' ? null : partyConversation(selected, conversations);
@@ -155,6 +155,7 @@ export function taskDetails(task, { views, bubble, save, saveTo, others, notify,
     select: { order, selected, onSelect: (party) => { writeOrder(task.id, [party, ...order.filter((item) => item !== party)]); redraw(); } } }));
   box.append(talkPane({ task, party: selected, conversation, taskViews: views, bubble, name: nameOf(selected),
     unlink: (id) => save({ op: 'update', remove: [id] }), onMode: redraw }));
-  onConversation(conversation);
+  // A switched-off participant gets no answer from the task: the message stays a note (PLAN 2026-11-20).
+  onConversation((task.muted ?? []).includes(selected) ? null : conversation);
   return box;
 }
