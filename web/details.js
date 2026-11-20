@@ -20,6 +20,7 @@ import { slideIn } from './swipezones.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
 import { dayPlan } from './dayplan.js';
+import { getSetting } from './db.js';
 import { participants } from './participants.js';
 import { participantOptions, setupParticipantPicker } from './participantpicker.js';
 
@@ -239,6 +240,22 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     });
   }
 
+  // Google Calendar events for the plan (/api/calendar): asked at most once a minute while the plan is drawn.
+  const calendar = { events: [], titles: new Map(), at: 0, busy: false };
+  async function loadCalendar() {
+    if (calendar.busy || Date.now() - calendar.at < 60_000) return;
+    calendar.busy = true;
+    try {
+      const response = await fetch('/api/calendar', { headers: { Authorization: `Bearer ${await getSetting('ownerToken')}` } });
+      if (!response.ok) return;
+      const data = await response.json();
+      calendar.events = data.events ?? [];
+      calendar.titles = new Map((data.calendars ?? []).map((item) => [item.id, item.title]));
+      calendar.at = Date.now();
+      if (current?.kind === 'planner' || (!current && isWide())) draw();
+    } catch { /* offline: the plan shows the tasks only */ } finally { calendar.busy = false; }
+  }
+
   function draw() {
     onRender(); // the view switch counts the open task's conversations
     // The day plan: what is open there when nothing else is; on a wide screen the column shows it by default.
@@ -247,7 +264,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       if (panel.hidden) return;
       heading.textContent = 'План';
       const scroll = body.scrollTop;
-      body.replaceChildren(dayPlan({ tasks: feed.tasks(), onOpenTask: (id) => openTask(id), redraw: draw }));
+      body.replaceChildren(dayPlan({ tasks: feed.tasks(), events: calendar.events, calendars: calendar.titles, onOpenTask: (id) => openTask(id), redraw: draw }));
+      loadCalendar();
       body.scrollTop = scroll;
       return;
     }

@@ -26,8 +26,18 @@ const labelOf = (date, offset) => {
   return offset === 0 ? `Сегодня, ${name}` : offset === 1 ? `Завтра, ${name}` : name;
 };
 
-// { overdue: [{ task, time, key }], days: [{ key, label, items: [{ task, time }] }] } for `days` days from today.
-export function plannerDays(tasks, { now = new Date(), days = 4 } = {}) {
+// The local days an event covers in the shown ones: all-day — from its start to the day before its (exclusive) end;
+// timed — the day it starts. With its time ('HH:MM' or null).
+function eventDays(event) {
+  if (!event.allDay) { const start = new Date(event.start); return { keys: [dayKey(start)], time: `${pad(start.getHours())}:${pad(start.getMinutes())}` }; }
+  const keys = [];
+  for (let date = new Date(`${event.start}T12:00:00`); dayKey(date) < event.end && keys.length < 60; date.setDate(date.getDate() + 1)) keys.push(dayKey(date));
+  return { keys, time: null };
+}
+
+// { overdue: [{ task, time, key }], days: [{ key, label, items: [{ task, time } | { event, time }] }] } for `days`
+// days from today; `events` — Google Calendar events (/api/calendar), shown among the tasks, never overdue.
+export function plannerDays(tasks, { now = new Date(), days = 4, events = [] } = {}) {
   const today = dayKey(now);
   const list = [];
   for (let offset = 0; offset < days; offset += 1) {
@@ -42,6 +52,10 @@ export function plannerDays(tasks, { now = new Date(), days = 4 } = {}) {
     if (!when) continue;
     if (when.key < today) overdue.push({ task, time: when.time, key: when.key });
     else byKey.get(when.key)?.items.push({ task, time: when.time });
+  }
+  for (const event of events) {
+    const { keys, time } = eventDays(event);
+    for (const key of keys) byKey.get(key)?.items.push({ event, time });
   }
   for (const day of list) day.items.sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
   overdue.sort((a, b) => a.key.localeCompare(b.key));
@@ -59,9 +73,9 @@ const RANGE_KEY = 'stream.planRange';
 export const readRange = () => { try { const value = Number(localStorage.getItem(RANGE_KEY)); return RANGES.includes(value) ? value : 4; } catch { return 4; } };
 const writeRange = (value) => { try { localStorage.setItem(RANGE_KEY, String(value)); } catch { /* storage may be blocked */ } };
 
-// The panel: «День · 4 дня · 7 дней», then the days with their tasks; a tap opens the task. ctx: { tasks, now,
-// onOpenTask(id), redraw() }.
-export function dayPlan({ tasks, now = new Date(), onOpenTask, redraw }) {
+// The panel: «День · 4 дня · 7 дней», then the days with their tasks and calendar events (grey; a tap opens the event in
+// Google); a tap on a task opens it. ctx: { tasks, events, calendars (id -> title), now, onOpenTask(id), redraw() }.
+export function dayPlan({ tasks, events = [], calendars = new Map(), now = new Date(), onOpenTask, redraw }) {
   const box = element('div', 'day-plan');
   const range = readRange();
   const tabs = element('div', 'chips day-plan-range');
@@ -73,8 +87,17 @@ export function dayPlan({ tasks, now = new Date(), onOpenTask, redraw }) {
     tabs.append(chip);
   }
   box.append(tabs);
-  const { overdue, days } = plannerDays(tasks, { now, days: range });
-  const row = ({ task, time, key }) => {
+  const { overdue, days } = plannerDays(tasks, { now, days: range, events });
+  const eventRow = ({ event, time }) => {
+    const node = element(event.link ? 'a' : 'div', 'task-row day-plan-row day-plan-event');
+    if (event.link) Object.assign(node, { href: event.link, target: '_blank', rel: 'noopener' });
+    node.append(element('span', 'day-plan-time', time ?? 'весь день'), element('span', 'task-title', event.title),
+      element('span', 'task-meta', calendars.get(event.calendar) ?? ''));
+    return node;
+  };
+  const row = (item) => {
+    if (item.event) return eventRow(item);
+    const { task, time, key } = item;
     const node = element('button', `task-row day-plan-row ${task.status}`);
     node.type = 'button';
     // An overdue one shows its date (with the time under it when there is one); a day's row its time.
@@ -91,6 +114,6 @@ export function dayPlan({ tasks, now = new Date(), onOpenTask, redraw }) {
   };
   if (overdue.length) group('Просрочено', overdue, ' late');
   for (const day of days) group(day.label, day.items);
-  box.append(element('p', 'details-meta day-plan-note', 'Мои открытые задачи по сроку или плану; без даты здесь нет. Календарь — позже.'));
+  box.append(element('p', 'details-meta day-plan-note', 'Мои открытые задачи по сроку или плану и события Google Календаря (серые); задачи без даты здесь нет.'));
   return box;
 }

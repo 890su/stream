@@ -36,3 +36,17 @@ test('overdue ones come first as their own group; a deferred task waits on its r
   assert.deepEqual(result.overdue.map((item: any) => item.task.id), ['late']);
   assert.deepEqual(result.days[1].items.map((item: any) => [item.task.id, item.time]), [['snoozed', '09:00']]);
 });
+
+test('calendar events land on their local days among the tasks: all-day on every day they span, timed by time; overdue holds none', () => {
+  const events = [
+    { id: 'e1', calendar: 'family@group', title: 'Отпуск', start: '2026-11-21', end: '2026-11-23', allDay: true, link: null },
+    { id: 'e2', calendar: 'anna@example.com', title: 'Встреча', start: new Date(2026, 10, 20, 11, 0).toISOString(), end: new Date(2026, 10, 20, 12, 0).toISOString(), allDay: false, link: 'https://g/e2' },
+    { id: 'e3', calendar: 'anna@example.com', title: 'Вчера', start: '2026-11-19', end: '2026-11-20', allDay: true, link: null },
+  ];
+  const result = plannerDays([task('today-planned', { plan: { start: new Date(2026, 10, 20, 14, 30).toISOString(), duration_min: 60 } }), task('early', { plan: { start: new Date(2026, 10, 20, 9, 0).toISOString(), duration_min: 30 } })], { now, days: 4, events });
+  assert.deepEqual(result.days[0].items.map((item: any) => [item.task?.id ?? item.event.id, item.time]), [['early', '09:00'], ['e2', '11:00'], ['today-planned', '14:30']]);
+  assert.deepEqual(result.days[1].items.map((item: any) => item.event?.id), ['e1']);
+  assert.deepEqual(result.days[2].items.map((item: any) => item.event?.id), ['e1'], 'all-day spans to its exclusive end');
+  assert.deepEqual(result.days[3].items, []);
+  assert.equal(result.overdue.length, 0);
+});

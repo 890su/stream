@@ -346,3 +346,7 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 .system-calendar { cursor: pointer; }
 .system-calendar input { flex: none; width: 20px; height: 20px; margin: 0; }
 .system-google-connect { display: block; margin: 8px 0; min-height: 44px; }
+
+/* Google Calendar events in «План» (dayplan.js): grey, not tasks. */
+.day-plan-event { color: var(--muted); text-decoration: none; opacity: .85; }
+.day-plan-event .task-title { color: var(--muted); }
