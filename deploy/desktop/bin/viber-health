@@ -19,7 +19,7 @@ check() {
     text=$(tesseract /tmp/viber-health-g.png - -l rus+eng --psm 3 2>/dev/null | tr '\n' ' ')
     case "$text" in
       # Whole phrases of Viber's own screens, so that a chat preview with a similar word does not trigger them.
-      *"Чтобы использовать Viber"*) state=logged_out; detail="Viber ждёт входа по QR-коду" ;;
+      *"Чтобы использовать Viber"*|*"Откройте экран"*|*"Не работает камера"*) state=logged_out; detail="Viber ждёт входа по QR-коду" ;;
       *"Произошла ошибка"*) state=error; detail="В Viber окно «Произошла ошибка»" ;;
       *"Нет подключения"*|*"Нет соединения"*) state=offline; detail="Viber без связи" ;;
       *"Синхронизация сообщений"*|*"Синхронизация отменена"*) state=dialog; detail="Окно синхронизации закрывает чаты" ;;
