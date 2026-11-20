@@ -7,6 +7,8 @@
 #    (by phone only) and reported back. A send is never retried here: a failure goes back to the feed.
 # Env: STREAM_URL (default http://stream:3790), STREAM_VIBER_TOKEN. State: ~/inbox/bridge-state.json.
 import hashlib, json, mimetypes, os, subprocess, sys, time, urllib.error, urllib.request
+sys.path.insert(0, '/usr/local/bin')
+import viber_outgoing   # the owner's own messages, read back from the chat window
 
 HOME = os.path.expanduser('~')
 INBOX = os.path.join(HOME, 'inbox')
@@ -189,6 +191,7 @@ def forward_incoming(state):
                     log('message rejected', status, message['chat'])
                 else:
                     log('message', status, message['chat'], 'phone' if phone else 'no phone')
+                    viber_outgoing.note_incoming(state, message['chat'], phone)   # a chat to sweep for my replies
             state['offset'] += len(raw)
             save_state(state)
 
@@ -204,7 +207,7 @@ def health():
         return {'state': 'unknown', 'detail': 'Нет итога проверки состояния Viber'}
 
 
-def send_one():
+def send_one(state):
     """Take one reply and send it. Returns True if one was handled."""
     status, action = api('actions/next')
     if status != 200 or not action:
@@ -214,6 +217,7 @@ def send_one():
         done = subprocess.run(['viber-send', phone, text], capture_output=True, text=True, timeout=180)
         if done.returncode == 0:
             result = {'status': 'done'}
+            viber_outgoing.note_sent(state, phone, text)   # the chat is open: read my phone-typed messages too
         else:
             reason = {2: 'окна Viber нет', 3: 'открылся не тот чат — ничего не набрано', 4: 'стол занят другим сценарием'}.get(done.returncode, '')
             result = {'status': 'failed', 'error': (reason or done.stderr.strip()[-200:] or f'код {done.returncode}')}
@@ -248,8 +252,10 @@ def main():
                 api('pulse', {'state': current.get('state'), 'detail': current.get('detail')})
                 last_pulse = time.time()
             if current.get('state') == 'ok':
-                while send_one():
+                while send_one(state):
                     forward_incoming(state)
+                viber_outgoing.step(api, state, log)   # bring my own phone-typed messages into Stream
+                save_state(state)
         except OSError as error:
             log('Stream not reachable', error)
         except Exception as error:             # keep the bridge alive; the next round tries again

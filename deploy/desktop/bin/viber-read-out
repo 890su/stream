@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Read the owner's own (outgoing) messages from a Viber chat: open it the way viber-send does, then
+# viber-read-out.py copies each purple bubble (newest first) and prints one JSON object per message
+# {"text","time","chat","phone"}. The bridge uses this to bring the owner's phone-typed replies into Stream
+# (deploy/DESKTOP.md). Opening the chat marks it read on the phone — the bridge opens a chat only when it
+# already had to (a reply, a phone lookup) or after 15 minutes of none (viber-bridge).
+# Usage: viber-read-out "<phone or name>" [max messages]     Exit codes as viber-send (0 ok · 2 · 3 · 4).
+set -euo pipefail
+source /usr/local/bin/viber-lib.sh
+WHO=${1:-}; LIMIT=${2:-8}
+[ -n "$WHO" ] || { echo "usage: viber-read-out <phone or name> [max]" >&2; exit 64; }
+
+viber_lock
+trap 'viber_park; clip ""' EXIT
+viber_focus
+viber_open "$WHO"
+pause 0.8 1.2                       # let the chat settle: most shifts happen right after it opens
+MINE_CHAT=$TITLE MINE_PHONE=$PHONE python3 /usr/local/bin/viber-read-out.py "$LIMIT"

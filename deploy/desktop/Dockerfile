@@ -7,7 +7,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       tigervnc-standalone-server openbox tint2 xterm novnc websockify supervisor \
       dbus-x11 xdotool xclip x11-utils x11-xserver-utils imagemagick \
-      python3 python3-dbus python3-gi gir1.2-glib-2.0 \
+      python3 python3-dbus python3-gi gir1.2-glib-2.0 python3-numpy python3-pil \
       fonts-dejavu locales tzdata ca-certificates curl \
  && sed -i 's/^# *ru_RU.UTF-8/ru_RU.UTF-8/; s/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen \
  && rm -rf /var/lib/apt/lists/*

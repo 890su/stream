@@ -151,7 +151,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `docs/BUSINESS-PROCESS-ARCHITECT.md` | Business process analysis, modeling and local BPMN tool setup |
 | `android/` | «Stream · телефон» (Kotlin): call log and SMS sync, after-call note (§8.1, `deploy/PHONE.md`) |
 | `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md`, `DESKTOP.md` |
-| `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` / `viber-whois` (search by phone or name, the chat checked by its title menu), `viber-selftest`, `viber-health`, `viber-bridge` (Viber ⇄ Stream), `notify-log` (desktop notifications → JSON lines) |
+| `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` / `viber-whois` (search by phone or name, the chat checked by its title menu), `viber-selftest`, `viber-health`, `viber-bridge` (Viber ⇄ Stream), `viber-read-out` + `viber_outgoing.py` (the owner's own outgoing messages, copied from the chat window), `notify-log` (desktop notifications → JSON lines) |
 | `test/` | `node --test`: one file per area (api, phone, telegram-bot, triage, taskfold, projection, …) |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |
 | `docs/plans/` | active package plans; `archive/` (local, outside git) — done plans, superseded decisions, old Done items |
