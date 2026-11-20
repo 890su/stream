@@ -33,10 +33,10 @@ test('sources and chats: a reply to Telegram belongs to that chat', () => {
 test('delivery of a reply follows the latest action result; results are not messages', () => {
   const id = crypto.randomUUID();
   const waiting = project([reply(id)]);
-  assert.deepEqual(waiting[0]!.delivery, { status: 'approved', error: null, action: null });
+  assert.deepEqual(waiting[0]!.delivery, { status: 'approved', error: null, action: null, connector: 'telegram_by' });
   const views = project([reply(id), result(id, 'failed', '2026-11-17T08:06:00.000Z', 'FLOOD'), result(id, 'done', '2026-11-17T08:07:00.000Z')]);
   assert.equal(views.length, 1);
-  assert.deepEqual(views[0]!.delivery, { status: 'done', error: null, action: 'a1' });
+  assert.deepEqual(views[0]!.delivery, { status: 'done', error: null, action: 'a1', connector: 'telegram_by' });
   assert.equal(deliveryText(views[0]!.delivery), '✓ в Telegram');
 });
 

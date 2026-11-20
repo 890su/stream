@@ -6,10 +6,11 @@ import { phoneLabel } from './phonebubble.js';
 const order = (a, b) => (Date.parse(a.ts) - Date.parse(b.ts)) || (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
 
 // Where a message belongs for the source filter (drawer.js): my own notes, a messenger account, the phone, the system.
-// A reply sent to Telegram from the feed belongs to that account's conversation.
+// A reply sent to Telegram from the feed belongs to that account's conversation; Viber is one source of its own.
 export function sourceKey(event) {
   const data = event?.payload?.data ?? {};
   if (data.telegram) return `telegram:${data.telegram.account}`;
+  if (data.viber || data.outbound?.connector === 'viber') return 'viber';
   if (data.outbound) return `telegram:${data.outbound.connector.replace(/^telegram_/, '')}`;
   if (event?.source === 'android_phone') return 'phone';
   if (event?.kind === 'system' || event?.kind === 'action_result') return 'system';
@@ -17,8 +18,16 @@ export function sourceKey(event) {
 }
 
 // The messenger chat a message belongs to (CONCEPT.md §8.2), or null: { key, account, chat_id, title, group }.
+// A Viber chat (account 'viber') is answered by its phone: chat_id is the phone, empty when Viber hides it.
 export function chatOf(event) {
   const data = event?.payload?.data ?? {};
+  if (data.viber) {
+    const v = data.viber;
+    return { key: `viber|${v.phone ?? v.chat}`, account: 'viber', chat_id: v.phone ?? '', title: v.chat, group: Boolean(v.group) };
+  }
+  if (data.outbound?.connector === 'viber') {
+    return { key: `viber|${data.outbound.chat_id}`, account: 'viber', chat_id: data.outbound.chat_id, title: data.outbound.chat_title || data.outbound.chat_id, group: false };
+  }
   if (data.telegram) {
     const t = data.telegram;
     return { key: `${t.account}|${t.chat_id}`, account: t.account, chat_id: t.chat_id, title: t.chat_title || t.from_name || 'Чат', group: t.chat_type === 'group' };
@@ -83,12 +92,14 @@ export function project(events, pendingIds = new Set()) {
       default: break;
     }
   }
-  // A reply to a messenger: «отправляется» until the bot reports, then «в Telegram» or «не отправлено».
+  // A reply to a messenger: «отправляется» until the bot (or the Viber bridge) reports, then «в Telegram» / «в Viber»
+  // or «не отправлено».
   for (const view of views.values()) {
     if (!view.event.payload?.data?.outbound) continue;
     const result = deliveries.get(view.id);
     const action = result?.payload.data.action;
-    view.delivery = action ? { status: action.status, error: action.error ?? null, action: result.payload.ref.id } : { status: 'approved', error: null, action: null };
+    const connector = view.event.payload.data.outbound.connector;
+    view.delivery = action ? { status: action.status, error: action.error ?? null, action: result.payload.ref.id, connector } : { status: 'approved', error: null, action: null, connector };
   }
   for (const view of views.values()) {
     const parentId = view.event.reply_to;

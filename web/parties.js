@@ -16,6 +16,9 @@ export function partyOf(author) {
   if (author === 'me') return 'me';
   const telegram = /^contact:tg:[^:]+:(\d+)$/.exec(author);
   if (telegram) return `tg:${telegram[1]}`;
+  // A Viber sender: the phone when Viber shows it (one person with their calls and SMS), else the chat's name.
+  const viber = /^contact:viber:(.+)$/.exec(author);
+  if (viber) return /^\+\d+$/.test(viber[1]) ? `tel:${viber[1]}` : `name:${viber[1].trim().slice(0, 115)}`;
   return isParty(author) ? author : `name:${author}`;
 }
 

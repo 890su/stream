@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+# Viber ⇄ Stream bridge on the agent desktop (deploy/DESKTOP.md, src/server/viber.ts).
+#  · incoming: new Viber notifications (notify-log → ~/inbox/notifications.jsonl) become messages in Stream; the
+#    sender's phone is looked up once per name with viber-whois (contacts; Viber hides it for others → no phone);
+#  · state: the last viber-health result goes to Stream every minute as a pulse;
+#  · replies: while the channel is healthy, actions written in the feed are taken one by one, sent with viber-send
+#    (by phone only) and reported back. A send is never retried here: a failure goes back to the feed.
+# Env: STREAM_URL (default http://stream:3790), STREAM_VIBER_TOKEN. State: ~/inbox/bridge-state.json.
+import hashlib, json, os, subprocess, sys, time, urllib.error, urllib.request
+
+HOME = os.path.expanduser('~')
+INBOX = os.path.join(HOME, 'inbox')
+NOTIFICATIONS = os.path.join(INBOX, 'notifications.jsonl')
+HEALTH = os.path.join(INBOX, 'health.json')
+STATE = os.path.join(INBOX, 'bridge-state.json')
+URL = os.environ.get('STREAM_URL', 'http://stream:3790').rstrip('/')
+TOKEN = os.environ.get('STREAM_VIBER_TOKEN', '')
+ISOLATES = '⁨⁩⁦⁧'
+UNKNOWN_RETRY_S = 86400   # a name without a phone is looked up again after a day (the owner may add the contact)
+PULSE_S = 60
+HEALTH_STALE_S = 12 * 60
+
+
+def log(*parts):
+    print(time.strftime('%H:%M:%S'), *parts, flush=True)
+
+
+def api(path, body=None):
+    """POST to /api/viber/<path>; returns (status, parsed JSON or None). Network errors raise."""
+    data = None if body is None else json.dumps(body, ensure_ascii=False).encode('utf-8')
+    request = urllib.request.Request(f'{URL}/api/viber/{path}', data=data, method='POST',
+                                     headers={'Authorization': f'Bearer {TOKEN}', 'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            raw = response.read()
+            return response.status, (json.loads(raw) if raw else None)
+    except urllib.error.HTTPError as error:
+        return error.code, None
+
+
+def load_state():
+    try:
+        with open(STATE, encoding='utf-8') as source:
+            return json.load(source)
+    except (OSError, ValueError):
+        return {'offset': 0, 'phones': {}}
+
+
+def save_state(state):
+    with open(STATE + '.tmp', 'w', encoding='utf-8') as out:
+        json.dump(state, out, ensure_ascii=False, indent=1)
+    os.replace(STATE + '.tmp', STATE)
+
+
+def message_of(record):
+    """A Viber chat message from a notification, or None (service notices like «Viber обновлён» have no isolates)."""
+    if record.get('app') != 'ViberPC' or record.get('hints', {}).get('category') != 'im.received':
+        return None
+    summary, body = record.get('summary', ''), record.get('body', '')
+    if not any(mark in summary for mark in ISOLATES) or not body.strip():
+        return None
+    name = ''.join(ch for ch in summary if ch not in ISOLATES).strip()
+    if not name:
+        return None
+    digest = hashlib.sha1(f'{summary}\n{body}'.encode('utf-8')).hexdigest()[:12]
+    return {'key': f"{record.get('ts')}|{record.get('id')}|{digest}", 'chat': name[:200], 'text': body, 'received_at': record.get('ts')}
+
+
+def phone_of(name, state):
+    known = state['phones'].get(name)
+    if known and (known.get('phone') or time.time() - known.get('at', 0) < UNKNOWN_RETRY_S):
+        return known.get('phone')
+    try:
+        done = subprocess.run(['viber-whois', name], capture_output=True, text=True, timeout=120)
+        phone = json.loads(done.stdout).get('phone') if done.returncode == 0 and done.stdout.strip() else None
+        if done.returncode not in (0, 3):   # 3: the chat found is not this name — no phone, not an error
+            log('whois failed', done.returncode, done.stderr.strip()[-200:])
+            return None                       # not cached: tried again with the next message
+    except (subprocess.TimeoutExpired, ValueError) as error:
+        log('whois error', error)
+        return None
+    state['phones'][name] = {'phone': phone, 'at': time.time()}
+    return phone
+
+
+def forward_incoming(state):
+    """New notification lines → Stream. The offset moves only past lines that were written (or skipped)."""
+    try:
+        size = os.path.getsize(NOTIFICATIONS)
+    except OSError:
+        return
+    if size < state['offset']:
+        state['offset'] = 0                    # the file was replaced
+    if size == state['offset']:
+        return
+    with open(NOTIFICATIONS, 'rb') as source:
+        source.seek(state['offset'])
+        for raw in source:
+            if not raw.endswith(b'\n'):
+                break                          # a line still being written
+            try:
+                message = message_of(json.loads(raw))
+            except ValueError:
+                message = None
+            if message:
+                phone = phone_of(message['chat'], state)
+                if phone:
+                    message['phone'] = phone
+                status, _ = api('messages', message)
+                if status >= 500 or status == 401:
+                    log('message not accepted', status)
+                    return                     # Stream down or the token wrong: try again later
+                if status >= 400:
+                    log('message rejected', status, message['chat'])
+                else:
+                    log('message', status, message['chat'], 'phone' if phone else 'no phone')
+            state['offset'] += len(raw)
+            save_state(state)
+
+
+def health():
+    try:
+        with open(HEALTH, encoding='utf-8') as source:
+            record = json.load(source)
+        if time.time() - os.path.getmtime(HEALTH) > HEALTH_STALE_S:
+            return {'state': 'stale', 'detail': 'Проверка состояния Viber не идёт больше 12 минут'}
+        return record
+    except (OSError, ValueError):
+        return {'state': 'unknown', 'detail': 'Нет итога проверки состояния Viber'}
+
+
+def send_one():
+    """Take one reply and send it. Returns True if one was handled."""
+    status, action = api('actions/next')
+    if status != 200 or not action:
+        return False
+    phone, text = action.get('phone') or '', action.get('text') or ''
+    try:
+        done = subprocess.run(['viber-send', phone, text], capture_output=True, text=True, timeout=180)
+        if done.returncode == 0:
+            result = {'status': 'done'}
+        else:
+            reason = {2: 'окна Viber нет', 3: 'открылся не тот чат — ничего не набрано', 4: 'стол занят другим сценарием'}.get(done.returncode, '')
+            result = {'status': 'failed', 'error': (reason or done.stderr.strip()[-200:] or f'код {done.returncode}')}
+    except subprocess.TimeoutExpired:
+        result = {'status': 'failed', 'error': 'отправка не закончилась за 3 минуты — проверьте в Viber'}
+    log('send', action['id'][:8], result['status'], result.get('error', ''))
+    api(f"actions/{action['id']}", result)
+    return True
+
+
+def main():
+    if not TOKEN:
+        log('no STREAM_VIBER_TOKEN: the bridge waits (deploy/DESKTOP.md)')
+        while True:
+            time.sleep(3600)
+    os.makedirs(INBOX, exist_ok=True)
+    state = load_state()
+    while True:                                # hello: a send left running by a crash is reported, not repeated
+        try:
+            if api('hello')[0] == 204:
+                break
+        except OSError as error:
+            log('Stream not reachable', error)
+        time.sleep(15)
+    log('bridge started', URL)
+    last_pulse = 0
+    while True:
+        try:
+            forward_incoming(state)
+            current = health()
+            if time.time() - last_pulse >= PULSE_S:
+                api('pulse', {'state': current.get('state'), 'detail': current.get('detail')})
+                last_pulse = time.time()
+            if current.get('state') == 'ok':
+                while send_one():
+                    forward_incoming(state)
+        except OSError as error:
+            log('Stream not reachable', error)
+        except Exception as error:             # keep the bridge alive; the next round tries again
+            log('error', type(error).__name__, error)
+        time.sleep(3)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -30,6 +30,8 @@ export function from(event: JournalEvent): string {
     return phone?.name?.trim() || phone?.number || 'скрытый номер';
   }
   if (event.author === 'me') return 'владелец';
+  const viber = event.payload.data?.viber as { chat?: string } | undefined;
+  if (viber?.chat) return viber.chat;
   const telegram = event.payload.data?.telegram as { from_name?: string; chat_title?: string } | undefined;
   return telegram?.from_name || telegram?.chat_title || event.author;
 }

@@ -10,6 +10,7 @@ import type { JournalEvent } from '../src/contracts/validate.ts';
 
 export const token = 'test-owner-token-for-local-tests-only';
 export const phoneToken = 'test-phone-token-for-local-tests-only';
+export const viberToken = 'test-viber-token-for-local-tests-only';
 export const event = (overrides: Partial<JournalEvent> = {}): JournalEvent => ({
   id: randomUUID(), schema_version: 1, source: 'app', author: 'me',
   ts: '2026-11-11T10:00:00.000Z', kind: 'text', payload: { text: 'Проверка' }, ...overrides,
@@ -24,7 +25,7 @@ export function temporaryStore() {
 // `phone: ''` starts a server without a phone token; `telegram` runs account bots against a fake Bot API.
 export async function fixture({ phone = phoneToken, telegram }: { phone?: string; telegram?: { tokens: Record<string, string>; apiBase: string } } = {}) {
   const storage = temporaryStore();
-  const server = createApp({ store: storage.store, ownerToken: token, phoneToken: phone || undefined, telegram });
+  const server = createApp({ store: storage.store, ownerToken: token, phoneToken: phone || undefined, viberToken, telegram });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

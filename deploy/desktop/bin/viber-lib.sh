@@ -48,6 +48,13 @@ viber_focus() {
   xdotool key Escape; pause 0.3 0.6
 }
 
+# viber_park: leave the owner's own notes open. Viber may not notify about a chat that is open on screen, so after
+# every scenario the open chat is one nobody writes to. Best effort: no checks, errors ignored.
+viber_park() {
+  { xdotool key Escape; xdotool mousemove "$SEARCH_X" "$SEARCH_Y" click 1; sleep 0.4; xdotool key ctrl+a BackSpace
+    paste "Мои заметки"; sleep 1.5; xdotool mousemove "$RESULT_X" "$RESULT_Y" click 1; sleep 0.5; xdotool key Escape; } >/dev/null 2>&1 || true
+}
+
 # menu_copy name|number: right-click the chat title, pick the item, print what it put on the clipboard.
 # Returns 1 (nothing clicked) when the menu does not appear, e.g. in a group.
 menu_copy() {

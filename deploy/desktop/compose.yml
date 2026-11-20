@@ -1,7 +1,8 @@
 # Agent desktop on srv-150: a light virtual computer for agent sessions (Viber first).
 # Own compose project; noVNC on host loopback only (reach it through an SSH tunnel); the home folder with the
 # app profiles (Viber login, history) lives in a named volume and survives rebuilds.
-#   docker compose -f deploy/desktop/compose.yml up -d --build
+# Deployed by deploy/install.sh (it passes STREAM_VIBER_TOKEN from /srv/stream/.env):
+#   docker compose -f deploy/desktop/compose.yml --env-file /srv/stream/.env up -d --build
 name: desktop
 
 services:
@@ -10,15 +11,21 @@ services:
     image: agent-desktop:local
     container_name: agent-desktop
     hostname: agent-desktop
-    # Stable device identity for logged-in apps: fixed MAC here, machine id kept in the home volume (desktop-start).
-    mac_address: "02:42:ac:14:00:02"
     restart: unless-stopped
     environment:
       TZ: Europe/Warsaw
+      # The Viber bridge (bin/viber-bridge) reaches Stream on its network; its token opens only /api/viber/*.
+      STREAM_URL: http://stream:3790
+      STREAM_VIBER_TOKEN: ${STREAM_VIBER_TOKEN:-}
     ports:
       - "127.0.0.1:6080:6080"
     volumes:
       - home:/home/agent
+    networks:
+      default:
+        # Stable device identity for logged-in apps: fixed MAC here, machine id kept in the home volume (desktop-start).
+        mac_address: "02:42:ac:14:00:02"
+      stream: {}
     shm_size: 256m
     mem_limit: 1200m
     memswap_limit: 2400m
@@ -32,3 +39,8 @@ services:
 
 volumes:
   home:
+
+networks:
+  stream:
+    external: true
+    name: stream_default

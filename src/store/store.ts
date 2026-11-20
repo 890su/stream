@@ -9,6 +9,7 @@ import { checkTagging } from '../contracts/tagging.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { checkPhone } from '../contracts/phone.ts';
 import { checkTelegram } from '../contracts/telegram.ts';
+import { checkViber } from '../contracts/viber.ts';
 import { checkTask } from '../contracts/task.ts';
 import { ActionStore } from './actions.ts';
 import { StatusStore } from './status.ts';
@@ -81,6 +82,7 @@ export class JournalStore {
     checkTagging(input);
     checkPhone(input);
     checkTelegram(input);
+    checkViber(input);
     checkTask(input);
     // Server time is excluded, and omitted nullable fields have one canonical form.
     const { received_at, ...body } = input;

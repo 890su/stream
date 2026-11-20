@@ -25,13 +25,14 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | **contracts/** | | |
 | `validate.ts` | Event type + JSON Schema interpreter | `JournalEvent`, `validateEvent` |
 | `correction.ts` | owner corrections: ops, link targets | `CORRECTION_OPS`, `checkCorrection*` |
-| `tagging.ts` / `phone.ts` / `telegram.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry) | `check*` |
+| `tagging.ts` / `phone.ts` / `telegram.ts` / `viber.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry; Viber: replies by phone only) | `check*` |
 | **server/** | | |
 | `http.ts` | auth, routing, starts bots and triage | `createApp` |
 | `events.ts` | `/api/events` POST/GET | `events` |
 | `media.ts` | `/api/media/<sha256>` | `media` |
 | `share.ts` | Android share target | `share` |
 | `phone.ts` | `/api/phone/*` calls, SMS, notes (§8.1) | `phone`, `phoneEventId` |
+| `viber.ts` | `/api/viber/*` for the Viber bridge on the agent desktop: messages, pulse, reply actions one by one, hello (deploy/DESKTOP.md) | `viber`, `viberMessage` |
 | `system.ts` | `/api/system`, retries, trust; state notes | `system`, `stateChanged`, `actionChanged`, `watchSilence` |
 | `live.ts` | SSE `/api/live` | `LiveFeed` |
 | `static.ts` | versioned client files `/v/<build>/` | `VERSIONED`, `staticFile` |
@@ -105,7 +106,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
 | `composer.js` / `draftfiles.js` | input: text, voice, tags, recipient, modes (reply, edit, continue); attachments of the draft (checks, previews) |
-| `outbound.js` | pure: Telegram reply data, 24 h window |
+| `outbound.js` | pure: reply data for Telegram (24 h window) and Viber (by phone only, `viberAnswerable`) |
 | `tagrow.js` / `suggest.js` | tags in the row above the input (`ordered()` for the link window); tag suggestions |
 | `linkwindow.js` | the link window of the «связь» button: Метки · Контакты · Беседы · Задачи, likely first (`likelyConversations`, `likelyTasks`), strips and pages, a section on the whole window |
 | `linkstate.js` | the conversation or task the next message goes into: its chip, continuation, recipient, adding to the task once sent |
@@ -149,7 +150,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 |---|---|
 | `android/` | «Stream · телефон» (Kotlin): call log and SMS sync, after-call note (§8.1, `deploy/PHONE.md`) |
 | `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md`, `DESKTOP.md` |
-| `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` (scripted send with an OCR check of the chat), `notify-log` (desktop notifications → JSON lines) |
+| `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` / `viber-whois` (search by phone or name, the chat checked by its title menu), `viber-selftest`, `viber-health`, `viber-bridge` (Viber ⇄ Stream), `notify-log` (desktop notifications → JSON lines) |
 | `test/` | `node --test`: one file per area (api, phone, telegram-bot, triage, taskfold, projection, …) |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |
 | `docs/plans/` | active package plans; `archive/` (local, outside git) — done plans, superseded decisions, old Done items |

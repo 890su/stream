@@ -29,6 +29,9 @@ export function streamOf(event: JournalEvent): string {
   const telegram = data.telegram as { account: string; chat_id: string } | undefined;
   if (telegram) return `tg|${telegram.account}|${telegram.chat_id}`;
   const outbound = data.outbound as { connector: string; chat_id: string } | undefined;
+  const viber = data.viber as { chat: string; phone?: string } | undefined;
+  if (viber) return `viber|${viber.phone ?? viber.chat}`;
+  if (outbound?.connector === 'viber') return `viber|${outbound.chat_id}`;
   if (outbound) return `tg|${outbound.connector.replace(/^telegram_/, '')}|${outbound.chat_id}`;
   if (event.source === 'android_phone') return 'phone';
   return 'me';

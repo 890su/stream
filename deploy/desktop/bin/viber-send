@@ -12,7 +12,7 @@ WHO=$1; TEXT=${2-$(cat)}
 [ -n "$WHO" ] && [ -n "$TEXT" ] || { echo "usage: viber-send <phone or name> <text>" >&2; exit 64; }
 
 viber_lock
-trap 'clip ""' EXIT
+trap 'viber_park; clip ""' EXIT
 viber_focus
 viber_open "$WHO"
 pause 0.6 1.0

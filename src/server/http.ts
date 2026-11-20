@@ -9,6 +9,7 @@ import { events } from './events.ts';
 import { media } from './media.ts';
 import { share } from './share.ts';
 import { phone } from './phone.ts';
+import { viber } from './viber.ts';
 import { TelegramBot } from '../telegram/bot.ts';
 import { Triage } from '../tasks/triage.ts';
 import type { Namer } from '../tasks/namer.ts';
@@ -20,16 +21,19 @@ import { LiveFeed } from './live.ts';
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
 // phoneToken (optional) opens only /api/phone/*: the Android companion never holds the owner token.
+// viberToken (optional) opens only /api/viber/*: the Viber bridge on the agent desktop (deploy/DESKTOP.md).
 // telegram.tokens (optional) — one bot token per Telegram account (CONCEPT.md §8.2); the bots run in this process.
 // triage (optional) — the task triage (CONCEPT.md §2.8); planner null keeps it off and says why on the System screen.
-export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
-  store: JournalStore; ownerToken: string; phoneToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
+export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage }: {
+  store: JournalStore; ownerToken: string; phoneToken?: string; viberToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
   triage?: { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number };
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   const expected = bearer(ownerToken);
+  if (viberToken !== undefined && viberToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_VIBER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   const expectedPhone = phoneToken === undefined ? undefined : bearer(phoneToken);
+  const expectedViber = viberToken === undefined ? undefined : bearer(viberToken);
   const live = new LiveFeed();
   const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -41,9 +45,15 @@ export function createApp({ store, ownerToken, phoneToken, telegram, triage }: {
         const actual = createHash('sha256').update(request.headers.authorization ?? '').digest();
         const isPhonePath = url.pathname.startsWith('/api/phone/');
         const owner = timingSafeEqual(expected, actual);
+        const isViberPath = url.pathname.startsWith('/api/viber/');
         const phoneAllowed = isPhonePath && expectedPhone !== undefined && timingSafeEqual(expectedPhone, actual);
-        if (!owner && !phoneAllowed) { response.setHeader('WWW-Authenticate', 'Bearer'); throw new HttpError(401, isPhonePath ? 'Проверьте токен телефона' : 'Введите токен владельца в настройках'); }
+        const viberAllowed = isViberPath && expectedViber !== undefined && timingSafeEqual(expectedViber, actual);
+        if (!owner && !phoneAllowed && !viberAllowed) {
+          response.setHeader('WWW-Authenticate', 'Bearer');
+          throw new HttpError(401, isPhonePath ? 'Проверьте токен телефона' : isViberPath ? 'Проверьте токен моста Viber' : 'Введите токен владельца в настройках');
+        }
         if (isPhonePath) return await phone(request, response, url.pathname.slice('/api/phone/'.length), store, live);
+        if (isViberPath) return await viber(request, response, url.pathname.slice('/api/viber/'.length), store, live);
         if (url.pathname === '/api/system' || url.pathname.startsWith('/api/actions/') || url.pathname.startsWith('/api/telegram/')) {
           return await system(request, response, url.pathname.slice('/api/'.length), store, live, bots);
         }

@@ -25,7 +25,7 @@
     },
     "source": {
       "type": "string",
-      "description": "Where the event came from. Known values: app, share, system, analyst, email, telegram, android_notifications, android_phone.",
+      "description": "Where the event came from. Known values: app, share, system, analyst, email, telegram, viber, android_notifications, android_phone.",
       "pattern": "^[a-z][a-z0-9_]*$"
     },
     "author": {
@@ -377,9 +377,37 @@
                 }
               }
             },
+            "viber": {
+              "type": "object",
+              "description": "A Viber message read on the agent desktop (deploy/DESKTOP.md): the sender as Viber shows it, the phone when Viber shows it (contacts; hidden for people not in contacts). Only with source: viber.",
+              "required": [
+                "chat",
+                "received_at"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "chat": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The chat's name in Viber (the sender, or the group)."
+                },
+                "phone": {
+                  "type": "string",
+                  "pattern": "^\\+[0-9]{6,15}$"
+                },
+                "group": {
+                  "type": "boolean"
+                },
+                "received_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
             "outbound": {
               "type": "object",
-              "description": "The owner's reply to be sent outside (CONCEPT.md 8.2): writing it creates a class C action for the connector. Only on kind: text by me.",
+              "description": "The owner's reply to be sent outside (CONCEPT.md 8.2): writing it creates a class C action for the connector. Only on kind: text by me. Telegram: chat_id is the chat's number; Viber (connector viber): the phone.",
               "required": [
                 "connector",
                 "chat_id"
@@ -392,7 +420,7 @@
                 },
                 "chat_id": {
                   "type": "string",
-                  "pattern": "^-?[0-9]{1,20}$"
+                  "pattern": "^(-?[0-9]{1,20}|\\+[0-9]{6,15})$"
                 },
                 "chat_title": {
                   "type": "string"

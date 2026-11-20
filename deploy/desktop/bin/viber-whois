@@ -9,7 +9,7 @@ WHO=${1:-}
 [ -n "$WHO" ] || { echo "usage: viber-whois <phone or name>" >&2; exit 64; }
 
 viber_lock
-trap 'clip ""' EXIT
+trap 'viber_park; clip ""' EXIT
 viber_focus
 viber_open "$WHO"
 python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1] or None, "phone": sys.argv[2] or None}, ensure_ascii=False))' "$TITLE" "$PHONE"

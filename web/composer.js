@@ -6,7 +6,7 @@ import { snippet, chatOf } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow, leadButtons } from './tagrow.js';
-import { outboundData } from './outbound.js';
+import { outboundData, viberAnswerable } from './outbound.js';
 import { createRecipients } from './recipients.js';
 import { createDraftFiles } from './draftfiles.js';
 import { createLinkState } from './linkstate.js';
@@ -124,11 +124,17 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     updateAction();
   }
 
-  // Sending to a recipient is the confirmation (class C, CONCEPT.md §8.2): text only, a personal chat within 24 hours.
+  // Sending to a recipient is the confirmation (class C, CONCEPT.md §8.2): text only, a personal chat within 24 hours;
+  // Viber — only to a phone (deploy/DESKTOP.md).
   async function sendOutbound(chat) {
     const message = text.value.trim();
-    if (draftFiles.list().length) { notify('В Telegram уходит только текст: уберите вложения или адресата'); return; }
-    if (!message) { notify('Напишите текст: в Telegram уходит только текст'); return; }
+    const where = chat.account === 'viber' ? 'Viber' : 'Telegram';
+    if (draftFiles.list().length) { notify(`В ${where} уходит только текст: уберите вложения или адресата`); return; }
+    if (!message) { notify(`Напишите текст: в ${where} уходит только текст`); return; }
+    if (!viberAnswerable(chat)) {
+      notify(`«${chat.title}»: Viber не показывает номер — ответьте в Viber на телефоне или добавьте контакт в Viber`);
+      return;
+    }
     if (!recipients.isOpen(chat)) {
       notify(`«${chat.title}»: окно 24 часа закрыто — ответьте в Telegram`, { label: 'Открыть', run: () => { location.href = `tg://user?id=${chat.chat_id}`; } });
       return;

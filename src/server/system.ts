@@ -18,7 +18,7 @@ const STATE_TEXT: Record<SourceState, string> = { ok: 'работает', silent
 export function sourceTitle(source: string): string {
   const account = Object.values(telegramConfig.accounts).find((item) => item.connector === source);
   if (account) return account.title;
-  return source === 'android_phone' ? 'Телефон' : source === 'ai_triage' ? 'Разбор задач (ИИ)' : source;
+  return source === 'android_phone' ? 'Телефон' : source === 'ai_triage' ? 'Разбор задач (ИИ)' : source === 'viber' ? 'Viber' : source;
 }
 
 export function stateChanged(store: JournalStore, live: LiveFeed, source: string, state: SourceState, previous: SourceState | 'unknown', detail: string | null): void {

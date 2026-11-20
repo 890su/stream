@@ -5,12 +5,13 @@
 let accounts = {}; // account -> { title }, from /capture-config.json
 
 export function setAccounts(map) { accounts = map ?? {}; }
-export const accountTitle = (account) => accounts[account]?.title ?? `Telegram ${String(account).toUpperCase()}`;
+export const accountTitle = (account) => account === 'viber' ? 'Viber' : accounts[account]?.title ?? `Telegram ${String(account).toUpperCase()}`;
 export const accountKeys = () => Object.keys(accounts);
-export const isMessenger = (event) => Boolean(event?.payload?.data?.telegram || event?.payload?.data?.outbound);
+export const isMessenger = (event) => Boolean(event?.payload?.data?.telegram || event?.payload?.data?.viber || event?.payload?.data?.outbound);
 
 const SKIPPED = { too_large: 'слишком большой', unsupported: 'формат не сохраняется', failed: 'не скачался' };
 const DELIVERY = { proposed: 'ждёт подтверждения', approved: 'отправляется…', running: 'отправляется…', done: '✓ в Telegram', failed: 'не отправлено', rejected: 'отменено' };
+const DONE_IN = { viber: '✓ в Viber' };
 
 function sizeLabel(bytes) {
   if (!bytes) return '';
@@ -28,6 +29,10 @@ export function messengerLabel(event) {
     const account = data.outbound.connector.replace(/^telegram_/, '');
     return { head: `→ ${accountTitle(account)} · ${data.outbound.chat_title || 'чат'}`, incoming: false, outbound: true, forward: null, skipped: null };
   }
+  if (data.viber) {
+    const v = data.viber;
+    return { head: `Viber · ${v.chat}${v.phone && v.phone !== v.chat ? ` · ${v.phone}` : ''}`, incoming: event.author !== 'me', outbound: false, forward: null, skipped: null };
+  }
   const t = data.telegram;
   if (!t) return null;
   const chat = t.chat_title || t.from_name || 'чат';
@@ -39,7 +44,7 @@ export function messengerLabel(event) {
   return { head: `${accountTitle(t.account)} · ${chat}${author}`, incoming: event.author !== 'me', outbound: false, forward, skipped };
 }
 
-export const deliveryText = (delivery) => DELIVERY[delivery?.status] ?? '';
+export const deliveryText = (delivery) => (delivery?.status === 'done' && DONE_IN[delivery.connector]) || DELIVERY[delivery?.status] || '';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);

@@ -2,7 +2,8 @@
   "version": 1,
   "quiet_s": 60,
   "quiet_s_by_stream": {
-    "tg": 180
+    "tg": 180,
+    "viber": 180
   },
   "lookback_h": 24,
   "max_batch": 40,

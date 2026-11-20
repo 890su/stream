@@ -48,6 +48,11 @@ if ! grep -q '^STREAM_PHONE_TOKEN=' "$ENV_FILE"; then
   echo "STREAM_PHONE_TOKEN=$(openssl rand -hex 32)" >> "$ENV_FILE"
   echo "Added a phone token to $ENV_FILE (read it with: sudo grep PHONE $ENV_FILE)"
 fi
+# Viber bridge token (opens only /api/viber/*; the agent desktop gets it, deploy/DESKTOP.md).
+if ! grep -q '^STREAM_VIBER_TOKEN=' "$ENV_FILE"; then
+  echo "STREAM_VIBER_TOKEN=$(openssl rand -hex 32)" >> "$ENV_FILE"
+  echo "Added a Viber bridge token to $ENV_FILE"
+fi
 grep -Eq '^ANTHROPIC_API_KEY=.+' "$ENV_FILE" && echo "AI: ANTHROPIC_API_KEY is set" || echo "AI: ANTHROPIC_API_KEY is missing in $ENV_FILE - task triage is off"
 # Telegram bot tokens: report which are set (never their values).
 for KEY in STREAM_TG_BY_BOT_TOKEN STREAM_TG_PL_BOT_TOKEN; do
@@ -76,6 +81,12 @@ for _ in $(seq 1 20); do
   sleep 1
 done
 curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null || { docker compose logs --tail 50; exit 1; }
+
+# Agent desktop (deploy/DESKTOP.md): updated with the code once it exists — created by hand the first time, since
+# it needs the owner's QR login. Only STREAM_VIBER_TOKEN is passed to it; nothing changes if the image did not.
+if docker ps -a --format '{{.Names}}' | grep -q '^agent-desktop$'; then
+  docker compose -f "$APP/deploy/desktop/compose.yml" --env-file "$ENV_FILE" up -d --build --quiet-pull 2>&1 | tail -1
+fi
 
 # Public HTTPS: add one ingress rule to the existing locally managed tunnel (backup kept, validated first).
 CFG=/etc/cloudflared/config.yml
