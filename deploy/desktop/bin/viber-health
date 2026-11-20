@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
 # Is the Viber channel usable? Checks the process, the window and what the screen says (OCR), prints one JSON line
 # {"ts","state","ok","detail"} and keeps the last one in ~/inbox/health.json for Stream.
-# States: ok · not_running · no_window · logged_out (QR screen) · error (Viber's error dialog) · offline · dialog
+# States: ok · not_running · no_window · logged_out (QR screen) · error (Viber's error dialog) · offline · dialog ·
+# unverified (the scenario self-check, viber-selftest, has not passed for this Viber version: after a restart or an
+# update it runs by itself; a failed one is retried every 30 minutes)
 # Usage: viber-health            one check
 #        viber-health --watch N  check every N seconds (run by supervisor)
 set -uo pipefail
 export DISPLAY=${DISPLAY:-:1} LC_ALL=ru_RU.UTF-8
-source /usr/local/bin/viber-ui.env
+source /usr/local/bin/viber-lib.sh
 OUT=~/inbox/health.json
+SELFTEST=~/inbox/selftest.json
+
+# selftest_state: prints "ok" or why the scenarios are not verified; runs viber-selftest when it is due.
+selftest_state() {
+  local due=1 result
+  if [ -f "$SELFTEST" ]; then
+    result=$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(r["version"]); print("ok" if r["ok"] else next(s["step"] + ": " + s["detail"] for s in r["steps"] if not s["ok"]))' "$SELFTEST" 2>/dev/null)
+    if [ "$(sed -n 1p <<< "$result")" = "$(viber_version)" ]; then
+      [ "$(sed -n 2p <<< "$result")" = ok ] && { echo ok; return; }
+      [ -n "$(find "$SELFTEST" -mmin -30)" ] && due=0
+    fi
+  fi
+  if [ "$due" = 1 ]; then viber-selftest >/dev/null 2>&1 && { echo ok; return; }; fi
+  python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(next((s["step"] + ": " + s["detail"] for s in r["steps"] if not s["ok"]), "нет итога"))' "$SELFTEST" 2>/dev/null || echo "самопроверка не запускалась"
+}
 
 check() {
   local state=ok detail="" text
@@ -24,6 +41,10 @@ check() {
       *"Нет подключения"*|*"Нет соединения"*) state=offline; detail="Viber без связи" ;;
       *"Синхронизация сообщений"*|*"Синхронизация отменена"*) state=dialog; detail="Окно синхронизации закрывает чаты" ;;
     esac
+  fi
+  if [ "$state" = ok ]; then
+    local verified; verified=$(selftest_state)
+    [ "$verified" = ok ] || { state=unverified; detail="Самопроверка кликов не пройдена — $verified"; }
   fi
   [ "$state" = not_running ] && detail="Viber не запущен"
   [ "$state" = no_window ] && detail="Окна Viber нет"

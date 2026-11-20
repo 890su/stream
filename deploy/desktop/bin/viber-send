@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Send a Viber message by driving Viber Desktop the way a person does: click the search, paste the contact's name,
-# open the first result, check the opened chat's title (OCR) matches, paste the text, press Enter.
-# Usage: viber-send "<contact name or phone>" "<text>"     (text may also come on stdin)
+# Send a Viber message by driving Viber Desktop the way a person does: click the search, paste the phone (preferred)
+# or the name, open the first result, check it is that chat (the phone or name copied from the title's menu),
+# paste the text, press Enter.
+# Usage: viber-send "<phone or contact name>" "<text>"     (text may also come on stdin)
 #        VIBER_SEND_DRY=1 viber-send ...   opens and checks the chat, types nothing
 # Exit codes: 0 sent · 2 Viber window not found · 3 the opened chat does not match (nothing typed) · 4 busy
 # Every send leaves a screenshot in ~/sent/ for review.
 set -euo pipefail
 source /usr/local/bin/viber-lib.sh
 WHO=$1; TEXT=${2-$(cat)}
-[ -n "$WHO" ] && [ -n "$TEXT" ] || { echo "usage: viber-send <contact> <text>" >&2; exit 64; }
+[ -n "$WHO" ] && [ -n "$TEXT" ] || { echo "usage: viber-send <phone or name> <text>" >&2; exit 64; }
 
 viber_lock
 trap 'clip ""' EXIT

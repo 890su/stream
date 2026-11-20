@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# Who is a Viber chat: open it by name (as viber-send does) and print {"name","phone"} as JSON.
-# The phone is read from the chat header: the title itself for a number not in contacts, else the line under
-# the title, shown for ~2 s after opening. Opening the chat marks its messages as seen.
-# Usage: viber-whois "<name as shown in Viber>"     Exit codes as viber-send; phone is null if not seen.
+# Who is a Viber chat: open it by phone (preferred) or name, as viber-send does, and print {"name","phone"} as JSON.
+# Name and phone are copied from the chat title's menu; phone is null when Viber does not show it (groups, numbers
+# of people not in contacts are hidden on the computer). Opening the chat marks its messages as seen.
+# Usage: viber-whois "<phone or name as shown in Viber>"     Exit codes as viber-send.
 set -euo pipefail
 source /usr/local/bin/viber-lib.sh
 WHO=${1:-}
-[ -n "$WHO" ] || { echo "usage: viber-whois <name>" >&2; exit 64; }
+[ -n "$WHO" ] || { echo "usage: viber-whois <phone or name>" >&2; exit 64; }
 
 viber_lock
 trap 'clip ""' EXIT
 viber_focus
 viber_open "$WHO"
-PHONE=$(viber_phone || true)
-python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1], "phone": sys.argv[2] or None}, ensure_ascii=False))' "$TITLE" "$PHONE"
+python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1] or None, "phone": sys.argv[2] or None}, ensure_ascii=False))' "$TITLE" "$PHONE"

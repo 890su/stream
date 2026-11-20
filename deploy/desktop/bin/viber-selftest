@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Self-check of the Viber scenarios after a desktop restart or a Viber update: are the clicks still landing?
+# On the owner's own "Мои заметки" (nothing is sent): search → open → title menu gives the name → the input line
+# takes text (pasted, read back by OCR, erased). With SELFTEST_PHONE (a known contact, in ~/selftest.env, outside
+# git) also: search by phone → the title menu gives the same number. Every step leaves a screenshot in
+# ~/selftest/<time>/ for review by the agent (AI); the result goes to ~/inbox/selftest.json, which viber-health reads.
+# Usage: viber-selftest      Exit 0 all passed, 1 a step failed.
+set -uo pipefail
+source /usr/local/bin/viber-lib.sh
+[ -f ~/selftest.env ] && source ~/selftest.env
+STAMP=$(date +%Y%m%d-%H%M%S); DIR=~/selftest/$STAMP; mkdir -p "$DIR"
+STEPS=(); FAILED=0
+step() { # step <name> <ok 0|1> <detail>
+  local n=${#STEPS[@]}; local shot; shot=$(printf '%02d-%s.png' "$n" "$1")
+  import -window root "$DIR/$shot"
+  STEPS+=("$(python3 -c 'import json,sys; print(json.dumps({"step": sys.argv[1], "ok": sys.argv[2] == "0", "detail": sys.argv[3], "shot": sys.argv[4]}, ensure_ascii=False))' "$1" "$2" "$3" "$DIR/$shot")")
+  [ "$2" = 0 ] || FAILED=1
+}
+
+viber_lock
+trap 'clip ""' EXIT
+viber_focus
+
+# 1. Search by name and open; the title menu must give exactly the name.
+if ( viber_open "Мои заметки" ) >/tmp/selftest-open.txt 2>&1; then step open_by_name 0 "чат «Мои заметки» открыт"
+else step open_by_name 1 "$(cat /tmp/selftest-open.txt)"; fi
+NAME=$(menu_copy name || true)
+[ "$NAME" = "Мои заметки" ] && step title_menu 0 "меню заголовка: «$NAME»" || step title_menu 1 "меню заголовка дало «$NAME»"
+
+# 2. The input line takes text: paste, read back, erase (nothing is sent).
+xdotool mousemove "$INPUT_X" "$INPUT_Y" click 1; pause 0.3 0.5
+paste "проверка поля 4711"; sleep 0.6
+SEEN=$(ocr $((INPUT_X - 250)) $((INPUT_Y - 18)) 520 36 rus)
+xdotool key ctrl+a Delete
+[[ "$SEEN" == *4711* ]] && step input_line 0 "поле ввода: «$SEEN»" || step input_line 1 "в поле ввода не видно текста (OCR: «$SEEN»)"
+sleep 0.4
+LEFT=$(ocr $((INPUT_X - 250)) $((INPUT_Y - 18)) 520 36 rus)
+[[ "$LEFT" != *4711* ]] && step input_cleared 0 "поле очищено" || step input_cleared 1 "текст остался в поле: «$LEFT»"
+
+# 3. Search by phone of a known contact, if configured.
+if [ -n "${SELFTEST_PHONE:-}" ]; then
+  viber_focus
+  if ( viber_open "$SELFTEST_PHONE" ) >/tmp/selftest-open.txt 2>&1; then step open_by_phone 0 "контакт найден по номеру, номер из меню совпал"
+  else step open_by_phone 1 "$(cat /tmp/selftest-open.txt)"; fi
+fi
+xdotool key Escape
+
+VERSION=$(viber_version)
+printf '%s\n' "${STEPS[@]}" | python3 -c '
+import json, sys, time
+steps = [json.loads(l) for l in sys.stdin if l.strip()]
+print(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "ok": all(s["ok"] for s in steps), "version": sys.argv[1],
+                  "dir": sys.argv[2], "steps": steps}, ensure_ascii=False, indent=1))' "$VERSION" "$DIR" > ~/inbox/selftest.json.tmp
+mv ~/inbox/selftest.json.tmp ~/inbox/selftest.json
+python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); [print(("ok  " if s["ok"] else "FAIL"), s["step"], "-", s["detail"]) for s in r["steps"]]' ~/inbox/selftest.json
+# keep the last 10 runs
+ls -1d ~/selftest/*/ 2>/dev/null | head -n -10 | xargs -r rm -rf
+exit $FAILED
