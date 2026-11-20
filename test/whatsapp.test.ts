@@ -283,3 +283,22 @@ test('a failing close does not stop the client', async () => {
     await waitFor(() => wa.sockets.length === 2);
   } finally { await f.stop(); }
 });
+
+// History at linking: the last two days (owner's decision 2026-11-20).
+test('history from linking brings the last two days, once', async () => {
+  const { wa, f } = await linked();
+  try {
+    wa.last().emitUpdate({ connection: 'open' });
+    await wa.last().emitHistory([
+      text('H1', { messageTimestamp: now() - 3600 }),
+      text('H2', { messageTimestamp: now() - 47 * 3600 }),
+      text('H3', { messageTimestamp: now() - 49 * 3600 }),
+      text('H4', { key: { remoteJid: '48500000001@s.whatsapp.net', id: 'H4', fromMe: true }, message: { conversation: 'Moja odpowiedź' }, messageTimestamp: now() - 7200 }),
+    ]);
+    await wa.last().emitMessages([text('H1')]);          // the same message comes live again
+    const events = waEvents(f);
+    assert.equal(events.length, 3, 'H1, H2 and H4; H3 is older than two days; H1 once');
+    assert.equal(events.filter((item) => item.author === 'me').length, 1);
+    assert.ok(events.every((item) => (item.payload.data?.whatsapp as { phone?: string }).phone === '+48500000001'));
+  } finally { await f.stop(); }
+});

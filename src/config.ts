@@ -22,13 +22,14 @@ export const telegramConfig = JSON.parse(readFileSync(new URL('../registry/teleg
   address_book: { frequent_days: number; row_size: number };
 };
 
-// WhatsApp linked devices (docs/plans/2026-11-20-whatsapp-baileys-design.md): accounts, file limit, oldest message
-// written, reconnect ceiling, QR refresh, pulse while connected (below the System screen's silence threshold).
+// WhatsApp linked devices (docs/plans/2026-11-20-whatsapp-baileys-design.md): accounts, file limit, oldest live
+// message written, how far back the history sent at linking is taken, reconnect ceiling, QR refresh, pulse while
+// connected (below the System screen's silence threshold).
 // An account's connector is always `whatsapp_<account>` (the web client derives it).
 export const whatsappConfig = JSON.parse(readFileSync(new URL('../registry/whatsapp.json', import.meta.url), 'utf8')) as {
   version: number;
   accounts: Record<string, { title: string; connector: string; sphere: string; timezone: string }>;
-  media_max_bytes: number; max_age_h: number; reconnect_max_s: number; qr_refresh_s: number; pulse_s: number;
+  media_max_bytes: number; max_age_h: number; history_h: number; reconnect_max_s: number; qr_refresh_s: number; pulse_s: number;
 };
 for (const [key, account] of Object.entries(whatsappConfig.accounts)) {
   if (account.connector !== `whatsapp_${key}`) throw new Error(`registry/whatsapp.json: коннектор аккаунта ${key} должен быть whatsapp_${key}`);

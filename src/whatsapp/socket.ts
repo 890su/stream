@@ -19,8 +19,8 @@ const quiet: Logger = {
 
 // How Stream connects: never shown as online (the phone keeps showing WhatsApp notifications), its own sends do not
 // come back as messages, no link previews, no full history. Baileys' default history sync (all but FULL) is kept on
-// purpose: it carries the LID ↔ phone mappings (Baileys warns that without them sessions break); the history itself
-// arrives as `messaging-history.set`, which Stream does not handle, so nothing old reaches the journal.
+// purpose: it carries the LID ↔ phone mappings (Baileys warns that without them sessions break); of the history itself
+// (`messaging-history.set`) the client keeps only the last `history_h` hours.
 export const SOCKET_OPTIONS = {
   markOnlineOnConnect: false, emitOwnEvents: false, syncFullHistory: false, generateHighQualityLinkPreview: false,
 } as const;
@@ -53,6 +53,7 @@ export const createSocket: SocketFactory = async (authDir) => {
   return {
     onUpdate: (fn) => { sock.ev.on('connection.update', (update) => fn(updateOf(update))); },
     onMessages: (fn) => { sock.ev.on('messages.upsert', (upsert) => { void fn({ messages: upsert.messages as unknown as WaMessage[], type: upsert.type }); }); },
+    onHistory: (fn) => { sock.ev.on('messaging-history.set', (history) => { void fn((history.messages ?? []) as unknown as WaMessage[]); }); },
     sendText: async (jid, text) => {
       const sent = await sock.sendMessage(jid, { text });
       if (!sent?.key.id) throw new Error('WhatsApp did not return the message id');

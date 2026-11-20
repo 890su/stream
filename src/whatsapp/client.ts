@@ -101,7 +101,9 @@ export class WhatsAppClient {
       try { this.#onUpdate(socket, update); }
       catch (error) { console.error(`WhatsApp ${this.account}: update failed — ${messageOf(error)}`); }
     });
-    socket.onMessages((upsert) => this.#onMessages(socket, upsert.messages));
+    socket.onMessages((upsert) => this.#onMessages(socket, upsert.messages, whatsappConfig.max_age_h));
+    // The history sent at linking: only its last hours (owner's decision 2026-11-20), the same way as live messages.
+    socket.onHistory((messages) => this.#onMessages(socket, messages, whatsappConfig.history_h));
   }
 
   #onUpdate(socket: WaSocket, update: WaUpdate): void {
@@ -148,9 +150,9 @@ export class WhatsAppClient {
     }
   }
 
-  async #onMessages(socket: WaSocket, messages: WaMessage[]): Promise<void> {
+  async #onMessages(socket: WaSocket, messages: WaMessage[], hours: number): Promise<void> {
     const files = this.#files(socket);
-    const oldest = Date.now() - whatsappConfig.max_age_h * 3_600_000;
+    const oldest = Date.now() - hours * 3_600_000;
     for (const message of messages) {
       let id = '?';
       try {

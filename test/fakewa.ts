@@ -11,10 +11,12 @@ export class FakeSocket implements WaSocket {
   failEnd = false;                         // end() throws (a socket that is already gone)
   #updates: ((update: WaUpdate) => void)[] = [];
   #messages: ((upsert: { messages: WaMessage[]; type: string }) => Promise<void>)[] = [];
+  #history: ((messages: WaMessage[]) => Promise<void>)[] = [];
   #counter = 0;
 
   onUpdate(fn: (update: WaUpdate) => void): void { this.#updates.push(fn); }
   onMessages(fn: (upsert: { messages: WaMessage[]; type: string }) => Promise<void>): void { this.#messages.push(fn); }
+  onHistory(fn: (messages: WaMessage[]) => Promise<void>): void { this.#history.push(fn); }
   async sendText(jid: string, text: string): Promise<string> {
     if (this.failSend) throw new Error('fake send failed');
     this.sent.push({ jid, text });
@@ -33,6 +35,7 @@ export class FakeSocket implements WaSocket {
 
   emitUpdate(update: WaUpdate): void { for (const fn of this.#updates) fn(update); }
   async emitMessages(messages: WaMessage[], type = 'notify'): Promise<void> { for (const fn of this.#messages) await fn({ messages, type }); }
+  async emitHistory(messages: WaMessage[]): Promise<void> { for (const fn of this.#history) await fn(messages); }
 }
 
 export function fakeWa() {

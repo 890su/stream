@@ -20,6 +20,7 @@ export type WaUpdate = { connection?: 'open' | 'close' | 'connecting'; qr?: stri
 export interface WaSocket {
   onUpdate(fn: (update: WaUpdate) => void): void;
   onMessages(fn: (upsert: { messages: WaMessage[]; type: string }) => Promise<void>): void;
+  onHistory(fn: (messages: WaMessage[]) => Promise<void>): void;   // the recent history WhatsApp sends at linking
   sendText(jid: string, text: string): Promise<string>;   // the id of the message sent
   download(message: WaMessage): Promise<Buffer>;
   pnForLid(lid: string): Promise<string | null>;
