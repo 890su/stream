@@ -17,5 +17,7 @@ test('calendar switches: by account, the account\'s own calendar first, then by 
 test('the notice after Google sends the owner back', () => {
   assert.equal(googleNotice('?google=ok'), 'Google подключён: календари появятся в «Плане» через минуту');
   assert.equal(googleNotice('?google=error'), 'Не удалось подключить Google — попробуйте ещё раз на экране «Система»');
+  assert.equal(googleNotice('?google=expired'), 'Ссылка входа устарела — нажмите «Подключить Google» ещё раз');
+  assert.match(googleNotice('?google=scope'), /разрешите доступ к календарю/);
   assert.equal(googleNotice('?mode=tasks'), null);
 });

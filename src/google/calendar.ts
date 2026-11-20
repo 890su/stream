@@ -17,10 +17,16 @@ type Config = { poll_s: number; window_days: number; reconnect_max_s: number; hi
 
 // One event as «План» shows it: all-day keeps its days (`YYYY-MM-DD`, the end exclusive), a timed one its instants.
 export function normalizeEvent(raw: Record<string, any>, calendar: string): CalendarEvent | null {
-  if (!raw || raw.status === 'cancelled' || !raw.start) return null;
+  if (!raw || raw.status === 'cancelled' || !raw.start || (!raw.start.date && !raw.start.dateTime)) return null;
   const allDay = Boolean(raw.start.date);
-  const instant = (part: Record<string, string> | undefined) => (allDay ? String(part?.date ?? raw.start.date) : new Date(part?.dateTime ?? raw.start.dateTime).toISOString());
-  return { id: String(raw.id), calendar, title: String(raw.summary ?? '').trim() || '(без названия)', start: instant(raw.start), end: instant(raw.end ?? raw.start), allDay, link: raw.htmlLink ?? null };
+  const instant = (part: Record<string, string> | undefined) => {
+    if (allDay) return String(part?.date ?? raw.start.date);
+    const date = new Date(part?.dateTime ?? raw.start.dateTime);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  };
+  const [start, end] = [instant(raw.start), instant(raw.end ?? raw.start)];
+  if (!start || !end) return null; // a malformed event is skipped, never fails the account
+  return { id: String(raw.id), calendar, title: String(raw.summary ?? '').trim() || '(без названия)', start, end, allDay, link: raw.htmlLink ?? null };
 }
 
 export class CalendarPoller {
@@ -37,6 +43,8 @@ export class CalendarPoller {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #delay: number;
   #running = false;
+  #polling = false; // a round is under way
+  #again = false;   // a refresh came during it: one more round right after
 
   constructor({ accounts, fetch, config, dir, now = () => new Date(), onHealth }: { accounts: Accounts; fetch: Fetch; config: Config; dir: string; now?: () => Date; onHealth: (state: SourceState, detail: string | null) => void }) {
     this.#accounts = accounts;
@@ -53,15 +61,28 @@ export class CalendarPoller {
 
   start(): void { this.#running = true; void this.#loop(); }
   stop(): void { this.#running = false; if (this.#timer) clearTimeout(this.#timer); this.#timer = null; }
-  // Read again now (a new account, a calendar shown).
-  refresh(): void { if (this.#running) { if (this.#timer) clearTimeout(this.#timer); void this.#loop(); } }
+  // Read again now (a new account, a calendar shown). During a round — one more round right after it, never a second
+  // loop: there is only ever one chain of timers.
+  refresh(): void {
+    if (!this.#running) return;
+    if (this.#polling) { this.#again = true; return; }
+    if (this.#timer) clearTimeout(this.#timer);
+    this.#timer = null;
+    void this.#loop();
+  }
 
   async #loop(): Promise<void> {
+    if (this.#polling) { this.#again = true; return; }
+    this.#polling = true;
     let failed = false;
     try { failed = !(await this.poll()); } catch (error) { failed = true; console.error('Google: poll failed —', error instanceof Error ? error.name : 'error'); }
+    finally { this.#polling = false; }
     if (!this.#running) return;
     this.#delay = failed ? Math.min(this.#delay * 2, this.#config.reconnect_max_s * 1000) : this.#config.poll_s * 1000;
-    this.#timer = setTimeout(() => void this.#loop(), this.#delay);
+    if (this.#timer) clearTimeout(this.#timer);
+    const next = this.#again ? 0 : this.#delay;
+    this.#again = false;
+    this.#timer = setTimeout(() => { this.#timer = null; void this.#loop(); }, next);
     this.#timer.unref?.();
   }
 
@@ -91,15 +112,18 @@ export class CalendarPoller {
 
   async #get(token: string, path: string): Promise<Record<string, any>> {
     const response = await this.#fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (response.status === 401) throw Object.assign(new Error('Google: 401'), { unauthorized: true });
-    if (!response.ok) throw new Error(`Google: ${response.status}`);
+    if (!response.ok) throw Object.assign(new Error(`Google: ${response.status}`), { status: response.status });
     return await response.json() as Record<string, any>;
   }
 
   // One round over all accounts. True when everything was read.
   async poll(): Promise<boolean> {
     const accounts = this.#accounts.list();
-    if (!accounts.length) { this.#onHealth('login_required', 'подключите Google на экране «Система»'); return true; }
+    if (!accounts.length) {
+      this.#calendars.clear(); this.#events.clear(); this.#states.clear(); // the last account was removed: nothing stays
+      this.#onHealth('login_required', 'подключите Google на экране «Система»');
+      return true;
+    }
     const now = this.#now();
     const timeMin = new Date(now.getTime() - 86_400_000).toISOString();
     const timeMax = new Date(now.getTime() + this.#config.window_days * 86_400_000).toISOString();
@@ -107,6 +131,7 @@ export class CalendarPoller {
     const calendars = new Map<string, CalendarInfo>();
     let ok = true;
     for (const { email } of accounts) {
+      let broken = false;
       try {
         const token = await this.#accounts.accessToken(email);
         const list = await this.#get(token, '/users/me/calendarList?maxResults=250');
@@ -117,20 +142,33 @@ export class CalendarPoller {
         for (const item of list.items ?? []) {
           if (seen.has(item.id) || this.isHidden(item.id)) continue;
           seen.add(item.id);
-          const query = new URLSearchParams({ singleEvents: 'true', orderBy: 'startTime', timeMin, timeMax, maxResults: '2500' });
-          const events = await this.#get(token, `/calendars/${encodeURIComponent(item.id)}/events?${query}`);
-          this.#events.set(item.id, (events.items ?? []).map((raw: Record<string, any>) => normalizeEvent(raw, item.id)).filter(Boolean));
+          // One calendar failing keeps its last events and the others go on. Gone or no access (404, 403) is that
+          // calendar's own matter; Google not answering (5xx, network) marks the account «ошибка».
+          try {
+            const query = new URLSearchParams({ singleEvents: 'true', orderBy: 'startTime', timeMin, timeMax, maxResults: '2500' });
+            const events = await this.#get(token, `/calendars/${encodeURIComponent(item.id)}/events?${query}`);
+            this.#events.set(item.id, (events.items ?? []).map((raw: Record<string, any>) => normalizeEvent(raw, item.id)).filter(Boolean));
+          } catch (error) {
+            const status = (error as { status?: number }).status;
+            console.error(`Google ${email}: a calendar not read (${status ?? 'error'})`);
+            if (status !== 404 && status !== 403) broken = true;
+          }
         }
-        this.#states.set(email, 'ok');
+        this.#states.set(email, broken ? 'error' : 'ok');
+        if (broken) ok = false;
       } catch (error) {
         ok = false;
         const state: SourceState = error instanceof NeedsLogin ? 'login_required' : 'error';
         this.#states.set(email, state);
         if (state === 'login_required') for (const [id, info] of this.#calendars) if (info.account === email) this.#events.delete(id);
-        console.error(`Google ${email}: ${state}`);
+        console.error(`Google ${email}: ${state}${(error as { status?: number }).status ? ` ${(error as { status?: number }).status}` : ''}`);
       }
     }
-    for (const [id, info] of this.#calendars) if (!calendars.has(id) && this.#states.get(info.account) !== 'ok') calendars.set(id, info); // keep what a failed account had
+    // A failed account keeps what it had; a removed account leaves nothing behind.
+    const linked = new Set(accounts.map((item) => item.email));
+    for (const [id, info] of this.#calendars) if (!calendars.has(id) && linked.has(info.account) && this.#states.get(info.account) !== 'ok') calendars.set(id, info);
+    for (const email of [...this.#states.keys()]) if (!linked.has(email)) this.#states.delete(email);
+    for (const id of [...this.#events.keys()]) if (!calendars.has(id)) this.#events.delete(id);
     this.#calendars = calendars;
     const states = this.accountStates();
     const login = states.filter((item) => item.state === 'login_required').map((item) => item.email);

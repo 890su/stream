@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -21,16 +21,19 @@ export class NeedsLogin extends Error {
 
 const mac = (key: string, text: string) => createHmac('sha256', key).update(text).digest('base64url');
 
-// `<expiry ms>.<mac>`: valid for 10 minutes, made with a key the browser never sees.
-export function signState(key: string, now = Date.now()): string {
-  const expiry = String(now + STATE_MS);
-  return `${expiry}.${mac(key, expiry)}`;
+// `<expiry ms>.<nonce>.<mac>`: valid for 10 minutes, made with a key the browser never sees; the server also keeps the
+// nonce and lets it through once (src/server/google.ts), so a seen link cannot link another account.
+export function signState(key: string, now = Date.now(), nonce = randomBytes(12).toString('base64url')): string {
+  const body = `${now + STATE_MS}.${nonce}`;
+  return `${body}.${mac(key, body)}`;
 }
 
+export const stateNonce = (state: string): string | null => String(state).split('.')[1] ?? null;
+
 export function checkState(key: string, state: string, now = Date.now()): boolean {
-  const [expiry, given] = String(state).split('.');
-  if (!expiry || !given || !/^\d+$/.test(expiry) || Number(expiry) < now) return false;
-  const want = Buffer.from(mac(key, expiry));
+  const [expiry, nonce, given] = String(state).split('.');
+  if (!expiry || !nonce || !given || !/^\d+$/.test(expiry) || Number(expiry) < now) return false;
+  const want = Buffer.from(mac(key, `${expiry}.${nonce}`));
   const got = Buffer.from(given);
   return want.length === got.length && timingSafeEqual(want, got);
 }
@@ -60,6 +63,10 @@ const emailOf = (idToken: string): string => {
 export async function exchangeCode({ code, clientId, clientSecret, redirectUri, fetch }: { code: string; clientId: string; clientSecret: string; redirectUri: string; fetch: Fetch }) {
   const body = await token(fetch, { grant_type: 'authorization_code', code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri });
   if (!body.refresh_token) throw new Error('Google не выдал ключ для работы без входа — отключите Stream в аккаунте Google и подключите снова');
+  // Google lets the owner untick the calendar on the consent screen: then nothing would work, so say so now.
+  if (!String(body.scope ?? '').split(' ').includes('https://www.googleapis.com/auth/calendar')) {
+    throw Object.assign(new Error('Google: не разрешён доступ к календарю — подключите снова и разрешите доступ к календарю'), { code: 'scope' });
+  }
   return { access_token: String(body.access_token), refresh_token: String(body.refresh_token), expires_in: Number(body.expires_in ?? 3600), email: emailOf(body.id_token) };
 }
 

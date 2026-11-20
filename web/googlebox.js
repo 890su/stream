@@ -17,6 +17,8 @@ export function googleNotice(search) {
   const result = new URLSearchParams(search).get('google');
   if (result === 'ok') return 'Google подключён: календари появятся в «Плане» через минуту';
   if (result === 'error') return 'Не удалось подключить Google — попробуйте ещё раз на экране «Система»';
+  if (result === 'expired') return 'Ссылка входа устарела — нажмите «Подключить Google» ещё раз';
+  if (result === 'scope') return 'Google подключён без календаря — подключите снова и разрешите доступ к календарю';
   return null;
 }
 

@@ -9,7 +9,7 @@ const idToken = (email: string) => `x.${Buffer.from(JSON.stringify({ email })).t
 function fakeGoogle() {
   return async (url: string | URL | Request) => {
     const text = String(url);
-    if (text.startsWith('https://oauth2.googleapis.com/token')) return reply(200, { access_token: 'a1', refresh_token: 'r1', expires_in: 3600, id_token: idToken('anna@example.com') });
+    if (text.startsWith('https://oauth2.googleapis.com/token')) return reply(200, { access_token: 'a1', refresh_token: 'r1', expires_in: 3600, scope: 'openid email https://www.googleapis.com/auth/calendar', id_token: idToken('anna@example.com') });
     if (text.includes('/users/me/calendarList')) return reply(200, { items: [{ id: 'anna@example.com', summary: 'Анна' }, { id: 'family@group', summary: 'Семья' }] });
     const calendar = decodeURIComponent(text.split('/calendars/')[1]!.split('/events')[0]!);
     const soon = new Date(Date.now() + 3_600_000).toISOString();
@@ -27,7 +27,8 @@ test('connect gives a Google URL with a signed state; a bad state is refused; a 
     const state = url.searchParams.get('state')!;
     // The callback comes from Google's redirect: no owner token.
     const bad = await fetch(`${f.base}/api/google/callback?code=c&state=forged.123`, { redirect: 'manual' });
-    assert.equal(bad.status, 400);
+    assert.equal(bad.status, 302);
+    assert.match(bad.headers.get('location')!, /google=expired$/);
     assert.deepEqual(((await (await f.request('/api/calendar')).json()) as { accounts: unknown[] }).accounts, [], 'nothing linked by a forged state');
     const good = await fetch(`${f.base}/api/google/callback?code=c&state=${encodeURIComponent(state)}`, { redirect: 'manual' });
     assert.equal(good.status, 302);

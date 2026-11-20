@@ -34,7 +34,7 @@ test('a code becomes tokens and the account email', async () => {
   const fetch = async (url: string | URL | Request, init?: RequestInit) => {
     assert.equal(String(url), 'https://oauth2.googleapis.com/token');
     assert.match(String(init?.body), /grant_type=authorization_code/);
-    return reply(200, { access_token: 'a1', refresh_token: 'r1', expires_in: 3600, id_token: idToken('anna@example.com') });
+    return reply(200, { access_token: 'a1', refresh_token: 'r1', expires_in: 3600, scope: 'openid email https://www.googleapis.com/auth/calendar', id_token: idToken('anna@example.com') });
   };
   const tokens = await exchangeCode({ code: 'c', clientId: 'id', clientSecret: 's', redirectUri: 'https://x/cb', fetch });
   assert.deepEqual([tokens.email, tokens.refresh_token], ['anna@example.com', 'r1']);

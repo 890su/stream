@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { JournalStore } from '../store/store.ts';
 import type { LiveFeed } from './live.ts';
 import { googleConfig } from '../config.ts';
-import { GoogleAccounts, authUrl, checkState, exchangeCode, signState, type Fetch } from '../google/oauth.ts';
+import { GoogleAccounts, authUrl, checkState, exchangeCode, signState, stateNonce, type Fetch } from '../google/oauth.ts';
 import { CalendarPoller } from '../google/calendar.ts';
 import { HttpError } from './errors.ts';
 import { json, readBody } from './body.ts';
@@ -29,12 +29,19 @@ export function createGoogle({ store, live, ownerToken, options }: { store: Jour
     const previous = store.status.pulse(GOOGLE_SOURCE, state, detail, {}, new Date().toISOString());
     stateChanged(store, live, GOOGLE_SOURCE, state, previous, detail);
   };
+  const issued = new Map<string, number>(); // nonces of sign-in links given out, each let through once
   const poller = new CalendarPoller({ accounts, fetch, config: googleConfig, dir, onHealth: health });
 
   // Google's redirect back after the sign-in.
+  // The owner arrives here in the browser: always a redirect back to Stream with the outcome, never an error page.
   async function callback(response: ServerResponse, url: URL): Promise<void> {
-    if (!configured) throw new HttpError(409, 'Google не настроен');
-    if (!checkState(key, url.searchParams.get('state') ?? '')) throw new HttpError(400, 'Ссылка входа устарела — нажмите «Подключить Google» снова');
+    const back = (result: string) => { response.writeHead(302, { Location: `/?google=${result}` }); response.end(); };
+    if (!configured) { back('error'); return; }
+    const state = url.searchParams.get('state') ?? '';
+    const nonce = stateNonce(state);
+    const fresh = checkState(key, state) && nonce !== null && issued.has(nonce);
+    if (nonce) issued.delete(nonce);
+    if (!fresh) { back('expired'); return; }
     const code = url.searchParams.get('code');
     let result = 'ok';
     if (!code) result = 'error';
@@ -46,18 +53,21 @@ export function createGoogle({ store, live, ownerToken, options }: { store: Jour
         poller.refresh();
       } catch (error) {
         console.error('Google: linking failed —', error instanceof Error ? error.message.slice(0, 120) : 'error');
-        result = 'error';
+        result = (error as { code?: string }).code === 'scope' ? 'scope' : 'error';
       }
     }
-    response.writeHead(302, { Location: `/?google=${result}` });
-    response.end();
+    back(result);
   }
 
   // The routes behind the owner token. True when the path was ours.
   async function route(request: IncomingMessage, response: ServerResponse, url: URL): Promise<boolean> {
     if (url.pathname === '/api/google/connect' && request.method === 'GET') {
       if (!configured) throw new HttpError(409, 'Google не настроен: нет STREAM_GOOGLE_CLIENT_ID и STREAM_GOOGLE_CLIENT_SECRET в /srv/stream/.env (deploy/GOOGLE.md)');
-      json(response, 200, { url: authUrl({ clientId, redirectUri, state: signState(key) }) });
+      const now = Date.now();
+      for (const [nonce, until] of issued) if (until < now) issued.delete(nonce);
+      const state = signState(key, now);
+      issued.set(stateNonce(state)!, now + 10 * 60_000);
+      json(response, 200, { url: authUrl({ clientId, redirectUri, state }) });
       return true;
     }
     if (url.pathname === '/api/calendar' && request.method === 'GET') {
