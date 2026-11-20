@@ -21,6 +21,7 @@ import type { Planner } from '../tasks/planner.ts';
 import { system, watchSilence } from './system.ts';
 import { staticFile } from './static.ts';
 import { LiveFeed } from './live.ts';
+import { createGoogle, type GoogleOptions } from './google.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
@@ -30,10 +31,12 @@ const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`)
 // triage (optional) — the task triage (CONCEPT.md §2.8); planner null keeps it off and says why on the System screen.
 // whatsapp (optional) — WhatsApp accounts as linked devices in this process (deploy/WHATSAPP.md); session keys in
 // <authRoot>/<account>; `factory` replaces Baileys in tests.
-export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp }: {
+// google — the Google Calendar connector (deploy/GOOGLE.md): the owner's Google client, tokens in `dir`; `fetch` in tests.
+export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google }: {
   store: JournalStore; ownerToken: string; phoneToken?: string; viberToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
   triage?: { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number };
   whatsapp?: { accounts: string[]; authRoot: string; factory?: SocketFactory; retryMs?: number };
+  google?: GoogleOptions;
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
@@ -42,12 +45,18 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
   const expectedPhone = phoneToken === undefined ? undefined : bearer(phoneToken);
   const expectedViber = viberToken === undefined ? undefined : bearer(viberToken);
   const live = new LiveFeed();
+  const googleConnector = google ? createGoogle({ store, live, ownerToken, options: google }) : null;
   const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
     response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     try {
       const url = new URL(request.url ?? '/', 'http://localhost');
+      // Google's redirect back after the sign-in carries no owner token: a signed state instead (src/server/google.ts).
+      if (url.pathname === '/api/google/callback' && request.method === 'GET') {
+        if (!googleConnector) throw new HttpError(409, 'Google не настроен');
+        return await googleConnector.callback(response, url);
+      }
       if (url.pathname.startsWith('/api/') || (url.pathname === '/share-target' && request.method === 'POST')) {
         const actual = createHash('sha256').update(request.headers.authorization ?? '').digest();
         const isPhonePath = url.pathname.startsWith('/api/phone/');
@@ -65,6 +74,11 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           return await system(request, response, url.pathname.slice('/api/'.length), store, live, bots);
         }
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
+        if (url.pathname === '/api/calendar' || url.pathname.startsWith('/api/google/')) {
+          if (googleConnector && await googleConnector.route(request, response, url)) return;
+          if (url.pathname === '/api/calendar') { json(response, 200, { configured: false, accounts: [], calendars: [], events: [] }); return; }
+          if (url.pathname === '/api/google/connect') throw new HttpError(409, 'Google не настроен: нет STREAM_GOOGLE_CLIENT_ID и STREAM_GOOGLE_CLIENT_SECRET в /srv/stream/.env (deploy/GOOGLE.md)');
+        }
         if (url.pathname === '/api/recipients' && request.method === 'GET') { json(response, 200, { recipients: store.recipients.list() }); return; }
         if (url.pathname === '/api/events') return await events(request, response, url, store, live);
         // Long-lived records whole — people, counterparties, projects, task changes and triage results: a new device needs all of them,
@@ -107,7 +121,8 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
     for (const bot of bots) void bot.start();
     for (const client of whatsappClients) client.start().catch((error) => console.error(`WhatsApp ${client.account}: start failed`, error instanceof Error ? error.message : error));
     triageWorker?.start(triage?.everyMs);
+    googleConnector?.start();
   });
-  server.on('close', () => { stopWatching(); for (const bot of bots) bot.stop(); for (const client of whatsappClients) client.stop(); triageWorker?.stop(); });
+  server.on('close', () => { stopWatching(); for (const bot of bots) bot.stop(); for (const client of whatsappClients) client.stop(); triageWorker?.stop(); googleConnector?.stop(); });
   return server;
 }

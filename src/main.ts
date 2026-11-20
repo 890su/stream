@@ -27,7 +27,10 @@ const triage = { planner: aiKey ? anthropicPlanner(aiKey) : null, namer: aiKey ?
 // WhatsApp linked devices (deploy/WHATSAPP.md): STREAM_WA_<ACCOUNT>_ENABLED=1; session keys in <DATA_DIR>/whatsapp/<account>.
 const whatsappAccounts = Object.keys(whatsappConfig.accounts).filter((account) => process.env[`STREAM_WA_${account.toUpperCase()}_ENABLED`] === '1');
 const whatsapp = whatsappAccounts.length ? { accounts: whatsappAccounts, authRoot: resolve(dataDir, 'whatsapp') } : undefined;
-const server = createApp({ store, ownerToken, phoneToken, viberToken, telegram: { tokens, apiBase: process.env.TELEGRAM_API_BASE || undefined }, triage, whatsapp });
+// Google Calendar (deploy/GOOGLE.md): the owner's Google client; without it «Система» says how to set it up.
+const google = { clientId: process.env.STREAM_GOOGLE_CLIENT_ID || undefined, clientSecret: process.env.STREAM_GOOGLE_CLIENT_SECRET || undefined,
+  publicUrl: process.env.STREAM_PUBLIC_URL || 'https://stream.sekond.pl', dir: resolve(dataDir, 'google') };
+const server = createApp({ store, ownerToken, phoneToken, viberToken, telegram: { tokens, apiBase: process.env.TELEGRAM_API_BASE || undefined }, triage, whatsapp, google });
 // Bind to loopback by default; the container sets HOST=0.0.0.0 and Docker publishes only on host loopback.
 const host = process.env.HOST || '127.0.0.1';
 server.listen(port, host, () => console.log(`Stream http://${host}:${port}`));
