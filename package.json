@@ -18,6 +18,18 @@
     "typescript": "^5.9"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "1.4.0"
+    "@anthropic-ai/sdk": "1.4.0",
+    "baileys": "7.0.0-rc14"
+  },
+  "pnpm": {
+    "packageExtensions": {
+      "baileys@7.0.0-rc14": {
+        "peerDependenciesMeta": {
+          "sharp": {
+            "optional": true
+          }
+        }
+      }
+    }
   }
 }
