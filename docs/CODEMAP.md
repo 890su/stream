@@ -24,7 +24,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `backup.ts` | nightly copy of DB and media | — |
 | **contracts/** | | |
 | `validate.ts` | Event type + JSON Schema interpreter | `JournalEvent`, `validateEvent` |
-| `correction.ts` | owner corrections: ops, link targets | `CORRECTION_OPS`, `checkCorrection*` |
+| `correction.ts` | owner corrections: ops (incl. the queue's `snooze` with `until`, `requeue` and their undo), link targets | `CORRECTION_OPS`, `checkCorrection*` |
 | `tagging.ts` / `phone.ts` / `telegram.ts` / `viber.ts` / `whatsapp.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry; Viber and WhatsApp: replies by phone only) | `check*`, `whatsappAccountOf` |
 | **server/** | | |
 | `http.ts` | auth, routing, starts bots, WhatsApp clients and triage | `createApp` |
@@ -77,7 +77,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `styles.css` → `feed.css` → `panels.css` → `screens.css` → `wide.css` | styles, loaded in this order (cascade); `wide.css` — three columns from 1100 px |
 | `layout.js` | the wide-screen breakpoint the panels follow (docked or sliding) |
 | `app.js` | entry: wires everything, message action dispatch, view changes (old saved views map to new), the link window's context |
-| `viewswitch.js` | the «Беседы» / «Задачи» button at the right of the input row and its counter (`counterFor`); the view title in the top bar |
+| `viewswitch.js` | the ☑ / 💬 switch at the right of the input row and its counter (`counterFor`, `switchIcon`; Задачи count the queue); the view title in the top bar; `rootBack` — the system back from Задачи or Лента leads to the queue |
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
 | `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter |
 | `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history) |
@@ -102,13 +102,14 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows), only from the middle column: follow, arm, act; not a tap |
 | `peoplerow.js` | the participants line of an open conversation over the tags: the card's tiles in one sideways line, the conversation's task edited (`conversationTask`), read-only without a task (`chatParties`) |
 | `swipezones.js` | screen swipes by columns 25 / 50 / 25: tabs Беседы · Задачи, the left panel before them, the right one after; in the right panel — the card's tabs, close before the first (`zoneOf`, `swipeAction`) |
-| `convquick.js` | swipes on a «Беседы» row: left — to the archive (`answered` correction), right — its most urgent task or a new one (`pickTask`, `anchorOf`, `sourceOf`) |
+| `convquick.js` | actions on a queue tile: swipe left — archive (`answered`), right — confirm the AI's task, open the owner's or make one from what waits (`swipePlan`); ⏱ `snooze`, ↥ `requeue`, «+ задача…» (`newTask`), each with «Вернуть»; `anchorOf`, `sourceOf` |
 | `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
 | `donecard.js` | card «Задача выполнена?» (triage's `proposed: done`): «Да, готово» closes in one tap, «Ещё нет»; «Заполнить отчёт» on a closed task fills the missing fields; pure report parsing |
 | `backclose.js` | the system back closes what is open on top (link window, attach menu, message actions, dialogs) instead of leaving the app: history entries per window (`createBackStack`, `watchDialogs`) |
 | `holdrender.js` | redraws of the left panel, details and centre wait while an input or a list of choices there is in use (`holdRender`, `holding`) |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
-| `convlist.js` / `convtasks.js` | a row of the «Беседы» list (state label, channels, open tasks) and the «Завершённые · N» / «Архив · N» folds (`foldRow`); task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |
+| `snooze.js` | «⏱ Отложить»: choices by the time of day (`snoozeOptions`), the popover (`snoozeMenu`), a date from the system picker |
+| `convlist.js` / `convtasks.js` | a tile of the queue: four lines (kind · channel — contact; the task or «+ задача…»; two lines of the last message), time, ⏱ and ↥, a small line «ждёт · новых · контрагент · метки» (`tileFacts`, `tileTask`, `pickTask`, `convRow`); task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |
 | `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
@@ -120,14 +121,14 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `recipients.js` | recipients: address book, the chosen one's chip, items and pins for the Контакты section |
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
-| `drawer.js` | left panel (opened by the filter icon; closed by a swipe) — filters by view: contacts (conversations) and tags (shared), «Завершённые» (Беседы, Лента), sources (Лента), saved filters (Задачи) |
+| `drawer.js` / `favourites.js` | left panel (opened by the filter icon; closed by a swipe): «💬 Беседы» back to the queue, task filters in Беседы and Задачи (a choice switches to Задачи), «Избранные» — pinned chats (`favourites`), tags; Лента — «Завершённые» and sources |
 | `taskfold.js` | pure: tasks from `task_change` (with history, roles, checklist — `foldItems`, `itemsProgress`, `ownerTitled`), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter` (fields incl. `snoozed`), `visibleTasks` |
-| `conversations.js` | pure: messages → conversations (one per chat or number), state urgent / mine / theirs / quiet / done (an `answered` mark archives the conversation until a newer message — `isArchived`), order from the registry; `conversationKeys` (an own note joins the conversation it continues or answers; else a note in a task of its own → `task:<id>`; a split message and its chain → `split:<id>`); `withWhom` |
+| `conversations.js` / `queue.js` | pure: messages → conversations (one per chat or number), each with `queue` — waiting for the owner and since when (`queueOf`: only the owner's reply, own task link, `answered`, `snooze` take it out; `requeue` and a snooze's end lift its moment; `max_age_days`), `queueList` (newest moment on top), `ownerLinked`; `isArchived`; `conversationKeys` (an own note joins the conversation it continues or answers; else a note in a task of its own → `task:<id>`; a split message and its chain → `split:<id>`); `withWhom` |
 | `details.js` / `taskdetails.js` | right panel «Подробности»: a task (actions and due first, roles folded, «Другой…» typed in place, report, messages, folded history) or a message (versions, tasks) |
 | `taskactions.js` | pure: actions a task offers by status (`actionsFor`; «Готово» in every open status), the change of each (`changeFor`, `closeChange` — done at once, report fields to `missing`), its undo (`undoOf`), due chips, delegate and «Жду…» options (callers included) |
 | `parties.js` | pure: parties and roles (mirror of `src/tasks/parties.ts`) and `partyName` — a party in words for rows, plaques and details |
-| `chatview.js` | the bar of an open conversation: title, «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «+ Задача» (a task for the conversation), «Не отслеживать» |
+| `chatview.js` | the bar of an open conversation: title, ⏱ ↥ 🗄 (then back to the queue), «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «+ Задача» (a task for the conversation), «Не отслеживать» |
 | `system.js` | System screen: sources, connections, sends, exclusions |
 | `versioncard.js` / `picker.js` | versions of a message (left to right); link picker |
 | `shared.js` | builders of entries: message, share, correction, task change, the owner's own task (`ownTask`) |
@@ -147,7 +148,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/whatsapp.json` | WhatsApp accounts (connector `whatsapp_<account>`), file limit, oldest live message written, history window at linking, reconnect ceiling, QR refresh, pulse |
 | `registry/tasks.json` | triage: quiet window (default and per stream kind), AI model and budget, task templates (`filed` — file and close), fallback «Разобрать», closing reports (`report_fields`, per-template `report`, currencies) |
-| `registry/conversations.json` | conversations: quiet days, urgent tags, order of states |
+| `registry/conversations.json` | the queue: `max_age_days`, «⏱ Отложить» presets by the time of day |
 | `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Пульт», `view: 'pulse'`) is the default |
 | `registry/pulse.json` | the pulse: rows per block, `hot_wait_hours`, `watch_alert_days`, `stale_days`, `paused_remind_hours`, money templates, importance weights |
 | `registry/connectors.yaml`, `intents/`, `fields.yaml` | connectors, intents, fields (for step 3) |

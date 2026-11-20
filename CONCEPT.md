@@ -534,7 +534,8 @@ folded «Подробности», the participants line with roles — the sele
 the conversation with that participant, other tasks' messages dimmed or folded by «◐»); message details — a bottom
 sheet; the right panel is a day planner (day · 4 days · week · 2 weeks; Stream tasks, Google Calendar later) that
 also picks dates and durations; forwarding to other conversations and merging conversations into a task (stage 5);
-the view switch is an icon.
+the view switch is an icon. Stage 1 shipped 2026-11-20: the queue, its tiles, ⏱ / ↥ / 🗄, the left panel and the
+root; the paragraphs on «Беседы» states, «Завершённые» and the drawer below are superseded by it.
 
 - **Top bar** (2026-11-19): the name of the current view and the network status; on the right — filter (with the
   number of active filters), «Архив», ⋮. No tabs: the views switch in the input row.
