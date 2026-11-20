@@ -10,6 +10,8 @@ services:
     image: agent-desktop:local
     container_name: agent-desktop
     hostname: agent-desktop
+    # Stable device identity for logged-in apps: fixed MAC here, machine id kept in the home volume (desktop-start).
+    mac_address: "02:42:ac:14:00:02"
     restart: unless-stopped
     environment:
       TZ: Europe/Warsaw

@@ -32,4 +32,4 @@ ENV LANG=ru_RU.UTF-8 LC_ALL=ru_RU.UTF-8 DISPLAY=:1 \
     DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-session \
     QTWEBENGINE_DISABLE_SANDBOX=1 QT_X11_NO_MITSHM=1
 EXPOSE 6080
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+CMD ["/usr/local/bin/desktop-start"]

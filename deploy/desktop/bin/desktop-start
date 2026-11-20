@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Container entrypoint: keep the machine id in the home volume so it survives image rebuilds (Viber ties its login
+# and the key of its database to it: a new id logged Viber out on 2026-11-20), then run the desktop processes.
+set -euo pipefail
+KEEP=/home/agent/.machine-id
+if [ ! -s "$KEEP" ]; then
+  if [ -s /var/lib/dbus/machine-id ]; then cp /var/lib/dbus/machine-id "$KEEP"; else dbus-uuidgen > "$KEEP"; fi
+  chown agent:agent "$KEEP"
+fi
+cp "$KEEP" /etc/machine-id
+cp "$KEEP" /var/lib/dbus/machine-id
+exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf

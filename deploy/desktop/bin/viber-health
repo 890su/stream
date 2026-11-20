@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Is the Viber channel usable? Checks the process, the window and what the screen says (OCR), prints one JSON line
+# {"ts","state","ok","detail"} and keeps the last one in ~/inbox/health.json for Stream.
+# States: ok · not_running · no_window · logged_out (QR screen) · error (Viber's error dialog) · offline · dialog
+# Usage: viber-health            one check
+#        viber-health --watch N  check every N seconds (run by supervisor)
+set -uo pipefail
+export DISPLAY=${DISPLAY:-:1} LC_ALL=ru_RU.UTF-8
+source /usr/local/bin/viber-ui.env
+OUT=~/inbox/health.json
+
+check() {
+  local state=ok detail="" text
+  if ! pgrep -x Viber >/dev/null; then state=not_running
+  elif [ -z "$(xdotool search --onlyvisible --class "$VIBER_CLASS" 2>/dev/null | head -1)" ]; then state=no_window
+  else
+    import -window root /tmp/viber-health.png 2>/dev/null
+    convert /tmp/viber-health.png -resize 150% -colorspace Gray /tmp/viber-health-g.png
+    text=$(tesseract /tmp/viber-health-g.png - -l rus+eng --psm 3 2>/dev/null | tr '\n' ' ')
+    case "$text" in
+      # Whole phrases of Viber's own screens, so that a chat preview with a similar word does not trigger them.
+      *"Чтобы использовать Viber"*) state=logged_out; detail="Viber ждёт входа по QR-коду" ;;
+      *"Произошла ошибка"*) state=error; detail="В Viber окно «Произошла ошибка»" ;;
+      *"Нет подключения"*|*"Нет соединения"*) state=offline; detail="Viber без связи" ;;
+      *"Синхронизация сообщений"*|*"Синхронизация отменена"*) state=dialog; detail="Окно синхронизации закрывает чаты" ;;
+    esac
+  fi
+  [ "$state" = not_running ] && detail="Viber не запущен"
+  [ "$state" = no_window ] && detail="Окна Viber нет"
+  mkdir -p "$(dirname "$OUT")"
+  python3 -c 'import json,sys,time; print(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "state": sys.argv[1], "ok": sys.argv[1] == "ok", "detail": sys.argv[2] or None}, ensure_ascii=False))' \
+    "$state" "$detail" | tee "$OUT.tmp"
+  mv "$OUT.tmp" "$OUT"
+}
+
+if [ "${1:-}" = --watch ]; then
+  sleep 60   # let Viber start
+  while true; do check >/dev/null; sleep "${2:-300}"; done
+else
+  check
+fi
