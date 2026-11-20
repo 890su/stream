@@ -21,8 +21,10 @@ updated: 2026-11-19
   answer, tap «Готово» and correct the triage.
 - **Model.** An append-only event journal; recomputable layers over it: normalization → interpretation → tasks
   and actions. Every task leads back to its source message. Edits, archive, delete and status changes are events too.
-- **Screen.** «Беседы» — who I talk to and who owes whom an answer; «Задачи» — what to do («Сегодня»,
-  «Разобрать», «Жду», «Контроль»). The message feed is a technical view from the menu. Input is one row at the bottom.
+- **Screen.** «Беседы» — the queue of what waits for me, oldest at the bottom by the input, handled bottom-up; a
+  conversation is always two: me and a person (or a group chat). «Задачи» — what to do (the pulse, saved lists); a
+  task opens full-screen with its people and the conversation with each (2026-11-20). The message feed is a technical
+  view from the menu. Input is one row at the bottom.
 - **How it works.** New messages are triaged in batches after a pause (AI now, scripts later): into a new task,
   an open task or «без дела». Nothing goes out unless the owner sends it. Stream owns the tasks; Google, Planfix,
   Todoist are mirrors.
@@ -164,18 +166,20 @@ request and the job given to a partner).
   whole conversation. One person's conversations merge across channels once
   the contact directory exists (P7); before that — by Telegram user id.
 - Participants have no roles; roles belong to tasks (§2.8).
-- **State** is computed; thresholds are data (`registry/conversations.json`):
-
-| State | When |
-|---|---|
-| urgent («срочно») | a linked open task is due today or overdue, or an urgency tag |
-| mine («ждёт меня») | the last meaningful message is incoming and unanswered, or a linked task needs my action (new, review) |
-| theirs («жду ответа») | the last message is mine, or a linked task waits for a participant |
-| quiet | none of the above, with open tasks or messages younger than `quiet_days` |
-| done | all linked tasks closed and no unanswered incoming for `quiet_days` |
-
-- Order: urgent → mine → theirs (newest first inside) → quiet → done (folded «Завершённые · N») → archived (folded
-  «Архив · N»; unfolded by a tap or by «Архив» in the top bar).
+- **Always two** (2026-11-20, `docs/plans/2026-11-20-queue-and-task-screen-design.md`): me and a person, or me and
+  a group chat. A task's people are not merged into one conversation: several people are several conversations of
+  one task. From stage 3 of that design the key is the person (a contact of the directory) across all their channels,
+  with a main channel (`primary` of the contact); an address without a contact stays its own conversation.
+- **The queue** (2026-11-20, replaces states urgent / mine / theirs / quiet / done and their order). The «Беседы»
+  list holds only conversations with incoming that waits for me after my last action there; my actions: a reply (any
+  channel, also typed on the phone), a task made or chosen by me for its messages (AI linking is not my action),
+  the archive (`answered`), «⏱ Отложить» (`snooze` with `until`). An action closes the waiting messages up to the
+  last one it touches. A conversation's place is its queue moment: the first waiting incoming, or a later `requeue`
+  («↥ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back at once). The
+  oldest is at the bottom by the input, new ones arrive on top; a new message in a queued conversation and opening
+  it without an action do not move it. No urgency order for now (owner, 2026-11-20). Waiting incoming older than
+  `max_age_days` (`registry/queue.json`) does not enter the queue. Calls: a missed or rejected call waits, an
+  answered one does not; my outgoing call or SMS is a reply.
 - «ждёт меня» uses the triage outcome, not just the last message: an incoming "ok, thanks" filed as «без дела»
   waits for nothing. In a group a message waits for me only when addressed to me or part of my task. My reply in
   any channel of the conversation is an answer.
@@ -522,15 +526,29 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 | Right | what is this | details of what was tapped: a task, a conversation or a message |
 | Bottom | what to say | the input row, always there; above it the tags and recipients row (§2.9) |
 
+**Redesign 2026-11-20** (`docs/plans/2026-11-20-queue-and-task-screen-design.md`, stage by stage; what it replaces
+below holds until its stage ships): the queue of conversations is the root screen — the system back always ends
+there; the left panel is only task filters, with «Беседы» on top of every layout and favourite contacts instead of
+the conversation list (no conversation filters); a task opens in the centre (title, description, project, dates,
+folded «Подробности», the participants line with roles — the selected tile leftmost, 📣 instead of × — and below it
+the conversation with that participant, other tasks' messages dimmed or folded by «◐»); message details — a bottom
+sheet; the right panel is a day planner (day · 4 days · week · 2 weeks; Stream tasks, Google Calendar later) that
+also picks dates and durations; forwarding to other conversations and merging conversations into a task (stage 5);
+the view switch is an icon.
+
 - **Top bar** (2026-11-19): the name of the current view and the network status; on the right — filter (with the
   number of active filters), «Архив», ⋮. No tabs: the views switch in the input row.
 - **View switch** — the button at the right end of the input row: «Задачи» on Беседы, «Беседы» on Задачи and Лента.
   Its counter belongs to the open context: the Беседы list — tasks for «Сегодня»; an open conversation — its open
   tasks (a tap shows Задачи filtered by it); the Задачи list — conversations «срочно» and «ждёт меня»; an open task —
   its conversations in those states (a tap opens the first of them, or its first conversation).
-- **«Беседы»** — the conversation list by state (§2.5): urgent → mine → theirs → quiet → done. A row: title, last
-  message, channel badge, open tasks count, state. A tap opens the conversation: messages and its task plaques on
-  top; the input writes into it. Default view. **Swipes on a row:** right-to-left — to the archive (§2.5); left-to-right —
+- **«Беседы»** — the queue (§2.5, 2026-11-20): oldest waiting at the bottom by the input, scrolled there on opening.
+  A tile of four lines: chat kind icon, channel short name — contact; the conversation's task (a tap opens it) or
+  «+ задача…» to type one; two lines of the last message; on the right the time and two buttons — «⏱ Отложить»
+  (15 min, 1 h, 3 h, noon, evening, morning — offered by the time of day; «📅» — a date) and «↥ В конец очереди»;
+  under them a small line: waiting for, waiting messages, counterparty, a tag or two. The bar of an open
+  conversation has ⏱, ↥ and 🗄. A tap opens the conversation: messages and its task plaques on top; the input writes
+  into it. Default view. **Swipes on a row:** right-to-left — to the archive (§2.5); left-to-right —
   open the conversation's task (the most urgent open one) or, if it has none, make a task from its latest message
   and open it. Each with «Вернуть» in the toast.
 - **«Задачи»** — the pulse fills the screen; there are no list chips (2026-11-19). The saved lists («Сегодня ·
