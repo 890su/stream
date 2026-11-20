@@ -878,3 +878,15 @@ WhatsApp может давать адрес анонимно (LID): номер �
 «Разобрать» сохраняется для сообщений без результата планировщика.
 **Affected:** `CONCEPT.md` §2.8, `contracts/event.schema.json`, `src/tasks/{planner,triage,messages,anthropic}.ts`,
 `registry/tasks.json`, `web/projection.js`, `web/queue.js`, `golden/triage-information.jsonl`.
+
+## 2026-11-21 — Google Календарь: свой проект Google Cloud, вход в оба аккаунта, этап 1 — занятость в «Плане»
+**What:** Коннектор `google_calendar` в процессе сервера. Вход OAuth через проект Google Cloud владельца (ID и секрет —
+`/srv/stream/.env`), ключи аккаунтов — `<DATA_DIR>/google/` (600), права — календарь. Каждые 60 с — события видимых
+календарей на 14 дней вперёд, в памяти; «План» показывает их серыми среди задач. Возврат после входа
+`/api/google/callback` — единственный `/api/` без токена владельца, защищён подписанным `state` (10 мин). Без новых
+зависимостей (`fetch`).
+**Why:** Владелец 2026-11-20: «синхронизировать» календари; события из Google не видны в Stream.
+**Boundary:** Этап 2 (календарь «Stream» ⇄ задачи, события из «Stream» → задачи) — отдельным планом по утверждённому
+замыслу. Содержимое событий не пишется ни в журнал, ни в лог.
+**Affected:** `src/google/`, `src/server/google.ts`, `src/server/http.ts`, `src/main.ts`, `web/dayplan.js`,
+`web/googlebox.js`, `web/system.js`, `registry/google.json`, `deploy/GOOGLE.md`, `deploy/install.sh`

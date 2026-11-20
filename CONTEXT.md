@@ -38,7 +38,7 @@ updated: 2026-11-19
 | Данные вместо кода | `registry/`: цели, поля, коннекторы, метки, задачи, фильтры, беседы, Telegram, WhatsApp |
 | Эталонный набор | `golden/` (реальные — `cases.local.jsonl`, вне git) |
 | Сервер / клиент / телефон | `src/` · `web/` (PWA без сборщика) · `android/` |
-| Выкладка | `deploy/DEPLOY.md`; каналы — `TELEGRAM.md`, `DESKTOP.md` (Viber), `WHATSAPP.md`, `PHONE.md` |
+| Выкладка | `deploy/DEPLOY.md`; каналы — `TELEGRAM.md`, `DESKTOP.md` (Viber), `WHATSAPP.md`, `PHONE.md`, `GOOGLE.md` |
 | Анализ и моделирование бизнес-процессов | `docs/BUSINESS-PROCESS-ARCHITECT.md` — Discovery, согласование модели, BPMN 2.0, проверка и версии |
 
 **Оглавление `CONCEPT.md`** (на английском; общение с владельцем — по-русски): Summary · §1 Зачем · §2 Модель: журнал и слои (§2.1 точки расширения, §2.2

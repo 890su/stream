@@ -68,6 +68,8 @@ if ! grep -q '^STREAM_WA_PL_ENABLED=' "$ENV_FILE"; then
   echo "Enabled WhatsApp PL in $ENV_FILE"
 fi
 grep -Eq '^STREAM_WA_PL_ENABLED=1[[:space:]]*$' "$ENV_FILE" && echo "WhatsApp: PL enabled" || echo "WhatsApp: PL off (STREAM_WA_PL_ENABLED in $ENV_FILE is not 1, deploy/WHATSAPP.md)"
+# Google Calendar (deploy/GOOGLE.md): only whether the owner's client is set — never the values.
+if grep -Eq '^STREAM_GOOGLE_CLIENT_ID=.+' "$ENV_FILE" && grep -Eq '^STREAM_GOOGLE_CLIENT_SECRET=.+' "$ENV_FILE"; then echo "Google: client set"; else echo "Google: not set up (deploy/GOOGLE.md)"; fi
 chmod 600 "$ENV_FILE"
 ln -sfn "$ENV_FILE" "$APP/deploy/.env"   # compose reads variables from the project directory
 

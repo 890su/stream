@@ -33,6 +33,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `share.ts` | Android share target | `share` |
 | `phone.ts` | `/api/phone/*` calls, SMS, notes (§8.1) | `phone`, `phoneEventId` |
 | `viber.ts` | `/api/viber/*` for the Viber bridge on the agent desktop: messages, pulse, reply actions one by one, hello (deploy/DESKTOP.md) | `viber`, `viberMessage` |
+| `google.ts` | Google Calendar routes: `/api/google/connect` (sign-in URL), `/api/google/callback` (no owner token — a signed state), `/api/calendar` (accounts, calendars, events for «План»), show/hide a calendar, forget an account; the connector's health | `createGoogle` |
 | `whatsapp.ts` | `/api/whatsapp/<account>/qr`: the linking QR as a PNG while WhatsApp waits (System screen) | `whatsappQr` |
 | `system.ts` | `/api/system`, retries, trust; state notes | `system`, `stateChanged`, `actionChanged`, `watchSilence` |
 | `live.ts` | SSE `/api/live` | `LiveFeed` |
@@ -57,6 +58,9 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `ingest.ts` | item → journal event (id by WhatsApp message id and direction) | `toEvent` |
 | `socket.ts` | the only file importing Baileys: auth state, no online presence, quiet logger | `createSocket`, `updateOf` |
 | `types.ts` | the narrow shapes the rest works with (`WaSocket`, `WaMessage`, `WaItem`) | types |
+| **google/** (deploy/GOOGLE.md) | Google Calendar: the owner's own Google client, two accounts | |
+| `oauth.ts` | signed state, sign-in URL, code → tokens, refresh tokens per account in the data volume (mode 600), access tokens cached; revoked → `NeedsLogin` | `GoogleAccounts`, `authUrl`, `exchangeCode`, `signState` |
+| `calendar.ts` | the poll: calendar lists and events of the visible calendars over `window_days`, a shared calendar once, shown/hidden kept in `settings.json`, last good events kept on errors | `CalendarPoller`, `normalizeEvent` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface and structured results: tasks and `conversation_only` ids | `Planner`, `PLAN_SCHEMA` |
 | `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
@@ -101,7 +105,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `participantpicker.js` | participant dialog anchored to the card's plus; pinned and frequent entries in an empty search, all matching eligible contacts and conversations on input |
 | `taskcard.js` / `cardtalk.js` | card contact links and folding sections; inline conversation lookup, recent and swipe order, highlighted task messages and activity timelines |
 | `taskchips.js` | editable planned start, duration, deadline and repeat beside project and counterparty (`taskChips`, `chipFacts`) |
-| `dayplan.js` | the right panel by default: my open tasks by days — «День · 4 дня · 7 дней», overdue first (`plannerDays`, `dayPlan`) |
+| `dayplan.js` | the right panel by default: my open tasks by days — «День · 4 дня · 7 дней», overdue first — and Google Calendar events grey among them (`plannerDays`, `dayPlan`) |
+| `googlebox.js` | Google on the System screen: «Подключить Google», accounts with «Отключить», a switch per calendar; the toast after the sign-in (`calendarToggles`, `googleNotice`) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows), only from the middle column: follow, arm, act; not a tap |
 | `peoplerow.js` | the participants line of an open conversation over the tags: the card's tiles in one sideways line, the conversation's task edited (`conversationTask`), read-only without a task (`chatParties`) |

@@ -550,7 +550,7 @@ last participant. The plus at the right opens a small modal beside it, with a se
 contacts and chats. Typing replaces suggestions with matches. Picking a result adds a participant. The input adds
 a task note in the card and addresses the selected chat in the conversation when it can be answered.
 The header menu opens the task's action bar; message details — a bottom
-sheet; the right panel is a day planner (day · 4 days · week · 2 weeks; Stream tasks, Google Calendar later) that
+sheet; the right panel is a day planner (day · 4 days · week; Stream tasks and, grey, the events of the owner's Google calendars — 2026-11-21, `deploy/GOOGLE.md`) that
 also picks dates and durations; forwarding to other conversations and merging conversations into a task (stage 5);
 the view switch is an icon. Stage 1 shipped 2026-11-20: the queue, its tiles, ⏱ / ↥ / 🗄, the left panel and the
 root; the paragraphs on «Беседы» states, «Завершённые» and the drawer below are superseded by it.
