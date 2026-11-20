@@ -18,6 +18,11 @@ const quiet: Logger = {
   error(obj: unknown, msg?: string) { console.error('WhatsApp:', say(obj, msg)); },
 };
 
+// Saving the session keys must never reject unhandled: that would stop the whole server (journal, Telegram, all).
+export const saveQuietly = (save: () => Promise<void>) => (): void => {
+  save().catch((error: unknown) => console.error('WhatsApp: saving keys failed —', (error as { code?: string } | null)?.code ?? 'error'));
+};
+
 // Baileys' connection.update → ours: the state, the QR, whether the phone unlinked this device or WhatsApp asked for
 // a new connection (515, right after the QR is scanned), why it closed.
 export function updateOf(update: { connection?: string; qr?: string; lastDisconnect?: { error?: unknown } }): WaUpdate {
@@ -39,7 +44,7 @@ export const createSocket: SocketFactory = async (authDir) => {
     markOnlineOnConnect: false, emitOwnEvents: false, syncFullHistory: false, shouldSyncHistoryMessage: () => false,
     generateHighQualityLinkPreview: false,
   });
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', saveQuietly(saveCreds));
   return {
     onUpdate: (fn) => { sock.ev.on('connection.update', (update) => fn(updateOf(update))); },
     onMessages: (fn) => { sock.ev.on('messages.upsert', (upsert) => { void fn({ messages: upsert.messages as unknown as WaMessage[], type: upsert.type }); }); },

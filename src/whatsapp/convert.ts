@@ -9,6 +9,9 @@ import type { WaFiles, WaItem, WaMessage } from './types.ts';
 const PERSONAL = /^[0-9]+@(s\.whatsapp\.net|lid)$/;
 const WRAPPERS = ['ephemeralMessage', 'viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension', 'documentWithCaptionMessage'];
 const SKIPPED = ['protocolMessage', 'reactionMessage', 'stickerMessage', 'pollUpdateMessage', 'editedMessage'];
+const SERVICE = new Set(['messageContextInfo', 'senderKeyDistributionMessage']);   // parts that are not content
+// A message of a kind Stream does not read: a note instead of silence.
+const UNKNOWN = '[сообщение WhatsApp, которое Stream не показывает — откройте в WhatsApp]';
 
 export const bareJid = (jid: string): string => jid.replace(/:\d+@/, '@');
 
@@ -33,11 +36,18 @@ function unwrap(content: Record<string, any>): Record<string, any> {
   return current;
 }
 
+// Text in words: typed text, a caption, a business message's body, a place, contacts, a poll.
 function textOf(c: Record<string, any>): string {
-  const text = c.conversation ?? c.extendedTextMessage?.text ?? c.imageMessage?.caption ?? c.videoMessage?.caption ?? c.documentMessage?.caption;
+  const text = c.conversation ?? c.extendedTextMessage?.text ?? c.imageMessage?.caption ?? c.videoMessage?.caption ?? c.documentMessage?.caption
+    ?? c.ptvMessage?.caption ?? c.buttonsMessage?.contentText ?? c.templateMessage?.hydratedTemplate?.hydratedContentText ?? c.interactiveMessage?.body?.text;
   if (text) return String(text);
-  if (c.locationMessage) return `📍 ${numberOf(c.locationMessage.degreesLatitude).toFixed(5)}, ${numberOf(c.locationMessage.degreesLongitude).toFixed(5)}`;
+  const place = c.locationMessage ?? c.liveLocationMessage;
+  if (place) return `📍 ${numberOf(place.degreesLatitude).toFixed(5)}, ${numberOf(place.degreesLongitude).toFixed(5)}`;
   if (c.contactMessage?.displayName) return `👤 ${c.contactMessage.displayName}`;
+  const contacts = (c.contactsArrayMessage?.contacts ?? []).map((contact: { displayName?: string }) => contact.displayName).filter(Boolean);
+  if (contacts.length) return `👤 ${contacts.join(', ')}`;
+  const poll = c.pollCreationMessage ?? c.pollCreationMessageV2 ?? c.pollCreationMessageV3;
+  if (poll?.name) return `📊 ${poll.name}`;
   return '';
 }
 
@@ -52,6 +62,7 @@ function fileOf(c: Record<string, any>) {
   if (c.imageMessage) return of(c.imageMessage, 'photo', 'image/jpeg');
   if (c.audioMessage) return of(c.audioMessage, c.audioMessage.ptt ? 'voice' : 'file', 'audio/ogg');
   if (c.videoMessage) return of(c.videoMessage, 'file', 'video/mp4');
+  if (c.ptvMessage) return of(c.ptvMessage, 'file', 'video/mp4');               // a round video note
   if (c.documentMessage) {
     const file = of(c.documentMessage, 'file', 'application/octet-stream');
     return { ...file, kind: file.mime.startsWith('image/') ? 'photo' as const : 'file' as const };
@@ -75,7 +86,10 @@ export async function toItem(message: WaMessage, files: WaFiles, pnForLid: (lid:
   if (SKIPPED.some((name) => content[name])) return null;     // reactions, stickers, edits, service messages
   let text = textOf(content);
   const file = fileOf(content);
-  if (!text && !file) return null;
+  if (!text && !file) {
+    if (!Object.keys(content).some((part) => !SERVICE.has(part) && content[part] != null)) return null;
+    text = UNKNOWN;
+  }
 
   const phone = await phoneOf(jid, key.remoteJidAlt, pnForLid);
   const out = Boolean(key.fromMe);
@@ -87,8 +101,10 @@ export async function toItem(message: WaMessage, files: WaFiles, pnForLid: (lid:
   const item: WaItem = { id: key.id, jid, ...(phone ? { phone } : {}), chat, out, date, kind: 'text', text };
   if (file) {
     const megabytes = Math.round(files.limit / 1_048_576);
+    // A file is held in memory while it downloads: without a known size it is not fetched at all.
     let reason: string | null = !files.allowed(file.mime) ? 'такой тип не принимается'
-      : file.size !== undefined && file.size > files.limit ? `больше ${megabytes} МБ` : null;
+      : file.size === undefined || !Number.isFinite(file.size) ? 'размер неизвестен'
+      : file.size > files.limit ? `больше ${megabytes} МБ` : null;
     if (!reason) {
       try {
         const bytes = await files.download(message);

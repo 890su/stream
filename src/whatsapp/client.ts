@@ -33,6 +33,8 @@ export class WhatsAppClient {
   #state: [SourceState, string | null, Info] | null = null;
   #timers = new Set<ReturnType<typeof setTimeout>>();
   #open = false;
+  #pairing = false;                     // a QR was shown on this connection and not scanned yet
+  #idle = false;                        // the QR expired unscanned: no connection until the System screen asks
   #sent = new Set<string>();            // ids of replies sent from the feed: their echo is not a new message
   #wakers = new Set<() => void>();
 
@@ -52,6 +54,14 @@ export class WhatsAppClient {
 
   // The QR to link this device, while WhatsApp waits for it (the System screen shows it).
   get qr(): string | null { return this.#qr; }
+
+  // The System screen asks for the QR: if an unscanned QR expired, connect again for a new one. True if it did.
+  requestQr(): boolean {
+    if (!this.#idle || !this.#running) return false;
+    this.#idle = false;
+    this.#later(0);
+    return true;
+  }
 
   async start(): Promise<void> {
     this.#running = true;
@@ -98,31 +108,43 @@ export class WhatsAppClient {
     if (socket !== this.#socket) return;     // an old connection's last words
     if (update.qr) {
       this.#qr = update.qr;
+      this.#pairing = true;
       this.#health('login_required', 'отсканируйте QR на экране «Система»: WhatsApp → Связанные устройства', { qr: true, qr_refresh_s: whatsappConfig.qr_refresh_s });
     }
     if (update.connection === 'open') {
       this.#qr = null;
       this.#open = true;
+      this.#pairing = false;
+      this.#idle = false;
       this.#delay = this.#retryMs;
       console.log(`WhatsApp ${this.account}: connected`);
       this.#health('ok', null, { qr: false });
     }
     if (update.connection !== 'close') return;
+    const pairing = this.#pairing;
     this.#open = false;
+    this.#pairing = false;
+    this.#qr = null;
     this.#socket = null;
-    socket.end();
+    try { socket.end(); } catch { /* already gone */ }
+    // The next connection is scheduled before anything else here can fail: WhatsApp must not stay dead.
     if (update.loggedOut) {
       // The phone unlinked this device: its keys are useless now; a new connection shows a new QR.
-      rmSync(this.#authDir, { recursive: true, force: true });
-      this.#qr = null;
-      console.log(`WhatsApp ${this.account}: unlinked`);
-      this.#health('login_required', 'устройство отвязано — отсканируйте новый QR на экране «Система»', { qr: false });
       this.#later(this.#retryMs);
+      console.log(`WhatsApp ${this.account}: unlinked`);
+      try { rmSync(this.#authDir, { recursive: true, force: true }); }
+      catch (error) { console.error(`WhatsApp ${this.account}: removing keys failed — ${messageOf(error)}`); }
+      this.#health('login_required', 'устройство отвязано — отсканируйте новый QR на экране «Система»', { qr: false });
     } else if (update.restart) {
       this.#later(0);                        // WhatsApp asks for a new connection (right after linking): not an error
+    } else if (pairing) {
+      // The QR was not scanned in time and WhatsApp closed the pairing. No error and no reconnects every few minutes
+      // (each would write two notes to the journal): wait quietly until the System screen asks for a QR.
+      this.#idle = true;
+      console.log(`WhatsApp ${this.account}: QR expired, waiting for the System screen`);
     } else {
-      this.#health('error', `нет связи с WhatsApp (${update.reason ?? 'соединение закрыто'})`, { qr: false });
       this.#later(this.#backoff());
+      this.#health('error', `нет связи с WhatsApp (${update.reason ?? 'соединение закрыто'})`, { qr: false });
     }
   }
 

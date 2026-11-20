@@ -8,6 +8,7 @@ export class FakeSocket implements WaSocket {
   pn = new Map<string, string>();
   downloads = new Map<string, Buffer>();   // message id → file bytes; others fail to download
   ended = false;
+  failEnd = false;                         // end() throws (a socket that is already gone)
   #updates: ((update: WaUpdate) => void)[] = [];
   #messages: ((upsert: { messages: WaMessage[]; type: string }) => Promise<void>)[] = [];
   #counter = 0;
@@ -25,7 +26,10 @@ export class FakeSocket implements WaSocket {
     return bytes;
   }
   async pnForLid(lid: string): Promise<string | null> { return this.pn.get(lid) ?? null; }
-  end(): void { this.ended = true; }
+  end(): void {
+    if (this.failEnd) throw new Error('fake end failed');
+    this.ended = true;
+  }
 
   emitUpdate(update: WaUpdate): void { for (const fn of this.#updates) fn(update); }
   async emitMessages(messages: WaMessage[], type = 'notify'): Promise<void> { for (const fn of this.#messages) await fn({ messages, type }); }

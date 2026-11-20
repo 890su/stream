@@ -13,6 +13,8 @@ import { outboundData, replyWindowClosed, phoneAnswerable } from '../web/outboun
 import { messengerLabel, deliveryText } from '../web/tgbubble.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { partyOf as webPartyOf } from '../web/parties.js';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
+import { showsQr, qrNext } from '../web/system.js';
 
 const event = { id: 'w1', author: 'contact:whatsapp:+48500000001', source: 'whatsapp', kind: 'text', ts: '2026-11-20T10:00:00.000Z', schema_version: 1,
   payload: { text: 'Cześć', data: { whatsapp: { account: 'pl', chat: 'Anna', jid: '48500000001@s.whatsapp.net', phone: '+48500000001', received_at: '2026-11-20T10:00:00.000Z' } } } };
@@ -66,4 +68,18 @@ test('Viber still answers only by phone', () => {
   assert.equal(phoneAnswerable({ account: 'viber', chat_id: '' }), false);
   assert.equal(phoneAnswerable({ account: 'viber', chat_id: '+375290000001' }), true);
   assert.equal(phoneAnswerable({ account: 'by', chat_id: '123456' }), true, 'Telegram is not limited to phones');
+});
+
+test('the System screen shows the QR only while WhatsApp waits for linking', () => {
+  assert.equal(showsQr({ source: 'whatsapp_pl', state: 'login_required', info: { qr: true } }), true);
+  assert.equal(showsQr({ source: 'whatsapp_pl', state: 'silent', info: { qr: true } }), false, 'switched off after a QR');
+  assert.equal(showsQr({ source: 'whatsapp_pl', state: 'ok', info: { qr: false } }), false);
+  assert.equal(showsQr({ source: 'telegram_pl', state: 'login_required', info: { qr: true } }), false);
+});
+
+test('a missing QR is waited for, not reloaded at once', () => {
+  assert.equal(qrNext(200, false), 'show');
+  assert.equal(qrNext(404, false), 'wait', 'right after drawing: no new render (no request loop)');
+  assert.equal(qrNext(404, true), 'refresh', 'on the timer: redraw the screen once');
+  assert.equal(qrNext(500, true), 'wait');
 });

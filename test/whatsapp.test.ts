@@ -126,7 +126,7 @@ test('a broken message does not stop the server', async () => {
     await wa.last().emitMessages([
       exploding,
       { key: {}, message: null },
-      { key: { remoteJid: '48500000001@s.whatsapp.net', id: 'B1' }, message: { imageMessage: {} }, messageTimestamp: now() },
+      { key: { remoteJid: '48500000001@s.whatsapp.net', id: 'B1' }, message: { imageMessage: { fileLength: 10 } }, messageTimestamp: now() },
       text('C1'),
     ]);
     assert.deepEqual(waEvents(f).map((item) => item.payload.text).sort(), ['Cześć', '[файл «image/jpeg» не загружен: ошибка загрузки]']);
@@ -254,5 +254,32 @@ test('a reply by name is refused', async () => {
   const { f } = await linked();
   try {
     assert.equal((await postReply(f, reply('Anna'))).status, 400);
+  } finally { await f.stop(); }
+});
+
+// Review fixes (2026-11-20).
+test('an unscanned QR expires quietly and comes back when the System screen asks', async () => {
+  const { wa, f } = await linked();
+  try {
+    wa.last().emitUpdate({ qr: '2@abc' });
+    wa.last().emitUpdate({ connection: 'close', loggedOut: false, reason: 'QR refs attempts ended' });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(wa.sockets.length, 1, 'no reconnect while nobody looks at the QR');
+    assert.equal(status(f)?.state, 'login_required');
+    assert.equal(f.store.listEvents({ limit: 50 }).events.filter((item) => item.kind === 'system' && /ошибка/.test(item.payload.text ?? '')).length, 0);
+    const asked = await f.request('/api/whatsapp/pl/qr');
+    assert.equal(asked.status, 404);
+    assert.match(((await asked.json()) as { error: string }).error, /готовится/);
+    await waitFor(() => wa.sockets.length === 2);
+  } finally { await f.stop(); }
+});
+
+test('a failing close does not stop the client', async () => {
+  const { wa, f } = await linked();
+  try {
+    wa.last().emitUpdate({ connection: 'open' });
+    wa.last().failEnd = true;
+    wa.last().emitUpdate({ connection: 'close', loggedOut: false, reason: 'stream errored' });
+    await waitFor(() => wa.sockets.length === 2);
   } finally { await f.stop(); }
 });

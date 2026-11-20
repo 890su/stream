@@ -77,7 +77,7 @@ test('reactions, stickers, edits and service messages are skipped', async () => 
 test('a photo with a caption is stored', async () => {
   const bytes = Buffer.from('jpeg-bytes');
   const { f, stored } = files({ bytes });
-  const item = await toItem(m({}, { imageMessage: { mimetype: 'image/jpeg', caption: 'Zdjęcie' } }), f, noLid);
+  const item = await toItem(m({}, { imageMessage: { mimetype: 'image/jpeg', caption: 'Zdjęcie', fileLength: bytes.length } }), f, noLid);
   const sha = createHash('sha256').update(bytes).digest('hex');
   assert.equal(item?.kind, 'photo');
   assert.equal(item?.text, 'Zdjęcie');
@@ -86,7 +86,7 @@ test('a photo with a caption is stored', async () => {
 });
 
 test('a voice note is voice', async () => {
-  const item = await toItem(m({}, { audioMessage: { ptt: true, mimetype: 'audio/ogg; codecs=opus', seconds: 7 } }), files().f, noLid);
+  const item = await toItem(m({}, { audioMessage: { ptt: true, mimetype: 'audio/ogg; codecs=opus', seconds: 7, fileLength: 10 } }), files().f, noLid);
   assert.equal(item?.kind, 'voice');
   assert.equal(item?.media?.[0]?.mime, 'audio/ogg');
   assert.equal(item?.media?.[0]?.duration_s, 7);
@@ -106,7 +106,7 @@ test('a document keeps its name and a too large one becomes a note', async () =>
 });
 
 test('a failed download becomes a note', async () => {
-  const item = await toItem(m({}, { imageMessage: { mimetype: 'image/jpeg', caption: 'Zdjęcie' } }), files({ fail: true }).f, noLid);
+  const item = await toItem(m({}, { imageMessage: { mimetype: 'image/jpeg', caption: 'Zdjęcie', fileLength: 10 } }), files({ fail: true }).f, noLid);
   assert.equal(item?.kind, 'text');
   assert.match(item?.text ?? '', /^Zdjęcie\n\[файл «image\/jpeg» не загружен: ошибка загрузки\]$/);
 });
@@ -122,4 +122,44 @@ test('wrappers are unwrapped and the device suffix dropped', async () => {
 test('a timestamp as Long is read', async () => {
   const item = await toItem(m({}, { conversation: 'x' }, { messageTimestamp: { toNumber: () => 1763632800 } }), files().f, noLid);
   assert.equal(item?.date, '2025-11-20T10:00:00.000Z');
+});
+
+// Review fixes (2026-11-20): nothing big without a known size, nothing vanishes silently.
+test('a file of unknown size is not downloaded', async () => {
+  let asked = 0;
+  const f: WaFiles = { limit: 20971520, allowed: () => true, download: async () => { asked += 1; return Buffer.from('x'); }, store: () => {} };
+  const item = await toItem(m({}, { videoMessage: { mimetype: 'video/mp4' } }), f, noLid);
+  assert.equal(asked, 0);
+  assert.equal(item?.kind, 'text');
+  assert.match(item?.text ?? '', /«video\/mp4» не загружен: размер неизвестен/);
+});
+
+test('round video notes are files', async () => {
+  const item = await toItem(m({}, { ptvMessage: { mimetype: 'video/mp4', fileLength: 10, seconds: 4 } }), files().f, noLid);
+  assert.equal(item?.kind, 'file');
+  assert.equal(item?.media?.[0]?.mime, 'video/mp4');
+});
+
+test('contacts, polls and live locations are shown in words', async () => {
+  const contacts = await toItem(m({}, { contactsArrayMessage: { contacts: [{ displayName: 'Jan' }, { displayName: 'Ola' }] } }), files().f, noLid);
+  assert.equal(contacts?.text, '👤 Jan, Ola');
+  const poll = await toItem(m({}, { pollCreationMessageV3: { name: 'Kiedy?' } }), files().f, noLid);
+  assert.equal(poll?.text, '📊 Kiedy?');
+  const live = await toItem(m({}, { liveLocationMessage: { degreesLatitude: 52.2297, degreesLongitude: 21.0122 } }), files().f, noLid);
+  assert.equal(live?.text, '📍 52.22970, 21.01220');
+});
+
+test('a business message shows its text', async () => {
+  const template = await toItem(m({}, { templateMessage: { hydratedTemplate: { hydratedContentText: 'Twoja paczka jest w drodze' } } }), files().f, noLid);
+  assert.equal(template?.text, 'Twoja paczka jest w drodze');
+  const interactive = await toItem(m({}, { interactiveMessage: { body: { text: 'Wybierz termin' } } }), files().f, noLid);
+  assert.equal(interactive?.text, 'Wybierz termin');
+  const buttons = await toItem(m({}, { buttonsMessage: { contentText: 'Potwierdź wizytę' } }), files().f, noLid);
+  assert.equal(buttons?.text, 'Potwierdź wizytę');
+});
+
+test('an unknown kind leaves a note instead of vanishing', async () => {
+  const item = await toItem(m({}, { someNewMessage: { x: 1 }, messageContextInfo: {} }), files().f, noLid);
+  assert.equal(item?.text, '[сообщение WhatsApp, которое Stream не показывает — откройте в WhatsApp]');
+  assert.equal(await toItem(m({}, { messageContextInfo: {}, senderKeyDistributionMessage: {} }), files().f, noLid), null, 'service parts only');
 });

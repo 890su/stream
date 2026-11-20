@@ -52,7 +52,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `convert.ts` | Bot API message → ingest item (files, forwards, service text) | `toItem` |
 | `ingest.ts` | item → journal event: ids, authors, replies, edits, deletions, echoes | `ingest`, `markDeleted` |
 | **whatsapp/** (deploy/WHATSAPP.md) | Baileys as a linked device on the owner's number, in this process | |
-| `client.ts` | one account: connection and reconnects, QR and pulse as the channel's state, incoming and own messages, replies by phone (never twice) | `WhatsAppClient` |
+| `client.ts` | one account: connection and reconnects (an unscanned QR waits quietly until the System screen asks, `requestQr`), QR and pulse as the channel's state, incoming and own messages, replies by phone (never twice) | `WhatsAppClient` |
 | `convert.ts` | Baileys message → item: personal chats only, phone from the address, `remoteJidAlt` or the LID cache, files | `toItem`, `bareJid`, `phoneOfJid` |
 | `ingest.ts` | item → journal event (id by WhatsApp message id and direction) | `toEvent` |
 | `socket.ts` | the only file importing Baileys: auth state, no online presence, quiet logger | `createSocket`, `updateOf` |

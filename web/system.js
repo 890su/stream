@@ -15,6 +15,13 @@ function element(tag, className, text) {
   return node;
 }
 
+// The WhatsApp linking QR shows only while the channel waits for linking: a stale `info.qr` left by a channel that
+// was switched off or linked must not draw it.
+export const showsQr = (item) => item.state === 'login_required' && Boolean(item.info?.qr) && String(item.source).startsWith('whatsapp_');
+// After asking for the QR: 'show' it; a miss right after drawing is waited for (the timer asks again) — redrawing at
+// once would loop; a miss on the timer redraws the screen once (linked meanwhile, or a new QR is being prepared).
+export const qrNext = (status, fromTimer) => status === 200 ? 'show' : status === 404 && fromTimer ? 'refresh' : 'wait';
+
 export function ago(iso, now = Date.now()) {
   if (!iso) return 'никогда';
   const minutes = Math.round((now - Date.parse(iso)) / 60000);
@@ -48,7 +55,7 @@ export function setupSystem({ notify, onTrack }) {
     const detail = element('span', 'system-detail', facts.join(' · '));
     if (item.detail && item.state !== 'ok') detail.append(element('div', '', item.detail));
     row.append(detail);
-    if (item.info?.qr && item.source.startsWith('whatsapp_')) row.append(qrBlock(item));
+    if (showsQr(item)) row.append(qrBlock(item));
     return row;
   }
 
@@ -68,20 +75,22 @@ export function setupSystem({ notify, onTrack }) {
     const image = element('img');
     image.alt = 'QR для привязки WhatsApp';
     box.append(image, element('div', 'system-detail', 'На телефоне: WhatsApp → Связанные устройства → Привязать устройство'));
-    const load = async () => {
+    const load = async (fromTimer) => {
       try {
         const response = await fetch(`/api/whatsapp/${account}/qr`, { headers: { Authorization: `Bearer ${await getSetting('ownerToken')}` }, cache: 'no-store' });
-        if (response.status === 404) { render(); return; }    // linked meanwhile
-        if (!response.ok) return;
+        const next = qrNext(response.status, fromTimer);
+        if (next === 'refresh') { render(); return; }
+        if (next === 'wait') { image.hidden = true; return; }   // a new QR is on its way: the timer asks again
         const url = URL.createObjectURL(await response.blob());
         const old = image.src;
         image.src = url;
+        image.hidden = false;
         qrUrls.add(url);
         if (old) { URL.revokeObjectURL(old); qrUrls.delete(old); }
       } catch { /* offline: the next refresh tries again */ }
     };
-    void load();
-    qrTimers.add(setInterval(() => { if (dialog.open) void load(); else stopQr(); }, (item.info.qr_refresh_s ?? 15) * 1000));
+    void load(false);
+    qrTimers.add(setInterval(() => { if (dialog.open) void load(true); else stopQr(); }, (item.info.qr_refresh_s ?? 15) * 1000));
     return box;
   }
 

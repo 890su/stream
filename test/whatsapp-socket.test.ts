@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createSocket, updateOf } from '../src/whatsapp/socket.ts';
+import { createSocket, saveQuietly, updateOf } from '../src/whatsapp/socket.ts';
 
 test('updateOf: logged out is 401', () => {
   assert.deepEqual(updateOf({ connection: 'close', lastDisconnect: { error: { output: { statusCode: 401 }, message: 'logged out' } } }),
@@ -20,4 +20,16 @@ test('updateOf: the QR passes through', () => {
 
 test('createSocket is a socket factory', () => {
   assert.equal(typeof createSocket, 'function');
+});
+
+test('a failed key write does not crash the server', async () => {
+  const unhandled: unknown[] = [];
+  const catcher = (reason: unknown) => { unhandled.push(reason); };
+  process.on('unhandledRejection', catcher);
+  try {
+    saveQuietly(async () => { throw Object.assign(new Error('disk full'), { code: 'ENOSPC' }); })();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, []);
+  } finally { process.off('unhandledRejection', catcher); }
 });
