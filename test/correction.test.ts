@@ -30,3 +30,21 @@ test('owner corrections reference an accepted message and carry a known operatio
     assert.equal((await post(correction(photo.id, { op: 'edit' }, { text: '' }))).status, 201, 'a caption can be removed');
   } finally { await f.stop(); }
 });
+
+test('queue marks: snooze needs a date and time, requeue and the undos need nothing', async () => {
+  const f = await fixture();
+  const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const original = event({ payload: { text: 'когда приедете?' } });
+    assert.equal((await post(original)).status, 201);
+    for (const data of [{ op: 'snooze' }, { op: 'snooze', until: 'завтра' }]) {
+      const response = await post(correction(original.id, data));
+      assert.equal(response.status, 400, JSON.stringify(data));
+      assert.match((await response.json()).error, /Отложить можно только до даты и времени \(until\)/);
+    }
+    assert.equal((await post(correction(original.id, { op: 'snooze', until: '2026-11-21T09:00:00.000Z' }))).status, 201);
+    for (const op of ['unsnooze', 'requeue', 'unrequeue']) assert.equal((await post(correction(original.id, { op }))).status, 201, op);
+  } finally {
+    await f.stop();
+  }
+});

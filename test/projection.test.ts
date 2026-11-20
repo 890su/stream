@@ -125,3 +125,19 @@ test('calls and SMS get a header from their data; hidden numbers are named', asy
   assert.equal(snippet(callView), 'Входящий · 1');
   assert.equal(snippet(smsView), 'Буду в 10');
 });
+
+test('queue marks: snoozes and requeues are stacks, their undo takes the last one off', () => {
+  const original = message('когда приедете?');
+  const snooze = (until: string) => ({ ...fix(original.id, 'snooze'), payload: { ref: { type: 'event', id: original.id }, data: { op: 'snooze', until } } });
+  const first = snooze('2026-11-12T09:00:00.000Z');
+  const second = snooze('2026-11-12T18:00:00.000Z');
+  const undo = fix(original.id, 'unsnooze');
+  const lift = fix(original.id, 'requeue');
+  const liftAgain = fix(original.id, 'requeue');
+  const drop = fix(original.id, 'unrequeue');
+  const [view] = project([original, first, second, undo, lift, liftAgain, drop]);
+  assert.deepEqual(view.snoozes, [{ at: first.ts, until: '2026-11-12T09:00:00.000Z' }]);
+  assert.deepEqual(view.requeues, [lift.ts]);
+  const [plain] = project([message('без отметок')]);
+  assert.deepEqual([plain.snoozes, plain.requeues], [[], []]);
+});

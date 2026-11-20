@@ -2,7 +2,7 @@ import { HttpError } from '../server/errors.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Owner actions on a message are new journal events (CONCEPT.md §2.4); the original never changes.
-export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive', 'untrack', 'track', 'remote_delete', 'pin', 'unpin', 'answered', 'unanswered', 'split', 'unsplit'] as const;
+export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive', 'untrack', 'track', 'remote_delete', 'pin', 'unpin', 'answered', 'unanswered', 'split', 'unsplit', 'snooze', 'unsnooze', 'requeue', 'unrequeue'] as const;
 
 // Shape rules that need no database. `target` is checked separately, inside the write transaction.
 export function checkCorrectionShape(event: JournalEvent): void {
@@ -18,6 +18,11 @@ export function checkCorrectionShape(event: JournalEvent): void {
   if (op === 'topic') {
     const title = event.payload.data?.title;
     if (typeof title !== 'string' || !title.trim() || title.length > 80) throw new HttpError(400, 'Название темы — от 1 до 80 знаков');
+  }
+  // «⏱ Отложить» on a conversation (CONCEPT.md §2.5, the queue): until when it stays out of the queue.
+  if (op === 'snooze') {
+    const until = event.payload.data?.until;
+    if (typeof until !== 'string' || Number.isNaN(Date.parse(until))) throw new HttpError(400, 'Отложить можно только до даты и времени (until)');
   }
   if (op === 'link') {
     const target = event.payload.data?.target;

@@ -68,7 +68,7 @@ export function project(events, pendingIds = new Set()) {
     }
     views.set(event.id, {
       id: event.id, event, text: event.payload?.text ?? '', tags: event.payload?.tags ?? [],
-      edited: false, archived: false, deleted: false, history: [], pending: pendingIds.has(event.id), replyTo: null, replies: 0,
+      edited: false, archived: false, deleted: false, history: [], snoozes: [], requeues: [], pending: pendingIds.has(event.id), replyTo: null, replies: 0,
       // The message this one continues (CONCEPT.md §2.5): the owner's choice at capture, changed later by link/unlink.
       continues: event.payload?.data?.continuation?.on ? event.payload.data.continuation.target : null,
     });
@@ -102,6 +102,11 @@ export function project(events, pendingIds = new Set()) {
       // A message split off its chat into a conversation of its own (task manager spec; «Вернуть в беседу» undoes).
       case 'split': view.split = true; break;
       case 'unsplit': view.split = false; break;
+      // The queue (CONCEPT.md §2.5): «⏱ Отложить» and «↥ В конец очереди» stack up; their undo takes the last one off.
+      case 'snooze': view.snoozes.push({ at: correction.ts, until: correction.payload.data.until }); break;
+      case 'unsnooze': view.snoozes.pop(); break;
+      case 'requeue': view.requeues.push(correction.ts); break;
+      case 'unrequeue': view.requeues.pop(); break;
       default: break;
     }
   }
