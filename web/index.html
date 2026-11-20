@@ -66,14 +66,25 @@
       </button>
     </header>
     <div class="drawer-body">
-      <button id="drawer-queue" type="button" class="drawer-queue">💬 Беседы</button>
-      <h3 class="drawer-section">Избранные</h3>
-      <div id="drawer-contacts"></div>
-      <h3 class="drawer-section">Недавние</h3>
-      <div id="drawer-recent"></div>
+      <div class="drawer-queue-tools">
+        <button id="drawer-queue" type="button" class="drawer-queue">💬 Беседы</button>
+        <button id="drawer-search-toggle" type="button" class="icon-button" aria-label="Найти беседу" aria-expanded="false" aria-controls="drawer-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></svg>
+        </button>
+      </div>
+      <div id="drawer-search" hidden>
+        <input id="drawer-search-input" class="view-search" type="search" placeholder="Имя или номер" aria-label="Имя или номер собеседника">
+        <div id="drawer-search-results"></div>
+      </div>
       <div id="drawer-mode"></div>
-      <h3 class="drawer-section">Метки</h3>
-      <div id="drawer-tags" class="chips"></div>
+      <details id="drawer-favourites" class="drawer-disclosure" hidden>
+        <summary class="drawer-summary">Избранные</summary>
+        <div id="drawer-contacts"></div>
+      </details>
+      <details id="drawer-tag-section" class="drawer-disclosure">
+        <summary class="drawer-summary">Метки<span id="drawer-tag-count" class="drawer-count" hidden></span></summary>
+        <div id="drawer-tags" class="chips"></div>
+      </details>
     </div>
   </aside>
 

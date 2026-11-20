@@ -66,13 +66,17 @@ test('back to the queue takes the view\'s history entry away instead of leaving 
   assert.equal(toQueue({ drawer: true }), 'stay');
 });
 
-test('«Недавние» in the left panel: every conversation with someone, latest first, also archived and snoozed ones', async () => {
+test('drawer search finds conversations outside the queue and shows nothing without a query', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { recent } = await import('../web/favourites.js');
-  const list = [conv('tg:1', null, [], '2026-11-19T08:00:00'), conv('me', null, [], '2026-11-19T12:00:00'), conv('task:x', null, [], '2026-11-19T12:00:00'),
-    { ...conv('tel:+48', null, [], '2026-11-19T10:00:00'), archived: true }, conv('wa:9@lid', '2026-11-19T09:00:00', [], '2026-11-19T09:00:00')];
-  assert.deepEqual(recent(list, 3).map((item: any) => item.key), ['tel:+48', 'wa:9@lid', 'tg:1']);
-  assert.equal(recent(list, 2).length, 2);
+  const { searchConversations } = await import('../web/favourites.js');
+  const list = [
+    { ...conv('tg:1', null, [], '2026-11-19T08:00:00'), title: 'Олег Пример' },
+    { ...conv('tel:+48500000002', null, [], '2026-11-19T10:00:00'), title: 'Олег Тест', archived: true },
+    { ...conv('task:x', null), title: 'Олег из заметки' },
+  ];
+  assert.deepEqual(searchConversations(list, '  ОЛЕГ ').map((item: any) => item.key), ['tel:+48500000002', 'tg:1']);
+  assert.deepEqual(searchConversations(list, '+48 (500)').map((item: any) => item.key), ['tel:+48500000002']);
+  assert.deepEqual(searchConversations(list, '  '), []);
 });
 
 test('back from a task card stays where the card was opened: its entry is the card\'s own', async () => {

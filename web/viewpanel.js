@@ -1,13 +1,21 @@
-// The left panel of «Задачи» as a control panel of the view (viewstate.js): three layouts over one view, switched by
-// the gear at the bottom (⚙ and a list of three):
-// - «Оси» — КОГДА · ЧЬЁ · ГДЕ (projects, counterparties, people) combine; «Мои виды» save a combination;
-// - «Списки», as in TickTick — smart lists · projects · filters; a tap opens one list (the view is replaced);
-// - «Дерево», as in Things — when on top, then areas → projects; people and counterparties by search.
-// The current view in words with ✕ on top of every layout.
-import { WHEN, WHOSE, applyView, countsFor, viewTitle, isDefaultView } from './viewstate.js';
-import { LAYOUTS } from './viewstore.js';
+// Renders task shortcuts and optional filters in the left panel.
+import { DEFAULT_VIEW, WHEN, WHOSE, applyView, countsFor, viewTitle, isDefaultView } from './viewstate.js';
 import { projectTreeBlock } from './projectpanel.js';
-import { isOpen } from './taskfold.js';
+
+const SHORTCUTS = [
+  DEFAULT_VIEW,
+  { ...DEFAULT_VIEW, when: 'inbox' },
+  { ...DEFAULT_VIEW, when: 'all', whose: 'review' },
+  { ...DEFAULT_VIEW, when: 'all' },
+];
+
+export function taskShortcuts(tasks, data) {
+  return SHORTCUTS.map((view) => ({
+    view,
+    title: view.whose === 'review' ? WHOSE.find((item) => item.id === 'review').title : viewTitle(view),
+    count: view.when === 'pulse' ? null : applyView(tasks, view, data).length,
+  }));
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -15,6 +23,7 @@ function element(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
+
 function button(className, text, onClick, label) {
   const node = element('button', className, text);
   node.type = 'button';
@@ -22,149 +31,115 @@ function button(className, text, onClick, label) {
   if (label) node.setAttribute('aria-label', label);
   return node;
 }
-// A row of the panel: title, count, on when chosen.
+
 function row(title, count, on, onClick) {
-  const node = button(`drawer-contact${on ? ' on' : ''}`, '', onClick);
+  const node = button(`drawer-contact view-row${on ? ' on' : ''}`, '', onClick);
   node.setAttribute('aria-pressed', String(on));
-  node.append(element('span', 'drawer-title', title), element('span', 'drawer-count', count ? String(count) : ''));
-  if (!count) node.classList.add('empty-list');
+  node.append(element('span', 'drawer-title', title));
+  if (count) node.append(element('span', 'drawer-count', String(count)));
   return node;
 }
 
-// ctx: { store (viewstore.js), tasks, projects, counterparties, people, onCreateProject, done() — closes the panel on a phone }
-export function viewPanel(ctx) {
-  const { store } = ctx;
-  const view = store.get();
-  const data = { now: new Date(), projects: ctx.projects, people: ctx.people };
-  const box = element('div', 'view-panel');
-  // «Оси» combine: a choice keeps the panel open; a list of «Списки» or «Дерево» opens and the panel closes.
-  const set = (change) => store.set(change);
-  const replace = (next) => { store.replace(next); ctx.done?.(); };
-
-  // On top: the view in words, ✕ back to the pulse.
-  const head = element('div', 'view-current');
-  head.append(element('span', 'view-current-title', viewTitle(view, ctx)));
-  if (!isDefaultView(view)) head.append(button('icon-button', '✕', () => replace({}), 'Сбросить вид: Пульт'));
-  box.append(head);
-
-  const layout = store.layout();
-  if (layout === 'lists') box.append(...listsLayout(ctx, view, data, replace));
-  else if (layout === 'tree') box.append(...treeLayout(ctx, view, data, replace, set));
-  else box.append(...axesLayout(ctx, view, data, set, replace));
-
-  // The gear at the bottom: which layout.
-  const gear = element('label', 'view-gear');
-  const select = element('select', 'view-gear-select');
-  for (const item of LAYOUTS) select.append(Object.assign(document.createElement('option'), { value: item.id, textContent: item.title, selected: item.id === layout }));
-  select.onchange = () => store.setLayout(select.value);
-  gear.append(element('span', 'view-gear-icon', '⚙'), select);
-  gear.title = 'Вид панели';
-  box.append(gear);
-  return box;
+function section(key, title, expanded, active, ...children) {
+  const details = element('details', 'drawer-disclosure');
+  details.open = expanded.get(key) ?? active;
+  details.addEventListener('toggle', () => { if (details.isConnected) expanded.set(key, details.open); });
+  const body = element('div', 'view-options');
+  body.append(...children);
+  details.append(element('summary', 'drawer-summary', title), body);
+  return details;
 }
 
-// Open tasks of a counterparty or a person, for their rows.
-const openOf = (tasks, match) => tasks.filter((task) => isOpen(task) && !task.filed && match(task)).length;
-const personMatch = (person) => (task) => Object.values(task.roles ?? {}).flat().some((party) => person.points.includes(party));
-const busyCounterparties = (ctx) => ctx.counterparties.filter((item) => item.status === 'active')
-  .map((item) => ({ item, open: openOf(ctx.tasks, (task) => task.counterparty === item.id) })).filter(({ open }) => open).sort((a, b) => b.open - a.open);
-const busyPeople = (ctx) => ctx.people.filter((person) => person.status !== 'deleted' && person.points.length)
-  .map((person) => ({ person, open: openOf(ctx.tasks, personMatch(person)) })).filter(({ open }) => open).sort((a, b) => b.open - a.open);
+export function viewPanel(ctx) {
+  const { store, tasks, projects, people, expanded, done } = ctx;
+  const view = store.get();
+  const data = { now: new Date(), projects, people };
+  const box = element('div', 'view-panel');
+  const open = (next) => { store.replace(next); done(); };
+  const set = (change) => store.set(view.when === 'pulse' ? { when: 'all', ...change } : change);
 
-// «Оси»: КОГДА · ЧЬЁ chips with counts, ГДЕ — projects, counterparties, people; «Мои виды».
-function axesLayout(ctx, view, data, set, replace) {
-  const nodes = [];
+  const shortcuts = taskShortcuts(tasks, data);
+  const located = Object.values(view.where ?? {}).some(Boolean);
+  const simple = !located && shortcuts.some(({ view: next }) => next.when === view.when && next.whose === view.whose);
+  for (const item of shortcuts) {
+    const on = ctx.inTasks && simple && item.view.when === view.when && item.view.whose === view.whose;
+    box.append(row(item.title, item.count, on, () => open(item.view)));
+  }
+  if (!simple) box.append(element('div', 'view-scope', viewTitle(view, ctx)));
+
+  const project = view.where?.project;
+  const tree = projectTreeBlock({ projects, tasks, current: project, onCreate: ctx.onCreateProject,
+    onOpen: (id) => open({ when: 'all', where: { project: id } }) });
+  box.append(section('projects', 'Проекты', expanded, Boolean(project), tree));
+
   const chips = (axis, options) => {
-    const counts = countsFor(ctx.tasks, view, axis, data);
+    const counts = countsFor(tasks, view.when === 'pulse' ? { ...view, when: 'all' } : view, axis, data);
     const wrap = element('div', 'chips view-axis');
     for (const option of options) {
       const on = view[axis] === option.id;
-      const chip = button(`chip ${on ? 'on' : 'suggest'}`, `${option.icon ? `${option.icon} ` : ''}${option.title}${option.id !== 'pulse' && counts.get(option.id) ? ` ${counts.get(option.id)}` : ''}`, () => set({ [axis]: option.id }));
+      const count = counts.get(option.id);
+      const chip = button(`chip ${on ? 'on' : 'suggest'}`, `${option.title}${count ? ` ${count}` : ''}`, () => set({ [axis]: option.id }));
       chip.setAttribute('aria-pressed', String(on));
       wrap.append(chip);
     }
     return wrap;
   };
-  nodes.push(element('h3', 'drawer-section', 'Когда'), chips('when', WHEN), element('h3', 'drawer-section', 'Чьё'), chips('whose', WHOSE));
-  nodes.push(element('h3', 'drawer-section', 'Где · проекты'), projectTreeBlock({ projects: ctx.projects, tasks: ctx.tasks, current: view.where?.project ?? null,
-    onOpen: (id) => set({ where: { project: view.where?.project === id ? null : id } }), onCreate: ctx.onCreateProject }));
-  const counterparties = busyCounterparties(ctx);
-  if (counterparties.length) {
-    nodes.push(element('h3', 'drawer-section', 'Где · контрагенты'));
-    for (const { item, open } of counterparties.slice(0, 8)) nodes.push(row(`◆ ${item.title}`, open, view.where?.counterparty === item.id, () => set({ where: { counterparty: view.where?.counterparty === item.id ? null : item.id } })));
-  }
-  const people = busyPeople(ctx);
-  if (people.length) {
-    nodes.push(element('h3', 'drawer-section', 'Где · люди'));
-    for (const { person, open } of people.slice(0, 8)) nodes.push(row(person.name, open, view.where?.person === person.id, () => set({ where: { person: view.where?.person === person.id ? null : person.id } })));
-  }
-  nodes.push(...savedViews(ctx, view, replace, true));
-  return nodes;
+  const options = [
+    element('h3', 'drawer-section', 'Срок и состояние'), chips('when', WHEN.filter((option) => option.id !== 'pulse')),
+    element('h3', 'drawer-section', 'Роль'), chips('whose', WHOSE),
+    directorySearch(ctx, view, data, set),
+    ...savedViews(ctx, view, data, open),
+  ];
+  if (ctx.showApply) options.push(button('chip on view-apply', 'Показать задачи', done));
+  box.append(section('filters', 'Ещё фильтры', expanded, !simple && !project, ...options.filter(Boolean)));
+  return box;
 }
 
-// «Мои виды»: saved combinations; «+ Сохранить текущий вид» names the current one.
-function savedViews(ctx, view, replace, canSave) {
-  const nodes = [element('h3', 'drawer-section', 'Мои виды ★')];
-  for (const item of ctx.store.saved()) {
-    const line = element('div', 'view-saved');
-    const open = row(`★ ${item.title}`, applyView(ctx.tasks, item.view, { now: new Date(), projects: ctx.projects, people: ctx.people }).length, false, () => replace(item.view));
-    line.append(open, button('icon-button', '×', () => { ctx.store.remove(item.id); ctx.store.set({}); }, `Удалить вид «${item.title}»`));
-    nodes.push(line);
-  }
-  if (canSave && !isDefaultView(view)) {
-    const form = element('form', 'view-save');
-    const input = Object.assign(document.createElement('input'), { placeholder: 'Название вида', maxLength: 60, className: 'details-input' });
-    input.setAttribute('aria-label', 'Название вида');
-    form.append(input, button('chip suggest', '+ Сохранить вид', () => form.requestSubmit()));
-    form.onsubmit = (event) => { event.preventDefault(); ctx.store.save(input.value || viewTitle(view, ctx)); ctx.store.set({}); };
-    nodes.push(form);
-  } else if (!ctx.store.saved().length) nodes.push(element('p', 'drawer-empty', 'Выберите когда, чьё и где — и сохраните сочетание.'));
-  return nodes;
-}
-
-// «Списки», as in TickTick: smart lists · projects · filters; one tap — one list.
-function listsLayout(ctx, view, data, replace) {
-  const nodes = [element('h3', 'drawer-section', 'Умные списки')];
-  const whenCounts = countsFor(ctx.tasks, { when: 'all', whose: 'all', where: {} }, 'when', data);
-  const plain = (next) => view.when === next.when && view.whose === (next.whose ?? 'all') && JSON.stringify(view.where ?? {}) === JSON.stringify(next.where ?? {});
-  for (const option of WHEN) nodes.push(row(`${option.icon} ${option.title}`, option.id === 'pulse' ? 0 : whenCounts.get(option.id), plain({ when: option.id }), () => replace({ when: option.id })));
-  nodes.push(element('h3', 'drawer-section', 'Проекты'), projectTreeBlock({ projects: ctx.projects, tasks: ctx.tasks, current: view.where?.project ?? null,
-    onOpen: (id) => replace({ when: 'all', where: { project: id } }), onCreate: ctx.onCreateProject }));
-  nodes.push(element('h3', 'drawer-section', 'Фильтры'));
-  const whoseCounts = countsFor(ctx.tasks, { when: 'all', whose: 'all', where: {} }, 'whose', data);
-  for (const option of WHOSE.filter((item) => item.id !== 'all')) nodes.push(row(option.title, whoseCounts.get(option.id), plain({ when: 'all', whose: option.id }), () => replace({ when: 'all', whose: option.id })));
-  for (const { item, open } of busyCounterparties(ctx).slice(0, 5)) nodes.push(row(`◆ ${item.title}`, open, plain({ when: 'all', where: { counterparty: item.id } }), () => replace({ when: 'all', where: { counterparty: item.id } })));
-  nodes.push(...savedViews(ctx, view, replace, false));
-  return nodes;
-}
-
-// «Дерево», as in Things: when on top, then areas → projects; people and counterparties by search.
-function treeLayout(ctx, view, data, replace, set) {
-  const nodes = [];
-  const counts = countsFor(ctx.tasks, { when: 'all', whose: view.whose, where: {} }, 'when', data);
-  const order = ['inbox', 'today', 'upcoming', 'all', 'deferred', 'done', 'unreported', 'pulse'];
-  const names = { all: 'В любое время', deferred: 'Когда-нибудь', done: 'Журнал' };
-  for (const id of order) {
-    const option = WHEN.find((item) => item.id === id);
-    nodes.push(row(`${option.icon} ${names[id] ?? option.title}`, id === 'pulse' ? 0 : counts.get(id), view.when === id && !view.where?.project, () => replace({ when: id, whose: view.whose })));
-  }
-  nodes.push(element('h3', 'drawer-section', 'Области и проекты'), projectTreeBlock({ projects: ctx.projects, tasks: ctx.tasks, current: view.where?.project ?? null,
-    onOpen: (id) => replace({ when: 'all', whose: view.whose, where: { project: id } }), onCreate: ctx.onCreateProject }));
-  // Search: a counterparty or a person by name.
-  const search = Object.assign(document.createElement('input'), { type: 'search', placeholder: 'Найти контрагента или человека', className: 'details-input view-search' });
-  search.setAttribute('aria-label', 'Найти контрагента или человека');
+function directorySearch(ctx, view, data, set) {
+  const people = ctx.people.filter((person) => person.status !== 'deleted' && person.points.length);
+  const counterparties = ctx.counterparties.filter((item) => item.status === 'active');
+  if (!people.length && !counterparties.length) return null;
+  const box = element('div', 'view-directory');
+  const search = element('input', 'details-input view-search');
+  search.type = 'search';
+  search.placeholder = 'Найти по имени или названию';
+  search.setAttribute('aria-label', 'Люди и контрагенты');
   const found = element('div', 'view-found');
   search.oninput = () => {
     const query = search.value.trim().toLowerCase();
     if (!query) { found.replaceChildren(); return; }
-    const hits = [
-      ...ctx.counterparties.filter((item) => item.status === 'active' && item.title.toLowerCase().includes(query)).slice(0, 5)
-        .map((item) => row(`◆ ${item.title}`, openOf(ctx.tasks, (task) => task.counterparty === item.id), false, () => set({ when: 'all', where: { counterparty: item.id, person: null, project: null } }))),
-      ...ctx.people.filter((person) => person.status !== 'deleted' && person.name.toLowerCase().includes(query)).slice(0, 5)
-        .map((person) => row(person.name, openOf(ctx.tasks, personMatch(person)), false, () => set({ when: 'all', where: { person: person.id, counterparty: null, project: null } }))),
-    ];
-    found.replaceChildren(...(hits.length ? hits : [element('p', 'drawer-empty', 'Никого не нашлось')]));
+    const matches = (items, name, key) => items.filter((item) => name(item).toLowerCase().includes(query)).slice(0, 5).map((item) => {
+      const other = key === 'person' ? 'counterparty' : 'person';
+      const on = view.where[key] === item.id;
+      const where = { [key]: on ? null : item.id, [other]: null };
+      const count = applyView(ctx.tasks, { ...view, when: view.when === 'pulse' ? 'all' : view.when,
+        where: { ...view.where, [key]: item.id, [other]: null } }, data).length;
+      return row(name(item), count, on, () => { set({ where }); ctx.done(); });
+    });
+    const hits = [...matches(people, (item) => item.name, 'person'), ...matches(counterparties, (item) => item.title, 'counterparty')];
+    found.replaceChildren(...(hits.length ? hits : [element('p', 'drawer-empty', 'Ничего не найдено')]));
   };
-  nodes.push(element('h3', 'drawer-section', 'Люди и контрагенты'), search, found);
+  box.append(element('h3', 'drawer-section', 'Люди и контрагенты'), search, found);
+  return box;
+}
+
+function savedViews(ctx, view, data, open) {
+  const nodes = [];
+  const saved = ctx.store.saved();
+  if (saved.length || !isDefaultView(view)) nodes.push(element('h3', 'drawer-section', 'Мои виды'));
+  for (const item of saved) {
+    const line = element('div', 'view-saved');
+    line.append(row(item.title, applyView(ctx.tasks, item.view, data).length, false, () => open(item.view)),
+      button('icon-button', '×', () => { ctx.store.remove(item.id); ctx.store.set({}); }, `Удалить вид «${item.title}»`));
+    nodes.push(line);
+  }
+  if (!isDefaultView(view)) {
+    const form = element('form', 'view-save');
+    const input = Object.assign(document.createElement('input'), { placeholder: 'Название вида', maxLength: 60, className: 'details-input view-search' });
+    input.setAttribute('aria-label', 'Название вида');
+    form.append(input, button('chip suggest', 'Сохранить', () => form.requestSubmit()));
+    form.onsubmit = (event) => { event.preventDefault(); ctx.store.save(input.value || viewTitle(view, ctx)); ctx.store.set({}); };
+    nodes.push(form);
+  }
   return nodes;
 }

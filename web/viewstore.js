@@ -1,14 +1,7 @@
-// The task view kept on this device (viewstate.js): the current view, «Мои виды» (saved views) and the layout of the
-// left panel (axes · lists · tree). Changes call the listeners (the centre and the panel redraw). Tested in node with a
-// fake storage. Saved views are per device for now; across devices — later, as journal events.
+// Stores the current task view and saved filters on this device.
 import { DEFAULT_VIEW } from './viewstate.js';
 
-const KEYS = { view: 'stream.taskView.v1', saved: 'stream.taskViews.saved.v1', layout: 'stream.taskPanel.layout' };
-export const LAYOUTS = [
-  { id: 'axes', title: 'Оси: когда · чьё · где' },
-  { id: 'lists', title: 'Списки, как в TickTick' },
-  { id: 'tree', title: 'Дерево, как в Things' },
-];
+const KEYS = { view: 'stream.taskView.v1', saved: 'stream.taskViews.saved.v1' };
 
 const browserStorage = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
 
@@ -18,7 +11,6 @@ export function createViewStore(storage = browserStorage()) {
   let view = { ...DEFAULT_VIEW, ...read(KEYS.view, {}) };
   view.where = { ...(view.where ?? {}) };
   let saved = read(KEYS.saved, []);
-  let layout = read(KEYS.layout, 'axes');
   const listeners = new Set();
   const changed = () => { write(KEYS.view, view); for (const listener of listeners) listener(view); };
   const clean = (where) => Object.fromEntries(Object.entries(where).filter(([, value]) => value));
@@ -41,8 +33,6 @@ export function createViewStore(storage = browserStorage()) {
     },
     open(id) { const item = saved.find((entry) => entry.id === id); if (item) this.replace(item.view); },
     remove(id) { saved = saved.filter((entry) => entry.id !== id); write(KEYS.saved, saved); },
-    layout: () => layout,
-    setLayout(next) { layout = next; write(KEYS.layout, next); for (const listener of listeners) listener(view); },
     onChange(listener) { listeners.add(listener); return () => listeners.delete(listener); },
   };
 }

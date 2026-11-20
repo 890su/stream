@@ -117,5 +117,8 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .bubble.system { align-self: center; max-width: 92%; background: var(--panel); color: var(--muted); font-size: 14px; box-shadow: none; border-radius: 12px; cursor: pointer; }
 .bubble.system .link-row, .bubble.system .more { display: none; }
 /* «Беседы» on top of the left panel (drawer.js): back to the queue, the main screen. */
-.drawer-queue { display: block; width: calc(100% - 12px); margin: 8px 6px 0; padding: 10px 12px; border-radius: 12px; background: var(--chip); color: var(--chip-text); font: inherit; font-weight: 600; text-align: left; }
+.drawer-queue-tools { display: flex; gap: 6px; margin: 8px 6px 0; }
+.drawer-queue { flex: 1; min-height: 44px; padding: 8px 12px; border-radius: 10px; background: var(--chip); color: var(--chip-text); font: inherit; font-weight: 600; text-align: left; }
 .drawer-queue:active, .drawer-queue:hover { background: var(--press); }
+#drawer-search-toggle[aria-expanded="true"] { background: var(--chip); color: var(--link); }
+#drawer-search { margin: 8px 6px 0; }

@@ -1,7 +1,10 @@
+// Checks task filtering, shortcuts and saved views.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { applyView, countsFor, viewTitle, isDefaultView, dueGroups, DEFAULT_VIEW, WHEN, WHOSE } from '../web/viewstate.js';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
+import { taskShortcuts } from '../web/viewpanel.js';
 
 // One view for the task panel (when · whose · where), whatever layout picks it. Tasks are made up.
 const now = new Date('2026-11-19T12:00:00');
@@ -62,10 +65,18 @@ test('a list by dates: overdue, today, tomorrow, this week, later, no date', () 
   assert.deepEqual(groups.map((group: any) => [group.title, group.tasks.length]), [['Просрочено', 1], ['Сегодня', 1], ['Позже', 1], ['Без срока', 6]]);
 });
 
-test('the view store: changes merge, «Мои виды» are kept, the layout is remembered', async () => {
+test('the panel has one dashboard and shortcuts with counts for inbox, review and open tasks', () => {
+  const entries = taskShortcuts(tasks, { now, projects: [], people: [] });
+  assert.deepEqual(entries.map(({ title, count }: { title: string; count: number | null }) => [title, count]),
+    [['Пульт', null], ['Входящие', 1], ['На проверке', 1], ['Все открытые', 9]]);
+  assert.deepEqual(entries[0].view, DEFAULT_VIEW);
+  assert.deepEqual(entries[2].view, { when: 'all', whose: 'review', where: {} });
+});
+
+test('the view store keeps filters and saved views from devices with an old layout preference', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   const { createViewStore } = await import('../web/viewstore.js');
-  const data = new Map<string, string>();
+  const data = new Map([['stream.taskPanel.layout', '"tree"']]);
   const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); } };
   const store = createViewStore(storage);
   assert.deepEqual(store.get(), DEFAULT_VIEW);
@@ -83,9 +94,8 @@ test('the view store: changes merge, «Мои виды» are kept, the layout is
   assert.equal(store.get().whose, 'watch');
   store.remove(saved.id);
   assert.equal(store.saved().length, 0);
-  assert.equal(store.layout(), 'axes');
-  store.setLayout('tree');
-  assert.equal(createViewStore(storage).layout(), 'tree', 'remembered on the device');
+  assert.equal(store.layout, undefined);
+  assert.equal(data.get('stream.taskPanel.layout'), '"tree"', 'the legacy choice is ignored');
 });
 
 test('«Не учтено»: closed tasks whose report has gaps', () => {

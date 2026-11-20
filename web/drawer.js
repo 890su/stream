@@ -1,13 +1,12 @@
+// Manages the left panel, with task filters, pinned conversations and tags.
 import { sourceKey } from './projection.js';
 import { viewPanel } from './viewpanel.js';
 import { viewStore } from './viewstore.js';
 import { accountTitle } from './tgbubble.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
+import { favourites, searchConversations } from './favourites.js';
 
-// Left panel (CONCEPT.md §5, design 2026-11-20): «Беседы» on top — back to the queue, the main screen; the task
-// filters (three layouts, viewpanel.js) in Беседы and Задачи — no conversation filters; «Избранные» — pinned chats
-// (favourites.js), a tap opens the conversation; tags for every view. Лента keeps its own: «Завершённые» and sources.
 const DAY = 86400000;
 
 function element(tag, className, text) {
@@ -22,15 +21,20 @@ function age(ts) {
   return days <= 0 ? 'сегодня' : `${days} дн. назад`;
 }
 
-import { favourites, recent } from './favourites.js';
-
 export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () => {}, pinned = () => [], onFilterChange, onCreateProject = () => {} }) {
   const drawer = document.querySelector('#drawer');
   const backdrop = document.querySelector('#drawer-backdrop');
   const contactsBox = document.querySelector('#drawer-contacts');
-  const recentBox = document.querySelector('#drawer-recent');
+  const favouritesSection = document.querySelector('#drawer-favourites');
+  const tagSection = document.querySelector('#drawer-tag-section');
+  const tagCount = document.querySelector('#drawer-tag-count');
   const tagsBox = document.querySelector('#drawer-tags');
   const modeBox = document.querySelector('#drawer-mode');
+  const search = document.querySelector('#drawer-search');
+  const searchToggle = document.querySelector('#drawer-search-toggle');
+  const searchInput = document.querySelector('#drawer-search-input');
+  const searchResults = document.querySelector('#drawer-search-results');
+  const expanded = new Map();
 
   // The drawer sits between the top bar and the composer; both stay visible and usable.
   function place() {
@@ -54,7 +58,7 @@ export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () 
     } else {
       drawer.classList.remove('open');
       backdrop.hidden = true;
-      setTimeout(() => { if (!isOpen()) drawer.hidden = true; }, 230);
+      setTimeout(() => { if (!isWide() && !isOpen()) drawer.hidden = true; }, 230);
     }
   }
 
@@ -107,31 +111,43 @@ export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () 
   window.addEventListener('resize', () => { if (!drawer.hidden) place(); });
 
   // «Избранные»: pinned chats; a tap opens the conversation in Беседы.
+  function contactRow({ key, title }, last) {
+    const active = feed.conversationKey() === key;
+    const row = element('button', `drawer-contact${active ? ' on' : ''}`);
+    row.type = 'button';
+    row.append(element('span', 'drawer-title', title), element('span', 'drawer-count', last ? age(last) : 'нет сообщений'));
+    row.setAttribute('aria-pressed', String(active));
+    row.onclick = () => goToConversation(key);
+    return row;
+  }
+
   function renderContacts() {
-    const active = feed.conversationKey();
     const known = new Map(feed.conversations().map((item) => [item.key, item]));
-    const rows = favourites(pinned()).map((item) => {
-      const row = element('button', `drawer-contact${active === item.key ? ' on' : ''}`);
-      row.type = 'button';
-      const conversation = known.get(item.key);
-      row.append(element('span', 'drawer-title', item.title), element('span', 'drawer-count', conversation ? age(conversation.last) : 'нет сообщений'));
-      row.setAttribute('aria-pressed', String(active === item.key));
-      row.onclick = () => { close(); onContact(item.key); };
-      return row;
-    });
-    contactsBox.replaceChildren(...(rows.length ? rows : [element('p', 'drawer-empty', 'Закрепите чат звёздочкой в окне «связь» — он появится здесь')]));
-    // «Недавние»: every conversation by its latest message — also those out of the queue (answered, archived, snoozed).
-    const CHANNELS = { phone: 'телефон', viber: 'Viber', whatsapp: 'WhatsApp' };
-    recentBox.replaceChildren(...recent(feed.conversations()).map((item) => {
-      const row = element('button', `drawer-contact${active === item.key ? ' on' : ''}`);
-      row.type = 'button';
-      const channels = item.channels.map((channel) => CHANNELS[channel] ?? accountTitle(channel)).join(', ');
-      const where = item.queue?.waiting ? 'в очереди' : item.queue?.snoozedUntil ? 'отложена' : item.archived ? 'в архиве' : '';
-      row.append(element('span', 'drawer-title', item.title), element('span', 'drawer-count', [channels, item.group ? 'группа' : '', where, age(item.last)].filter(Boolean).join(' · ')));
-      row.setAttribute('aria-pressed', String(active === item.key));
-      row.onclick = () => { close(); onContact(item.key); };
-      return row;
-    }));
+    const rows = favourites(pinned()).map((item) => contactRow(item, known.get(item.key)?.last));
+    favouritesSection.hidden = !rows.length;
+    contactsBox.replaceChildren(...rows);
+  }
+
+  function renderSearch() {
+    const query = searchInput.value.trim();
+    const hits = searchConversations(feed.conversations(), query).map((item) => contactRow(item, item.last));
+    searchResults.replaceChildren(...(query && !hits.length ? [element('p', 'drawer-empty', 'Беседа не найдена')] : hits));
+  }
+
+  function setSearch(open) {
+    search.hidden = !open;
+    searchToggle.setAttribute('aria-expanded', String(open));
+    if (open) { renderSearch(); searchInput.focus(); }
+    else { searchInput.value = ''; searchResults.replaceChildren(); }
+  }
+
+  function goToConversation(key) {
+    const go = () => { if (key) onContact(key); else onQueue(); };
+    const pending = isOpen() && history.state?.drawer;
+    if (pending) window.addEventListener('popstate', go, { once: true });
+    setSearch(false);
+    close();
+    if (!pending) go();
   }
 
   // Sources (CONCEPT.md §8.2): my notes, each messenger account, the phone, the system. One at a time.
@@ -164,28 +180,31 @@ export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () 
   }
 
   const chipRow = (chips) => { const row = element('div', 'chips'); row.append(...chips); return row; };
-  // The «Задачи» view: the control panel of the view (viewpanel.js) — three layouts over one view, the gear below.
   function renderTaskFilters() {
-    modeBox.replaceChildren(viewPanel({ store: viewStore, tasks: feed.tasks(), projects: feed.projects(), counterparties: feed.counterparties(), people: feed.people(),
-      onCreateProject, done: () => { onFilterChange(); if (feed.mode() === 'conversations') onTasks(); if (!isWide()) close(); } }));
+    modeBox.replaceChildren(viewPanel({
+      store: viewStore, tasks: feed.tasks().filter(feed.taskMatches()), projects: feed.projects(), counterparties: feed.counterparties(), people: feed.people(),
+      expanded, onCreateProject, inTasks: feed.mode() === 'tasks', showApply: !isWide() || feed.mode() !== 'tasks',
+      async done() { if (feed.mode() !== 'tasks') await onTasks(); close(); },
+    }));
   }
-  // The task filters come first, above «Избранные»; Лента's sources follow them.
-  const contactsHead = contactsBox.previousElementSibling;
-  function placeModeBox() {
-    if (feed.mode() === 'feed') contactsBox.after(modeBox); else contactsHead.before(modeBox);
-  }
-  document.querySelector('#drawer-queue').onclick = () => { close(); onQueue(); };
+  document.querySelector('#drawer-queue').onclick = () => goToConversation(null);
+  searchToggle.onclick = () => setSearch(search.hidden);
+  searchInput.oninput = renderSearch;
 
   function render() {
     renderContacts();
-    placeModeBox();
+    if (!search.hidden) renderSearch();
     if (feed.mode() === 'feed') renderSources(); else renderTaskFilters();
     document.querySelector('#drawer-title').textContent = feed.mode() === 'feed' ? 'Фильтры ленты' : 'Фильтры задач';
     const counts = new Map();
     for (const view of feed.views()) if (!view.deleted) for (const tag of view.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     const active = new Set(feed.tagFilter());
+    for (const tag of active) if (!counts.has(tag)) counts.set(tag, 0);
     const tags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru'));
-    tagsBox.replaceChildren(...(tags.length ? tags.map(([tag, count]) => {
+    tagSection.hidden = !tags.length;
+    tagCount.hidden = !active.size;
+    tagCount.textContent = String(active.size);
+    tagsBox.replaceChildren(...tags.map(([tag, count]) => {
       const chip = element('button', `chip ${active.has(tag) ? 'on' : 'suggest'}`, `${tag} ${count}`);
       chip.type = 'button';
       chip.setAttribute('aria-pressed', String(active.has(tag)));
@@ -196,13 +215,11 @@ export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () 
         render();
       };
       return chip;
-    }) : [element('p', 'drawer-empty', 'Меток пока нет')]));
+    }));
   }
 
-  // A task filter chosen while the queue is shown leads to Задачи (the panel is open: the owner chose it).
   viewStore.onChange(() => {
-    if (!drawer.hidden && feed.mode() === 'conversations') onTasks();
-    if (!drawer.hidden && feed.mode() === 'tasks') render();
+    if (!drawer.hidden && feed.mode() !== 'feed') render();
     onFilterChange();
   });
   document.querySelector('#drawer-button').onclick = open;

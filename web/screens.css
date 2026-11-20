@@ -244,21 +244,31 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .people-add { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-strong); color: #fff; font-size: 22px; line-height: 1; }
 .card-people-menu:empty { display: none; }
 
-/* The control panel of the task view (viewpanel.js): the view in words, axes, saved views, the gear at the bottom. */
-.view-panel { display: grid; gap: 4px; min-width: 0; }
-.view-current, .view-gear, .view-save { min-width: 0; }
-.view-current .icon-button { flex: none; }
-.view-current { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 4px 6px; border-radius: 10px; background: var(--chip); }
-.view-current-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 14px; }
-.view-axis { padding: 0 6px; }
-.view-saved { display: flex; align-items: center; }
+/* The task shortcuts and disclosures of the left panel. */
+.view-panel { margin: 10px 6px 0; }
+.view-row { display: flex; align-items: center; justify-content: space-between; min-width: 0; min-height: 44px; padding: 7px 12px; gap: 8px; border-bottom: 0; }
+.view-row.on .drawer-title { color: var(--link); font-weight: 600; }
+.view-scope { padding: 6px 12px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.drawer-disclosure { border-top: 1px solid var(--line); }
+.view-panel .drawer-disclosure:first-of-type { margin-top: 10px; }
+#drawer-favourites, #drawer-tag-section { margin-inline: 6px; }
+.drawer-summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; font-size: 15.5px; text-align: start; cursor: pointer; list-style: none; border-radius: 10px; }
+.drawer-summary::-webkit-details-marker { display: none; }
+.drawer-summary::before { content: ''; flex: none; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); }
+.drawer-disclosure[open] > .drawer-summary::before { transform: rotate(45deg); }
+.drawer-summary .drawer-count { margin-inline-start: auto; }
+.drawer-summary:hover { background: var(--press); }
+.view-options { padding: 0 2px 10px; }
+.view-options .drawer-section { margin: 10px 8px 6px; }
+.view-axis, #drawer-tags { padding: 0 6px 6px; }
+.view-saved, .view-save { display: flex; align-items: center; gap: 6px; }
 .view-saved > .drawer-contact { flex: 1; }
-.view-save { display: flex; gap: 6px; padding: 4px 6px; }
-.view-save .details-input, .view-search { flex: 1; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; }
-.view-search { margin: 0 6px; }
-.view-gear { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 6px; border-top: 1px solid var(--line); background: var(--panel); }
-.view-gear-icon { font-size: 20px; }
-.view-gear-select { flex: 1; min-width: 0; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; padding: 0 8px; }
+.view-save { padding: 4px 6px; }
+.view-search { width: 100%; min-width: 0; min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; }
+.view-directory { margin: 0 6px; }
+.view-directory .drawer-section { margin-inline: 2px; }
+.view-save .view-search { flex: 1; }
+.view-apply { margin: 8px 6px 0; }
 
 /* A task on the main screen (details.js, design 2026-11-20 stage 2): over the list, between the top bar and the
    input row; on a wide screen it takes the centre column. */

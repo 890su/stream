@@ -85,8 +85,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `tasklist.js` / `days.js` | the «Задачи» view: the head of a list opened from the left panel («← Пульт», name, grouping — `listHead`), sections of a list (`sectionsOf`, `listCount`) or groups by tag / person (`groupsOf`), a task row (mark, title, facts with checklist progress, due word — `dueLabel`); day pill labels |
 | `taskview.js` | the «Задачи» centre by the view: the pulse of its tasks, one project by its sections, or a list by dates / tags / people (`taskViewNodes`) |
 | `viewstate.js` | pure: the view of «Задачи» — when (`WHEN`) · whose (`WHOSE`) · where (project, counterparty, person); `applyView`, `countsFor`, `viewTitle`, `dueGroups` |
-| `viewstore.js` | the view kept on the device: current view, «Мои виды», panel layout; listeners redraw (`viewStore`, `LAYOUTS`) |
-| `viewpanel.js` | the left panel of «Задачи»: three layouts over one view — «Оси», «Списки» (TickTick), «Дерево» (Things) — and the gear ⚙ at the bottom |
+| `viewstore.js` | device storage of the current view and «Мои виды»; listeners redraw (`viewStore`) |
+| `viewpanel.js` | task shortcuts with counts (`taskShortcuts`), project tree, expandable filters and saved views |
 | `pulse.js` / `pulseview.js` | the «Задачи» dashboard: in work, paused, today (incl. overdue work), watch with alerts, projects, later; `pulseBlocks`, `importance`, `projectHealth`, `pulseCount`, and `pulseNodes` |
 | `focus.js` | pure: one task of mine in work (`inWork`, `isMineToDo`), «▶ В работу» / «Пауза» changes with `resume_note` (`startWork`, `pauseWork`, `resumeNoteOf`), `workedMinutes` from the status history |
 | `contacts.js` | pure: the directory (mirror of `src/contacts/fold.ts`), `markCounterparties` (titles for rows) |
@@ -124,7 +124,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `recipients.js` | recipients: address book, the chosen one's chip, items and pins for the Контакты section |
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
-| `drawer.js` / `favourites.js` | left panel (opened by the filter icon; closed by a swipe): «💬 Беседы» back to the queue, task filters in Беседы and Задачи (a choice switches to Задачи), «Избранные» — pinned chats (`favourites`), «Недавние» — every conversation by its latest message, also out of the queue (`recent`), tags; Лента — «Завершённые» and sources |
+| `drawer.js` / `favourites.js` | left panel: queue shortcut, conversation lookup by name or number (`searchConversations`), task filters, pinned chats (`favourites`), tags; Лента — «Завершённые» and sources |
 | `taskfold.js` | pure: tasks from `task_change` (with history, roles, checklist — `foldItems`, `itemsProgress`, `ownerTitled`), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter` (fields incl. `snoozed`), `visibleTasks` |
 | `conversations.js` / `queue.js` | pure: messages → conversations (one per chat or number), each with `queue` — waiting for the owner and since when (`queueOf`: only the owner's reply, own task link, `answered`, `snooze` take it out; `requeue` and a snooze's end lift its moment; nothing before `queue.since` waits), `queueList` (newest moment on top), `ownerLinked`; `isArchived`; `conversationKeys` (an own note joins the conversation it continues or answers; else a note in a task of its own → `task:<id>`; a split message and its chain → `split:<id>`); `withWhom` |

@@ -532,8 +532,8 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 
 **Redesign 2026-11-20** (`docs/plans/2026-11-20-queue-and-task-screen-design.md`, stage by stage; what it replaces
 below holds until its stage ships): the queue of conversations is the root screen — the system back always ends
-there; the left panel is only task filters, with «Беседы» on top of every layout and favourite contacts instead of
-the conversation list (no conversation filters); a task opens in the centre with a completion mark, title, editable
+there; the left panel has one layout for «Беседы» and «Задачи», with a queue shortcut, conversation search, task
+filters and pinned conversations. A task opens in the centre with a completion mark, title, editable
 chips for planned time, due, project and repeat, a counterparty link, description, open checklist and folded details.
 The participants line opens a separate conversation screen; arrows and edge swipes change the participant. Under
 «Я» the task's messages and history share a timeline. A contact's conversation dims or folds other tasks' messages
@@ -582,10 +582,13 @@ me), «Контроль» (I control, someone else executes, open), «Все м�
 without me), «Не учтено», «Готовые». The owner saves own ones from the left panel as events. Lists, a future board,
 the morning three, process rules and mirrors all select tasks with the same filters.
 
-**Left panel.** Shared across views and kept on switching: contacts and tags (with counts; selected tags filter —
-a message must carry all, a task through at least one message). Per view: Беседы — state, channel,
-«Завершённые»; Задачи — saved filters, role, status, due; Лента — sources, «Завершённые» (messages of finished
-tasks, hidden by default). Задачи also has the project tree (§2.11). While a filter is on, the top bar
+**Left panel.** The search button beside «Беседы» finds a conversation by name or number, including chats outside
+the queue. Results only appear while searching. The first task entry is «Пульт», which resets the task view. It is followed
+by «Входящие», «На проверке» and «Все открытые» with counts. «Проекты» expands the project tree (§2.11).
+«Ещё фильтры» combines time and status, role, person or counterparty, and keeps device-saved views accessible.
+Pinned conversations appear below when present. «Метки» is expandable; selected tags still filter a message or
+a task through at least one message carrying all of them. «Лента» has source filters and «Завершённые».
+While a tag or source filter is on, the top bar
 shows a reset button. **«Архив»** in the top bar works for all views (archived messages paler), off by default.
 The panel sits between the top bar and the input row; opened only by the filter icon (no opening swipe — horizontal
 swipes belong to rows), closed by a swipe right-to-left, the backdrop or «назад».

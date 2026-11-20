@@ -152,7 +152,7 @@ function setupMessageActions(feed, composer, config) {
     feed,
     onCreateProject: (project) => composer.queue(makeProjectChange(crypto.randomUUID(), { op: 'create', status: 'active', ...project })).catch((error) => notify(error.message)),
     onContact: (key) => goView?.('conversations', key),
-    onQueue: () => goView?.('conversations'),
+    onQueue: () => feed.mode() === 'conversations' && chatView.key() ? chatView.leave() : goView?.('conversations'),
     onTasks: () => goView?.('tasks'),
     pinned: () => composer.pinned(),
     onFilterChange: updateFilter,

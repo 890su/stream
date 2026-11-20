@@ -1,5 +1,4 @@
-// One view of the task panel (task view panel, 2026-11-19): when · whose · where. Three layouts of the left panel
-// (viewpanel.js) pick the same view; the centre shows it (taskview.js). Pure — tested in node.
+// Filters tasks by time or state, responsibility, and location or participant.
 import { dueState, involvesMe, isOpen } from './taskfold.js';
 import { isMineToDo } from './focus.js';
 import { projectScope } from './projects.js';
@@ -15,7 +14,7 @@ export const WHEN = [
   { id: 'unreported', title: 'Не учтено', icon: '🧾' },
 ];
 export const WHOSE = [
-  { id: 'all', title: 'Всё' },
+  { id: 'all', title: 'С моим участием' },
   { id: 'mine', title: 'Делаю я' },
   { id: 'watch', title: 'Слежу' },
   { id: 'review', title: 'На проверке' },
