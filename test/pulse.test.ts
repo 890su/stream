@@ -24,9 +24,10 @@ const projectEvent = (id: string, data: Record<string, unknown>) => ({
   id: `e${++n}`, schema_version: 1, source: 'app', author: 'me', ts: at('2026-11-01T09:00:00'), kind: 'project_change',
   payload: { ref: { type: 'project', id }, data: { project: { op: 'create', ...data } } },
 });
-const conversation = (key: string, state: string, lastIncoming: string, extra: Record<string, unknown> = {}) => ({
-  key, title: key, state, archived: false, tasks: [],
-  views: [{ id: `${key}-1`, event: { ts: at(lastIncoming), kind: 'text', author: 'tg:5', payload: { text: 'когда?' } } }], ...extra,
+// A conversation in the queue (queue.js) since `moment`, or out of it.
+const conversation = (key: string, waiting: boolean, moment: string, extra: Record<string, unknown> = {}) => ({
+  key, title: key, queue: { waiting, moment: waiting ? at(moment) : null, snoozedUntil: null }, archived: false, tasks: [],
+  views: [{ id: `${key}-1`, event: { ts: at(moment), kind: 'text', author: 'tg:5', payload: { text: 'когда?' } } }], ...extra,
 });
 const blocks = (events: unknown[], conversations: unknown[] = [], projectEvents: unknown[] = []) => {
   const projects = foldProjects(projectEvents);
@@ -68,12 +69,11 @@ test('overdue mine and overdue delegated both burn, not in today or watch', () =
   assert.deepEqual([b.today.length, b.watch.length], [0, 0]);
 });
 
-test('a conversation waiting for me over the threshold burns; under it or archived does not', () => {
+test('a conversation waiting in the queue over the threshold burns (from its queue moment); under it or out of the queue does not', () => {
   const b = blocks([], [
-    conversation('Клиент А', 'mine', '2026-11-19T09:00:00'),
-    conversation('Клиент Б', 'mine', '2026-11-19T11:30:00'),
-    conversation('Клиент В', 'mine', '2026-11-19T08:00:00', { archived: true }),
-    conversation('Клиент Г', 'theirs', '2026-11-19T07:00:00'),
+    conversation('Клиент А', true, '2026-11-19T09:00:00'),
+    conversation('Клиент Б', true, '2026-11-19T11:30:00'),
+    conversation('Клиент Г', false, '2026-11-19T07:00:00'),
   ]);
   assert.deepEqual(b.hot.map((item: any) => [item.kind, item.conversation.key, item.waitingHours]), [['conversation', 'Клиент А', 3]]);
 });
@@ -129,7 +129,7 @@ test('the pulse counter is what burns plus what is for today', () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   return import('../web/pulse.js').then(({ pulseCount }) => {
     const b = blocks([create('горит', { roles: mine, due: '2026-11-18' }), create('разобрать', { roles: mine, status: 'inbox' }), create('потом', { roles: mine })],
-      [conversation('Клиент А', 'mine', '2026-11-19T09:00:00')]);
+      [conversation('Клиент А', true, '2026-11-19T09:00:00')]);
     assert.equal(pulseCount(b), 3);
   });
 });
@@ -149,9 +149,8 @@ test('review fixes: paused stack holds only plain paused tasks; a burning paused
   assert.deepEqual(titles(b.today), ['напоминание пришло']);
 });
 
-test('review fixes: an urgent conversation burns; one I already answered does not', () => {
-  const answered = conversation('Клиент Д', 'mine', '2026-11-19T08:00:00');
-  answered.views.push({ id: 'Клиент Д-2', event: { ts: at('2026-11-19T08:30:00'), kind: 'text', author: 'me', payload: { text: 'ок' } } } as any);
-  const b = blocks([], [conversation('Клиент Е', 'urgent', '2026-11-19T08:00:00'), answered]);
+test('a snoozed conversation never burns, however long it waited', () => {
+  const snoozed = { ...conversation('Клиент Д', false, '2026-11-19T06:00:00'), queue: { waiting: false, moment: null, snoozedUntil: at('2026-11-19T18:00:00') } };
+  const b = blocks([], [conversation('Клиент Е', true, '2026-11-19T08:00:00'), snoozed]);
   assert.deepEqual(b.hot.map((item: any) => item.conversation.key), ['Клиент Е']);
 });

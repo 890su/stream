@@ -3,7 +3,7 @@
 // section title expands it to the whole window with «назад», a search and the full list. Choosing a tag switches it
 // for the next message; a contact becomes the recipient; a conversation or a task is what the message goes into.
 import { normalizeTag } from './suggest.js';
-import { STATE_LABELS, tasksLabel } from './convlist.js';
+import { tasksLabel } from './convlist.js';
 import { dueLabel } from './tasklist.js';
 import { isOpen } from './taskfold.js';
 import { snippet } from './projection.js';
@@ -21,10 +21,11 @@ function element(tag, className, text) {
   return node;
 }
 
-// Conversations most likely first: the open one, then «срочно» and «ждёт меня», then the latest. Pure.
+// Conversations most likely first: the open one, then the queue from its oldest (queue.js), then the latest. Pure.
 export function likelyConversations(list, openKey = null) {
-  const rank = (item) => (item.key === openKey ? 0 : item.state === 'urgent' || item.state === 'mine' ? 1 : 2);
-  return list.filter((item) => item.key !== 'me').sort((a, b) => rank(a) - rank(b) || b.last.localeCompare(a.last));
+  const rank = (item) => (item.key === openKey ? 0 : item.queue?.waiting ? 1 : 2);
+  const order = (a, b) => (a.queue?.waiting && b.queue?.waiting ? Date.parse(a.queue.moment) - Date.parse(b.queue.moment) : Date.parse(b.last) - Date.parse(a.last));
+  return list.filter((item) => item.key !== 'me').sort((a, b) => rank(a) - rank(b) || order(a, b));
 }
 
 // Open tasks most likely first: the one in details, those of the open conversation, «Сегодня», the latest changed. Pure.
@@ -57,7 +58,7 @@ export function setupLinkWindow({ tagRow, recipients, context, attached, attach,
         const on = link?.type === 'conversation' && link.key === item.key;
         const last = item.views.filter((view) => !view.deleted).at(-1);
         const open = item.tasks.filter((task) => isOpen(task) && !task.filed).length;
-        return { key: item.key, title: item.title, sub: [STATE_LABELS[item.state], open ? tasksLabel(open) : '', last ? snippet(last) : ''].filter(Boolean).join(' · '), on,
+        return { key: item.key, title: item.title, sub: [item.queue?.waiting ? 'ждёт' : '', open ? tasksLabel(open) : '', last ? snippet(last) : ''].filter(Boolean).join(' · '), on,
           pick: () => { attach(on ? null : { type: 'conversation', key: item.key, title: item.title }); close(); } };
       });
     }

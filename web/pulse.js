@@ -3,7 +3,6 @@
 // checked top-down; order inside a block is a computed importance (spec §4.5), weights in registry/pulse.json.
 // Pure: no DOM — tested in node; pulseview.js draws it.
 import { dueState, involvesMe, isOpen } from './taskfold.js';
-import { directionOf, conversationOf } from './conversations.js';
 import { inWork, isMineToDo } from './focus.js';
 
 // Used when the capture config has no `pulse` (an old cached config): the values of registry/pulse.json v1.
@@ -37,15 +36,10 @@ export function importance(task, { now = new Date(), config }) {
 const byImportance = (now, config) => (a, b) => importance(b, { now, config }) - importance(a, { now, config })
   || (a.due ? String(a.due) : '￿').localeCompare(b.due ? String(b.due) : '￿');
 
-// A conversation waits for my answer longer than the threshold: hours since its last incoming message, else null.
-// Who spoke last decides: an own note pulled into a chat is not an answer; my reply ends the wait.
+// A conversation waits in the queue (queue.js) longer than the threshold: hours since its queue moment, else null.
 function waitingHours(conversation, now, config) {
-  if (!['mine', 'urgent'].includes(conversation.state) || conversation.archived) return null;
-  const spoken = (conversation.views ?? []).filter((view) => !view.deleted && directionOf(view.event) !== 'unknown'
-    && !(conversation.key !== 'me' && conversationOf(view.event) === 'me'));
-  const last = spoken.at(-1);
-  if (!last || directionOf(last.event) !== 'in') return null;
-  const hours = Math.floor((now.getTime() - Date.parse(last.event.ts)) / HOUR);
+  if (!conversation.queue?.waiting) return null;
+  const hours = Math.floor((now.getTime() - Date.parse(conversation.queue.moment)) / HOUR);
   return hours >= config.hot_wait_hours ? hours : null;
 }
 

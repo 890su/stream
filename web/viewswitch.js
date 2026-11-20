@@ -3,7 +3,7 @@
 import { isOpen } from './taskfold.js';
 
 const TITLES = { conversations: 'Беседы', tasks: 'Задачи', feed: 'Лента' };
-const waiting = (conversation) => !conversation.archived && (conversation.state === 'mine' || conversation.state === 'urgent');
+const waiting = (conversation) => Boolean(conversation.queue?.waiting); // in the queue (queue.js)
 
 // What the switch leads to and its number: { target: 'tasks' | 'conversations', count, open (conversation key) }.
 export function counterFor({ mode, conversationKey = null, taskId = null, conversations = [], todayCount = 0 }) {
