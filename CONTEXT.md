@@ -19,7 +19,7 @@ updated: 2026-11-19
 
 ## Сейчас (2026-11-20)
 
-Работает на https://stream.sekond.pl, ветка `step1-journal-capture`: журнал, PWA с офлайн-очередью и SSE;
+Работает на https://stream.sekond.pl, ветка `main` (с 2026-11-20; `install.sh main`): журнал, PWA с офлайн-очередью и SSE;
 экран «Беседы · Задачи» (Лента — из ⋮), фильтры слева, подробности справа; задачи с ролями и разбором ИИ
 (Claude Haiku 5.5, `triage-ai-v6`); звонки и SMS (Kotlin, `deploy/PHONE.md`); Telegram-боты BY и PL
 (`deploy/TELEGRAM.md`); Viber через рабочий стол агентов (`deploy/DESKTOP.md`); WhatsApp PL связанным устройством
