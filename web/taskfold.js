@@ -54,7 +54,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], ownerTitled: false, history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted']) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat']) {
       if (change[key] !== undefined) task[key] = change[key];
     }
     if (change.waiting_for !== undefined) task.waitingFor = change.waiting_for;
@@ -105,6 +105,10 @@ export function describeChange(change) {
   if (change.status) parts.push(STATUSES[change.status] ?? change.status);
   if (change.assignee) parts.push(`исполнитель: ${ASSIGNEES[change.assignee] ?? change.assignee}`);
   if (change.due !== undefined) parts.push(change.due ? `срок: ${change.due}` : 'без срока');
+  if (change.plan !== undefined) parts.push(change.plan ? 'время запланировано' : 'план снят');
+  if (change.repeat !== undefined) parts.push(change.repeat ? 'повтор настроен' : 'повтор отключён');
+  if (change.project !== undefined) parts.push(change.project ? 'проект изменён' : 'без проекта');
+  if (change.note !== undefined) parts.push('описание изменено');
   if (change.add?.length) parts.push(`+${change.add.length} сообщ.`);
   if (change.remove?.length) parts.push(`−${change.remove.length} сообщ.`);
   if (change.items_add?.length) parts.push(`+${change.items_add.length} в чеклист`);

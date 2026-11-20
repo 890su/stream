@@ -154,10 +154,15 @@ export function participantsBlock(task, ctx) {
   const inner = element('div', 'people-cloud-inner');
   cloud.append(inner);
   const listed = participants(task);
-  const ordered = ctx.select ? ctx.select.order.map((party) => listed.find((item) => item.party === party)).filter(Boolean) : listed;
-  for (const { party, roles, muted } of ordered) {
+  const ordered = ctx.select ? ctx.select.order.map((party) => listed.find((item) => item.party === party) ?? (party === 'me' ? { party, roles: [], muted: false, notes: true } : null)).filter(Boolean) : listed;
+  for (const { party, roles, muted, notes } of ordered) {
     const key = `${task.id}|${party}`;
     const name = nameOf(party);
+    if (notes) {
+      const open = () => ctx.select.onSelect(party);
+      inner.append(tile({ icon: '✎', iconLabel: 'Заметки задачи', name, nameLabel: 'Заметки задачи', off: null, selected: ctx.select.selected === party, onIcon: open, onName: open }));
+      continue;
+    }
     if (ctx.readOnly) { inner.append(tile({ role: '', name, off: null, iconLabel: name, nameLabel: name, onIcon: () => ctx.readOnly(), onName: () => ctx.readOnly() })); continue; }
     const selected = ctx.select?.selected === party;
     inner.append(tile({ role: roleLabel(roles), name, off: muted, selected,

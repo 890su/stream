@@ -38,3 +38,19 @@ test('the first tile: who wrote last — a group as the group, a muted participa
   assert.equal(lastSpeaker(views, ['me', 'tg:501', 'group:tg:-900'], ['group:tg:-900']), 'tg:501', 'muted is skipped');
   assert.equal(lastSpeaker(views, ['me'], []), null);
 });
+
+test('the task\'s own feed: its messages and its changes as grey lines, by time', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { withLog } = await import('../web/cardtalk.js');
+  const views = [{ id: 'm1', event: { ts: '2026-11-20T09:00:00Z' } }, { id: 'm2', event: { ts: '2026-11-20T11:00:00Z' } }];
+  const log = [{ ts: '2026-11-20T10:00:00Z', text: 'срок пт' }, { ts: '2026-11-20T12:00:00Z', text: 'готово' }];
+  assert.deepEqual(withLog(views, log).map((item: any) => item.kind === 'log' ? item.text : item.view.id), ['m1', 'срок пт', 'm2', 'готово']);
+});
+
+test('paging keeps its order when another participant moves to the front of the strip', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { pagerOrder } = await import('../web/cardtalk.js');
+  const original = ['me', 'tg:501', 'tg:502'];
+  assert.deepEqual(pagerOrder(['tg:501', 'me', 'tg:502'], original), original);
+  assert.deepEqual(pagerOrder(['tg:502', 'me', 'tg:503'], original), ['me', 'tg:502', 'tg:503']);
+});

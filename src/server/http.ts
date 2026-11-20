@@ -83,7 +83,7 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
       if (url.pathname === '/capture-config.json') {
         const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])), address_book: telegramConfig.address_book };
         json(response, 200, { ...captureConfig, tagging: tagConfig, conversations: conversationsConfig, filters: filtersConfig.filters, pulse: pulseConfig, telegram, tasks: { filed_templates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name),
-          report_fields: tasksConfig.report_fields, report_default: tasksConfig.report_default, currencies: tasksConfig.currencies,
+          card: tasksConfig.card, report_fields: tasksConfig.report_fields, report_default: tasksConfig.report_default, currencies: tasksConfig.currencies,
           reports: Object.fromEntries(tasksConfig.templates.filter((template) => template.report).map((template) => [template.name, template.report])) } }); return;
       }
       const file = await staticFile(url.pathname);

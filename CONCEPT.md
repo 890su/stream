@@ -107,7 +107,10 @@ mirrors (Google Tasks, Calendar) may also select by saved filters (§5).
 
 - **Now:** title, source messages, roles (§2.8), statuses, due, plan, reminder, promise, a checklist (§2.8),
   one project (§2.11).
-- **Later:** recurring tasks, boards on the same filters, subtasks with their own roles and dates, time tracking,
+- **Repeats:** finishing an occurrence creates the next one with the same roles, project, description and unchecked checklist.
+  The due date and planned start advance by the interval, or the due date is set from completion if neither was set.
+  Reopening the original cancels an untouched successor. Finishing again restores that successor.
+- **Later:** boards on the same filters, subtasks with their own roles and dates, time tracking,
   weekly report.
 - **Not doing:** collaboration inside the app (partners act through the task bot), own attachments (links to events only).
 
@@ -530,9 +533,12 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 **Redesign 2026-11-20** (`docs/plans/2026-11-20-queue-and-task-screen-design.md`, stage by stage; what it replaces
 below holds until its stage ships): the queue of conversations is the root screen — the system back always ends
 there; the left panel is only task filters, with «Беседы» on top of every layout and favourite contacts instead of
-the conversation list (no conversation filters); a task opens in the centre (title, description, project, dates,
-folded «Подробности», the participants line with roles — the selected tile leftmost, 📣 instead of × — and below it
-the conversation with that participant, other tasks' messages dimmed or folded by «◐»); message details — a bottom
+the conversation list (no conversation filters); a task opens in the centre with a completion mark, title, editable
+chips for planned time, due, project and repeat, a counterparty link, description, open checklist and folded details.
+The participants line opens a separate conversation screen; arrows and edge swipes change the participant. Under
+«Я» the task's messages and history share a timeline. A contact's conversation dims or folds other tasks' messages
+with «◐». The input adds a task note in the card and addresses the selected chat in the conversation screen.
+The header menu opens the task's action bar; message details — a bottom
 sheet; the right panel is a day planner (day · 4 days · week · 2 weeks; Stream tasks, Google Calendar later) that
 also picks dates and durations; forwarding to other conversations and merging conversations into a task (stage 5);
 the view switch is an icon. Stage 1 shipped 2026-11-20: the queue, its tiles, ⏱ / ↥ / 🗄, the left panel and the

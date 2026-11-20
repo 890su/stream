@@ -748,6 +748,8 @@
                 "counterparty": { "type": ["string", "null"], "description": "The counterparty of the task (contacts design 6).", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
                 "counterparty_options": { "type": "array", "description": "When the triage is unsure: up to three counterparties to choose from.", "items": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" } },
                 "counterparty_hint": { "type": ["string", "null"], "maxLength": 120, "description": "The triage's name for a new counterparty: a firm or an address." },
+                "repeat": { "type": ["object", "null"], "additionalProperties": false, "required": ["every", "n"], "description": "A repeating task (2026-11-20): closing it makes the next one, its dates moved by the step.",
+                  "properties": { "every": { "enum": ["day", "week", "month", "year"] }, "n": { "type": "integer", "minimum": 1, "maximum": 30 } } },
                 "muted": { "type": "array", "description": "Participants switched off in the task card: answers from the task do not go to them (2026-11-19).", "items": { "type": "string", "pattern": "^(?=.{1,120}$)(?:me|ai|system|tg:\\d+|tel:\\+\\d+|group:tg:-?\\d+|name:\\S.*)$" } },
                 "report": {
                   "type": "object",

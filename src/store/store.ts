@@ -20,6 +20,7 @@ import { RecipientQueries } from './recipients.ts';
 import { TriageStore } from './triage.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
+import { repeatChange } from '../tasks/repeat.ts';
 
 export interface MediaRecord { id: string; mime: string; size_bytes: number; path: string; created_at: string }
 interface EventRow { id: string; schema_version: 1; source: string; author: string; ts: string; received_at: string; kind: string; payload: string; reply_to: string | null; topic_hint: string | null; body_hash: string }
@@ -77,7 +78,18 @@ export class JournalStore {
     } catch (error) { rmSync(destination, { recursive: true, force: true }); throw error; }
   }
 
-  appendEvent(input: JournalEvent): { created: boolean; event: JournalEvent } {
+  appendEvent(input: JournalEvent): { created: boolean; event: JournalEvent; related?: JournalEvent } {
+    this.#db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = this.#insertEvent(input);
+      const next = result.created ? repeatChange(result.event, (id) => this.triage.taskEvents(id)) : null;
+      const related = next ? this.#insertEvent(next).event : undefined;
+      this.#db.exec('COMMIT');
+      return related ? { ...result, related } : result;
+    } catch (error) { this.#db.exec('ROLLBACK'); throw error; }
+  }
+
+  #insertEvent(input: JournalEvent): { created: boolean; event: JournalEvent } {
     validateEvent(input);
     checkCorrectionShape(input);
     checkTagging(input);
@@ -90,33 +102,28 @@ export class JournalStore {
     const { received_at, ...body } = input;
     const normalized = { ...body, reply_to: input.reply_to ?? null, topic_hint: input.topic_hint ?? null };
     const hash = createHash('sha256').update(canonical(normalized)).digest('hex');
-    this.#db.exec('BEGIN IMMEDIATE');
-    try {
-      const existing = this.#db.prepare('SELECT * FROM events WHERE id = ?').get(input.id) as unknown as EventRow | undefined;
-      if (existing) {
-        if (existing.body_hash !== hash) throw new HttpError(409, 'Этот id уже принят с другим содержимым');
-        this.#db.exec('COMMIT');
-        return { created: false, event: fromRow(existing) };
+    const existing = this.#db.prepare('SELECT * FROM events WHERE id = ?').get(input.id) as unknown as EventRow | undefined;
+    if (existing) {
+      if (existing.body_hash !== hash) throw new HttpError(409, 'Этот id уже принят с другим содержимым');
+      return { created: false, event: fromRow(existing) };
+    }
+    if (input.kind === 'correction') checkCorrectionTarget(input, this.getEvent(input.payload.ref!.id));
+    for (const target of linkTargets(input)) checkLinkTarget(this.getEvent(target));
+    for (const reference of input.payload.media ?? []) {
+      const media = this.getMedia(reference.media_id);
+      if (!media) throw new HttpError(422, 'Сначала загрузите все медиа');
+      if (reference.mime !== media.mime || (reference.size_bytes !== undefined && reference.size_bytes !== media.size_bytes)) {
+        throw new HttpError(422, 'Метаданные медиа не совпадают с загруженным файлом');
       }
-      if (input.kind === 'correction') checkCorrectionTarget(input, this.getEvent(input.payload.ref!.id));
-      for (const target of linkTargets(input)) checkLinkTarget(this.getEvent(target));
-      for (const reference of input.payload.media ?? []) {
-        const media = this.getMedia(reference.media_id);
-        if (!media) throw new HttpError(422, 'Сначала загрузите все медиа');
-        if (reference.mime !== media.mime || (reference.size_bytes !== undefined && reference.size_bytes !== media.size_bytes)) {
-          throw new HttpError(422, 'Метаданные медиа не совпадают с загруженным файлом');
-        }
-      }
-      const latest = this.#db.prepare('SELECT received_at FROM events ORDER BY received_at DESC LIMIT 1').get() as { received_at: string } | undefined;
-      const timestamp = new Date(Math.max(Date.now(), latest ? Date.parse(latest.received_at) + 1 : 0)).toISOString();
-      this.#db.prepare(`INSERT INTO events
-        (id, schema_version, source, author, ts, received_at, kind, payload, reply_to, topic_hint, body_hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(input.id, input.schema_version, input.source, input.author,
-        input.ts, timestamp, input.kind, JSON.stringify(input.payload), normalized.reply_to, normalized.topic_hint, hash);
-      this.actions.fromEvent(input, timestamp);
-      this.#db.exec('COMMIT');
-      return { created: true, event: { ...normalized, received_at: timestamp } };
-    } catch (error) { this.#db.exec('ROLLBACK'); throw error; }
+    }
+    const latest = this.#db.prepare('SELECT received_at FROM events ORDER BY received_at DESC LIMIT 1').get() as { received_at: string } | undefined;
+    const timestamp = new Date(Math.max(Date.now(), latest ? Date.parse(latest.received_at) + 1 : 0)).toISOString();
+    this.#db.prepare(`INSERT INTO events
+      (id, schema_version, source, author, ts, received_at, kind, payload, reply_to, topic_hint, body_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(input.id, input.schema_version, input.source, input.author,
+      input.ts, timestamp, input.kind, JSON.stringify(input.payload), normalized.reply_to, normalized.topic_hint, hash);
+    this.actions.fromEvent(input, timestamp);
+    return { created: true, event: { ...normalized, received_at: timestamp } };
   }
 
   listEvents({ before, limit }: { before?: string; limit: number }): { events: JournalEvent[]; next_before: string | null } {

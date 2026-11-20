@@ -45,8 +45,10 @@ export class TriageStore {
     return (this.#db.prepare(`SELECT * FROM events WHERE kind = 'project_change' ORDER BY ts, received_at`).all() as unknown as Row[]).map(fromRow);
   }
 
-  taskEvents(): JournalEvent[] {
-    return (this.#db.prepare(`SELECT * FROM events WHERE kind = 'task_change' ORDER BY ts, received_at`).all() as unknown as Row[]).map(fromRow);
+  taskEvents(id?: string): JournalEvent[] {
+    const where = id ? " AND json_extract(payload, '$.ref.id') = ?" : '';
+    const statement = this.#db.prepare(`SELECT * FROM events WHERE kind = 'task_change'${where} ORDER BY ts, received_at`);
+    return ((id ? statement.all(id) : statement.all()) as unknown as Row[]).map(fromRow);
   }
 
   mark(ids: string[], tasks: number, at: string): void {

@@ -15,6 +15,7 @@ export async function events(request: IncomingMessage, response: ServerResponse,
     validateEvent(input);
     const result = store.appendEvent(input);
     if (result.created) live.publish(result.event);
+    if (result.related) live.publish(result.related);
     json(response, result.created ? 201 : 200, result.event);
     return;
   }

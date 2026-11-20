@@ -1,3 +1,4 @@
+// Projects tasks from append-only task changes for the server.
 import type { JournalEvent } from '../contracts/validate.ts';
 import { defaultController, partyOf, ROLE_KEYS, LIST_ROLES } from './parties.ts';
 
@@ -8,15 +9,19 @@ export interface Roles {
   members: string[]; // plain participants, without a role (2026-11-19)
 }
 
+export type Repeat = { every: 'day' | 'week' | 'month' | 'year'; n: number };
+
 export interface Task {
   id: string; title: string; status: string; assignee: string; person?: string; template?: string; due?: string | null;
-  roles: Roles; waiting_for?: unknown; plan?: unknown; remind_at?: string | null; promise?: unknown; filed: boolean;
+  roles: Roles; waiting_for?: unknown; plan?: { start: string; duration_min: number } | null; remind_at?: string | null; promise?: unknown; filed: boolean;
   messages: string[]; confidence?: number; processor?: string; proposed?: string | null; created_by: string; created_at: string; updated_at: string;
   project?: string | null; section?: string | null; project_options?: string[]; // CONCEPT.md §2.11
   resume_note?: string; // where the owner stopped (task manager spec 5.4)
   report?: Record<string, unknown>; // the closing report or its draft from the conversation
   counterparty?: string | null; counterparty_options?: string[]; counterparty_hint?: string | null; // contacts design §6
   muted?: string[]; // participants switched off: answers from the task do not go to them (2026-11-19)
+  repeat?: Repeat | null;
+  note?: string;
   items: ChecklistItem[]; owner_titled: boolean; // the checklist (CONCEPT.md §2.8); the owner gave the title
 }
 
@@ -65,7 +70,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], owner_titled: false, created_by: event.author, created_at: event.ts, updated_at: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted'] as const) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat', 'note'] as const) {
       if (change[key] !== undefined) (task as any)[key] = change[key];
     }
     if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }

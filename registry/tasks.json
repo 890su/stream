@@ -32,6 +32,17 @@
     "system",
     "person"
   ],
+  "card": {
+    "default_duration_min": 60,
+    "durations_min": [15, 30, 60, 90, 120, 240],
+    "repeats": [
+      {"every": null, "label": "Без повтора"},
+      {"every": "day", "label": "каждый день"},
+      {"every": "week", "label": "каждую неделю"},
+      {"every": "month", "label": "каждый месяц"},
+      {"every": "year", "label": "каждый год"}
+    ]
+  },
   "templates": [
     {
       "name": "diary",

@@ -41,13 +41,18 @@ export function projectTreeBlock({ projects, tasks, current, onOpen, onCreate, a
 
 // «Проект» in task details: the current project and section; a tap shows active projects, then that project's sections.
 export function projectLine(task, { projects, save: store }) {
-  let choice;
-  const save = (change) => { if (choice) holding(choice, false); store(change); };
   const byId = new Map(projects.map((project) => [project.id, project]));
   const project = task.project ? byId.get(task.project) : null;
   const section = project?.sections.find((item) => item.id === task.section);
   const box = element('div', 'details-project');
-  choice = element('div', 'chips');
+  const choice = element('div', 'chips');
+  const setOpen = (open) => {
+    holding(choice, open);
+    trigger.setAttribute('aria-expanded', String(open));
+    if (!open) choice.replaceChildren();
+  };
+  const save = (change) => { setOpen(false); store(change); };
+  const close = () => button('chip suggest muted', 'Закрыть', () => setOpen(false));
   // The triage hesitated (CONCEPT.md §2.11): its candidates first, one tap places the task.
   const options = !project ? (task.project_options ?? []).map((id) => byId.get(id)).filter(Boolean) : [];
   if (options.length) {
@@ -57,17 +62,18 @@ export function projectLine(task, { projects, save: store }) {
   }
   const label = project ? `▸ ${project.title}${section ? ` · ${section.title}` : ''}` : 'Входящие · без проекта';
   const sections = (target) => {
-    holding(choice);
     choice.replaceChildren(...target.sections.map((item) => button(`chip ${task.project === target.id && task.section === item.id ? 'on' : 'suggest'}`, item.title,
-      () => save({ op: 'update', project: target.id, section: item.id }))));
-    if (!target.sections.length) save({ op: 'update', project: target.id, section: null });
+      () => save({ op: 'update', project: target.id, section: item.id }))), close());
   };
-  box.append(button('link-button details-project-pick', label, () => {
-    holding(choice);
+  const trigger = button(`chip ${project ? 'on' : 'suggest'} task-chip`, label, () => {
+    if (choice.hasChildNodes()) { setOpen(false); return; }
+    setOpen(true);
     const active = projects.filter((item) => item.status === 'active' || item.id === task.project).sort((a, b) => a.title.localeCompare(b.title, 'ru'));
     choice.replaceChildren(...active.map((item) => button(`chip ${item.id === task.project ? 'on' : 'suggest'}`, item.title, () => (item.sections.length ? sections(item) : save({ op: 'update', project: item.id, section: null })))),
-      ...(task.project ? [button('chip suggest', 'Без проекта', () => save({ op: 'update', project: null, section: null }))] : []));
-    if (!active.length) choice.replaceChildren(element('p', 'drawer-empty', 'Проектов пока нет: создайте в левой панели «Задач».'));
-  }, 'Проект задачи: сменить'), choice);
-  return box;
+      ...(task.project ? [button('chip suggest', 'Без проекта', () => save({ op: 'update', project: null, section: null }))] : []),
+      ...(!active.length ? [element('p', 'drawer-empty', 'Проектов пока нет.')] : []), close());
+  }, 'Проект задачи: сменить');
+  trigger.setAttribute('aria-expanded', 'false');
+  box.append(choice);
+  return { trigger, editor: box };
 }
