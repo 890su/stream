@@ -7,12 +7,15 @@ import { phoneNumber } from './parties.js';
 
 // The conversation a message belongs to: one Telegram chat across both accounts, one phone number, own notes.
 // A Viber chat with a phone is that number's conversation (with its calls and SMS); without one — `viber:<name>`.
+// WhatsApp the same; without a phone (an anonymous LID address) — `wa:<address>`.
 export function conversationOf(event) {
   const data = event?.payload?.data ?? {};
   if (event?.kind === 'system' || event?.kind === 'correction' || event?.kind === 'task_change' || event?.kind === 'project_change'
     || event?.kind === 'contact_change' || event?.kind === 'counterparty_change') return null;
   if (data.viber) return data.viber.phone ? `tel:${data.viber.phone}` : `viber:${data.viber.chat}`;
   if (data.outbound?.connector === 'viber') return `tel:${data.outbound.chat_id}`;
+  if (data.whatsapp) return data.whatsapp.phone ? `tel:${data.whatsapp.phone}` : `wa:${data.whatsapp.jid}`;
+  if (data.outbound?.connector?.startsWith('whatsapp_')) return `tel:${data.outbound.chat_id}`;
   const chat = data.telegram?.chat_id ?? data.outbound?.chat_id;
   if (chat !== undefined && chat !== null) return `tg:${chat}`;
   if (event?.kind === 'call' || event?.kind === 'sms') {
@@ -27,6 +30,7 @@ const channelOf = (event, key) => {
   if (key === 'me' || key.startsWith('task:')) return 'me';
   if (key.startsWith('split:')) return channelOf(event, conversationOf(event) ?? 'me');
   if (event?.payload?.data?.viber || event?.payload?.data?.outbound?.connector === 'viber') return 'viber';
+  if (event?.payload?.data?.whatsapp || event?.payload?.data?.outbound?.connector?.startsWith('whatsapp_')) return 'whatsapp';
   if (key.startsWith('tel:')) return 'phone';
   return chatOf(event)?.account ?? null;
 };
@@ -45,8 +49,10 @@ const titleOf = (view, key, taskById = new Map(), views = []) => {
   const event = view.event;
   if (key.startsWith('tel:')) {
     const data = event.kind === 'call' ? event.payload?.data?.call : event.kind === 'sms' ? event.payload?.data?.sms : null;
-    const viber = event.payload?.data?.viber?.chat ?? (event.payload?.data?.outbound?.connector === 'viber' ? event.payload.data.outbound.chat_title : null);
-    return (data?.name ?? '').trim() || (viber ?? '').trim() || key.slice(4);
+    const outbound = event.payload?.data?.outbound;
+    const byPhone = outbound && (outbound.connector === 'viber' || outbound.connector.startsWith('whatsapp_'));
+    const messenger = event.payload?.data?.viber?.chat ?? event.payload?.data?.whatsapp?.chat ?? (byPhone ? outbound.chat_title : null);
+    return (data?.name ?? '').trim() || (messenger ?? '').trim() || key.slice(4);
   }
   return chatOf(event)?.title ?? 'Чат';
 };
@@ -62,7 +68,7 @@ export function directionOf(event) {
 }
 const isMine = (view) => directionOf(view.event) === 'out';
 const isIncoming = (view) => directionOf(view.event) === 'in';
-const incomingChat = (view) => isIncoming(view) && (view.event.payload?.data?.telegram || view.event.payload?.data?.viber);
+const incomingChat = (view) => isIncoming(view) && (view.event.payload?.data?.telegram || view.event.payload?.data?.viber || view.event.payload?.data?.whatsapp);
 
 // The latest message with the archive mark (`answered`, CONCEPT.md §2.5), or null.
 const archiveMark = (views) => views.filter((view) => view.answered).reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);

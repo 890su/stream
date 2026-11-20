@@ -9,7 +9,7 @@ import { chatOf, sourceKey } from '../web/projection.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { conversationOf, directionOf } from '../web/conversations.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { outboundData, replyWindowClosed, viberAnswerable } from '../web/outbound.js';
+import { outboundData, replyWindowClosed, phoneAnswerable } from '../web/outbound.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { messengerLabel, deliveryText } from '../web/tgbubble.js';
 
@@ -158,7 +158,7 @@ test('the client: a Viber chat with a phone is that number conversation and is a
 
   const hidden = { ...event, author: 'contact:viber:Неизвестно', payload: { text: 'Здравствуйте', data: { viber: { chat: 'Неизвестно', received_at: event.ts } } } };
   assert.equal(conversationOf(hidden), 'viber:Неизвестно');
-  assert.equal(viberAnswerable(chatOf(hidden)), false, 'no phone — no reply from the feed');
+  assert.equal(phoneAnswerable(chatOf(hidden)), false, 'no phone — no reply from the feed');
   const reply = { ...event, author: 'me', source: 'app', payload: { text: 'Ок', data: { outbound: { connector: 'viber', chat_id: '+375290000001', chat_title: 'Пётр' } } } };
   assert.equal(conversationOf(reply), 'tel:+375290000001', 'my reply joins the same conversation');
 });

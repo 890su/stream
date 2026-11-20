@@ -6,11 +6,13 @@ import { phoneLabel } from './phonebubble.js';
 const order = (a, b) => (Date.parse(a.ts) - Date.parse(b.ts)) || (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
 
 // Where a message belongs for the source filter (drawer.js): my own notes, a messenger account, the phone, the system.
-// A reply sent to Telegram from the feed belongs to that account's conversation; Viber is one source of its own.
+// A reply sent to Telegram from the feed belongs to that account's conversation; Viber and WhatsApp are sources of
+// their own.
 export function sourceKey(event) {
   const data = event?.payload?.data ?? {};
   if (data.telegram) return `telegram:${data.telegram.account}`;
   if (data.viber || data.outbound?.connector === 'viber') return 'viber';
+  if (data.whatsapp || data.outbound?.connector?.startsWith('whatsapp_')) return 'whatsapp';
   if (data.outbound) return `telegram:${data.outbound.connector.replace(/^telegram_/, '')}`;
   if (event?.source === 'android_phone') return 'phone';
   if (event?.kind === 'system' || event?.kind === 'action_result') return 'system';
@@ -27,6 +29,17 @@ export function chatOf(event) {
   }
   if (data.outbound?.connector === 'viber') {
     return { key: `viber|${data.outbound.chat_id}`, account: 'viber', chat_id: data.outbound.chat_id, title: data.outbound.chat_title || data.outbound.chat_id, group: false };
+  }
+  // A WhatsApp chat (account `whatsapp_<account>`, the connector's name) is answered by its phone, like Viber;
+  // without one (an anonymous LID address) it is keyed by its address and cannot be answered from the feed.
+  if (data.whatsapp) {
+    const w = data.whatsapp;
+    const account = `whatsapp_${w.account}`;
+    return { key: `${account}|${w.phone ?? w.jid}`, account, chat_id: w.phone ?? '', title: w.chat, group: false };
+  }
+  if (data.outbound?.connector?.startsWith('whatsapp_')) {
+    const o = data.outbound;
+    return { key: `${o.connector}|${o.chat_id}`, account: o.connector, chat_id: o.chat_id, title: o.chat_title || o.chat_id, group: false };
   }
   if (data.telegram) {
     const t = data.telegram;

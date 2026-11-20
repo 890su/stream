@@ -5,9 +5,12 @@
 let accounts = {}; // account -> { title }, from /capture-config.json
 
 export function setAccounts(map) { accounts = map ?? {}; }
-export const accountTitle = (account) => account === 'viber' ? 'Viber' : accounts[account]?.title ?? `Telegram ${String(account).toUpperCase()}`;
+// A WhatsApp account is named by its connector, `whatsapp_<account>` → «WhatsApp PL».
+export const accountTitle = (account) => account === 'viber' ? 'Viber'
+  : String(account).startsWith('whatsapp_') ? `WhatsApp ${String(account).slice(9).toUpperCase()}`
+  : accounts[account]?.title ?? `Telegram ${String(account).toUpperCase()}`;
 export const accountKeys = () => Object.keys(accounts);
-export const isMessenger = (event) => Boolean(event?.payload?.data?.telegram || event?.payload?.data?.viber || event?.payload?.data?.outbound);
+export const isMessenger = (event) => Boolean(event?.payload?.data?.telegram || event?.payload?.data?.viber || event?.payload?.data?.whatsapp || event?.payload?.data?.outbound);
 
 const SKIPPED = { too_large: 'слишком большой', unsupported: 'формат не сохраняется', failed: 'не скачался' };
 const DELIVERY = { proposed: 'ждёт подтверждения', approved: 'отправляется…', running: 'отправляется…', done: '✓ в Telegram', failed: 'не отправлено', rejected: 'отменено' };
@@ -33,6 +36,10 @@ export function messengerLabel(event) {
     const v = data.viber;
     return { head: `Viber · ${v.chat}${v.phone && v.phone !== v.chat ? ` · ${v.phone}` : ''}`, incoming: event.author !== 'me', outbound: false, forward: null, skipped: null };
   }
+  if (data.whatsapp) {
+    const w = data.whatsapp;
+    return { head: `${accountTitle(`whatsapp_${w.account}`)} · ${w.chat}${w.phone && w.phone !== w.chat ? ` · ${w.phone}` : ''}`, incoming: event.author !== 'me', outbound: false, forward: null, skipped: null };
+  }
   const t = data.telegram;
   if (!t) return null;
   const chat = t.chat_title || t.from_name || 'чат';
@@ -44,7 +51,8 @@ export function messengerLabel(event) {
   return { head: `${accountTitle(t.account)} · ${chat}${author}`, incoming: event.author !== 'me', outbound: false, forward, skipped };
 }
 
-export const deliveryText = (delivery) => (delivery?.status === 'done' && DONE_IN[delivery.connector]) || DELIVERY[delivery?.status] || '';
+export const deliveryText = (delivery) => (delivery?.status === 'done'
+  && (DONE_IN[delivery.connector] ?? (String(delivery.connector).startsWith('whatsapp_') ? '✓ в WhatsApp' : null))) || DELIVERY[delivery?.status] || '';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);

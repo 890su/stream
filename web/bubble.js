@@ -234,7 +234,8 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits, 
   bubble.classList.toggle('has-tags', view.tags.length > 0);
   bubble.classList.toggle('archived', Boolean(faded ?? view.archived));
   // Someone else's SMS sits on the left, like a chat partner's message (CONCEPT.md §8.1).
-  bubble.classList.toggle('incoming', (event.kind === 'sms' && payload.data?.sms?.direction === 'in') || (Boolean(payload.data?.telegram || payload.data?.viber) && event.author !== 'me'));
+  bubble.classList.toggle('incoming', (event.kind === 'sms' && payload.data?.sms?.direction === 'in')
+    || (Boolean(payload.data?.telegram || payload.data?.viber || payload.data?.whatsapp) && event.author !== 'me'));
   // State changes of sources and connectors (System screen) are notes, not messages; a tap opens the screen.
   bubble.classList.toggle('system', event.kind === 'system');
   if (event.kind === 'system') bubble.dataset.systemOpen = '';

@@ -1,5 +1,6 @@
-// The System screen (CONCEPT.md §5): what works without the owner — Telegram bots, the phone companion —
-// its state, the replies sent outside, and the chats switched off with «Не отслеживать».
+// The System screen (CONCEPT.md §5): what works without the owner — Telegram bots, WhatsApp, the phone companion —
+// its state (with the WhatsApp linking QR while it waits), the replies sent outside, and the chats switched off with
+// «Не отслеживать».
 import { getSetting } from './db.js';
 import { accountTitle } from './tgbubble.js';
 
@@ -47,7 +48,41 @@ export function setupSystem({ notify, onTrack }) {
     const detail = element('span', 'system-detail', facts.join(' · '));
     if (item.detail && item.state !== 'ok') detail.append(element('div', '', item.detail));
     row.append(detail);
+    if (item.info?.qr && item.source.startsWith('whatsapp_')) row.append(qrBlock(item));
     return row;
+  }
+
+  // WhatsApp linking (deploy/WHATSAPP.md): the QR needs the owner token, so it is fetched and shown as a blob (the
+  // page's CSP allows blob: images, not data:); WhatsApp changes it every few seconds while it waits.
+  const qrTimers = new Set();
+  const qrUrls = new Set();
+  function stopQr() {
+    for (const timer of qrTimers) clearInterval(timer);
+    qrTimers.clear();
+    for (const url of qrUrls) URL.revokeObjectURL(url);
+    qrUrls.clear();
+  }
+  function qrBlock(item) {
+    const account = item.source.slice('whatsapp_'.length);
+    const box = element('div', 'system-qr');
+    const image = element('img');
+    image.alt = 'QR для привязки WhatsApp';
+    box.append(image, element('div', 'system-detail', 'На телефоне: WhatsApp → Связанные устройства → Привязать устройство'));
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/whatsapp/${account}/qr`, { headers: { Authorization: `Bearer ${await getSetting('ownerToken')}` }, cache: 'no-store' });
+        if (response.status === 404) { render(); return; }    // linked meanwhile
+        if (!response.ok) return;
+        const url = URL.createObjectURL(await response.blob());
+        const old = image.src;
+        image.src = url;
+        qrUrls.add(url);
+        if (old) { URL.revokeObjectURL(old); qrUrls.delete(old); }
+      } catch { /* offline: the next refresh tries again */ }
+    };
+    void load();
+    qrTimers.add(setInterval(() => { if (dialog.open) void load(); else stopQr(); }, (item.info.qr_refresh_s ?? 15) * 1000));
+    return box;
   }
 
   function actionRow(action) {
@@ -112,6 +147,7 @@ export function setupSystem({ notify, onTrack }) {
   async function render() {
     try {
       const data = await call('/api/system');
+      stopQr();
       sources.replaceChildren(...data.sources.map(sourceRow));
       telegramBox.replaceChildren(...telegramRows(data.telegram ?? {}));
       actions.replaceChildren(...(data.actions.length ? data.actions.map(actionRow) : [element('p', 'system-empty', 'Ответов наружу ещё не было')]));
@@ -122,6 +158,7 @@ export function setupSystem({ notify, onTrack }) {
   }
 
   document.querySelector('#system-close').onclick = () => dialog.close();
+  dialog.addEventListener('close', stopQr);
   document.querySelector('#system-refresh').onclick = render;
   return { open: () => { dialog.showModal(); render(); }, retry: retryAction };
 }

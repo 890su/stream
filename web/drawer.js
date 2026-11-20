@@ -104,7 +104,7 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
 
   // Contacts: conversations with people (not own notes), latest first. In Беседы a tap opens the conversation;
   // in Задачи and Лента it filters by it (the bar on top removes the filter).
-  const CHANNELS = { phone: 'телефон', viber: 'Viber' };
+  const CHANNELS = { phone: 'телефон', viber: 'Viber', whatsapp: 'WhatsApp' };
   function renderContacts() {
     const active = feed.conversationKey();
     const rows = feed.conversations().filter((item) => item.key !== 'me').sort((a, b) => b.last.localeCompare(a.last)).map((item) => {
@@ -120,7 +120,7 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
   }
 
   // Sources (CONCEPT.md §8.2): my notes, each messenger account, the phone, the system. One at a time.
-  const SOURCE_TITLES = { me: 'Мои', phone: 'Телефон', viber: 'Viber', system: 'Система' };
+  const SOURCE_TITLES = { me: 'Мои', phone: 'Телефон', viber: 'Viber', whatsapp: 'WhatsApp', system: 'Система' };
   const sourceTitle = (key) => SOURCE_TITLES[key] ?? (key.startsWith('telegram:') ? accountTitle(key.slice(9)) : key);
   function renderSources() {
     const counts = new Map();

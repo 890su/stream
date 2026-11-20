@@ -6,7 +6,7 @@ import { snippet } from './projection.js';
 import { isOpen } from './taskfold.js';
 
 export const STATE_LABELS = { urgent: 'срочно', mine: 'ждёт меня', theirs: 'жду ответа', quiet: '', done: '' };
-const CHANNELS = { by: 'BY', pl: 'PL', phone: 'Тел', viber: 'Viber', me: 'Я' };
+const CHANNELS = { by: 'BY', pl: 'PL', phone: 'Тел', viber: 'Viber', whatsapp: 'WA', me: 'Я' };
 const time = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
 const date = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
 

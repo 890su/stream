@@ -6,7 +6,7 @@ import { snippet, chatOf } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow, leadButtons } from './tagrow.js';
-import { outboundData, viberAnswerable } from './outbound.js';
+import { outboundData, phoneAnswerable } from './outbound.js';
 import { createRecipients } from './recipients.js';
 import { createDraftFiles } from './draftfiles.js';
 import { createLinkState } from './linkstate.js';
@@ -125,14 +125,16 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
   }
 
   // Sending to a recipient is the confirmation (class C, CONCEPT.md §8.2): text only, a personal chat within 24 hours;
-  // Viber — only to a phone (deploy/DESKTOP.md).
+  // Viber (deploy/DESKTOP.md) and WhatsApp (deploy/WHATSAPP.md) — only to a phone.
   async function sendOutbound(chat) {
     const message = text.value.trim();
-    const where = chat.account === 'viber' ? 'Viber' : 'Telegram';
+    const whatsapp = chat.account.startsWith('whatsapp_');
+    const where = chat.account === 'viber' ? 'Viber' : whatsapp ? 'WhatsApp' : 'Telegram';
     if (draftFiles.list().length) { notify(`В ${where} уходит только текст: уберите вложения или адресата`); return; }
     if (!message) { notify(`Напишите текст: в ${where} уходит только текст`); return; }
-    if (!viberAnswerable(chat)) {
-      notify(`«${chat.title}»: Viber не показывает номер — ответьте в Viber на телефоне или добавьте контакт в Viber`);
+    if (!phoneAnswerable(chat)) {
+      notify(whatsapp ? `«${chat.title}»: WhatsApp не показал номер — ответьте в WhatsApp на телефоне`
+        : `«${chat.title}»: Viber не показывает номер — ответьте в Viber на телефоне или добавьте контакт в Viber`);
       return;
     }
     if (!recipients.isOpen(chat)) {

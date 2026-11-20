@@ -7,7 +7,8 @@ const MOVE_CANCEL_PX = 10;
 const GAP_PX = 8;
 
 // A message of a chat with people (Telegram, a reply sent there, a call or an SMS), not an own note.
-export const inChat = (view) => Boolean(view.event.payload?.data?.telegram || view.event.payload?.data?.viber || view.event.payload?.data?.outbound || view.event.kind === 'call' || view.event.kind === 'sms');
+export const inChat = (view) => Boolean(view.event.payload?.data?.telegram || view.event.payload?.data?.viber || view.event.payload?.data?.whatsapp
+  || view.event.payload?.data?.outbound || view.event.kind === 'call' || view.event.kind === 'sms');
 
 export function setupActions({ list, getView, onAction }) {
   const layer = document.querySelector('#action-layer');
@@ -39,7 +40,7 @@ export function setupActions({ list, getView, onAction }) {
     archiveButton.setAttribute('aria-label', archived ? 'Вернуть из архива' : 'В архив');
     // A call has no text and an SMS text is not the owner's to rewrite (CONCEPT.md §8.1).
     // Someone else's Telegram message is not the owner's to rewrite either (CONCEPT.md §8.2).
-    const telegram = view.event.payload?.data?.telegram ?? view.event.payload?.data?.viber;
+    const telegram = view.event.payload?.data?.telegram ?? view.event.payload?.data?.viber ?? view.event.payload?.data?.whatsapp;
     panel.querySelector('[data-op="edit"]').hidden = view.event.kind === 'call' || view.event.kind === 'sms' || Boolean(telegram && view.event.author !== 'me')
       || Boolean(view.event.payload?.data?.outbound);
     // A chat message can go into a conversation of its own and back; own notes split by their tasks.

@@ -7,6 +7,9 @@
 .system-dot.login_required, .system-dot.error { background: var(--danger); }
 .system-name { font-weight: 600; }
 .system-detail { font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+/* WhatsApp linking QR: black on white whatever the theme, so the phone camera reads it. */
+.system-qr { grid-column: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
+.system-qr img { width: 240px; max-width: 100%; height: auto; aspect-ratio: 1; background: #fff; border-radius: 8px; image-rendering: pixelated; }
 .system-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .system-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .system-row .state { flex: none; font-size: 13px; color: var(--muted); }

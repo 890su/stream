@@ -4,10 +4,13 @@ import { chatOf } from './projection.js';
 
 const REPLY_WINDOW_MS = 24 * 3600 * 1000; // a business bot answers only within 24 hours of an incoming message
 
+// Viber and WhatsApp write as the owner (the desktop bridge, a linked device): no 24-hour window, a phone only.
+const byPhone = (account) => account === 'viber' || String(account).startsWith('whatsapp_');
+
 // The newest incoming message of the chat is older than 24 hours (or there is none): the bot cannot answer.
-// Viber has no such window (the bridge writes as the owner); it answers only by phone (`viberAnswerable`).
+// Viber and WhatsApp have no such window; they answer only by phone (`phoneAnswerable`).
 export function replyWindowClosed(chat, views, now = Date.now()) {
-  if (chat.account === 'viber') return false;
+  if (byPhone(chat.account)) return false;
   const last = views.filter((view) => view.event.author !== 'me' && view.event.payload?.data?.telegram && chatOf(view.event)?.key === chat.key).at(-1);
   return !last || now - Date.parse(last.event.ts) > REPLY_WINDOW_MS;
 }
@@ -15,6 +18,7 @@ export function replyWindowClosed(chat, views, now = Date.now()) {
 // payload.data.outbound for a reply: the chat, and the message it answers when that message is in the chat.
 export function outboundData(chat, view, config) {
   if (chat.account === 'viber') return { connector: 'viber', chat_id: chat.chat_id, chat_title: chat.title };
+  if (chat.account.startsWith('whatsapp_')) return { connector: chat.account, chat_id: chat.chat_id, chat_title: chat.title };
   const answered = view?.event.payload?.data?.telegram;
   return {
     connector: config.telegram?.accounts?.[chat.account]?.connector ?? `telegram_${chat.account}`, chat_id: chat.chat_id, chat_title: chat.title,
@@ -22,6 +26,6 @@ export function outboundData(chat, view, config) {
   };
 }
 
-// A Viber chat can be answered from the feed only by its phone: Viber hides the number of people not in contacts,
-// and a name may be shared by several chats («Неизвестно»).
-export const viberAnswerable = (chat) => chat.account !== 'viber' || /^\+\d{6,15}$/.test(chat.chat_id ?? '');
+// A Viber or WhatsApp chat can be answered from the feed only by its phone: Viber hides the number of people not in
+// contacts, a name may be shared by several chats («Неизвестно»), and WhatsApp may give only an anonymous address.
+export const phoneAnswerable = (chat) => !byPhone(chat.account) || /^\+\d{6,15}$/.test(chat.chat_id ?? '');
