@@ -1,4 +1,4 @@
-// The centre of the screen (CONCEPT.md §5) in three views: Беседы (the list by state; a tap opens one
+// The centre of the screen (CONCEPT.md §5) in three views: Беседы (the queue, oldest at the bottom; a tap opens one
 // conversation — its task plaques on top, its messages in a row), Задачи (a task list by a saved filter) and
 // Лента (all messages in a row: bursts, chains, day pills); filters, paging and live updates.
 import { listEntries, cachedEvents, cacheEvents } from './db.js';
@@ -16,7 +16,9 @@ import { foldProjects, markNext } from './projects.js';
 import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
-import { convRow, foldRow, splitDone } from './convlist.js';
+import { convRow } from './convlist.js';
+import { queueList } from './queue.js';
+import { snoozeMenu } from './snooze.js';
 import { convTasks } from './convtasks.js';
 import { grow, shrink, reduced, play } from './motion.js';
 
@@ -41,7 +43,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let sourceFilter = null; // 'me' | 'telegram:by' | 'phone' | 'system'… (drawer.js)
   let conversationKey = null; // the open conversation (Беседы) or the contact filter (Задачи, Лента) — chatview.js
   let current = null; // that conversation as of the last render
-  let convList = []; // all conversations, ordered by state
+  let convList = []; // all conversations, each with its place in the queue (queue.js)
   let convKeys = new Map(); // message id -> conversation key (conversations.js)
   let listTop = 0; // where the list was when a conversation opened: «назад» returns there
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
@@ -50,8 +52,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   // The project open in Задачи: the view's project when it shows all open tasks (viewstate.js, viewpanel.js).
   const currentProject = () => { const view = viewStore.get(); return (mode === 'tasks' && view.when === 'all' && projectList.find((item) => item.id === view.where?.project)) || null; };
   const openSections = new Set(); // Задачи: folded sections («Дальше») the owner unfolded
-  let showArchivedConversations = false; // Беседы: the «Архив · N» fold unfolded
-  let showDone = false; // Беседы: finished conversations unfolded; Лента: messages of finished tasks shown (drawer.js)
+  let showDone = false; // Лента: messages of finished tasks shown (drawer.js)
   let mode = 'conversations';
   const taskFilters = limits.filters?.length ? limits.filters : [{ id: 'all', title: 'Все', all: [] }]; // saved filters (registry/filters.json)
   let taskFilterId = (() => { try { return localStorage.getItem('stream.taskFilter.v3'); } catch { return null; } })();
@@ -65,7 +66,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     return render({ top: true, quiet: true });
   };
   // Lists read from the top; a conversation and the Лента read from the bottom, like a chat.
-  const readsDown = () => mode === 'tasks' || (mode === 'conversations' && !conversationKey);
+  const readsDown = () => mode === 'tasks'; // the queue and a chat start at the bottom, by the input
   const load = createMediaLoader();
   const { refresh, loadOlder } = createPager({ scroller, historyState, notify, render: (...args) => draw(...args), readsDown });
 
@@ -173,17 +174,20 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         view: viewStore.get(), people: peopleList, counterparties: counterpartyList, onResetView: () => viewStore.reset(),
         conversations: convList, pulseConfig: limits.pulse, onOpenConversation: (key) => onGoConversation?.(key), onOpenProject: (id) => setProject(id) }));
     } else if (mode === 'conversations' && !inside) {
-      // The list (CONCEPT.md §5): by state; finished, then archived ones folded at the end («Архив» on top unfolds it).
-      const { active, done, archived } = splitDone(convList.filter((item) => item.views.some(tagged)));
-      const rowOf = (item) => convRow(item, { onOpen: (key) => (onOpenConversation ?? openConversation)(key), decorate: convQuick?.decorate });
-      for (const item of active) children.push(rowOf(item));
-      for (const [key, list, open, flip] of [['done', done, showDone, () => { showDone = !showDone; }], ['archived', archived, showArchivedConversations || showArchive, () => { showArchivedConversations = !showArchivedConversations; }]]) {
-        if (!list.length) continue;
-        children.push(foldRow(key, list.length, { open, onToggle: () => toggleGroup(key, open, flip) }));
-        if (open) groupNodes.set(key, list.map(rowOf));
-        children.push(...(groupNodes.get(key) ?? []));
+      // The queue (CONCEPT.md §2.5, §5): the newest moment on top, the oldest at the bottom by the input.
+      const waiting = queueList(convList.filter((item) => item.views.some(tagged)));
+      const config = limits.conversations?.queue ? limits.conversations : DEFAULT_CONVERSATIONS;
+      const hotHours = (limits.pulse ?? PULSE_DEFAULTS).hot_wait_hours;
+      for (const item of waiting) {
+        children.push(convRow(item, { now, hotHours, counterparties: counterpartyList, decorate: convQuick?.decorate, on: {
+          open: (key) => (onOpenConversation ?? openConversation)(key),
+          task: (id) => onOpenTask(id),
+          newTask: (title) => convQuick?.newTask(item, title),
+          snooze: (anchor) => snoozeMenu(anchor, { config, onPick: (until) => convQuick?.snooze(item, until) }),
+          requeue: () => convQuick?.requeue(item),
+        } }));
       }
-      if (!active.length && !done.length && !archived.length) empty(filtered ? 'Под фильтр ничего не подходит.' : 'Здесь появятся беседы: чаты Telegram, звонки и SMS, ваши заметки.');
+      if (!waiting.length) empty(filtered ? 'Под фильтр ничего не подходит.' : 'Очередь пуста — всё разобрано. Новые сообщения появятся здесь, внизу.');
     } else {
       // One conversation (its task plaques on top) or the Лента: messages in a row.
       const plaques = inside && current ? convTasks(current, { onOpen: onOpenTask, quick }) : null;

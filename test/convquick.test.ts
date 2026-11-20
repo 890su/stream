@@ -21,3 +21,16 @@ test('«Отвечено» goes on the latest message; a new task starts from th
   assert.equal(sourceOf({ views }).id, 'm1');
   assert.equal(sourceOf({ views: [views[1]] }).id, 'm2');
 });
+
+test('a swipe right on a queue tile: confirms the task the AI chose, opens the owner\'s, or makes one from what waits', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { swipePlan } = await import('../web/convquick.js');
+  const waiting = [view('m1', 'contact:tg:by:5', '2026-11-19T09:00:00'), view('m2', 'contact:tg:by:5', '2026-11-19T09:05:00')];
+  const queue = { waiting: true, moment: '2026-11-19T09:00:00', pending: waiting };
+  const guessed = task('ai', 'inbox', { messages: ['m1', 'm2'] });
+  assert.deepEqual(swipePlan({ views: waiting, tasks: [guessed], queue }, now), { type: 'confirm', task: guessed, add: ['m1', 'm2'] });
+  const owned = task('own', 'todo', { messages: ['m0'] });
+  assert.deepEqual(swipePlan({ views: waiting, tasks: [owned], queue }, now), { type: 'open', task: owned });
+  const made = swipePlan({ views: waiting, tasks: [], queue }, now);
+  assert.deepEqual([made.type, made.source.id, made.add], ['create', 'm2', ['m1', 'm2']]);
+});

@@ -62,22 +62,26 @@ test('a leading 00 is a plus; digits without a prefix stay as they are', () => {
   assert.equal(conversationOf(phone('sms', 'in', '2026-11-18T08:00:00', '600 100 200')), 'tel:600100200');
 });
 
-test('a list row: last message, open tasks, channels', async () => {
+test('a queue tile: channel, task (guessed when the AI linked it), two lines of the last message, how long it waits', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { rowFacts, tasksLabel } = await import('../web/convlist.js');
+  const { tileFacts, tasksLabel } = await import('../web/convlist.js');
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   const { withWhom } = await import('../web/conversations.js');
-  const ask = tg('by', '777', '2026-11-18T09:00:00', 'когда приедете?');
-  const reply = mine('777', '2026-11-18T09:10:00', 'завтра утром');
-  const events = [ask, reply,
-    change('k1', '2026-11-18T09:05:00', { op: 'create', title: 'Выезд', status: 'todo', add: [ask.id] }),
-    change('k2', '2026-11-18T09:05:00', { op: 'create', title: 'Болтовня', status: 'done', template: 'chatter', add: [reply.id] })];
+  const ask = tg('pl', '777', '2026-11-18T09:00:00', 'когда приедете?', { tags: ['#выезд'] });
+  const more = tg('pl', '777', '2026-11-18T09:05:00', 'и захватите кабель');
+  const events = [ask, more, change('k1', '2026-11-18T09:06:00', { op: 'create', title: 'Анна: выезд', status: 'inbox', add: [ask.id, more.id], counterparty: 'cp1' })];
   const [person] = run(events);
-  const facts = rowFacts(person, now);
-  assert.equal(facts.snippet, 'завтра утром');
-  assert.equal(facts.mine, true, 'my reply reads «Вы: …»');
-  assert.equal(facts.tasks, 1, 'open, not filed');
-  assert.deepEqual(facts.channels, ['BY']);
+  const facts = tileFacts(person, { now, hotHours: 2, counterparties: [{ id: 'cp1', title: 'Неоформ' }] });
+  assert.deepEqual([facts.kind, facts.channel, facts.title], ['chat', 'TG PL', 'Анна Тестова']);
+  assert.deepEqual(facts.task && [facts.task.id, facts.task.title, facts.task.guessed], ['k1', 'Анна: выезд', true]);
+  assert.equal(facts.snippet, 'и захватите кабель');
+  assert.deepEqual([facts.waited, facts.hot, facts.count], ['3 ч', true, 2]);
+  assert.equal(facts.counterparty, 'Неоформ');
+  assert.deepEqual(facts.tags, ['#выезд']);
+  assert.equal(facts.when, '09:05');
+  const call = run([phone('call', 'missed', '2026-11-18T11:30:00')])[0];
+  const quiet = tileFacts(call, { now, hotHours: 2, counterparties: [] });
+  assert.deepEqual([quiet.kind, quiet.channel, quiet.task, quiet.waited, quiet.hot], ['phone', 'Тел', null, '30 мин', false]);
   assert.deepEqual([1, 3, 5, 21].map(tasksLabel), ['1 задача', '3 задачи', '5 задач', '21 задача']);
   assert.deepEqual(withWhom(person.views), ['Анна Тестова']);
 });
