@@ -7,7 +7,7 @@ import { streamOf } from '../src/tasks/triage.ts';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { chatOf, sourceKey } from '../web/projection.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { conversationOf } from '../web/conversations.js';
+import { conversationOf, directionOf } from '../web/conversations.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { outboundData, replyWindowClosed, viberAnswerable } from '../web/outbound.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
@@ -73,6 +73,28 @@ test('a photo from Viber: the bridge uploads the file, the message is a photo wi
     const missing = await bridge(f, '/api/viber/messages', { key: 'p2', chat: 'Пётр', text: '', received_at: '2026-11-20T09:14:00+01:00',
       media: [{ media_id: 'a'.repeat(64), mime: 'image/png' }] });
     assert.ok(missing.status >= 400, 'a file that was not uploaded is refused');
+  } finally { await f.stop(); }
+});
+
+test('the owner own Viber message read back from the window: author me, same conversation, idempotent', async () => {
+  const f = await fixture();
+  try {
+    const own = { key: 'out|+375290000001|09:58|abc123', chat: 'Пётр', phone: '+375290000001', mine: true,
+      text: 'Да, договорились', received_at: '2026-11-20T09:58:00+01:00' };
+    const first = await bridge(f, '/api/viber/messages', own);
+    assert.equal(first.status, 201);
+    const stored = f.store.getEvent((await first.json() as { id: string }).id)!;
+    assert.equal(stored.author, 'me', 'the owner own message is mine, not the contact');
+    assert.equal(stored.source, 'viber');
+    assert.equal(conversationOf(stored), 'tel:+375290000001', 'it joins the number conversation');
+    assert.equal(directionOf(stored), 'out', 'it renders as my (outgoing) bubble');
+    assert.equal((await bridge(f, '/api/viber/messages', own)).status, 200, 'a re-read writes nothing new');
+
+    // A name-only chat (Viber hides the number): still my message, in the conversation by the name.
+    const noPhone = { key: 'out|Аня|10:01|def456', chat: 'Аня', mine: true, text: 'Ок', received_at: '2026-11-20T10:01:00+01:00' };
+    const kept = f.store.getEvent((await (await bridge(f, '/api/viber/messages', noPhone)).json() as { id: string }).id)!;
+    assert.equal(kept.author, 'me');
+    assert.equal(conversationOf(kept), 'viber:Аня');
   } finally { await f.stop(); }
 });
 

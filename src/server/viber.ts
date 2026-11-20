@@ -42,11 +42,14 @@ function attachments(value: unknown): MediaRef[] {
   });
 }
 
-// One incoming message. `key` is the bridge's own id of the notification, so a retry writes nothing new.
-// The author is the phone when Viber shows it (the same person as their calls and SMS), else the chat's name.
-// With files: kind photo (images) or file; the text is then optional.
+// One message. `key` is the bridge's own idempotent id (a notification, or, for the owner's own messages read
+// back from the chat window, `out|<chat>|<time>|<hash>`), so a retry or a re-read writes nothing new.
+// The author is `me` when the bridge marks the message as the owner's own (`mine: true`, typed in Viber from the
+// phone — deploy/DESKTOP.md), else the phone when Viber shows it (the same person as their calls and SMS), else
+// the chat's name. With files: kind photo (images) or file; the text is then optional.
 export function viberMessage(body: Body): JournalEvent {
   const key = str(body.key); const chat = str(body.chat).slice(0, 200); const phone = str(body.phone);
+  const mine = body.mine === true;
   const text = typeof body.text === 'string' ? body.text : '';
   const files = attachments(body.media);
   const ms = Date.parse(str(body.received_at));
@@ -59,7 +62,7 @@ export function viberMessage(body: Body): JournalEvent {
   const viber = { chat, ...(phone ? { phone } : {}), ...(body.group === true ? { group: true } : {}), received_at: at };
   const kind = !files.length ? 'text' : files.every((file) => file.mime.startsWith('image/')) ? 'photo' : 'file';
   return {
-    id: nameId(`viber|${key}`), schema_version: 1, source: 'viber', author: `contact:viber:${phone || chat}`, ts: at, kind,
+    id: nameId(`viber|${key}`), schema_version: 1, source: 'viber', author: mine ? 'me' : `contact:viber:${phone || chat}`, ts: at, kind,
     payload: { ...(text.trim() ? { text } : {}), ...(files.length ? { media: files } : {}), data: { viber } },
   };
 }
