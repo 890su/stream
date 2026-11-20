@@ -5,8 +5,9 @@ import { accountTitle } from './tgbubble.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
 
-// Left panel — filters of the centre (CONCEPT.md §5), by view: contacts and tags for every view (kept when the
-// view changes); Беседы — «Завершённые»; Лента — «Завершённые» and sources; Задачи — the saved task filters.
+// Left panel (CONCEPT.md §5, design 2026-11-20): «Беседы» on top — back to the queue, the main screen; the task
+// filters (three layouts, viewpanel.js) in Беседы and Задачи — no conversation filters; «Избранные» — pinned chats
+// (favourites.js), a tap opens the conversation; tags for every view. Лента keeps its own: «Завершённые» and sources.
 const DAY = 86400000;
 
 function element(tag, className, text) {
@@ -21,7 +22,9 @@ function age(ts) {
   return days <= 0 ? 'сегодня' : `${days} дн. назад`;
 }
 
-export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject = () => {} }) {
+import { favourites } from './favourites.js';
+
+export function setupDrawer({ feed, onContact, onQueue = () => {}, onTasks = () => {}, pinned = () => [], onFilterChange, onCreateProject = () => {} }) {
   const drawer = document.querySelector('#drawer');
   const backdrop = document.querySelector('#drawer-backdrop');
   const contactsBox = document.querySelector('#drawer-contacts');
@@ -102,21 +105,20 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
   window.addEventListener('pointercancel', () => { if (drag?.external) return; if (drag?.horizontal) show(drag.opening ? false : true); drag = null; });
   window.addEventListener('resize', () => { if (!drawer.hidden) place(); });
 
-  // Contacts: conversations with people (not own notes), latest first. In Беседы a tap opens the conversation;
-  // in Задачи and Лента it filters by it (the bar on top removes the filter).
-  const CHANNELS = { phone: 'телефон', viber: 'Viber', whatsapp: 'WhatsApp' };
+  // «Избранные»: pinned chats; a tap opens the conversation in Беседы.
   function renderContacts() {
     const active = feed.conversationKey();
-    const rows = feed.conversations().filter((item) => item.key !== 'me').sort((a, b) => b.last.localeCompare(a.last)).map((item) => {
+    const known = new Map(feed.conversations().map((item) => [item.key, item]));
+    const rows = favourites(pinned()).map((item) => {
       const row = element('button', `drawer-contact${active === item.key ? ' on' : ''}`);
       row.type = 'button';
-      const channels = item.channels.map((channel) => CHANNELS[channel] ?? accountTitle(channel)).join(', ');
-      row.append(element('span', 'drawer-title', item.title), element('span', 'drawer-count', `${channels}${item.group ? ' · группа' : ''} · ${item.views.length} · ${age(item.last)}`));
+      const conversation = known.get(item.key);
+      row.append(element('span', 'drawer-title', item.title), element('span', 'drawer-count', conversation ? age(conversation.last) : 'нет сообщений'));
       row.setAttribute('aria-pressed', String(active === item.key));
       row.onclick = () => { close(); onContact(item.key); };
       return row;
     });
-    contactsBox.replaceChildren(...(rows.length ? rows : [element('p', 'drawer-empty', 'Контактов пока нет: здесь появятся чаты Telegram и номера телефонов')]));
+    contactsBox.replaceChildren(...(rows.length ? rows : [element('p', 'drawer-empty', 'Закрепите чат звёздочкой в окне «связь» — он появится здесь')]));
   }
 
   // Sources (CONCEPT.md §8.2): my notes, each messenger account, the phone, the system. One at a time.
@@ -152,19 +154,20 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
   // The «Задачи» view: the control panel of the view (viewpanel.js) — three layouts over one view, the gear below.
   function renderTaskFilters() {
     modeBox.replaceChildren(viewPanel({ store: viewStore, tasks: feed.tasks(), projects: feed.projects(), counterparties: feed.counterparties(), people: feed.people(),
-      onCreateProject, done: () => { onFilterChange(); if (!isWide()) close(); } }));
+      onCreateProject, done: () => { onFilterChange(); if (feed.mode() === 'conversations') onTasks(); if (!isWide()) close(); } }));
   }
-  // In Задачи the lists come first, above the contacts; elsewhere the view's filters follow the contacts.
+  // The task filters come first, above «Избранные»; Лента's sources follow them.
   const contactsHead = contactsBox.previousElementSibling;
   function placeModeBox() {
-    if (feed.mode() === 'tasks') contactsHead.before(modeBox); else contactsBox.after(modeBox);
+    if (feed.mode() === 'feed') contactsBox.after(modeBox); else contactsHead.before(modeBox);
   }
+  document.querySelector('#drawer-queue').onclick = () => { close(); onQueue(); };
 
   function render() {
     renderContacts();
     placeModeBox();
-    if (feed.mode() === 'tasks') renderTaskFilters(); else renderSources();
-    document.querySelector('#drawer-title').textContent = { feed: 'Фильтры ленты', conversations: 'Фильтры бесед', tasks: 'Фильтры задач' }[feed.mode()] ?? 'Фильтры';
+    if (feed.mode() === 'feed') renderSources(); else renderTaskFilters();
+    document.querySelector('#drawer-title').textContent = feed.mode() === 'feed' ? 'Фильтры ленты' : 'Фильтры задач';
     const counts = new Map();
     for (const view of feed.views()) if (!view.deleted) for (const tag of view.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
     const active = new Set(feed.tagFilter());
@@ -183,7 +186,12 @@ export function setupDrawer({ feed, onContact, onFilterChange, onCreateProject =
     }) : [element('p', 'drawer-empty', 'Меток пока нет')]));
   }
 
-  viewStore.onChange(() => { if (!drawer.hidden && feed.mode() === 'tasks') render(); onFilterChange(); });
+  // A task filter chosen while the queue is shown leads to Задачи (the panel is open: the owner chose it).
+  viewStore.onChange(() => {
+    if (!drawer.hidden && feed.mode() === 'conversations') onTasks();
+    if (!drawer.hidden && feed.mode() === 'tasks') render();
+    onFilterChange();
+  });
   document.querySelector('#drawer-button').onclick = open;
   document.querySelector('#drawer-close').onclick = close;
   backdrop.onclick = close;

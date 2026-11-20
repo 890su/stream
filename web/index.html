@@ -26,7 +26,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>
       <span id="filter-count"></span>
     </button>
-    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры: контакты, метки, списки" aria-controls="drawer">
+    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры задач, беседы, избранные" aria-controls="drawer">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5Z"/></svg>
     </button>
     <button id="archive-toggle" type="button" class="icon-button" aria-pressed="false" aria-label="Показывать архив">
@@ -63,7 +63,8 @@
       </button>
     </header>
     <div class="drawer-body">
-      <h3 class="drawer-section">Контакты</h3>
+      <button id="drawer-queue" type="button" class="drawer-queue">💬 Беседы</button>
+      <h3 class="drawer-section">Избранные</h3>
       <div id="drawer-contacts"></div>
       <div id="drawer-mode"></div>
       <h3 class="drawer-section">Метки</h3>
@@ -172,7 +173,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
       </button>
       <div id="tag-chips" class="row-chips" role="group" aria-label="С чем уйдёт сообщение: беседа или задача, адресат, метки"></div>
-      <button id="view-switch" type="button" class="view-switch row-end"><span id="view-switch-label">Задачи</span><span id="view-switch-count" class="view-switch-count" hidden></span></button>
+      <button id="view-switch" type="button" class="view-switch row-end"><span id="view-switch-label" aria-hidden="true">☑</span><span id="view-switch-count" class="view-switch-count" hidden></span></button>
     </div>
     <form id="composer" class="composer" autocomplete="off">
       <div id="recording-bar" class="recording-bar" hidden>

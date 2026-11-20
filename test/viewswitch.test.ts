@@ -34,3 +34,26 @@ test('the link window lists open tasks: the one in details, the conversation\'s,
   const ordered = likelyTasks(tasks, { openTask: 'open', conversationTasks: [task('conv')], today: [task('today')] }).map((item: any) => item.id);
   assert.deepEqual(ordered, ['open', 'conv', 'today', 'new', 'old']);
 });
+
+test('the switch is an icon: ☑ leads to Задачи, 💬 to Беседы', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { switchIcon } = await import('../web/viewswitch.js');
+  assert.deepEqual([switchIcon('tasks'), switchIcon('conversations')], ['☑', '💬']);
+});
+
+test('the system back leads to the queue: from Задачи or Лента with nothing open on top; never past it', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { rootBack } = await import('../web/viewswitch.js');
+  assert.equal(rootBack('tasks', null), 'conversations');
+  assert.equal(rootBack('feed', { overlay: 1, page: 'x' }), 'conversations');
+  assert.equal(rootBack('tasks', { view: 'tasks' }), null, 'landed on the view\'s own entry: a panel above it closed');
+  assert.equal(rootBack('tasks', { drawer: true }), null);
+  assert.equal(rootBack('conversations', null), null, 'the queue is the root: the system leaves the app');
+});
+
+test('favourites in the left panel: pinned chats, opened as their conversations', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { favourites } = await import('../web/favourites.js');
+  const items = [{ key: 'by:501', title: 'Анна', pinned: true, item: { chat_id: '501' } }, { key: 'pl:7', title: 'Борис', pinned: false, item: { chat_id: '7' } }];
+  assert.deepEqual(favourites(items), [{ key: 'tg:501', title: 'Анна' }]);
+});

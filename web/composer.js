@@ -290,6 +290,7 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     selectionTags: (state) => { selection = state; tagRow.update(selection ? '' : text.value); },
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),
     loadRecipients: () => recipients.load(),
+    pinned: () => recipients.items().filter((item) => item.pinned), // «Избранные» of the left panel
     // A reply to a messenger message chooses its chat as the recipient; another can be chosen in the link window.
     reply: (view) => { setMode({ type: 'reply', view }); const chat = chatOf(view.event); if (chat) recipients.choose(chat); },
     chat: (chat) => { chatDefault = chat; recipients.reset(chat); },

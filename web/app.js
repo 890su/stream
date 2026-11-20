@@ -23,7 +23,7 @@ import { createDoneCards } from './donecard.js';
 import { createTaskQuick } from './taskquick.js';
 import { createConvQuick } from './convquick.js';
 import { setupQuestions } from './question.js';
-import { setupViewSwitch } from './viewswitch.js';
+import { setupViewSwitch, rootBack } from './viewswitch.js';
 import { isWide } from './layout.js';
 import { listCount } from './tasklist.js';
 import { setupSwipeZones, slideIn } from './swipezones.js';
@@ -46,16 +46,23 @@ let convActions; // convquick.js: the queue marks on a conversation (snooze, req
 // by earlier versions map to the new ones (feed.js).
 function setupViews(feed) {
   const update = () => viewSwitch?.update();
-  let saved = 'conversations';
-  try { saved = localStorage.getItem('stream.feedMode') ?? 'conversations'; } catch { /* private mode */ }
-  if (saved === 'feed' || saved === 'messages') saved = 'conversations';
-  feed.setMode(saved);
-  try { if (saved !== feed.mode()) localStorage.setItem('stream.feedMode', feed.mode()); } catch { /* private mode */ }
+  // The queue of Беседы is the root (design 2026-11-20): the app always starts there; Задачи and Лента get a history
+  // entry of their own, so the system back returns to the queue (rootBack, viewswitch.js).
+  feed.setMode('conversations');
+  // A reload (an app update) keeps the entry's old state — a panel, a conversation, a view: none of them is open now.
+  if (history.state?.view || history.state?.drawer || history.state?.conversation || history.state?.details) history.replaceState(null, '');
   const after = () => { chatView?.sync(); updateFilter(); drawer?.render(); update(); };
+  const enter = (next) => {
+    if (next === 'conversations') { if (history.state?.view) history.replaceState(null, ''); return; }
+    // An open conversation's or the left panel's entry becomes the view's: one back from there goes to the queue.
+    const state = history.state;
+    if (state?.view || state?.conversation || state?.drawer) history.replaceState({ view: next }, ''); else history.pushState({ view: next }, '');
+  };
+  window.addEventListener('popstate', () => { if (rootBack(feed.mode(), history.state)) go('conversations'); });
   // `key` — a conversation to open (from a task or a conversation filter); Задачи keep an open conversation as a filter.
   async function go(next, key = null) {
-    try { localStorage.setItem('stream.feedMode', next); } catch { /* private mode */ }
     if (next === 'conversations' && details?.current()?.kind === 'task' && !isWide()) details.close();
+    if (next !== feed.mode()) enter(next);
     await feed.setMode(next);
     if (next === 'conversations' && key && key !== chatView?.key()) await chatView.open(key);
     after();
@@ -72,7 +79,8 @@ function setupViews(feed) {
   // ⋮ → «Лента сообщений».
   $('#feed-button').onclick = async () => {
     $('#settings').close();
-    if (chatView?.key()) chatView.leave();
+    if (chatView?.key()) chatView.close();
+    enter('feed');
     await feed.setMode('feed');
     after();
   };
@@ -134,7 +142,10 @@ function setupMessageActions(feed, composer, config) {
   drawer = setupDrawer({
     feed,
     onCreateProject: (project) => composer.queue(makeProjectChange(crypto.randomUUID(), { op: 'create', status: 'active', ...project })).catch((error) => notify(error.message)),
-    onContact: (key) => chatView.open(key),
+    onContact: (key) => goView?.('conversations', key),
+    onQueue: () => goView?.('conversations'),
+    onTasks: () => goView?.('tasks'),
+    pinned: () => composer.pinned(),
     onFilterChange: updateFilter,
   });
   setupActions({
