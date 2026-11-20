@@ -20,7 +20,7 @@ UNKNOWN_RETRY_S = 86400   # a name without a phone is looked up again after a da
 # Photos, files and voice Viber saves on the desktop the moment the message comes (seen 2026-11-20: same second).
 DOWNLOADS = [os.path.join(HOME, 'Documents', 'ViberDownloads'), os.path.join(HOME, 'Documents', 'ViberDownloads', 'PTT')]
 SETTLE_S = 15             # a message waits this long for its file before it goes to Stream
-FILE_WINDOW = (-5, 30)    # a file belongs to a message saved this many seconds before / after its notification
+FILE_WINDOW = (-3, 8)     # a file belongs to a message saved this many seconds before / after its notification (seen: same second)
 # Notification texts that only stand for an attachment (dropped when the file is attached); reactions are not messages.
 PLACEHOLDERS = {'Фотосообщение', 'Видеосообщение', 'Файл', 'Голосовое сообщение', 'Стикер', 'GIF'}
 SKIP_PREFIXES = ('Реакция:',)
