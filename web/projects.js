@@ -26,10 +26,10 @@ export function foldProjects(events) {
     let project = projects.get(id);
     if (!project) {
       if (change.op !== 'create') continue;
-      project = { id, title: change.title, parent: null, kind: 'stream', status: 'active', sections: [], sources: [], createdAt: event.ts, updatedAt: event.ts };
+      project = { id, title: change.title, parent: null, kind: 'stream', status: 'active', sections: [], sources: [], scope: '', createdAt: event.ts, updatedAt: event.ts };
       projects.set(id, project);
     }
-    for (const key of ['title', 'parent', 'kind', 'status', 'sections', 'sources']) if (change[key] !== undefined) project[key] = change[key];
+    for (const key of ['title', 'parent', 'kind', 'status', 'sections', 'sources', 'scope']) if (change[key] !== undefined) project[key] = change[key];
     project.updatedAt = event.ts;
   }
   // A parent that does not exist (or a loop) puts the project at the top.

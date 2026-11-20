@@ -148,7 +148,7 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v12').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v13').length, 4);
   } finally { s.cleanup(); }
 });
 
@@ -300,7 +300,7 @@ test('a follow-up request becomes a checklist item of the job, which gets a gene
   } finally { s.cleanup(); }
 });
 
-test('triage puts tasks into projects: the planner\'s choice, the source default, options when unsure; a placed task stays', async () => {
+test('triage puts tasks into projects: the planner\'s choice by the project scope, never the source default alone, options when unsure; a placed task stays', async () => {
   const P1 = '11111111-1111-4111-8111-111111111111';
   const P2 = '22222222-2222-4222-8222-222222222222';
   const base = { responsible: 'me', executors: [], author: null, template: null, due: null, confidence: 0.9, note: null, filed: false, done: false, alternatives: [], items: [], rename: null };
@@ -308,15 +308,21 @@ test('triage puts tasks into projects: the planner\'s choice, the source default
   const s = setup((input) => reply(input));
   const project = (id: string, data: Record<string, unknown>) => s.add({ ...event({ kind: 'project_change', payload: { ref: { type: 'project', id }, data: { project: { op: 'create', ...data } } } }), source: 'app', author: 'me' } as JournalEvent);
   try {
-    project(P1, { title: 'Удалёнка BY', kind: 'stream', sources: ['tg:by'] });
+    project(P1, { title: 'Удалёнка BY', kind: 'stream', sources: ['tg:by'], scope: 'удалённая IT-поддержка клиентов в Беларуси' });
     project(P2, { title: 'Сайт', kind: 'goal', sections: [{ id: 'ideas', title: 'Идеи', role: 'ideas' }, { id: 'next', title: 'Следующее', role: 'next' }] });
-    // A chat of the BY account: the planner leaves it empty, the source default applies.
+    // A chat of the BY account: the planner sees each project's scope and the source as a hint; what it leaves
+    // empty stays without a project — the source alone puts nothing into a project (owner, 2026-11-20).
     reply = (input) => {
       assert.deepEqual(input.projects.map((item) => item.title).sort(), ['Сайт', 'Удалёнка BY']);
+      assert.equal(input.projects.find((item) => item.id === P1)!.scope, 'удалённая IT-поддержка клиентов в Беларуси');
       assert.equal(input.messages[0]!.default_project, P1);
-      return { tasks: [{ ...base, task_id: null, title: 'Настроить принтер', message_ids: [input.messages[0]!.id], project: null, section: null, project_options: [] }] };
+      return { tasks: [
+        { ...base, task_id: null, title: 'Настроить принтер', message_ids: [input.messages[0]!.id], project: P1, section: null, project_options: [] },
+        { ...base, task_id: null, title: 'Купить подарок маме', message_ids: [input.messages[1]!.id], project: null, section: null, project_options: [] },
+      ] };
     };
     s.add(telegram('7101', 'не печатает принтер'));
+    s.add(telegram('7101', 'и напомни купить подарок маме'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     // An idea of my own goes to the project's ideas; a doubtful one gets options; a made-up section is dropped.
     reply = (input) => ({ tasks: [
@@ -330,6 +336,7 @@ test('triage puts tasks into projects: the planner\'s choice, the source default
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
     const byTitle = new Map(s.tasks().map((task) => [task.title, task]));
     assert.deepEqual([byTitle.get('Настроить принтер')!.project, byTitle.get('Настроить принтер')!.section], [P1, null]);
+    assert.equal(byTitle.get('Купить подарок маме')!.project, undefined, 'not put into the project of its source');
     assert.deepEqual([byTitle.get('Тёмная тема')!.project, byTitle.get('Тёмная тема')!.section], [P2, 'ideas']);
     assert.equal(byTitle.get('Что-то общее')!.project, undefined);
     assert.deepEqual(byTitle.get('Что-то общее')!.project_options, [P1, P2]);

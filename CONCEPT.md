@@ -445,9 +445,10 @@ built), not in git. A project has:
   «Идеи»), not filed away.
 
 **How a task gets its project** (cheapest first): the project chosen in the link window (§2.9) or named with a
-`#tag`; the default project of the source — a project lists the sources it takes by default (`sources`: Telegram
-BY, Telegram PL, phone, own notes; later one chat), so the BY bot → «Удалёнка BY»; triage by content (the planner
-sees the active projects with their sections and each message's default project). When unsure, triage leaves the
+`#tag`; triage by content against the project's **scope** — «Что сюда относится», in the owner's words (2026-11-20:
+before it, every task of a project's source went there, personal ones too). The source (`sources`: Telegram BY,
+Telegram PL, phone, own notes) is only a hint: the planner sees each message's source project, but puts a task into a
+project only when the matter fits its scope; no project is filled in by the source alone. When unsure, triage leaves the
 project empty and names up to three candidates (`project_options`): the task shows «В какой проект?» with them.
 Triage sets the project of a new task, or of an existing one that has none; it never moves a task the owner placed.
 An idea about a known project becomes a task in its «ideas» section (not a filed note); ideas stay out of «Сегодня».

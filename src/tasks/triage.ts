@@ -59,11 +59,12 @@ export function checklistChange(taskId: string, planned: PlannedTask, task?: Tas
 // The project a planned task goes to (CONCEPT.md §2.11): the planner's project if it is active, else the source's
 // default; a section only of that project (an idea without one goes to its «ideas» section). A task that already has
 // a project keeps it; filed outcomes get none. When unsure — `project_options` for the owner to choose.
-export function projectChange(planned: PlannedTask, task: Task | undefined, projects: Project[], fallback: Project | null): Record<string, unknown> {
+export function projectChange(planned: PlannedTask, task: Task | undefined, projects: Project[]): Record<string, unknown> {
   if (planned.filed || task?.project) return {};
   const byId = new Map(projects.map((project) => [project.id, project]));
   const options = [...new Set(planned.project_options ?? [])].filter((id) => byId.has(id)).slice(0, 3);
-  const chosen = (planned.project && byId.get(planned.project)) || (options.length ? null : fallback);
+  // Only the planner's choice by the project's scope: the source alone puts nothing into a project (owner, 2026-11-20).
+  const chosen = (planned.project && byId.get(planned.project)) || null;
   if (!chosen) return options.length ? { project_options: options } : {};
   const section = chosen.sections.find((item) => item.id === planned.section);
   return { project: chosen.id, section: section?.id ?? null };
@@ -182,7 +183,7 @@ export class Triage {
     const at = new Date().toISOString();
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
     const input: PlanInput = {
-      now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections }) => ({ id, title, kind, sections })), templates: tasksConfig.templates,
+      now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections, scope }) => ({ id, title, kind, scope, sections })), templates: tasksConfig.templates,
       counterparties: counterparties.filter((item) => item.status === 'active').map(({ id, kind, title, address, side }) => ({ id, kind, title, address, side,
         people: peopleOf(id, people).map(({ person, title: job }) => (job ? `${person.name} (${job})` : person.name)) })),
       open_tasks: open.map(asContext),
@@ -242,7 +243,7 @@ export class Triage {
       // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
       const proposal = planned.done && !planned.filed ? { proposed: 'done', ...reportDraft(planned, existing ? taskById.get(existing) : undefined) } : {};
       const checklist = checklistChange(taskId, planned, existing ? taskById.get(existing) : undefined);
-      const placed = { ...projectChange(planned, existing ? taskById.get(existing) : undefined, projects, defaultProject(projects, streamOf(batch[0]!))),
+      const placed = { ...projectChange(planned, existing ? taskById.get(existing) : undefined, projects),
         ...counterpartyChange(planned, existing ? taskById.get(existing) : undefined, counterparties) };
       const change: Record<string, unknown> = existing
         ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked, ...checklist, ...placed }

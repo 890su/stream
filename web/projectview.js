@@ -67,17 +67,27 @@ export function projectHead(project, tasks, actions) {
   };
   edit.append(
     button('link-button', 'Переименовать', () => edit.append(inlineForm('Название проекта', (title) => actions.saveProject({ title }), { value: project.title, max: 120 }))),
-    chips(PROJECT_STATUSES, project.status, 'status'), chips(KINDS, project.kind, 'kind'), sourcesBlock(project, actions),
+    scopeBlock(project, actions), chips(PROJECT_STATUSES, project.status, 'status'), chips(KINDS, project.kind, 'kind'), sourcesBlock(project, actions),
     button('link-button', '+ Раздел', () => edit.append(inlineForm('Название раздела', (title) => actions.saveProject({ sections: [...project.sections, { id: crypto.randomUUID().slice(0, 8), title: line(title, 60) }] }), { max: 60 }))),
   );
   box.append(button('link-button project-edit-toggle', 'Изменить', () => { edit.hidden = !edit.hidden; editing = edit.hidden ? null : project.id; }), edit);
   return box;
 }
 
-// «Сюда по умолчанию»: sources whose new tasks the triage puts here (CONCEPT.md §2.11).
+// «Что сюда относится»: the project's scope in the owner's words — the triage puts a task here only when it fits
+// (owner, 2026-11-20).
+function scopeBlock(project, actions) {
+  const box = element('div', 'project-scope');
+  box.append(element('p', 'picker-section', 'Что сюда относится'),
+    element('p', project.scope ? 'details-meta' : 'details-meta muted', project.scope || 'Не описано — разбор положит сюда только явные дела проекта'),
+    button('link-button', project.scope ? 'Изменить описание' : 'Описать', () => box.append(inlineForm('Что относится к проекту', (scope) => actions.saveProject({ scope: scope.slice(0, 500) }), { value: project.scope ?? '', max: 500 }))));
+  return box;
+}
+
+// Sources as a hint to the triage: their tasks may go here, only when they fit «Что сюда относится» (CONCEPT.md §2.11).
 function sourcesBlock(project, actions) {
   const box = element('div', 'project-sources');
-  box.append(element('p', 'picker-section', 'Задачи отсюда — в этот проект'));
+  box.append(element('p', 'picker-section', 'Откуда обычно дела проекта — подсказка разбору'));
   const row = element('div', 'chips');
   const sources = { ...Object.fromEntries(accountKeys().map((account) => [`tg:${account}`, accountTitle(account)])), ...SOURCE_TITLES };
   const on = new Set(project.sources ?? []);

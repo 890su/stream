@@ -548,6 +548,7 @@
                   "items": { "type": "string", "pattern": "^(?:tg:[a-z]{2,10}|phone|me)$" }
                 },
                 "status": { "enum": ["active", "paused", "done", "archived"] },
+                "scope": { "type": "string", "maxLength": 500, "description": "What belongs to this project, in the owner's words: the triage puts a task here only when it fits (owner, 2026-11-20)." },
                 "sections": {
                   "type": "array",
                   "description": "The project's sections in order; role next - its next actions (shown in Сегодня), ideas - its backlog.",

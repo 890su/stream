@@ -80,3 +80,14 @@ test('a task in a project\'s ideas is an idea and stays out of «Сегодня�
   assert.equal(matchesFilter(idea, today), false);
   assert.equal(matchesFilter(loose, today), true);
 });
+
+test('a project keeps «Что сюда относится» (scope); without it the scope is empty', () => {
+  const projects = foldProjects([
+    change(P1, { op: 'create', title: 'Сервис', kind: 'stream' }),
+    change(P2, { op: 'create', title: 'Дом' }),
+    change(P1, { op: 'update', scope: 'ремонт компьютеров и сетей у клиентов' }),
+  ]);
+  const byId = new Map<string, any>(projects.map((item: any) => [item.id, item]));
+  assert.equal(byId.get(P1).scope, 'ремонт компьютеров и сетей у клиентов');
+  assert.equal(byId.get(P2).scope, '');
+});

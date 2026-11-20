@@ -4,7 +4,7 @@ import type { JournalEvent } from '../contracts/validate.ts';
 // the same way (web/projects.js).
 
 export interface ProjectSection { id: string; title: string; role?: 'next' | 'ideas' }
-export interface Project { id: string; title: string; parent: string | null; kind: string; status: string; sections: ProjectSection[]; sources: string[] }
+export interface Project { id: string; title: string; parent: string | null; kind: string; status: string; sections: ProjectSection[]; sources: string[]; scope: string }
 
 export function foldProjects(events: JournalEvent[]): Project[] {
   const projects = new Map<string, Project>();
@@ -16,10 +16,10 @@ export function foldProjects(events: JournalEvent[]): Project[] {
     let project = projects.get(id);
     if (!project) {
       if (change.op !== 'create') continue;
-      project = { id, title: change.title, parent: null, kind: 'stream', status: 'active', sections: [], sources: [] };
+      project = { id, title: change.title, parent: null, kind: 'stream', status: 'active', sections: [], sources: [], scope: '' };
       projects.set(id, project);
     }
-    for (const key of ['title', 'parent', 'kind', 'status', 'sections', 'sources'] as const) if (change[key] !== undefined) (project as any)[key] = change[key];
+    for (const key of ['title', 'parent', 'kind', 'status', 'sections', 'sources', 'scope'] as const) if (change[key] !== undefined) (project as any)[key] = change[key];
   }
   return [...projects.values()];
 }

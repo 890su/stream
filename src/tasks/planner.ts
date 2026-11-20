@@ -6,7 +6,7 @@ import { TITLE_RULE } from './namer.ts';
 export interface PlanMessage {
   id: string; time: string; source: string; from: string; party: string; text: string; tags: string[];
   reply_to?: string; continues?: string; in_tasks: string[];
-  default_project?: string | null; // the project this message's source goes to by default (CONCEPT.md §2.11)
+  default_project?: string | null; // a hint: the project of this message's source, when the matter fits its scope (CONCEPT.md §2.11)
   person?: string | null; // the directory's name for the author, when known (contacts design §3)
 }
 // A counterparty the triage may set (contacts design §6): active ones, with their people and job titles.
@@ -17,7 +17,7 @@ export interface PlanTask { id: string; title: string; project?: string | null; 
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
 // context — earlier messages of the same conversation, already triaged: to understand, not to assign.
 // An active project: the triage may put tasks in it, in one of its sections.
-export interface PlanProject { id: string; title: string; kind: string; sections: { id: string; title: string; role?: string }[] }
+export interface PlanProject { id: string; title: string; kind: string; scope: string; sections: { id: string; title: string; role?: string }[] }
 export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; counterparties: PlanCounterparty[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
 
 export interface PlannedTask {
@@ -143,10 +143,12 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
     переписка остаётся в беседе (см. выше).
   * Список — одно сообщение перечисляет несколько мелочей одного дела («купить кабель, коннекторы и стяжки») — одна
     задача, items — пункты.
-- Проекты (projects — активные проекты с разделами). У каждой задачи project — id проекта, к которому она относится,
-  и section — id его раздела, или null. Сообщение с default_project обычно относится к этому проекту (рабочий поток
-  источника), если по смыслу дело явно не другого проекта. Если уверенности нет — project: null и project_options —
-  до трёх id вероятных проектов (владельца спросят); иначе project_options: []. Задача, у которой проект уже есть
+- Проекты (projects — активные проекты с разделами; scope — что к проекту относится, словами владельца). У каждой
+  задачи project — id проекта, к которому она относится, и section — id его раздела, или null. В проект кладёшь только
+  дело, которое подходит под его scope (по смыслу дела, а не по чату или стране): личные, семейные и бытовые дела, чужие
+  для проекта работы — project: null, даже если сообщение пришло из рабочего чата. default_project — лишь подсказка:
+  проект источника, если дело подходит под его scope. У проекта без scope — только явно его дела. Если уверенности нет —
+  project: null и project_options — до трёх id вероятных проектов (владельца спросят); иначе project_options: []. Задача, у которой проект уже есть
   (project в open_tasks), остаётся в нём: верни его же или null. filed-задачам project: null.
 - Контрагенты (counterparties — организации и адреса частных клиентов, с людьми и должностями). У каждой задачи
   counterparty — id контрагента, о ком дело: организация автора (person сообщения и people контрагента), адрес из
