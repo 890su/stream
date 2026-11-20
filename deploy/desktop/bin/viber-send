@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Send a Viber message by driving Viber Desktop the way a person does: click the search, paste the contact's name,
+# open the first result, check the opened chat's title (OCR) matches, paste the text, press Enter.
+# Usage: viber-send "<contact name or phone>" "<text>"     (text may also come on stdin)
+#        VIBER_SEND_DRY=1 viber-send ...   opens and checks the chat, types nothing
+# Exit codes: 0 sent · 2 Viber window not found · 3 the opened chat does not match (nothing typed) · 4 busy
+# Places on screen come from viber-ui.env (fixed 1280x800 screen, window maximized). Every send leaves a
+# screenshot in ~/sent/ for review.
+set -euo pipefail
+export DISPLAY=${DISPLAY:-:1} LC_ALL=ru_RU.UTF-8
+source /usr/local/bin/viber-ui.env
+WHO=$1; TEXT=${2-$(cat)}
+[ -n "$WHO" ] && [ -n "$TEXT" ] || { echo "usage: viber-send <contact> <text>" >&2; exit 64; }
+
+exec 9>/tmp/viber-send.lock
+flock -w 60 9 || { echo "busy" >&2; exit 4; }
+
+pause() { sleep "$(awk -v a="$1" -v b="$2" 'BEGIN{srand(); printf "%.2f", a+rand()*(b-a)}')"; }
+# xclip stays in the background to serve the clipboard: it must not inherit the lock (fd 9).
+clip() { printf '%s' "$1" | xclip -selection clipboard 9>&-; }
+paste() { clip "$1"; xdotool key --clearmodifiers ctrl+v; }
+trap 'clip ""' EXIT
+
+WIN=$(xdotool search --onlyvisible --class "$VIBER_CLASS" | tail -1 || true)
+[ -n "$WIN" ] || { echo "Viber window not found" >&2; exit 2; }
+xdotool windowactivate --sync "$WIN" 2>/dev/null || xdotool windowfocus --sync "$WIN"
+xdotool key Escape; pause 0.3 0.6
+
+# Search the contact and open the first result.
+xdotool mousemove "$SEARCH_X" "$SEARCH_Y" click 1; pause 0.4 0.8
+xdotool key ctrl+a BackSpace
+paste "$WHO"; pause 1.5 2.2
+xdotool mousemove "$RESULT_X" "$RESULT_Y" click 1; pause 1.0 1.6
+
+# The chat title must contain the searched name (letters and digits only, case-insensitive), else stop.
+mkdir -p ~/sent
+STAMP=$(date +%Y%m%d-%H%M%S)
+import -window root -crop "${TITLE_W}x${TITLE_H}+${TITLE_X}+${TITLE_Y}" -resize 200% /tmp/viber-title.png
+TITLE=$(tesseract /tmp/viber-title.png - -l rus+eng --psm 7 2>/dev/null | tr -d '\n')
+# Bash patterns are multibyte-aware under the UTF-8 locale (tr is not: it drops Cyrillic letters).
+norm() { local s=${1,,}; printf '%s' "${s//[^[:alnum:]]/}"; }
+WANT=$(norm "$WHO"); GOT=$(norm "$TITLE")
+if [ ${#WANT} -lt 2 ] || [ -z "$GOT" ] || [[ "$GOT" != *"$WANT"* ]]; then
+  import -window root ~/sent/"$STAMP"-mismatch.png
+  echo "opened chat \"$TITLE\" does not match \"$WHO\"; nothing sent" >&2; exit 3
+fi
+
+[ "${VIBER_SEND_DRY:-}" = 1 ] && { echo "dry run: chat \"$TITLE\" matches, nothing typed"; exit 0; }
+
+# Type the message into the input line and send.
+xdotool mousemove "$INPUT_X" "$INPUT_Y" click 1; pause 0.3 0.6
+paste "$TEXT"; pause 0.5 1.0
+xdotool key Return; pause 1.0 1.5
+import -window root ~/sent/"$STAMP".png
+echo "sent to \"$TITLE\""

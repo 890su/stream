@@ -148,7 +148,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | Path | What |
 |---|---|
 | `android/` | «Stream · телефон» (Kotlin): call log and SMS sync, after-call note (§8.1, `deploy/PHONE.md`) |
-| `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md` |
+| `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md`, `DESKTOP.md` |
+| `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` (scripted send with an OCR check of the chat), `notify-log` (desktop notifications → JSON lines) |
 | `test/` | `node --test`: one file per area (api, phone, telegram-bot, triage, taskfold, projection, …) |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |
 | `docs/plans/` | active package plans; `archive/` (local, outside git) — done plans, superseded decisions, old Done items |

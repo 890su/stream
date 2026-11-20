@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Screenshot of the agent desktop to stdout (PNG) or to a file: desktop-shot [file.png]
+set -euo pipefail
+export DISPLAY=${DISPLAY:-:1}
+if [ $# -gt 0 ]; then import -window root "$1"; else import -window root png:-; fi
