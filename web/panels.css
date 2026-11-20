@@ -106,9 +106,13 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .tg-delivery { font-size: 13px; color: var(--bubble-meta); padding-top: 2px; }
 .tg-delivery.failed { color: var(--danger); font-weight: 600; }
 .tg-delivery .link-button { font-size: 13px; min-height: 32px; color: inherit; text-decoration: underline; }
-.chat-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 2px 4px 2px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14.5px; }
+/* The bar of an open conversation: «назад», the title, ⏱ ↥ 🗄 on the first line; the text actions wrap to a second
+   line when the phone is too narrow (the title keeps at least 120 px). */
+.chat-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; padding: 2px 4px 2px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14.5px; }
 .chat-bar:has(#chat-back:not([hidden])) { padding-left: 4px; }
-.chat-title { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat-bar .link-button { font-size: 14px; color: var(--muted); padding: 0 8px; display: inline-flex; align-items: center; text-decoration: none; }
+.chat-title { flex: 1 0 120px; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-bar .link-button { order: 2; min-height: 32px; font-size: 13.5px; color: var(--muted); padding: 0 5px; display: inline-flex; align-items: center; text-decoration: none; }
+.chat-bar #chat-close { order: 1; }
+.chat-bar .chat-queue { flex: none; width: 38px; height: 38px; font-size: 17px; line-height: 1; }
 .bubble.system { align-self: center; max-width: 92%; background: var(--panel); color: var(--muted); font-size: 14px; box-shadow: none; border-radius: 12px; cursor: pointer; }
 .bubble.system .link-row, .bubble.system .more { display: none; }

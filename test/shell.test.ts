@@ -85,3 +85,11 @@ test('capture config carries the pulse thresholds and weights (registry/pulse.js
     assert.deepEqual(config.pulse.money_templates, ['lead', 'money']);
   } finally { await f.stop(); }
 });
+
+test('an open conversation\'s bar has «⏱ Отложить», «↥ В конец очереди» and «В архив» (the queue, CONCEPT.md §5)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  for (const [id, label] of [['chat-snooze', 'Отложить'], ['chat-requeue', 'В конец очереди'], ['chat-archive', 'В архив']]) {
+    assert.match(html, new RegExp(`<button id="${id}" type="button"[^>]*aria-label="${label}"`), id);
+  }
+});

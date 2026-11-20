@@ -39,6 +39,7 @@ let system;
 let chatView; // { open(key), close(), sync() } — one conversation (CONCEPT.md §2.5)
 let viewSwitch; // the «Беседы» / «Задачи» button of the input row
 let goView; // switches the view and opens a conversation (setupViews)
+let convActions; // convquick.js: the queue marks on a conversation (snooze, requeue, archive)
 
 // «Беседы» / «Задачи» (CONCEPT.md §5): the switch at the right end of the input row (viewswitch.js); the choice is
 // remembered on this device. The technical Лента opens from ⋮ («Лента сообщений») and is not remembered. Views saved
@@ -126,7 +127,8 @@ function setupMessageActions(feed, composer, config) {
     notify('Связано', { label: 'Отменить', run: () => correct(view, 'unlink') });
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
-  chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id), openPerson: (id) => details.openPerson(id), openCounterparty: (id) => details.openCounterparty(id) });
+  chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id), openPerson: (id) => details.openPerson(id), openCounterparty: (id) => details.openCounterparty(id),
+    convQuick: convActions, queueConfig: () => feed.queueConfig() });
   details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update(), openConversation: (key) => goView?.('conversations', key) });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
@@ -220,7 +222,7 @@ async function main() {
   taskQuick = quick = createTaskQuick({ queue: composer.queue, notify, config,
     onHold: (task) => openTaskSheet(task, { feed, quick, openConversation: (key) => goView?.('conversations', key) }) });
   // A new task is opened once the feed has drawn it (the queue redraws without waiting).
-  convQuick = createConvQuick({ queue: composer.queue, notify, openTask: async (id) => { if (!feed.task(id)) await feed.render(); details.openTask(id); } });
+  convActions = convQuick = createConvQuick({ queue: composer.queue, notify, openTask: async (id) => { if (!feed.task(id)) await feed.render(); details.openTask(id); } });
   doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); }, close: (task) => quick.done(task), drop: (task) => quick.act(task, { proposed: null }, `Ещё не готово: «${task.title}»`) });
   setupViews(feed);
   setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });

@@ -67,6 +67,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   };
   // Lists read from the top; a conversation and the Лента read from the bottom, like a chat.
   const readsDown = () => mode === 'tasks'; // the queue and a chat start at the bottom, by the input
+  // The queue settings (registry/conversations.json); a cached registry of an older version has none.
+  const queueConfig = () => (limits.conversations?.queue ? limits.conversations : DEFAULT_CONVERSATIONS);
   const load = createMediaLoader();
   const { refresh, loadOlder } = createPager({ scroller, historyState, notify, render: (...args) => draw(...args), readsDown });
 
@@ -105,7 +107,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const inConversation = (view) => !conversationKey || convKeys.get(view.id) === conversationKey;
     // Лента: messages whose tasks are all finished only with «Завершённые» (CONCEPT.md §5).
     const finished = (view) => view.taskIds.length > 0 && view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' }));
-    convList = conversations(kept, taskList, { now, config: limits.conversations?.queue ? limits.conversations : DEFAULT_CONVERSATIONS, keys: convKeys });
+    convList = conversations(kept, taskList, { now, config: queueConfig(), keys: convKeys });
     current = conversationKey ? convList.find((item) => item.key === conversationKey) ?? null : null;
     const inside = mode === 'conversations' && Boolean(conversationKey);
     const visible = inside ? kept.filter(inConversation)
@@ -176,7 +178,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     } else if (mode === 'conversations' && !inside) {
       // The queue (CONCEPT.md §2.5, §5): the newest moment on top, the oldest at the bottom by the input.
       const waiting = queueList(convList.filter((item) => item.views.some(tagged)));
-      const config = limits.conversations?.queue ? limits.conversations : DEFAULT_CONVERSATIONS;
+      const config = queueConfig();
       const hotHours = (limits.pulse ?? PULSE_DEFAULTS).hot_wait_hours;
       for (const item of waiting) {
         children.push(convRow(item, { now, hotHours, counterparties: counterpartyList, decorate: convQuick?.decorate, on: {
@@ -299,7 +301,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
 
   return { pulseCount: pulseTotal, refresh, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),
-    openConversation, conversation: () => current, conversationKey: () => conversationKey, conversations: () => convList,
+    openConversation, conversation: () => current, queueConfig, conversationKey: () => conversationKey, conversations: () => convList,
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,
     projects: () => projectList, project: currentProject, setProject, people: () => peopleList, counterparties: () => counterpartyList,
     setShowDone, showDone: () => showDone,

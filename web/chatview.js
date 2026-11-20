@@ -6,6 +6,7 @@ import { personFromConversation } from './personcard.js';
 import { reveal, conceal } from './motion.js';
 import { setupPeopleRow, conversationTask } from './peoplerow.js';
 import { answerable } from './participants.js';
+import { snoozeMenu } from './snooze.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -14,7 +15,7 @@ const $ = (selector) => document.querySelector(selector);
 // The composer's recipient is the conversation's reply chat. Without one (a phone number, a chat with only my
 // messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
 // plain notes. «Не отслеживать» for Telegram conversations.
-export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {}, openCounterparty = () => {} }) {
+export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {}, openCounterparty = () => {}, convQuick = null, queueConfig = null }) {
   const bar = $('#chat-bar');
   // Participants over the tags: the same set as the conversation's task (peoplerow.js).
   const people = setupPeopleRow({ feed, queue: composer.queue, notify, openCounterparty });
@@ -51,6 +52,8 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     app.hidden = !chat || chat.group;
     app.href = chat && !chat.group ? `tg://user?id=${chat.chat_id}` : '#';
     $('#chat-untrack').hidden = !key.startsWith('tg:');
+    // The queue (CONCEPT.md §2.5): «прочитал, но откладываю» — only for a conversation with someone, only in Беседы.
+    for (const id of ['#chat-snooze', '#chat-requeue', '#chat-archive']) $(id).hidden = !inList || key === 'me' || key.startsWith('task:');
     $('#chat-person').hidden = !personFromConversation(conversation ?? { key });
     people.render(conversation);
     steer();
@@ -90,6 +93,15 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   window.addEventListener('popstate', () => { if (key && !history.state?.conversation) close(); });
   $('#chat-close').onclick = leave;
   $('#chat-back').onclick = leave;
+  // ⏱ ↥ 🗄: the mark goes on the conversation's latest message, then back to the queue. Leaving without them keeps
+  // the conversation's place (owner, 2026-11-20).
+  const queued = (run) => { const conversation = feed.conversation(); if (!conversation || !convQuick) return; run(conversation); leave(); };
+  $('#chat-snooze').onclick = (event) => {
+    const conversation = feed.conversation();
+    if (conversation && convQuick) snoozeMenu(event.currentTarget, { config: queueConfig(), onPick: (until) => queued((item) => convQuick.snooze(item, until)) });
+  };
+  $('#chat-requeue').onclick = () => queued((item) => convQuick.requeue(item));
+  $('#chat-archive').onclick = () => queued((item) => convQuick.archive(item));
   // «Контакт»: the person of this conversation from the directory, or a new one from the chat or the number.
   let creatingPerson = false; // a double tap must not make two people: the directory updates on the next render
   $('#chat-person').onclick = async () => {
