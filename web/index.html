@@ -89,6 +89,16 @@
     <div id="history-state" class="service-pill" hidden></div>
     <div id="feed-list" role="log" aria-live="polite"></div>
   </main>
+  <!-- A task on the main screen (details.js, design 2026-11-20 stage 2): its card over the list. -->
+  <section id="task-screen" class="task-screen" hidden aria-labelledby="task-screen-heading">
+    <header class="task-screen-head">
+      <button id="task-screen-back" type="button" class="icon-button" aria-label="Назад">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <h2 id="task-screen-heading">Задача</h2>
+    </header>
+    <div id="task-screen-body" class="task-screen-body"></div>
+  </section>
 
 
   <div id="pick-banner" class="pick-banner" hidden role="status">

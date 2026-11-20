@@ -74,3 +74,9 @@ test('«Недавние» in the left panel: every conversation with someone, l
   assert.deepEqual(recent(list, 3).map((item: any) => item.key), ['tel:+48', 'wa:9@lid', 'tg:1']);
   assert.equal(recent(list, 2).length, 2);
 });
+
+test('back from a task card stays where the card was opened: its entry is the card\'s own', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { rootBack } = await import('../web/viewswitch.js');
+  assert.equal(rootBack('tasks', { task: true }), null);
+});

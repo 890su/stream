@@ -85,9 +85,10 @@ function button(className, text, onClick, label) {
 }
 const PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>';
 
-// A tile: icon (a button), role | (when there is one), name (a button), ×.
-function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = false, onRemove = null, removeLabel }) {
-  const node = element('span', `person-tile${role ? ' with-role' : ''}${off ? ' off' : ''}`);
+// A tile: icon (a button), role | (when there is one), name (a button), × — on the chosen tile of the card 📣 (the
+// conversation under the line is with this one).
+function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = false, onRemove = null, removeLabel, selected = false }) {
+  const node = element('span', `person-tile${role ? ' with-role' : ''}${off ? ' off' : ''}${selected ? ' selected' : ''}`);
   const glyph = button('person-tile-icon', '', onIcon, iconLabel);
   if (icon) glyph.textContent = icon; else glyph.innerHTML = PERSON;
   node.append(glyph);
@@ -95,7 +96,8 @@ function tile({ icon, iconLabel, onIcon, role, name, nameLabel, onName, off = fa
   const label = button('person-tile-name', name, onName, nameLabel);
   if (off !== null) label.setAttribute('aria-pressed', String(!off));
   node.append(label);
-  if (onRemove) node.append(button('person-tile-remove', '×', onRemove, removeLabel));
+  if (selected) node.append(element('span', 'person-tile-speaker', '📣'));
+  else if (onRemove) node.append(button('person-tile-remove', '×', onRemove, removeLabel));
   return node;
 }
 
@@ -120,12 +122,13 @@ let openMenu = null;
 
 // ctx: { views (the task's messages), people, counterparties (the directory), save(change), savePerson, saveCounterparty,
 //   onOpenCounterparty(id), strip (one sideways line, no counterparty question), readOnly(text) — no task: the tiles
-//   only show who is there, a tap says `text` }
+//   only show who is there, a tap says `text`; select — the task card's line: { order (parties, the chosen first),
+//   selected, onSelect(party) } — a tap on the name chooses whose conversation shows; «Не отвечать» moves to the roles }
 export function participantsBlock(task, ctx) {
   const { views = [], people = [], save } = ctx;
   const box = element('div', `card-people${ctx.strip ? ' strip' : ''}`);
   const menu = element('div', 'chips card-people-menu');
-  const nameOf = (party) => people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name ?? partyName(party, views);
+  const nameOf = ctx.nameOf ?? ((party) => people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name ?? partyName(party, views));
   const setRoles = (change) => { openMenu = null; holding(menu, false); save({ op: 'update', roles: change }); };
   const show = (key, nodes) => {
     openMenu = nodes ? key : null;
@@ -134,7 +137,11 @@ export function participantsBlock(task, ctx) {
   };
 
   // The roles of one participant: «Участник» first, then the roles; the ones held are on.
-  const rolesMenu = (party, held) => [element('span', 'picker-section', nameOf(party)),
+  const muteChip = (party) => {
+    const off = (task.muted ?? []).includes(party);
+    return button('chip suggest', off ? 'Отвечать ему' : 'Не отвечать ему', () => { show(null); save({ op: 'update', muted: toggleMuted(task, party) }); });
+  };
+  const rolesMenu = (party, held) => [element('span', 'picker-section', nameOf(party)), ...(ctx.select && party !== 'me' ? [muteChip(party)] : []),
     button(`chip ${held.length ? 'suggest' : 'on'}`, ROLE_TITLES.members, () => setRoles(toggleRole(task.roles, party, 'members'))),
     ...ROLES.map((role) => {
       const chip = button(`chip ${held.includes(role) ? 'on' : 'suggest'}`, ROLE_TITLES[role], () => setRoles(toggleRole(task.roles, party, role)));
@@ -146,14 +153,17 @@ export function participantsBlock(task, ctx) {
   const cloud = element('div', 'people-cloud');
   const inner = element('div', 'people-cloud-inner');
   cloud.append(inner);
-  for (const { party, roles, muted } of participants(task)) {
+  const listed = participants(task);
+  const ordered = ctx.select ? ctx.select.order.map((party) => listed.find((item) => item.party === party)).filter(Boolean) : listed;
+  for (const { party, roles, muted } of ordered) {
     const key = `${task.id}|${party}`;
     const name = nameOf(party);
     if (ctx.readOnly) { inner.append(tile({ role: '', name, off: null, iconLabel: name, nameLabel: name, onIcon: () => ctx.readOnly(), onName: () => ctx.readOnly() })); continue; }
-    inner.append(tile({ role: roleLabel(roles), name, off: muted,
+    const selected = ctx.select?.selected === party;
+    inner.append(tile({ role: roleLabel(roles), name, off: muted, selected,
       iconLabel: `${name}: роль`, onIcon: () => (openMenu === key ? show(null) : show(key, rolesMenu(party, roles))),
-      nameLabel: muted ? `${name}: отключён, включить` : `${name}: включён, отключить`,
-      onName: () => save({ op: 'update', muted: toggleMuted(task, party) }),
+      nameLabel: ctx.select ? (selected ? `${name}: беседа открыта` : `Беседа с ${name}`) : muted ? `${name}: отключён, включить` : `${name}: включён, отключить`,
+      onName: ctx.select ? () => ctx.select.onSelect(party) : () => save({ op: 'update', muted: toggleMuted(task, party) }),
       removeLabel: `Убрать ${name}`, onRemove: () => save({ op: 'update', roles: removeParticipant(task.roles, party), ...(muted ? { muted: toggleMuted(task, party) } : {}) }) }));
   }
 

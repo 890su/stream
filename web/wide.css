@@ -10,6 +10,8 @@
   .topbar { grid-area: top; padding-left: calc(min(300px, 22vw) + 16px); } /* the view switch stands over the centre */
   .chat-bar { grid-area: bar; }
   #messages { grid-area: main; }
+  .task-screen { position: static; grid-column: 2; grid-row: 2 / 4; z-index: 2; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .task-screen-body { padding-left: max(16px, calc(50% - 380px)); padding-right: max(16px, calc(50% - 380px)); }
   .pick-banner { grid-area: pick; }
   .composer-area { grid-area: input; box-shadow: none; border-top: 1px solid var(--line); }
 

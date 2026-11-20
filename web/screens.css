@@ -260,3 +260,28 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .view-gear { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 6px; border-top: 1px solid var(--line); background: var(--panel); }
 .view-gear-icon { font-size: 20px; }
 .view-gear-select { flex: 1; min-width: 0; min-height: 40px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; padding: 0 8px; }
+
+/* A task on the main screen (details.js, design 2026-11-20 stage 2): over the list, between the top bar and the
+   input row; on a wide screen it takes the centre column. */
+.task-screen { position: fixed; left: 0; right: 0; top: var(--drawer-top, 0); bottom: var(--drawer-bottom, 0); z-index: 19; display: flex; flex-direction: column;
+  background: var(--panel); color: var(--bar-text); }
+.task-screen[hidden] { display: none; }
+.task-screen-head { flex: none; display: flex; align-items: center; gap: 4px; padding: 2px 8px 2px 4px; border-bottom: 1px solid var(--line); }
+.task-screen-head h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--muted); }
+.task-screen-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 16px; }
+.card-description { display: block; width: 100%; margin: 0 0 4px; padding: 4px; border: 0; border-radius: 8px; background: none; color: var(--bar-text); font: inherit; font-size: 14.5px; line-height: 1.4; text-align: left; white-space: pre-wrap; }
+.card-description.empty { color: var(--muted); }
+.card-description:active, .card-description:hover { background: var(--press); }
+.card-description-form textarea { flex: 1; min-height: 72px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; resize: vertical; }
+.task-screen .card-section { margin: 6px 0; }
+.task-screen .card-people.strip { margin: 8px -12px 0; padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); position: sticky; top: -4px; z-index: 1; }
+.person-tile.selected { background: color-mix(in srgb, var(--accent) 22%, var(--chip)); box-shadow: inset 0 0 0 1.5px var(--accent-strong); }
+.person-tile-speaker { padding: 0 6px 0 2px; font-size: 14px; }
+.card-talk { margin: 4px 0 0; }
+.card-talk-head { display: flex; align-items: baseline; gap: 8px; padding: 6px 2px; }
+.card-talk-title { flex: 1; min-width: 0; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-talk-mode { flex: none; font-size: 13px; }
+.details-message.other-task { opacity: .45; }
+.card-talk-fold { align-self: center; margin: 2px 0; padding: 4px 10px; border: 0; border-radius: 12px; background: var(--chip); color: var(--chip-text); font: inherit; font-size: 12.5px; }
+/* While a task card is open its own participants line is shown; the open conversation's one under it is not. */
+body:has(#task-screen:not([hidden])) #people-row { display: none; }

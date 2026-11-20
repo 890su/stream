@@ -1,6 +1,7 @@
-// Right panel «Подробности» (CONCEPT.md §5): what was chosen by a tap — a task or a message. Opens only by
-// a tap (task plaque in a conversation, task row, task mark, history icon, chain title); a left-to-right swipe closes it.
-// While a task is open, the composer writes into it.
+// What was chosen by a tap (CONCEPT.md §5). A task opens on the main screen, over the list (#task-screen, design
+// 2026-11-20 stage 2): its card with the participants line and the conversation under it; the system back closes it.
+// A message, a person or a counterparty opens in the right panel «Подробности»; a left-to-right swipe closes it.
+// While a task is open, the composer writes into it — to the participant chosen in the card when they have a chat.
 import { makeTaskChange, makeCorrection, makePersonChange, makeCounterpartyChange, ownTask } from './shared.js';
 import { inChat } from './actions.js';
 import { personCard } from './personcard.js';
@@ -30,7 +31,11 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   const backdrop = document.querySelector('#details-backdrop');
   const body = document.querySelector('#details-body');
   const heading = document.querySelector('#details-heading');
-  let current = null; // { kind: 'task' | 'message', id }
+  let current = null; // the right panel: { kind: 'message' | 'person' | 'counterparty', id }
+  const screen = document.querySelector('#task-screen');
+  const screenBody = document.querySelector('#task-screen-body');
+  let taskId = null; // the task open on the main screen
+  let replyKey = null; // the chat the card put into the composer as the recipient
 
   const save = (taskId, change) => composer.queue(makeTaskChange(taskId, change)).catch((error) => notify(error.message));
   const tasksById = () => new Map(feed.tasks().map((task) => [task.id, task]));
@@ -74,28 +79,80 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   }
 
   // While a name is typed or a list of choices is open in the panel, a live update waits (holdrender.js).
-  const render = holdRender(document.querySelector('#details'), draw);
+  const render = holdRender(document.querySelector('#details'), () => { draw(); drawTask(); });
+  const redrawTask = () => drawTask();
+
+  // The task card on the main screen.
+  function drawTask() {
+    if (!taskId || screen.hidden) return;
+    const task = feed.task(taskId);
+    if (!task) { closeTask(); return; }
+    const scroll = screenBody.scrollTop;
+    const typing = Boolean(document.activeElement?.closest?.('.checklist-add'));
+    // «В дело…» offers the tasks of the same conversations first, then the latest changed.
+    const mine = new Set(feed.conversations().filter((item) => item.tasks.some((other) => other.id === task.id)).flatMap((item) => item.tasks.map((other) => other.id)));
+    const others = [...feed.tasks()].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || b.updatedAt.localeCompare(a.updatedAt));
+    screenBody.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save, others, notify, projects: feed.projects(),
+      doneCards, fields: config.tasks?.report_fields ?? {}, directory: directory(),
+      bar: quick ? barContext(task, { feed, quick, openConversation }) : null,
+      conversations: feed.conversations(), redraw: redrawTask, onConversation: steer }));
+    screenBody.scrollTop = scroll;
+    if (typing) screenBody.querySelector('.checklist-add input')?.focus({ preventScroll: true });
+    requestAnimationFrame(place); // the input row changes height (its participants line hides under the card)
+  }
+
+  // The answer goes to the participant chosen in the card when they have a chat; else it is a note in the task.
+  function steer(conversation) {
+    const reply = conversation?.reply ?? null;
+    const key = reply ? `${reply.account}:${reply.chat_id}` : null;
+    if (key === replyKey) return;
+    replyKey = key;
+    composer.chat(reply);
+  }
+
+  function showTask(id) {
+    const same = taskId === id;
+    taskId = id;
+    place();
+    screen.hidden = false;
+    if (!history.state?.task) history.pushState({ task: true }, '');
+    composer.enterTopic({ last: () => feed.taskViews(id).at(-1) }, 'Сообщение в задачу');
+    if (!isWide() && current) hide(); // the right panel does not cover the card on a phone
+    onRender();
+    drawTask();
+    if (!same) screenBody.scrollTop = 0;
+  }
+
+  function hideTask() {
+    if (!taskId) return;
+    taskId = null;
+    screen.hidden = true;
+    screenBody.replaceChildren();
+    composer.leaveTopic();
+    if (replyKey) { replyKey = null; composer.chat(null); }
+    onRender();
+    feed.render(); // a completion card shown in the card goes back to the feed
+  }
+
+  // `quiet` — another view takes the screen: the card's history entry is given to it instead of popped.
+  function closeTask({ quiet = false } = {}) {
+    const had = Boolean(taskId);
+    hideTask();
+    if (!had || !history.state?.task) return;
+    if (quiet) history.replaceState(null, ''); else history.back();
+  }
+
   function draw() {
     onRender(); // the view switch counts the open task's conversations
     if (!current) {
       // On a wide screen the column stays: a hint until something is chosen.
-      if (isWide()) { heading.textContent = 'Подробности'; body.replaceChildren(element('p', 'details-empty', 'Выберите задачу или сообщение: здесь появятся его свойства, переписка и история. Касание плашки задачи в беседе, строки задачи или значка под сообщением.')); }
+      if (isWide()) { heading.textContent = 'Подробности'; body.replaceChildren(element('p', 'details-empty', 'Выберите сообщение, человека или контрагента: здесь появятся его свойства. Задача открывается в центре.')); }
       return;
     }
     if (panel.hidden) return;
     const scroll = body.scrollTop;
     const typing = Boolean(document.activeElement?.closest?.('.checklist-add')); // adding items one after another
-    if (current.kind === 'task') {
-      const task = feed.task(current.id);
-      if (!task) { close(); return; }
-      heading.textContent = 'Задача';
-      // «В дело…» offers the tasks of the same conversations first, then the latest changed.
-      const mine = new Set(feed.conversations().filter((item) => item.tasks.some((other) => other.id === task.id)).flatMap((item) => item.tasks.map((other) => other.id)));
-      const others = [...feed.tasks()].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || b.updatedAt.localeCompare(a.updatedAt));
-      body.replaceChildren(taskDetails(task, { views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save, others, notify, projects: feed.projects(),
-        doneCards, fields: config.tasks?.report_fields ?? {}, directory: directory(),
-        bar: quick ? barContext(task, { feed, quick, openConversation }) : null }));
-    } else if (current.kind === 'person' || current.kind === 'counterparty') {
+    if (current.kind === 'person' || current.kind === 'counterparty') {
       // The directory's cards (contacts design §6).
       const dir = directory();
       const cardCtx = { ...dir, tasks: feed.tasks(), onOpenPerson: openPerson, onOpenCounterparty: openCounterparty, onOpenTask: openTask };
@@ -126,16 +183,15 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       panel.classList.add('open');
       if (!history.state?.details) history.pushState({ details: true }, '');
     }
-    if (next.kind === 'task') composer.enterTopic({ last: () => feed.taskViews(next.id).at(-1) }, 'Сообщение в задачу');
-    else composer.leaveTopic();
-    render();
+    if (!taskId) composer.leaveTopic();
+    draw();
     if (!same) body.scrollTop = 0;
   }
 
   // The screen swipe from the right (swipezones.js): what was open here last.
   let last = null;
   const reopen = () => { if (!last || current) return Boolean(current); show(last); return true; };
-  const openTask = (id) => show({ kind: 'task', id });
+  const openTask = (id) => showTask(id);
   const openMessage = (id) => show({ kind: 'message', id });
   const openPerson = (id) => show({ kind: 'person', id });
   const openCounterparty = (id) => show({ kind: 'counterparty', id });
@@ -146,12 +202,12 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   }
 
   function hide() {
-    if (isWide()) { current = null; composer.leaveTopic(); feed.render(); render(); return; }
+    if (isWide()) { current = null; if (!taskId) composer.leaveTopic(); feed.render(); draw(); return; }
     if (panel.hidden) return;
     current = null;
     panel.classList.remove('open');
     backdrop.hidden = true;
-    composer.leaveTopic();
+    if (!taskId) composer.leaveTopic();
     feed.render(); // a completion card shown here goes back to the feed
     setTimeout(() => { if (!panel.classList.contains('open')) panel.hidden = true; }, 230);
   }
@@ -176,18 +232,23 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   });
   document.querySelector('#details-close').onclick = close;
   backdrop.onclick = close;
-  window.addEventListener('popstate', () => { if (!isWide() && !history.state?.details) hide(); });
+  window.addEventListener('popstate', () => {
+    if (!isWide() && !history.state?.details) hide();
+    if (taskId && !history.state?.task && !history.state?.details) hideTask();
+  });
+  document.querySelector('#task-screen-back').onclick = () => closeTask();
   // Crossing the breakpoint: a column of its own, or a panel that slides over the feed.
   const dock = (wide) => {
     panel.classList.remove('open'); backdrop.hidden = true;
     if (wide) { panel.hidden = false; render(); return; }
-    if (current) { current = null; composer.leaveTopic(); }
+    if (current) { current = null; if (!taskId) composer.leaveTopic(); }
     panel.hidden = true;
   };
   onWideChange(dock);
   if (isWide()) dock(true);
-  window.addEventListener('resize', () => { if (!panel.hidden) place(); });
+  window.addEventListener('resize', () => { if (!panel.hidden || !screen.hidden) place(); });
 
-  return { render, openTask, openMessage, openPerson, openCounterparty, openFor, createFrom, close, reopen, current: () => current,
+  return { render, openTask, openMessage, openPerson, openCounterparty, openFor, createFrom, close, closeTask, reopen,
+    current: () => (taskId ? { kind: 'task', id: taskId } : current), taskOpen: () => Boolean(taskId), screen,
     panel, isOpen: () => !isWide() && panel.classList.contains('open') };
 }

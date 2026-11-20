@@ -12,7 +12,7 @@ export const switchIcon = (target) => ICONS[target] ?? '';
 // (a panel or a conversation above it was closed) or the queue is already shown. null — nothing to do here.
 export function rootBack(mode, state) {
   if (mode === 'conversations') return null;
-  if (state?.view === mode || state?.drawer || state?.details || state?.conversation) return null;
+  if (state?.view === mode || state?.drawer || state?.details || state?.conversation || state?.task) return null;
   return 'conversations';
 }
 

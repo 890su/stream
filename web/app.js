@@ -69,7 +69,7 @@ function setupViews(feed) {
   async function go(next, key = null) {
     // Back to the queue from Задачи or Лента: pop their entry; the popstate above comes back here.
     if (next === 'conversations' && feed.mode() !== 'conversations' && toQueue(history.state) === 'back') { opening = key; history.back(); return; }
-    if (next === 'conversations' && details?.current()?.kind === 'task' && !isWide()) details.close();
+    if (details?.taskOpen()) details.closeTask({ quiet: true }); // the card gives the screen to the view
     if (next !== feed.mode()) enter(next);
     await feed.setMode(next);
     if (next === 'conversations' && key && key !== chatView?.key()) await chatView.open(key);

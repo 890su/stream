@@ -55,7 +55,7 @@ export function slideIn(node, dir) {
 export function setupSwipeZones(deps) {
   let start = null; // { x, y, zone, surface, horizontal, drawer }
   const blocked = (target) => document.body.classList.contains('selecting') || document.body.classList.contains('picking')
-    || Boolean(document.querySelector('dialog[open], .task-sheet')) || Boolean(target.closest?.('input, textarea, select, [contenteditable="true"], .composer-area, #drawer'));
+    || Boolean(document.querySelector('dialog[open], .task-sheet')) || Boolean(target.closest?.('input, textarea, select, [contenteditable="true"], .composer-area, #drawer, #task-screen'));
 
   // The tabs of the card in the right panel: buttons with role=tab inside [data-swipe-tabs].
   const cardTabs = () => {
