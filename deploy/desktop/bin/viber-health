@@ -2,8 +2,8 @@
 # Is the Viber channel usable? Checks the process, the window and what the screen says (OCR), prints one JSON line
 # {"ts","state","ok","detail"} and keeps the last one in ~/inbox/health.json for Stream.
 # States: ok · not_running · no_window · logged_out (QR screen) · error (Viber's error dialog) · offline · dialog ·
-# unverified (the scenario self-check, viber-selftest, has not passed for this Viber version: after a restart or an
-# update it runs by itself; a failed one is retried every 30 minutes)
+# unverified (the scenario self-check, viber-selftest, has not passed since the container started or for this Viber
+# version: it then runs by itself; a failed one is retried every 30 minutes)
 # Usage: viber-health            one check
 #        viber-health --watch N  check every N seconds (run by supervisor)
 set -uo pipefail
@@ -15,7 +15,8 @@ SELFTEST=~/inbox/selftest.json
 # selftest_state: prints "ok" or why the scenarios are not verified; runs viber-selftest when it is due.
 selftest_state() {
   local due=1 result
-  if [ -f "$SELFTEST" ]; then
+  # Due after every container start (a restart of the virtual computer) and for every new Viber version.
+  if [ -f "$SELFTEST" ] && [ "$(stat -c %Y "$SELFTEST")" -ge "$(stat -c %Y /proc/1)" ]; then
     result=$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(r["version"]); print("ok" if r["ok"] else next(s["step"] + ": " + s["detail"] for s in r["steps"] if not s["ok"]))' "$SELFTEST" 2>/dev/null)
     if [ "$(sed -n 1p <<< "$result")" = "$(viber_version)" ]; then
       [ "$(sed -n 2p <<< "$result")" = ok ] && { echo ok; return; }
