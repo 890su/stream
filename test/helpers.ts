@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net';
 import { JournalStore } from '../src/store/store.ts';
 import { createApp } from '../src/server/http.ts';
 import type { JournalEvent } from '../src/contracts/validate.ts';
+import type { SocketFactory } from '../src/whatsapp/types.ts';
 
 export const token = 'test-owner-token-for-local-tests-only';
 export const phoneToken = 'test-phone-token-for-local-tests-only';
@@ -22,10 +23,14 @@ export function temporaryStore() {
   return { store, directory, cleanup() { store.close(); rmSync(directory, { recursive: true, force: true }); } };
 }
 
-// `phone: ''` starts a server without a phone token; `telegram` runs account bots against a fake Bot API.
-export async function fixture({ phone = phoneToken, telegram }: { phone?: string; telegram?: { tokens: Record<string, string>; apiBase: string } } = {}) {
+// `phone: ''` starts a server without a phone token; `telegram` runs account bots against a fake Bot API;
+// `whatsapp` runs linked-device clients on a fake socket (test/fakewa.ts), reconnecting after 10 ms.
+export async function fixture({ phone = phoneToken, telegram, whatsapp }: {
+  phone?: string; telegram?: { tokens: Record<string, string>; apiBase: string }; whatsapp?: { accounts: string[]; factory: SocketFactory };
+} = {}) {
   const storage = temporaryStore();
-  const server = createApp({ store: storage.store, ownerToken: token, phoneToken: phone || undefined, viberToken, telegram });
+  const server = createApp({ store: storage.store, ownerToken: token, phoneToken: phone || undefined, viberToken, telegram,
+    whatsapp: whatsapp && { ...whatsapp, authRoot: join(storage.directory, 'whatsapp'), retryMs: 10 } });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

@@ -15,11 +15,13 @@
   },
   "devDependencies": {
     "@types/node": "^24",
+    "@types/qrcode": "1.5.6",
     "typescript": "^5.9"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.4.0",
-    "baileys": "7.0.0-rc14"
+    "baileys": "7.0.0-rc14",
+    "qrcode": "1.5.4"
   },
   "pnpm": {
     "packageExtensions": {

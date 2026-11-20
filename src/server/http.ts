@@ -1,8 +1,9 @@
 // HTTP server: auth (owner and phone tokens), routing to API modules, static files, background workers.
 import { createServer } from 'node:http';
 import { timingSafeEqual, createHash } from 'node:crypto';
+import { join } from 'node:path';
 import type { JournalStore } from '../store/store.ts';
-import { captureConfig, tagConfig, telegramConfig, tasksConfig, conversationsConfig, filtersConfig, pulseConfig } from '../config.ts';
+import { captureConfig, tagConfig, telegramConfig, tasksConfig, conversationsConfig, filtersConfig, pulseConfig, whatsappConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json } from './body.ts';
 import { events } from './events.ts';
@@ -11,6 +12,9 @@ import { share } from './share.ts';
 import { phone } from './phone.ts';
 import { viber } from './viber.ts';
 import { TelegramBot } from '../telegram/bot.ts';
+import { WhatsAppClient } from '../whatsapp/client.ts';
+import type { SocketFactory } from '../whatsapp/types.ts';
+import { whatsappQr } from './whatsapp.ts';
 import { Triage } from '../tasks/triage.ts';
 import type { Namer } from '../tasks/namer.ts';
 import type { Planner } from '../tasks/planner.ts';
@@ -24,9 +28,12 @@ const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`)
 // viberToken (optional) opens only /api/viber/*: the Viber bridge on the agent desktop (deploy/DESKTOP.md).
 // telegram.tokens (optional) — one bot token per Telegram account (CONCEPT.md §8.2); the bots run in this process.
 // triage (optional) — the task triage (CONCEPT.md §2.8); planner null keeps it off and says why on the System screen.
-export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage }: {
+// whatsapp (optional) — WhatsApp accounts as linked devices in this process (deploy/WHATSAPP.md); session keys in
+// <authRoot>/<account>; `factory` replaces Baileys in tests.
+export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp }: {
   store: JournalStore; ownerToken: string; phoneToken?: string; viberToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
   triage?: { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number };
+  whatsapp?: { accounts: string[]; authRoot: string; factory?: SocketFactory; retryMs?: number };
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
@@ -66,6 +73,8 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           json(response, 200, { events: [...store.triage.contactEvents(), ...store.triage.projectEvents(), ...store.triage.taskEvents()] }); return;
         }
         if (url.pathname.startsWith('/api/media/')) return await media(request, response, url.pathname.slice('/api/media/'.length), store);
+        const qr = /^\/api\/whatsapp\/([a-z]{2,8})\/qr$/.exec(url.pathname);
+        if (qr && request.method === 'GET') return await whatsappQr(response, whatsappClients.find((client) => client.account === qr[1]));
         if (url.pathname === '/share-target') return await share(request, response, store, live);
         throw new HttpError(404, 'Маршрут не найден');
       }
@@ -89,8 +98,16 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
   const stopWatching = watchSilence(store, live);
   const bots = Object.entries(telegram?.tokens ?? {}).filter(([account, token]) => token && telegramConfig.accounts[account])
     .map(([account, token]) => new TelegramBot({ account, token, store, live, apiBase: telegram?.apiBase }));
+  // Baileys is loaded only when a WhatsApp account is on (and never in tests, which pass a fake socket).
+  const socketFactory: SocketFactory = whatsapp?.factory ?? (async (dir) => (await import('../whatsapp/socket.ts')).createSocket(dir));
+  const whatsappClients = (whatsapp?.accounts ?? []).filter((account) => whatsappConfig.accounts[account])
+    .map((account) => new WhatsAppClient({ account, store, live, authDir: join(whatsapp!.authRoot, account), factory: socketFactory, retryMs: whatsapp?.retryMs }));
   const triageWorker = triage ? new Triage({ store, live, planner: triage.planner, namer: triage.namer ?? null, reason: triage.reason }) : null;
-  server.on('listening', () => { for (const bot of bots) void bot.start(); triageWorker?.start(triage?.everyMs); });
-  server.on('close', () => { stopWatching(); for (const bot of bots) bot.stop(); triageWorker?.stop(); });
+  server.on('listening', () => {
+    for (const bot of bots) void bot.start();
+    for (const client of whatsappClients) client.start().catch((error) => console.error(`WhatsApp ${client.account}: start failed`, error instanceof Error ? error.message : error));
+    triageWorker?.start(triage?.everyMs);
+  });
+  server.on('close', () => { stopWatching(); for (const bot of bots) bot.stop(); for (const client of whatsappClients) client.stop(); triageWorker?.stop(); });
   return server;
 }

@@ -18,10 +18,12 @@ const quiet: Logger = {
   error(obj: unknown, msg?: string) { console.error('WhatsApp:', say(obj, msg)); },
 };
 
-// Baileys' connection.update → ours: the state, the QR, whether the phone unlinked this device, why it closed.
+// Baileys' connection.update → ours: the state, the QR, whether the phone unlinked this device or WhatsApp asked for
+// a new connection (515, right after the QR is scanned), why it closed.
 export function updateOf(update: { connection?: string; qr?: string; lastDisconnect?: { error?: unknown } }): WaUpdate {
   const error = update.lastDisconnect?.error as { output?: { statusCode?: number }; message?: string } | undefined;
   const result: WaUpdate = { loggedOut: error?.output?.statusCode === DisconnectReason.loggedOut };
+  if (error?.output?.statusCode === DisconnectReason.restartRequired) result.restart = true;
   if (update.connection === 'open' || update.connection === 'close' || update.connection === 'connecting') result.connection = update.connection;
   if (update.qr) result.qr = update.qr;
   if (error?.message) result.reason = String(error.message).slice(0, 120);

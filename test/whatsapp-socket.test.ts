@@ -10,6 +10,7 @@ test('updateOf: logged out is 401', () => {
 test('updateOf: a restart is not a logout', () => {
   const update = updateOf({ connection: 'close', lastDisconnect: { error: { output: { statusCode: 515 }, message: 'restart required' } } });
   assert.equal(update.loggedOut, false);
+  assert.equal(update.restart, true);
   assert.equal(update.reason, 'restart required');
 });
 

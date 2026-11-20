@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { JournalStore } from '../store/store.ts';
 import type { SourceState } from '../store/status.ts';
 import type { Action } from '../store/actions.ts';
-import { telegramConfig } from '../config.ts';
+import { telegramConfig, whatsappConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { HttpError } from './errors.ts';
 import { json } from './body.ts';
@@ -16,7 +16,8 @@ import { readBody } from './body.ts';
 const STATE_TEXT: Record<SourceState, string> = { ok: 'работает', silent: 'молчит', login_required: 'нужен вход', error: 'ошибка' };
 
 export function sourceTitle(source: string): string {
-  const account = Object.values(telegramConfig.accounts).find((item) => item.connector === source);
+  const account = Object.values(telegramConfig.accounts).find((item) => item.connector === source)
+    ?? Object.values(whatsappConfig.accounts).find((item) => item.connector === source);
   if (account) return account.title;
   return source === 'android_phone' ? 'Телефон' : source === 'ai_triage' ? 'Разбор задач (ИИ)' : source === 'viber' ? 'Viber' : source;
 }

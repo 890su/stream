@@ -13,7 +13,8 @@ export interface WaMessage {
   pushName?: string | null;
 }
 
-export type WaUpdate = { connection?: 'open' | 'close' | 'connecting'; qr?: string; loggedOut?: boolean; reason?: string };
+// `loggedOut` — the phone unlinked this device; `restart` — WhatsApp asks for a new connection (right after linking).
+export type WaUpdate = { connection?: 'open' | 'close' | 'connecting'; qr?: string; loggedOut?: boolean; restart?: boolean; reason?: string };
 
 // One linked-device connection.
 export interface WaSocket {
