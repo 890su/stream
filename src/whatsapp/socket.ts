@@ -4,9 +4,8 @@ import type { SocketFactory, WaMessage, WaUpdate } from './types.ts';
 
 // The only file that imports Baileys (docs/plans/2026-11-20-whatsapp-baileys-design.md): one linked-device
 // connection behind the narrow WaSocket interface. The session keys live in `authDir` (the data volume, never git).
-// Stream never shows the owner as online (otherwise the phone stops showing WhatsApp notifications), does not get
-// its own sends back as messages, and does not pull the history. The logger prints messages only, never objects:
-// those may carry message content.
+// The connection settings are SOCKET_OPTIONS. The logger prints messages only, never objects: those may carry
+// message content.
 
 type Logger = NonNullable<Parameters<typeof makeWASocket>[0]['logger']>;
 const say = (obj: unknown, msg?: string) => msg ?? (typeof obj === 'string' ? obj : '');
@@ -17,6 +16,14 @@ const quiet: Logger = {
   warn(obj: unknown, msg?: string) { console.warn('WhatsApp:', say(obj, msg)); },
   error(obj: unknown, msg?: string) { console.error('WhatsApp:', say(obj, msg)); },
 };
+
+// How Stream connects: never shown as online (the phone keeps showing WhatsApp notifications), its own sends do not
+// come back as messages, no link previews, no full history. Baileys' default history sync (all but FULL) is kept on
+// purpose: it carries the LID ↔ phone mappings (Baileys warns that without them sessions break); the history itself
+// arrives as `messaging-history.set`, which Stream does not handle, so nothing old reaches the journal.
+export const SOCKET_OPTIONS = {
+  markOnlineOnConnect: false, emitOwnEvents: false, syncFullHistory: false, generateHighQualityLinkPreview: false,
+} as const;
 
 // Saving the session keys must never reject unhandled: that would stop the whole server (journal, Telegram, all).
 export const saveQuietly = (save: () => Promise<void>) => (): void => {
@@ -40,9 +47,7 @@ export const createSocket: SocketFactory = async (authDir) => {
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const latest = await fetchLatestBaileysVersion().catch(() => null);
   const sock = makeWASocket({
-    auth: state, logger: quiet, browser: Browsers.ubuntu('Stream'), ...(latest?.version ? { version: latest.version } : {}),
-    markOnlineOnConnect: false, emitOwnEvents: false, syncFullHistory: false, shouldSyncHistoryMessage: () => false,
-    generateHighQualityLinkPreview: false,
+    ...SOCKET_OPTIONS, auth: state, logger: quiet, browser: Browsers.ubuntu('Stream'), ...(latest?.version ? { version: latest.version } : {}),
   });
   sock.ev.on('creds.update', saveQuietly(saveCreds));
   return {

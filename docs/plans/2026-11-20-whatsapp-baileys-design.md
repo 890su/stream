@@ -74,8 +74,9 @@ Telegram, звонки, SMS, Viber) и раскладываться по бес�
 
 **Рантайм.** Адаптер `src/whatsapp/socket.ts` — единственный файл, который импортирует `baileys`:
 `useMultiFileAuthState(<DATA_DIR>/whatsapp/<account>)`, `makeWASocket` с `markOnlineOnConnect: false`,
-`emitOwnEvents: false`, `syncFullHistory: false`, `shouldSyncHistoryMessage: () => false`, тихим логгером без
-содержимого; версия протокола — `fetchLatestBaileysVersion` с запасным значением. Клиент `src/whatsapp/client.ts`
+`emitOwnEvents: false`, `syncFullHistory: false` (недавнюю историю Baileys синхронизирует по умолчанию — ради
+соответствий LID ↔ номер; в журнал она не попадает: приходит событием `messaging-history.set`, которое Stream не
+слушает; уточнено 2026-11-20 по предупреждению Baileys в журнале сервера), тихим логгером без содержимого; версия протокола — `fetchLatestBaileysVersion` с запасным значением. Клиент `src/whatsapp/client.ts`
 работает с адаптером через узкий интерфейс — тесты подставляют поддельный сокет. Включается флагом
 `STREAM_WA_<ACCOUNT>_ENABLED=1` для аккаунтов из `registry/whatsapp.json`; выключенный канал не создаётся.
 

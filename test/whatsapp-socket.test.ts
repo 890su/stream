@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createSocket, saveQuietly, updateOf } from '../src/whatsapp/socket.ts';
+import { SOCKET_OPTIONS, createSocket, saveQuietly, updateOf } from '../src/whatsapp/socket.ts';
 
 test('updateOf: logged out is 401', () => {
   assert.deepEqual(updateOf({ connection: 'close', lastDisconnect: { error: { output: { statusCode: 401 }, message: 'logged out' } } }),
@@ -32,4 +32,13 @@ test('a failed key write does not crash the server', async () => {
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(unhandled, []);
   } finally { process.off('unhandledRejection', catcher); }
+});
+
+test('the socket never shows the owner online and keeps the LID mappings', () => {
+  assert.equal(SOCKET_OPTIONS.markOnlineOnConnect, false, 'otherwise the phone stops showing WhatsApp notifications');
+  assert.equal(SOCKET_OPTIONS.emitOwnEvents, false, 'a reply sent from the feed must not come back as a message');
+  assert.equal(SOCKET_OPTIONS.syncFullHistory, false);
+  assert.equal(SOCKET_OPTIONS.generateHighQualityLinkPreview, false);
+  assert.equal('shouldSyncHistoryMessage' in SOCKET_OPTIONS, false,
+    "Baileys' default sync (all but FULL) carries the LID ↔ phone mappings; history itself never reaches the journal");
 });
