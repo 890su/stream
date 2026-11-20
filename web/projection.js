@@ -56,8 +56,13 @@ export function project(events, pendingIds = new Set()) {
   const views = new Map();
   const corrections = [];
   const deliveries = new Map(); // reply event id -> the latest action_result for it
+  const conversationOnly = new Set();
   for (const event of events) {
     if (event.kind === 'correction') { corrections.push(event); continue; }
+    if (event.kind === 'triage_result') {
+      for (const id of event.payload?.data?.triage?.conversation_only ?? []) conversationOnly.add(id);
+      continue;
+    }
     // Folded separately (taskfold.js, projects.js, contacts.js).
     if (['task_change', 'project_change', 'contact_change', 'counterparty_change'].includes(event.kind)) continue;
     if (event.kind === 'action_result') {
@@ -120,6 +125,7 @@ export function project(events, pendingIds = new Set()) {
     view.delivery = action ? { status: action.status, error: action.error ?? null, action: result.payload.ref.id, connector } : { status: 'approved', error: null, action: null, connector };
   }
   for (const view of views.values()) {
+    if (conversationOnly.has(view.id)) view.conversationOnly = true;
     const parentId = view.event.reply_to;
     if (!parentId) continue;
     const parent = views.get(parentId);

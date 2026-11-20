@@ -55,6 +55,7 @@
         "answer",
         "correction",
         "task_change",
+        "triage_result",
         "project_change",
         "contact_change",
         "counterparty_change",
@@ -138,6 +139,16 @@
         "data": {
           "type": "object",
           "properties": {
+            "triage": {
+              "type": "object",
+              "description": "On kind: triage_result. Messages handled as context without a task.",
+              "required": ["processor", "conversation_only"],
+              "additionalProperties": false,
+              "properties": {
+                "processor": { "type": "string", "pattern": "^\\S+$" },
+                "conversation_only": { "type": "array", "items": { "type": "string", "format": "uuid" } }
+              }
+            },
             "call": {
               "type": "object",
               "description": "A phone call from the Android companion (CONCEPT.md 8.1). Only on kind: call.",

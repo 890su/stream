@@ -7,7 +7,7 @@ import { tasksConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { stateChanged } from '../server/system.ts';
 import { foldTasks, isOpen, type Task } from './fold.ts';
-import { describe, from } from './messages.ts';
+import { describe, from, hasForwardOrigin, messageDirection } from './messages.ts';
 import { nameTasks, type Namer } from './namer.ts';
 import { counterpartyChange } from './counterparty.ts';
 import { foldPeople, foldCounterparties, personOf, peopleOf } from '../contacts/fold.ts';
@@ -17,9 +17,7 @@ import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts'
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
 // notes), then go together to the planner, which splits them into new tasks and additions to open ones.
-// Every message gets an outcome (§2.8 «Разобрать — тоже задача»): an open task, an addition to one, or a task
-// created already done because it only had to be filed (diary, plan, note, chatter). A message the planner
-// left out becomes «Разобрать» for the owner, so nothing is dropped silently.
+// The outcome is work, material to file, or context kept in the conversation. Missing decisions go to «Разобрать».
 
 export const TRIAGE_SOURCE = 'ai_triage';
 
@@ -156,6 +154,7 @@ export class Triage {
       const linked = [event.reply_to, continuation?.on ? continuation.target : undefined].filter(Boolean) as string[];
       return {
         id: event.id, time: event.ts, source: streamOf(event), from: from(event), party: partyOfEvent(event), text, tags,
+        direction: messageDirection(event), ...(hasForwardOrigin(event) ? { forwarded: true } : {}),
         ...(event.reply_to ? { reply_to: event.reply_to } : {}), ...(continuation?.on ? { continues: continuation.target } : {}),
         in_tasks: [...new Set([event.id, ...linked].flatMap(taskOf))],
         default_project: defaultProject(projects, streamOf(event))?.id ?? null,
@@ -164,6 +163,9 @@ export class Triage {
     };
     const messages: PlanMessage[] = [];
     const skipped: string[] = [];
+    const first = batch[0]?.received_at;
+    if (!first) return 0;
+    const since = new Date(Date.parse(first) - tasksConfig.lookback_h * 3_600_000).toISOString();
     for (const event of batch) {
       const view = describe(event, this.#store);
       if (view.deleted || !view.text.trim()) { skipped.push(event.id); continue; }
@@ -172,8 +174,6 @@ export class Triage {
     // Earlier messages of this conversation: a talk with pauses longer than the quiet window is split into
     // batches, and a batch alone may not say what it is about.
     const stream = streamOf(batch[0]!);
-    const first = batch[0]!.received_at!;
-    const since = new Date(Date.parse(first) - tasksConfig.lookback_h * 3_600_000).toISOString();
     const context = this.#store.triage.triaged(since)
       .filter((event) => event.received_at! < first && streamOf(event) === stream)
       .map((event) => ({ event, view: describe(event, this.#store) }))
@@ -183,7 +183,8 @@ export class Triage {
     const at = new Date().toISOString();
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
     const input: PlanInput = {
-      now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections, scope }) => ({ id, title, kind, scope, sections })), templates: tasksConfig.templates,
+      now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections, scope }) => ({ id, title, kind, scope, sections })),
+      templates: tasksConfig.templates.filter((template) => !template.legacy),
       counterparties: counterparties.filter((item) => item.status === 'active').map(({ id, kind, title, address, side }) => ({ id, kind, title, address, side,
         people: peopleOf(id, people).map(({ person, title: job }) => (job ? `${person.name} (${job})` : person.name)) })),
       open_tasks: open.map(asContext),
@@ -204,8 +205,19 @@ export class Triage {
     const taskById = new Map(tasks.map((task) => [task.id, task]));
     const filedTemplates = new Set(tasksConfig.templates.filter((template) => template.filed).map((template) => template.name));
     const batchKey = createHash('sha256').update([...batchIds].sort().join(',')).digest('hex').slice(0, 16);
+    const resultId = nameId(`triage-result|${batchKey}`);
+    const prior = this.#store.getEvent(resultId);
+    const stored = prior?.payload.data?.triage as { conversation_only: string[] } | undefined;
+    const conversationOnly = new Set((stored?.conversation_only ?? output.conversation_only).filter((id) => batchIds.has(id)));
+    if (conversationOnly.size && !prior) {
+      const result = this.#store.appendEvent({
+        id: resultId, schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'triage_result',
+        payload: { data: { triage: { processor: tasksConfig.ai.processor, conversation_only: [...conversationOnly] } } },
+      });
+      if (result.created) this.#live.publish(result.event);
+    }
     const covered = new Set(output.tasks.flatMap((planned) => planned.message_ids));
-    const missed = [...batchIds].filter((id) => !covered.has(id));
+    const missed = [...batchIds].filter((id) => !conversationOnly.has(id) && !covered.has(id));
     const outcomes = [...output.tasks];
     if (missed.length) {
       outcomes.push({ task_id: null, title: tasksConfig.unsorted.title, responsible: 'me', executors: [], author: null, template: null, due: null,
@@ -227,7 +239,7 @@ export class Triage {
     };
     let written = 0;
     outcomes.forEach((planned, index) => {
-      const add = planned.message_ids.filter((id) => batchIds.has(id));
+      const add = planned.message_ids.filter((id) => batchIds.has(id) && !conversationOnly.has(id));
       if (!add.length) return;
       const target = planned.task_id && known.has(planned.task_id) ? planned.task_id : null;
       // A closed case the messages continue comes back to work; a filed one (diary, note) just gets the message —

@@ -105,8 +105,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const inSource = (view) => !sourceFilter || sourceKey(view.event) === sourceFilter;
     convKeys = conversationKeys(live, { tasksById });
     const inConversation = (view) => !conversationKey || convKeys.get(view.id) === conversationKey;
-    // Лента: messages whose tasks are all finished only with «Завершённые» (CONCEPT.md §5).
-    const finished = (view) => view.taskIds.length > 0 && view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' }));
+    // Лента: context-only messages and all-finished tasks show with «Завершённые».
+    const finished = (view) => view.taskIds.length ? view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' })) : view.conversationOnly;
     convList = conversations(kept, taskList, { now, config: queueConfig(), keys: convKeys });
     current = conversationKey ? convList.find((item) => item.key === conversationKey) ?? null : null;
     const inside = mode === 'conversations' && Boolean(conversationKey);

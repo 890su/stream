@@ -10,7 +10,7 @@ import { ownerLinked, queueOf } from './queue.js';
 // WhatsApp the same; without a phone (an anonymous LID address) — `wa:<address>`.
 export function conversationOf(event) {
   const data = event?.payload?.data ?? {};
-  if (event?.kind === 'system' || event?.kind === 'correction' || event?.kind === 'task_change' || event?.kind === 'project_change'
+  if (event?.kind === 'system' || event?.kind === 'correction' || event?.kind === 'triage_result' || event?.kind === 'task_change' || event?.kind === 'project_change'
     || event?.kind === 'contact_change' || event?.kind === 'counterparty_change') return null;
   if (data.viber) return data.viber.phone ? `tel:${data.viber.phone}` : `viber:${data.viber.chat}`;
   if (data.outbound?.connector === 'viber') return `tel:${data.outbound.chat_id}`;

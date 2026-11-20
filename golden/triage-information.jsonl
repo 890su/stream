@@ -1,0 +1,6 @@
+{"id":"invitation","direction":"incoming","source":"sms","text":"Вас ждут в сервисном центре во вторник в 14:00. Привезите тестовый прибор.","expected":"task"}
+{"id":"forward","direction":"outgoing","source":"telegram","forwarded":true,"text":"Вас ждут в сервисном центре во вторник в 14:00. Привезите тестовый прибор.","expected":"conversation_only"}
+{"id":"retelling","direction":"outgoing","source":"sms","text":"Во вторник после обеда отвезу прибор в сервис. Просто чтобы ты знал.","expected":"conversation_only"}
+{"id":"new-request","direction":"outgoing","source":"telegram","text":"Во вторник отвезу прибор в сервис. Забери, пожалуйста, запасной кабель в понедельник.","expected":"task","title":"Забрать запасной кабель"}
+{"id":"capture","direction":"note","source":"share","text":"Купить новый аккумулятор для стенда.","expected":"task"}
+{"id":"status","direction":"incoming","source":"sms","text":"Высылаю расписание для сведения. Расписание менять не нужно.","expected":"conversation_only"}

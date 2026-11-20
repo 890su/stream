@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { temporaryStore, event, fixture } from './helpers.ts';
+import { tasksConfig } from '../src/config.ts';
 import { LiveFeed } from '../src/server/live.ts';
 import { Triage, streamOf } from '../src/tasks/triage.ts';
 import { foldTasks } from '../src/tasks/fold.ts';
@@ -11,14 +12,15 @@ import type { JournalEvent } from '../src/contracts/validate.ts';
 // Task triage (CONCEPT.md §2.8) with a scripted planner instead of AI. Texts are made up.
 const QUIET = 60_000;
 const CHAT_QUIET = 180_000;
+type ScriptedPlan = Omit<PlanOutput, 'conversation_only'>;
 const telegram = (chat: string, text: string, from = chat): JournalEvent => event({
   source: 'telegram', author: `contact:tg:by:${from}`, payload: { text, data: { telegram: { account: 'by', chat_id: chat, chat_type: 'private', chat_title: 'Клиент', message_id: Math.floor(Math.random() * 1e6) + 1, sent_at: '2026-11-17T10:00:00.000Z' } } },
 });
 
-function setup(plan: (input: PlanInput) => PlanOutput) {
+function setup(plan: (input: PlanInput) => ScriptedPlan) {
   const storage = temporaryStore();
   const calls: PlanInput[] = [];
-  const triage = new Triage({ store: storage.store, live: new LiveFeed(), planner: async (input) => { calls.push(input); return plan(input); } });
+  const triage = new Triage({ store: storage.store, live: new LiveFeed(), planner: async (input) => { calls.push(input); return { conversation_only: [], ...plan(input) }; } });
   const add = (item: JournalEvent) => storage.store.appendEvent(item).event;
   const tasks = () => foldTasks(storage.store.triage.taskEvents());
   return { ...storage, triage, calls, add, tasks };
@@ -95,7 +97,7 @@ test('without a planner or over budget the triage only reports why', async () =>
     await off.tick(Date.now() + QUIET + 1000);
     assert.equal(storage.store.status.get('ai_triage')!.state, 'login_required');
     let called = false;
-    const spent = new Triage({ store: storage.store, live: new LiveFeed(), planner: async () => { called = true; return { tasks: [] }; } });
+    const spent = new Triage({ store: storage.store, live: new LiveFeed(), planner: async () => { called = true; return { tasks: [], conversation_only: [] }; } });
     storage.store.triage.addUsage(new Date().toISOString().slice(0, 7), 0, 0, 1000);
     await spent.tick(Date.now() + QUIET + 1000);
     assert.equal(called, false);
@@ -148,7 +150,7 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.deepEqual(unsorted.messages, [ok.id]);
     assert.equal(unsorted.assignee, 'me');
     assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === 'triage-ai-v13').length, 4);
+    assert.equal(s.tasks().filter((task) => task.processor === tasksConfig.ai.processor).length, 4);
   } finally { s.cleanup(); }
 });
 
@@ -304,7 +306,7 @@ test('triage puts tasks into projects: the planner\'s choice by the project scop
   const P1 = '11111111-1111-4111-8111-111111111111';
   const P2 = '22222222-2222-4222-8222-222222222222';
   const base = { responsible: 'me', executors: [], author: null, template: null, due: null, confidence: 0.9, note: null, filed: false, done: false, alternatives: [], items: [], rename: null };
-  let reply: (input: PlanInput) => PlanOutput = () => ({ tasks: [] });
+  let reply: (input: PlanInput) => ScriptedPlan = () => ({ tasks: [] });
   const s = setup((input) => reply(input));
   const project = (id: string, data: Record<string, unknown>) => s.add({ ...event({ kind: 'project_change', payload: { ref: { type: 'project', id }, data: { project: { op: 'create', ...data } } } }), source: 'app', author: 'me' } as JournalEvent);
   try {
@@ -405,7 +407,7 @@ test('triage sets the counterparty of a task, or options and a hint; a set one s
   const C2 = '44444444-4444-4444-8444-444444444444';
   const C3 = '55555555-5555-4555-8555-555555555555';
   const base = { responsible: 'me', executors: [], author: null, template: null, due: null, confidence: 0.9, note: null, filed: false, done: false, alternatives: [], items: [], rename: null, project: null, section: null, project_options: [] };
-  let reply: (input: PlanInput) => PlanOutput = () => ({ tasks: [] });
+  let reply: (input: PlanInput) => ScriptedPlan = () => ({ tasks: [] });
   const s = setup((input) => reply(input));
   const firm = (id: string, data: Record<string, unknown>) => s.add({ ...event({ kind: 'counterparty_change', payload: { ref: { type: 'counterparty', id }, data: { counterparty: data } } }), source: 'app', author: 'me' } as JournalEvent);
   const person = (data: Record<string, unknown>) => s.add({ ...event({ kind: 'contact_change', payload: { ref: { type: 'person', id: randomUUID() }, data: { contact: data } } }), source: 'app', author: 'me' } as JournalEvent);
@@ -443,7 +445,7 @@ test('triage sets the counterparty of a task, or options and a hint; a set one s
 
 test('the triage keeps personal talk and consultations in the conversation; items are steps still to do', async () => {
   const { PLAN_INSTRUCTIONS } = await import('../src/tasks/planner.ts');
-  for (const rule of ['Остаётся в беседе', 'консультация', 'личная и семейная переписка', 'Пункт — только шаг', 'Сомневаешься — задачи нет']) {
+  for (const rule of ['Остаётся в беседе', 'консультация', 'личная и семейная переписка', 'Пункт — только шаг', 'conversation_only']) {
     assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   }
 });

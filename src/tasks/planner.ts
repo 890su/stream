@@ -1,10 +1,11 @@
-// The one interface the task triage talks to (development rule 9): a batch of new messages plus the open
-// tasks in, a list of tasks out. The provider (AI now, scripts later) is a setting, not a code path.
+// Task triage interface for deciding what work to track and what to keep in the conversation.
 import { TITLE_RULE } from './namer.ts';
+import type { MessageDirection } from './messages.ts';
 
 
 export interface PlanMessage {
   id: string; time: string; source: string; from: string; party: string; text: string; tags: string[];
+  direction: MessageDirection; forwarded?: true;
   reply_to?: string; continues?: string; in_tasks: string[];
   default_project?: string | null; // a hint: the project of this message's source, when the matter fits its scope (CONCEPT.md §2.11)
   person?: string | null; // the directory's name for the author, when known (contacts design §3)
@@ -46,16 +47,21 @@ export interface PlannedTask {
 }
 // A report draft from the conversation (task manager spec §11): the result in one line and the numbers named.
 export interface PlannedReport { note: string | null; duration_min: number | null; cost: number | null; expenses: number | null; currency: string | null }
-export interface PlanOutput { tasks: PlannedTask[]; usage?: { input_tokens: number; output_tokens: number } }
+export interface PlanOutput {
+  tasks: PlannedTask[];
+  conversation_only: string[];
+  usage?: { input_tokens: number; output_tokens: number };
+}
 
 export type Planner = (input: PlanInput) => Promise<PlanOutput>;
 
-// JSON Schema of PlanOutput.tasks for structured output.
+// JSON Schema of the planner's structured output.
 export const PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['tasks'],
+  required: ['tasks', 'conversation_only'],
   properties: {
+    conversation_only: { type: 'array', items: { type: 'string' } },
     tasks: {
       type: 'array',
       items: {
@@ -100,23 +106,23 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
 Правила:
 - context — только чтобы понять, о чём речь и к какой задаче относится новое; id из context в ответ не включай.
   Новое сообщение, продолжающее разговор из context, обычно относится к задаче этого разговора (in_tasks).
-- Пачка — не одна задача. Каждое сообщение относится к одной или нескольким задачам.
-- У КАЖДОГО сообщения пачки должен быть итог: его id есть хотя бы в одной задаче ответа.
-- Задача — только дело, которое после переписки ещё кто-то должен сделать. Сомневаешься — задачи нет: сообщение
-  остаётся в беседе (filed: true, шаблон chatter). Лишняя задача хуже пропущенной: владелец видит всю беседу сам.
-- Остаётся в беседе (filed: true, chatter), а не задача и не пункт:
+- Пачка — не одна задача. У каждого нового сообщения должен быть итог: его id находится либо в conversation_only,
+  либо в message_ids одной или нескольких задач. Не включай один id в оба результата.
+- В tasks включай работу или материал, который надо сохранить отдельно по шаблону. Сомневаешься, что есть дело —
+  добавь id в conversation_only. Лишняя задача хуже пропущенной: владелец видит всю беседу сам.
+- Остаётся в беседе (conversation_only):
   * личная и семейная переписка о текущем: где ты, когда будешь, кто с детьми, кто заболел, поел ли, советы,
-    лекарства, просьбы, которые выполняются тут же в переписке. Задача в личной переписке — только явная просьба
-    сделать что-то потом, вне этого разговора («запиши Рому к врачу на пятницу», «купи завтра молоко»);
+    лекарства, просьбы, которые выполняются тут же в переписке. В личной переписке задача появляется при явной
+    просьбе или новом обязательстве выполнить действие вне разговора («купи завтра молоко»);
   * консультация: владелец объясняет собеседнику, что нажать или сделать, и тот делает сам, пока они пишут
     («держи кнопку», «зайди в настройки», «попробуй ещё раз»). Это способ помочь, а не шаги владельцу. Если сама
     просьба о помощи — дело (клиент, работа), задача одна, без этих шагов в items;
   * рассказ о себе и своих делах, мнения, новости, обсуждение без поручения;
   * то, что уже сделано в этой же переписке, без отчёта о работе для клиента (пароль отправлен, ссылку скинул).
-- Если делать ничего не нужно, только разложить, верни задачу с filed: true — она сразу закрыта. Для этого
+- Если материал нужно сохранить отдельно, верни задачу с filed: true — она сразу закрыта. Для этого
   шаблоны с filed: true: diary (самочувствие, события дня — только из своих заметок владельца, source me, не из
   переписки), plan (идея, для которой нет подходящего проекта), note (справка, которую владелец явно хочет сохранить:
-  адрес, код, договорённость), chatter (всё, что остаётся в беседе). Несколько таких сообщений одного вида — одна задача.
+  адрес, код, договорённость). Несколько таких материалов одного вида — одна задача.
 - filed: false — настоящее дело, которое кто-то должен сделать.
 - done: true — сообщения говорят, что дело сделано («готово», «сделал», «закончил», «установил, работает»).
   Задачу это не закрывает: владельца спросят и попросят отчёт. У filed-задач done всегда false.
@@ -163,7 +169,7 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
   Пункт — только шаг, который исполнителю задачи ещё предстоит сделать. Не пункты: указания владельца собеседнику,
   действия собеседника, сделанное («отправлен», «исправлено»), факты и статусы («офис закажет в понедельник»),
   советы, просьбы к владельцу внутри личной переписки. Такое — в note задачи или ничего. Сомневаешься — items: [].
-- Болтовню, приветствия, «ок», служебное не превращай в дела: это filed: true с шаблоном chatter.
+- Приветствия, «ок» без принятия дела и служебный обмен остаются в conversation_only.
 - Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, executors — из шаблона.
 - ${TITLE_RULE}
 - responsible — кто отвечает за итог: me, если просят владельца или он сам взялся; иначе — сторона того, кого просят

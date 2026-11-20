@@ -35,10 +35,10 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   // An own note pulled into a chat or a number (a call description, a reply not sent) is neither an answer nor waiting.
   const note = (view) => conversationOf(view.event) === 'me';
   const answeredCall = (view) => view.event.kind === 'call' && view.event.payload?.data?.call?.direction === 'in';
-  // A message is meaningful unless it belongs only to filed tasks («спасибо» filed as «без дела»).
+  // Context-only messages and messages belonging only to filed tasks do not wait for an answer.
   const meaningful = (view) => {
     const tasks = (view.taskIds ?? []).map((id) => taskOf.get(id)).filter(Boolean);
-    return !tasks.length || tasks.some((task) => !task.filed);
+    return tasks.length ? tasks.some((task) => !task.filed) : !view.conversationOnly;
   };
   // In a group, someone else's message matters to me only when it answers mine or is in a task where I have a role.
   const matters = (view) => {

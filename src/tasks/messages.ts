@@ -4,6 +4,20 @@ import type { JournalStore } from '../store/store.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import { partyOf, partyOfEvent } from './parties.ts';
 
+export type MessageDirection = 'incoming' | 'outgoing' | 'note' | 'unknown';
+
+export function messageDirection(event: JournalEvent): MessageDirection {
+  const data = event.payload.data ?? {};
+  const phone = (data.sms ?? data.call) as { direction: string } | undefined;
+  if (phone?.direction === 'unknown') return 'unknown';
+  if (phone) return phone.direction === 'out' ? 'outgoing' : 'incoming';
+  if (event.author !== 'me') return 'incoming';
+  return data.telegram || data.viber || data.whatsapp || data.outbound ? 'outgoing' : 'note';
+}
+
+export const hasForwardOrigin = (event: JournalEvent): boolean =>
+  Boolean((event.payload.data?.telegram as { forward?: unknown } | undefined)?.forward);
+
 export function describe(event: JournalEvent, store: JournalStore): { text: string; tags: string[]; deleted: boolean } {
   let text = event.payload.text ?? '';
   let tags = event.payload.tags ?? [];

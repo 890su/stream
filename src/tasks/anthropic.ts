@@ -11,7 +11,9 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
   const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) });
   const { model, effort, max_tokens } = tasksConfig.ai;
   // Stable part first, so it can be cached: instructions and the task templates.
-  const system = `${PLAN_INSTRUCTIONS}\n\nШаблоны задач (name, метка, исполнитель, filed, что сделать):\n${tasksConfig.templates
+  const messageRules = tasksConfig.ai.message_rules.map((rule) => `- ${rule}`).join('\n');
+  const system = `${PLAN_INSTRUCTIONS}\n\nДействие и контекст:\n${messageRules}\n\nШаблоны задач (name, метка, исполнитель, filed, что сделать):\n${tasksConfig.templates
+    .filter((template) => !template.legacy)
     .map((template) => `- ${template.name} ${template.tag ?? '(без метки)'} → ${template.assignee}${template.filed ? ', filed: true' : ''}: ${template.title}. ${template.instruction}`).join('\n')}`;
 
   return async (input: PlanInput): Promise<PlanOutput> => {
@@ -27,8 +29,9 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
     if (response.stop_reason === 'max_tokens') throw new Error('ответ модели не уместился в max_tokens');
     const text = response.content.find((block) => block.type === 'text');
     if (!text || text.type !== 'text') throw new Error('модель не вернула разбор');
-    const parsed = JSON.parse(text.text) as Pick<PlanOutput, 'tasks'>;
-    return { tasks: parsed.tasks, usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
+    const parsed = JSON.parse(text.text) as Pick<PlanOutput, 'tasks' | 'conversation_only'>;
+    if (!Array.isArray(parsed.tasks) || !Array.isArray(parsed.conversation_only)) throw new Error('модель вернула неполный разбор');
+    return { ...parsed, usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
   };
 }
 

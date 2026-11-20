@@ -332,9 +332,17 @@ restarts it. Then everything new is triaged together, with up to `context_messag
 the same conversation from the last day as context. **A batch is a window, not one task:** each message goes to
 zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
 two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
-script). Its outcome: close at once by filing it (wellbeing → diary, "ok" and
-chatter → «без дела»), attach to an open task, or create a task for me, the system or a person. A message without a
-triage outcome is untriaged. Owner corrections (move to another task, merge, cancel) are events and golden examples.
+script). Its outcome: leave it in the conversation, file material meant to be kept (e.g. wellbeing → diary),
+attach to an open task, or create a task for me, the system or a person. A message without a triage outcome is
+untriaged. Owner corrections (move to another task, merge, cancel) are events and golden examples.
+
+**Work changes when an obligation changes.** A request, acceptance, commitment, or material change to an existing
+task can start or advance work. An announcement, forward, or retelling of a plan already in place stays in the
+conversation. A date, an imperative inside a quotation, and a change of recipient are context. The planner sees
+direction and available forward metadata, and explicitly returns `conversation_only` IDs. Those messages are
+handled by a versioned `triage_result` journal event, regardless of channel or phrasing. The queue reads this outcome
+without a hidden task. If a message adds an independent request alongside an announcement, the task describes only
+the request. Own notes and material shared into Stream remain captures.
 
 **Which task a message belongs to** (2026-11-18). Triage sees all open tasks (latest changed,
 `open_tasks_in_context`) with their last messages, chats and last activity, plus tasks closed or cancelled within

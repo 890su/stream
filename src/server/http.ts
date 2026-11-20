@@ -67,10 +67,10 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
         if (url.pathname === '/api/recipients' && request.method === 'GET') { json(response, 200, { recipients: store.recipients.list() }); return; }
         if (url.pathname === '/api/events') return await events(request, response, url, store, live);
-        // Long-lived records whole — people, counterparties, projects and task changes: a new device needs all of them,
+        // Long-lived records whole — people, counterparties, projects, task changes and triage results: a new device needs all of them,
         // not just the latest feed page (messages stay paged).
         if (url.pathname === '/api/directory' && request.method === 'GET') {
-          json(response, 200, { events: [...store.triage.contactEvents(), ...store.triage.projectEvents(), ...store.triage.taskEvents()] }); return;
+          json(response, 200, { events: [...store.triage.contactEvents(), ...store.triage.projectEvents(), ...store.triage.taskEvents(), ...store.triage.results()] }); return;
         }
         if (url.pathname.startsWith('/api/media/')) return await media(request, response, url.pathname.slice('/api/media/'.length), store);
         const qr = /^\/api\/whatsapp\/([a-z]{2,8})\/qr$/.exec(url.pathname);

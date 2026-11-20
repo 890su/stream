@@ -38,10 +38,10 @@ for (const [key, account] of Object.entries(whatsappConfig.accounts)) {
 // Task triage (CONCEPT.md §2.8): quiet window, AI model and budget, task templates.
 export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.json', import.meta.url), 'utf8')) as {
   version: number; quiet_s: number; quiet_s_by_stream: Record<string, number>; lookback_h: number; max_batch: number; context_messages: number; open_tasks_in_context: number; closed_tasks_in_context: number; reopen_days: number; job_days: number; low_confidence: number;
-  ai: { provider: string; model: string; effort: string; max_tokens: number; monthly_budget_usd: number; price_per_mtok: { input: number; output: number }; processor: string };
+  ai: { provider: string; model: string; effort: string; max_tokens: number; monthly_budget_usd: number; price_per_mtok: { input: number; output: number }; processor: string; message_rules: string[] };
   assignees: string[];
   card: { default_duration_min: number; durations_min: number[]; repeats: { every: 'day' | 'week' | 'month' | 'year' | null; label: string }[]; participant_suggestions: number };
-  templates: Array<{ name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string; report?: string[] }>;
+  templates: Array<{ name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string; report?: string[]; legacy?: boolean }>;
   report_default: string[]; report_fields: Record<string, { title: string; type: 'datetime' | 'minutes' | 'money' | 'tags' | 'text' }>; currencies: string[];
   unsorted: { title: string; note: string };
 };

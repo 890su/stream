@@ -17,7 +17,7 @@ const ownTask = (title: string, messageId: string, ts: string): JournalEvent => 
 test('a task made by hand is named by AI once; a task the owner named stays', async () => {
   const storage = temporaryStore();
   const asked: NameInput[] = [];
-  const triage = new Triage({ store: storage.store, live: new LiveFeed(), planner: async () => ({ tasks: [] }),
+  const triage = new Triage({ store: storage.store, live: new LiveFeed(), planner: async () => ({ tasks: [], conversation_only: [] }),
     namer: async (input) => { asked.push(input); return { title: 'Dzika 11: проверить кабель', usage: { input_tokens: 100, output_tokens: 10 } }; } });
   try {
     const earlier = new Date(Date.now() - 60_000).toISOString();

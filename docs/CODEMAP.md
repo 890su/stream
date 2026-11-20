@@ -46,7 +46,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `telegram.ts` | exclusions, forward origin, albums, 24 h window | `TelegramQueries` |
 | `connections.ts` | bot connections, owner trust, groups | `ConnectionStore` |
 | `recipients.ts` | address book of the «кому» row: chats, bot groups, pins, frequency, 24 h window (`/api/recipients`) | `RecipientQueries` |
-| `triage.ts` | pending messages, task events, AI spending | `TriageStore` |
+| `triage.ts` | pending messages, task events, context-only results, AI spending | `TriageStore` |
 | **telegram/** (§8.2) | | |
 | `bot.ts` | one account bot: `getUpdates` loop, update handling, sending (personal chats via business connection, groups as the bot), health | `TelegramBot`, `sendError` |
 | `convert.ts` | Bot API message → ingest item (files, forwards, service text) | `toItem` |
@@ -58,11 +58,11 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `socket.ts` | the only file importing Baileys: auth state, no online presence, quiet logger | `createSocket`, `updateOf` |
 | `types.ts` | the narrow shapes the rest works with (`WaSocket`, `WaMessage`, `WaItem`) | types |
 | **tasks/** (§2.8) | | |
-| `planner.ts` | planner interface, output schema, instructions | `Planner`, `PLAN_SCHEMA` |
+| `planner.ts` | planner interface and structured results: tasks and `conversation_only` ids | `Planner`, `PLAN_SCHEMA` |
 | `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) and the namer of hand-made tasks | `anthropicPlanner`, `anthropicNamer` |
 | `namer.ts` | titles «Контрагент: суть» (`TITLE_RULE`, shared with the planner); tasks the owner made by hand are named once by AI after 10 s unless he named them | `nameTasks`, `unnamed`, `TITLE_RULE` |
-| `messages.ts` | a journal message as the AI reads it: text after edits, a call or file in words, who it is from | `describe`, `from` |
+| `messages.ts` | planner message context: text after edits, sender, direction and forward metadata | `describe`, `from`, `messageDirection`, `hasForwardOrigin` |
 | `fold.ts` | tasks as fold of `task_change` (server side, checklist `items`, `owner_titled`, recurring settings); old tasks get roles from `assignee` | `foldTasks`, `isOpen` |
 | `repeat.ts` | advances dates and derives create, cancel and restore events for the next occurrence; the store writes them with the original task change | `nextOccurrence`, `repeatChange` |
 | `projects.ts` | projects as fold of `project_change` (server side), the default project of a stream (`defaultProject`, by `sources`) | `foldProjects`, `defaultProject` |
@@ -114,7 +114,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `snooze.js` | «⏱ Отложить»: choices by the time of day (`snoozeOptions`), the popover (`snoozeMenu`), a date from the system picker |
 | `convlist.js` / `convtasks.js` | a tile of the queue: four lines (kind · channel — contact; the task or «+ задача…»; two lines of the last message), time, ⏱ and ↥, a small line «ждёт · новых · контрагент · метки» (`tileFacts`, `tileTask`, `pickTask`, `convRow`); task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |
-| `projection.js` | pure: events → message views (corrections, delivery), sources, chats, topics |
+| `projection.js` | pure: events → message views (corrections, delivery, context-only results), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
 | `composer.js` / `draftfiles.js` | input: text, voice, tags, recipient, modes (reply, edit, continue); attachments of the draft (checks, previews) |
@@ -151,7 +151,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `registry/tags.json` | tag dictionary and suggestion threshold |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/whatsapp.json` | WhatsApp accounts (connector `whatsapp_<account>`), file limit, oldest live message written, history window at linking, reconnect ceiling, QR refresh, pulse |
-| `registry/tasks.json` | triage settings, task templates, closing report fields, duration and repeat choices, participant suggestion limit |
+| `registry/tasks.json` | triage settings and rules on actions vs context, task templates, report fields, card settings |
 | `registry/conversations.json` | the queue: `since` (its start date), «⏱ Отложить» presets by the time of day |
 | `registry/filters.json` | saved task filters: conditions over roles, status, due, report, `snoozed`; `pinned` chips, `sections`; first («Пульт», `view: 'pulse'`) is the default |
 | `registry/pulse.json` | dashboard settings and weights, plus `hot_wait_hours` for highlighting wait time on conversation tiles |
@@ -169,4 +169,5 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `test/taskchips.test.ts` / `test/repeat.test.ts` | card date labels and recurring task events through the API |
 | `test/participantpicker.test.ts` | picker suggestion ordering, search and supported task participant ids |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |
+| `golden/triage-information.jsonl` | synthetic task versus conversation-only triage cases |
 | `docs/plans/` | active package plans; `archive/` (local, outside git) — done plans, superseded decisions, old Done items |
