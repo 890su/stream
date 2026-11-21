@@ -7,11 +7,16 @@ import { reveal, conceal } from './motion.js';
 import { setupPeopleRow, conversationTask } from './peoplerow.js';
 import { answerable } from './participants.js';
 import { snoozeMenu } from './snooze.js';
+import { topicOf } from './topic.js';
+import { topicLine } from './cardhead.js';
+import { tileFacts } from './convlist.js';
 
 const $ = (selector) => document.querySelector(selector);
 
-// One conversation (CONCEPT.md §2.5, §5): the bar on top with its title. In Беседы it is the conversation screen
-// («назад» or the system back returns to the list); in Задачи and Лента it is the contact filter (× removes it).
+// One conversation (CONCEPT.md §2.5, §5): the head of its card on top (design 2026-11-21) — who and which channel
+// (a tap — the person's card), the topic line (cardhead.js: «+ задача…», the AI's offer with ✓ ✕, the task, the
+// «задача» switch), how long it waits with ⏱ ↥ 🗄, «≡» unfolds every cut, the folded details. In Беседы it is the
+// conversation screen («назад» or the system back); in Задачи and Лента it is the contact filter (× removes it).
 // The composer's recipient is the chat chosen in the line of interlocutors over the input (peoplerow.js): by default
 // the chat of the latest incoming message. With none chosen (switched off, a phone number, a chat with only my
 // messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
@@ -38,6 +43,45 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     sync();
   } });
   const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
+  const detailsOpen = new Set(); // conversations whose details the owner unfolded (this session)
+  const save = (id, change) => composer.queue(makeTaskChange(id, change)).catch((error) => { notify(error.message); throw error; });
+  // The topic line's acts (cardhead.js); each with «Вернуть».
+  const topicActs = {
+    openTask: (id) => openTask(id),
+    async create(title) {
+      const conversation = feed.conversation();
+      const waiting = (conversation?.queue?.pending ?? []).map((view) => view.id);
+      const ids = waiting.length ? waiting : [topic.last()?.id].filter(Boolean);
+      if (!ids.length) return;
+      const id = crypto.randomUUID();
+      await save(id, { ...ownTask(title, ids[0]), add: ids }).catch(() => null);
+      notify(`Задача: «${title}»`, { label: 'Вернуть', run: () => save(id, { op: 'update', status: 'cancelled', remove: ids }).catch(() => {}) });
+    },
+    async confirm(task) {
+      await save(task.id, { op: 'update', unconfirmed: false }).catch(() => null);
+      notify(`Задача подтверждена: «${task.title}»`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', unconfirmed: true }).catch(() => {}) });
+    },
+    async reject(task) {
+      await save(task.id, { op: 'update', status: 'cancelled' }).catch(() => null);
+      notify(`Без задачи: «${task.title}» отклонена`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', status: task.status, unconfirmed: true }).catch(() => {}) });
+    },
+    async toggle(on) {
+      const conversation = feed.conversation();
+      if (!conversation) return;
+      const current = topicOf(conversation);
+      if (!on) {
+        const task = current.tasks.find((item) => !item.unconfirmed);
+        if (!task) return;
+        await save(task.id, { op: 'update', unconfirmed: true }).catch(() => null);
+        notify(`«${task.title}» — снова тема, не задача`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', unconfirmed: false }).catch(() => {}) });
+        return;
+      }
+      const offered = current.tasks.find((item) => item.unconfirmed);
+      if (offered) { await topicActs.confirm(offered); return; }
+      const source = topic.last();
+      if (source) await topicActs.create(`${conversation.title}: ${snippet(source)}`.slice(0, 120));
+    },
+  };
 
   // The composer follows the conversation: its reply chat once known (unless another recipient was chosen), else
   // a continuation of its last message. The details panel's task topic wins while it is open. A participant switched
@@ -63,6 +107,16 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     const chat = conversation?.reply ?? null;
     const channels = (conversation?.channels ?? []).filter((channel) => channel === 'by' || channel === 'pl').map(accountTitle);
     $('#chat-title').textContent = [channels.join(', '), conversation?.title ?? 'Беседа'].filter(Boolean).join(' · ');
+    // The topic line and the facts: own notes and task notes have no topic of their own.
+    const topical = conversation && key !== 'me' && !key.startsWith('task:');
+    $('#chat-topic').replaceChildren(...(topical ? [topicLine({ topic: topicOf(conversation), on: topicActs })] : []));
+    $('#chat-topic').hidden = !topical;
+    const facts = conversation?.queue?.waiting ? tileFacts(conversation, { now: new Date(), hotHours: 2, counterparties: feed.counterparties() }) : null;
+    $('#chat-facts').textContent = facts ? `ждёт ${facts.waited}` : conversation?.queue?.snoozedUntil ? 'отложена' : '';
+    const unfolded = detailsOpen.has(key);
+    $('#chat-details').hidden = !unfolded;
+    $('#chat-more').setAttribute('aria-expanded', String(unfolded));
+    $('#chat-cuts').setAttribute('aria-pressed', String(feed.allCuts()));
     // A personal chat opens in the Telegram app by the user id; a group has no such link.
     const app = $('#chat-app');
     app.hidden = !chat || chat.group;
@@ -121,6 +175,9 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   $('#chat-archive').onclick = () => queued((item) => convQuick.archive(item));
   // «Контакт»: the person of this conversation from the directory, or a new one from the chat or the number.
   let creatingPerson = false; // a double tap must not make two people: the directory updates on the next render
+  $('#chat-more').onclick = () => { if (detailsOpen.has(key)) detailsOpen.delete(key); else detailsOpen.add(key); sync(); };
+  $('#chat-cuts').onclick = async () => { await feed.setAllCuts(!feed.allCuts()); sync(); };
+  $('#chat-title').onclick = () => $('#chat-person').onclick();
   $('#chat-person').onclick = async () => {
     if (creatingPerson) return;
     const conversation = feed.conversation();
@@ -133,17 +190,6 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     creatingPerson = true;
     try { await composer.queue(makePersonChange(id, { op: 'create', ...draft })); } catch (error) { notify(error.message); return; } finally { setTimeout(() => { creatingPerson = false; }, 1500); }
     openPerson(id);
-  };
-  // «+ Задача»: a new task for this conversation, from its latest message, titled by the conversation.
-  $('#chat-task').onclick = async () => {
-    const conversation = feed.conversation();
-    const source = conversation?.views.filter((view) => !view.deleted).at(-1);
-    if (!source) return;
-    const id = crypto.randomUUID();
-    const title = `${conversation.title}: ${snippet(source)}`.slice(0, 120);
-    try { await composer.queue(makeTaskChange(id, ownTask(title, source.id))); } catch (error) { notify(error.message); return; }
-    openTask(id);
-    notify(`Задача по беседе «${conversation.title}»`, { label: 'Вернуть', run: () => composer.queue(makeTaskChange(id, { op: 'update', status: 'cancelled' })).catch((error) => notify(error.message)) });
   };
   // «Не отслеживать»: Stream stops writing this chat; what is already written may go to the archive.
   const dialog = $('#untrack');

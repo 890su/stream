@@ -42,3 +42,17 @@ test('topic state: empty, unconfirmed, task; real tasks first, the urgent one le
   assert.equal(mixed.state, 'task');
   assert.deepEqual(mixed.tasks.map((item: any) => item.id), ['due', 'later', 'u']);
 });
+
+test('why the AI made a task: the reason of its first change, else its note', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { reasonOf } = await import('../web/cardhead.js');
+  assert.equal(reasonOf({ history: [{ change: { op: 'create' } }, { change: { reason: 'тот же сайт' } }], note: 'заметка' }), 'тот же сайт');
+  assert.equal(reasonOf({ history: [], note: 'заметка' }), 'заметка');
+  assert.equal(reasonOf({}), '');
+});
+
+test('messages waiting for my answer never fold', () => {
+  assert.deepEqual(shape(cutSegments(views, { tasksById, keep: new Set(['m3', 'm5']) })), [
+    'open:m1', 'cut:a:Роутер:m2:shut', 'open:m3,m4,m5,m6', 'cut:a:Роутер:m7:shut',
+  ]);
+});

@@ -17,8 +17,9 @@ export function topicOf(conversation, now = new Date()) {
 const NO_TASK = 'Без задачи';
 
 // [{ kind: 'open', views } | { kind: 'cut', taskId, title, views, key, open }]. `open` — keys of unfolded cuts
-// (`taskId|first view id`), `all` — everything unfolded.
-export function cutSegments(views, { focus = null, tasksById = new Map(), open = new Set(), all = false } = {}) {
+// (`taskId|first view id`), `all` — everything unfolded; `keep` — ids of messages that never fold (waiting for the owner's
+// answer: he opened the conversation to answer them).
+export function cutSegments(views, { focus = null, tasksById = new Map(), open = new Set(), all = false, keep = new Set() } = {}) {
   const topicId = (view) => {
     if (focus && view.taskIds?.includes(focus)) return focus;
     return (view.taskIds ?? []).find((id) => {
@@ -29,7 +30,7 @@ export function cutSegments(views, { focus = null, tasksById = new Map(), open =
   const segments = [];
   for (const view of views) {
     const topic = topicId(view);
-    const shown = focus ? topic === focus : topic === null;
+    const shown = keep.has(view.id) || (focus ? topic === focus : topic === null);
     const last = segments.at(-1);
     if (shown) {
       if (last?.kind === 'open') last.views.push(view); else segments.push({ kind: 'open', views: [view] });

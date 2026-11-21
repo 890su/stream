@@ -108,12 +108,33 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .tg-delivery .link-button { font-size: 13px; min-height: 32px; color: inherit; text-decoration: underline; }
 /* The bar of an open conversation: «назад», the title, ⏱ ↥ 🗄 on the first line; the text actions wrap to a second
    line when the phone is too narrow (the title keeps at least 120 px). */
-.chat-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; padding: 2px 4px 2px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14.5px; }
-.chat-bar:has(#chat-back:not([hidden])) { padding-left: 4px; }
-.chat-title { flex: 1 0 120px; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat-bar .link-button { order: 2; min-height: 32px; font-size: 13.5px; color: var(--muted); padding: 0 5px; display: inline-flex; align-items: center; text-decoration: none; }
-.chat-bar #chat-close { order: 1; }
+.chat-bar { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 2px 4px 4px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14.5px; }
+.chat-bar .card-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.chat-title { flex: 1; min-width: 0; min-height: 40px; padding: 0 8px; text-align: left; font: inherit; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 8px; }
+.chat-title:active { background: var(--press); }
 .chat-bar .chat-queue { flex: none; width: 38px; height: 38px; font-size: 17px; line-height: 1; }
+.chat-bar .chat-queue[aria-pressed="true"] { color: var(--accent-strong); }
+.card-facts { flex: 1; min-width: 0; padding-left: 8px; color: var(--muted); font-size: 13px; }
+.card-more svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.card-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+.card-details { display: flex; flex-wrap: wrap; gap: 0 6px; padding: 0 8px; }
+.card-details[hidden], .card-topic[hidden] { display: none; }
+.card-details .link-button { min-height: 32px; font-size: 13.5px; color: var(--muted); padding: 0 5px; display: inline-flex; align-items: center; text-decoration: none; }
+/* The topic line (cardhead.js): the task, the AI's offer with ✓ ✕, «+ задача…», the «задача» switch. */
+.card-topic { padding: 0 6px; }
+.card-topic-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.card-topic-chips { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.card-topic-chips > * { flex: none; }
+.card-topic-input { flex: 1 1 160px; min-width: 120px; min-height: 34px; padding: 0 10px; border: 1px dashed var(--line); border-radius: 17px; background: transparent; color: inherit; font: inherit; font-size: 14px; }
+.card-topic-task { max-width: 70vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-topic-offer { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border: 1px dashed var(--accent); border-radius: 18px; }
+.card-topic-offer-title { font: inherit; font-size: 14px; max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-topic-yes, .card-topic-no { min-width: 32px; min-height: 30px; padding: 0 8px; }
+.card-topic-switch { flex: none; min-height: 30px; padding: 0 10px 0 26px; border-radius: 15px; position: relative; font: inherit; font-size: 12.5px; color: var(--muted); background: var(--chip); }
+.card-topic-switch::before { content: ''; position: absolute; left: 6px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; border: 1.5px solid currentColor; }
+.card-topic-switch.on { color: var(--accent-strong); }
+.card-topic-switch.on::before { background: currentColor; }
+.card-topic-reason { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
 .bubble.system { align-self: center; max-width: 92%; background: var(--panel); color: var(--muted); font-size: 14px; box-shadow: none; border-radius: 12px; cursor: pointer; }
 .bubble.system .link-row, .bubble.system .more { display: none; }
 /* «Беседы» on top of the left panel (drawer.js): back to the queue, the main screen. */

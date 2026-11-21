@@ -40,21 +40,34 @@
     </button>
   </header>
 
+  <!-- The head of the card of a conversation (chatview.js, cardhead.js, design 2026-11-21): who and which channel,
+       the topic line, how long it waits with ⏱ ↥ 🗄, the folded details. -->
   <div id="chat-bar" class="chat-bar" hidden role="status">
-    <button id="chat-back" type="button" class="icon-button" aria-label="Назад к беседам">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-    </button>
-    <span id="chat-title" class="chat-title"></span>
-    <button id="chat-snooze" type="button" class="icon-button chat-queue" aria-label="Отложить">⏱</button>
-    <button id="chat-requeue" type="button" class="icon-button chat-queue" aria-label="В конец очереди">↥</button>
-    <button id="chat-archive" type="button" class="icon-button chat-queue" aria-label="В архив">🗄</button>
-    <button id="chat-person" type="button" class="link-button">Контакт</button>
-    <button id="chat-task" type="button" class="link-button">+ Задача</button>
-    <a id="chat-app" class="link-button" href="#">В Telegram</a>
-    <button id="chat-untrack" type="button" class="link-button">Не отслеживать</button>
-    <button id="chat-close" type="button" class="icon-button" aria-label="Снять фильтр по беседе">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-    </button>
+    <div class="card-row">
+      <button id="chat-back" type="button" class="icon-button" aria-label="Назад">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <button id="chat-title" type="button" class="chat-title" aria-label="Карточка собеседника"></button>
+      <button id="chat-close" type="button" class="icon-button" aria-label="Снять фильтр по беседе">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div id="chat-topic" class="card-topic"></div>
+    <div class="card-row card-facts-row">
+      <span id="chat-facts" class="card-facts"></span>
+      <button id="chat-snooze" type="button" class="icon-button chat-queue" aria-label="Отложить">⏱</button>
+      <button id="chat-requeue" type="button" class="icon-button chat-queue" aria-label="В конец очереди">↥</button>
+      <button id="chat-archive" type="button" class="icon-button chat-queue" aria-label="В архив">🗄</button>
+      <button id="chat-cuts" type="button" class="icon-button chat-queue" aria-pressed="false" aria-label="Развернуть все темы">≡</button>
+      <button id="chat-more" type="button" class="icon-button card-more" aria-expanded="false" aria-controls="chat-details" aria-label="Подробности">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 10.5 12 14l3.5-3.5"/></svg>
+      </button>
+    </div>
+    <div id="chat-details" class="card-details" hidden>
+      <button id="chat-person" type="button" class="link-button">Контакт</button>
+      <a id="chat-app" class="link-button" href="#">В Telegram</a>
+      <button id="chat-untrack" type="button" class="link-button">Не отслеживать</button>
+    </div>
   </div>
 
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>

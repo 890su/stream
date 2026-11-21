@@ -253,3 +253,10 @@ body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix
 #people-row .person-tile-icon { width: 30px; height: 32px; }
 .case-question.proposal { border-left: 2px solid var(--accent); padding-left: 8px; }
 .case-question-reason { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
+/* Cuts of a card (feed.js, topic.js, design 2026-11-21): a run of one task's messages folded into a centred line
+   between thin rules; unfolded, its messages stand on a tint of their own. */
+.cut { display: flex; align-items: center; gap: 10px; width: calc(100% - 24px); margin: 6px 12px; padding: 4px 0; color: var(--muted); font: inherit; font-size: 12px; line-height: 1.3; }
+.cut::before, .cut::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.cut span { flex: 0 1 auto; max-width: 70%; text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cut.open { color: var(--accent-strong); }
+.in-cut { background: color-mix(in srgb, var(--accent) 7%, transparent); }
