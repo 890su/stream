@@ -30,6 +30,18 @@ export const WHOSE = [
 ];
 export const DEFAULT_VIEW = { when: 'all', whose: 'mine', where: {} };
 
+// The left panel's filters, in order (docs/plans/2026-11-21-workspace-redesign-design.md).
+export const PANEL_FILTERS = [
+  { title: 'Текущие', view: { when: 'current', whose: 'all', where: {} } },
+  { title: 'Активные', view: { when: 'all', whose: 'mine', where: {} } },
+  { title: 'На контроле', view: { when: 'all', whose: 'control', where: {} } },
+  { title: 'В ожидании', view: { when: 'waiting', whose: 'all', where: {} } },
+  { title: 'Будущие', view: { when: 'future', whose: 'all', where: {} } },
+  { title: 'Неподтверждённые', view: { when: 'unconfirmed', whose: 'all', where: {} } },
+  { title: 'Законченные', view: { when: 'done', whose: 'all', where: {} } },
+  { title: 'Отменённые', view: { when: 'cancelled', whose: 'all', where: {} } },
+];
+
 const snoozed = (task, now) => task.status === 'deferred' && Boolean(task.remindAt) && Date.parse(task.remindAt) > now.getTime();
 
 const dayEnd = (now) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
@@ -100,6 +112,8 @@ export const isDefaultView = (view) => view.when === DEFAULT_VIEW.when && view.w
 // The view in words: «Все открытые · Слежу · ▸ Проект · ◆ Контрагент · Человек».
 export function viewTitle(view, { projects = [], counterparties = [], people = [] } = {}) {
   const where = view.where ?? {};
+  const panel = !Object.values(where).some(Boolean) && PANEL_FILTERS.find((item) => item.view.when === view.when && item.view.whose === view.whose);
+  if (panel) return panel.title;
   return [
     WHEN.find((item) => item.id === view.when)?.title,
     view.whose !== 'all' ? WHOSE.find((item) => item.id === view.whose)?.title : '',

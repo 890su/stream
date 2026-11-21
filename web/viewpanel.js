@@ -1,21 +1,9 @@
 // Renders task shortcuts and optional filters in the left panel.
-import { DEFAULT_VIEW, WHEN, WHOSE, applyView, countsFor, viewTitle, isDefaultView } from './viewstate.js';
+import { PANEL_FILTERS, WHEN, WHOSE, applyView, countsFor, viewTitle, isDefaultView } from './viewstate.js';
 import { projectTreeBlock } from './projectpanel.js';
 
-// The panel's filters, in order (docs/plans/2026-11-21-workspace-redesign-design.md).
-const SHORTCUTS = [
-  { title: 'Текущие', view: { when: 'current', whose: 'all', where: {} } },
-  { title: 'Активные', view: { when: 'all', whose: 'mine', where: {} } },
-  { title: 'На контроле', view: { when: 'all', whose: 'control', where: {} } },
-  { title: 'В ожидании', view: { when: 'waiting', whose: 'all', where: {} } },
-  { title: 'Будущие', view: { when: 'future', whose: 'all', where: {} } },
-  { title: 'Неподтверждённые', view: { when: 'unconfirmed', whose: 'all', where: {} } },
-  { title: 'Законченные', view: { when: 'done', whose: 'all', where: {} } },
-  { title: 'Отменённые', view: { when: 'cancelled', whose: 'all', where: {} } },
-];
-
 export function taskShortcuts(tasks, data) {
-  return SHORTCUTS.map(({ title, view }) => ({ view, title, count: applyView(tasks, view, data).length }));
+  return PANEL_FILTERS.map(({ title, view }) => ({ view, title, count: applyView(tasks, view, data).length }));
 }
 
 function element(tag, className, text) {

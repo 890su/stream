@@ -1,5 +1,6 @@
-// Stream PWA entry point: wires the centre («Беседы · Задачи», Лента from ⋮), filters on the left, details on the right,
-// the composer, and starts sync and live updates.
+// Stream PWA entry point: wires the centre (the dashboard, a conversation, a list of Задачи, the Лента from ⋮), the
+// left panel (conversations, contacts, task filters), details on the right, the composer, and starts sync and live
+// updates.
 import { getSetting } from './db.js';
 import { watchDialogs } from './backclose.js';
 import { openTaskSheet } from './tasksheet.js';
@@ -23,11 +24,10 @@ import { createDoneCards } from './donecard.js';
 import { createTaskQuick } from './taskquick.js';
 import { createConvQuick } from './convquick.js';
 import { setupQuestions } from './question.js';
-import { setupViewSwitch, rootBack, toQueue } from './viewswitch.js';
+import { setupViewTitle, backTarget, toHome } from './viewswitch.js';
 import { googleNotice } from './googlebox.js';
 import { isWide } from './layout.js';
-import { listCount } from './tasklist.js';
-import { setupSwipeZones, slideIn } from './swipezones.js';
+import { setupSwipeZones } from './swipezones.js';
 import { visibleTasks } from './filters.js';
 
 let details; // right panel «Подробности» (CONCEPT.md §5)
@@ -38,53 +38,55 @@ let bulk;
 let drawer;
 let system;
 let chatView; // { open(key), close(), sync() } — one conversation (CONCEPT.md §2.5)
-let viewSwitch; // the «Беседы» / «Задачи» button of the input row
+let viewSwitch; // the view's name in the top bar (viewswitch.js)
 let goView; // switches the view and opens a conversation (setupViews)
 let convActions; // convquick.js: the queue marks on a conversation (snooze, requeue, archive)
 
-// «Беседы» / «Задачи» (CONCEPT.md §5): the switch at the right end of the input row (viewswitch.js); the choice is
-// remembered on this device. The technical Лента opens from ⋮ («Лента сообщений») and is not remembered. Views saved
-// by earlier versions map to the new ones (feed.js).
+// The views (docs/plans/2026-11-21-workspace-redesign-design.md): the dashboard is the root — the app always starts
+// there and the system back ends there (backTarget, viewswitch.js); a list of Задачи and the Лента (⋮ → «Лента
+// сообщений») get a history entry of their own, a conversation its own (chatview.js). Views saved by earlier versions
+// map to the new ones (feed.js).
+let fromPanel = false; // the open conversation came from the queue in the left panel: back on a phone shows it again
 function setupViews(feed) {
   const update = () => viewSwitch?.update();
-  // The queue of Беседы is the root (design 2026-11-20): the app always starts there; Задачи and Лента get a history
-  // entry of their own, so the system back returns to the queue (rootBack, viewswitch.js).
-  feed.setMode('conversations');
+  feed.setMode('home');
   // A reload (an app update) keeps the entry's old state — a panel, a conversation, a view: none of them is open now.
   if (history.state?.view || history.state?.drawer || history.state?.conversation || history.state?.details || history.state?.task) history.replaceState(null, '');
   const after = () => { chatView?.sync(); updateFilter(); drawer?.render(); update(); };
-  let opening = null; // a conversation to open once the view's entry is popped (go → history.back → popstate)
   const enter = (next) => {
-    if (next === 'conversations') return;
-    // An open conversation's or the left panel's entry becomes the view's: one back from there goes to the queue.
+    // The left panel's entry becomes the view's: one back from there goes home.
     const state = history.state;
-    if (state?.view || state?.conversation || state?.drawer) history.replaceState({ view: next }, ''); else history.pushState({ view: next }, '');
+    if (state?.view || state?.drawer) history.replaceState({ view: next }, ''); else history.pushState({ view: next }, '');
   };
+  async function show(next) {
+    if (details?.taskOpen()) await details.leaveTask();
+    await feed.setMode(next);
+    after();
+  }
   window.addEventListener('popstate', () => {
-    if (!rootBack(feed.mode(), history.state)) return;
-    const key = opening;
-    opening = null;
-    go('conversations', key);
+    const target = backTarget(feed.mode(), history.state);
+    if (target) void show(target);
   });
-  // `key` — a conversation to open (from a task or a conversation filter); Задачи keep an open conversation as a filter.
-  async function go(next, key = null) {
+  // `key` — a conversation to open; Задачи and the Лента keep an open conversation as a filter.
+  async function go(next, key = null, { panel = false } = {}) {
     // The card gives the screen to the view: its entry is popped first, so no dead entry stays behind.
     if (details?.taskOpen()) await details.leaveTask();
-    // Back to the queue from Задачи or Лента: pop their entry; the popstate above comes back here.
-    if (next === 'conversations' && feed.mode() !== 'conversations' && toQueue(history.state) === 'back') { opening = key; history.back(); return; }
+    fromPanel = next === 'conversations' && panel;
+    if (next === 'conversations') {
+      if (!key) return;
+      if (feed.mode() !== 'conversations') await feed.setMode('conversations');
+      if (key !== chatView?.key()) await chatView.open(key);
+      after();
+      return;
+    }
+    // Home from a view or a conversation: pop its entry; the popstate above comes back with the dashboard.
+    if (next === 'home') { if (toHome(history.state) === 'back') history.back(); else await show('home'); return; }
     if (next !== feed.mode()) enter(next);
     await feed.setMode(next);
-    if (next === 'conversations' && key && key !== chatView?.key()) await chatView.open(key);
     after();
   }
   goView = go;
-  // The counter on Беседы: the pulse when it is the default of Задачи, else the first list.
-  const todayCount = () => {
-    const first = feed.taskFilters()[0];
-    if (first?.view === 'pulse') return feed.pulseCount();
-    return first ? listCount(visibleTasks(feed.tasks(), { filter: first }), first) : 0;
-  };
-  viewSwitch = setupViewSwitch({ feed, todayCount, taskId: () => (details?.current()?.kind === 'task' ? details.current().id : null), go });
+  viewSwitch = setupViewTitle({ feed });
   update();
   // ⋮ → «Лента сообщений».
   $('#feed-button').onclick = async () => {
@@ -146,14 +148,17 @@ function setupMessageActions(feed, composer, config) {
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
   chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id), openPerson: (id) => details.openPerson(id), openCounterparty: (id) => details.openCounterparty(id),
-    convQuick: convActions, queueConfig: () => feed.queueConfig() });
+    convQuick: convActions, queueConfig: () => feed.queueConfig(),
+    // Back from a conversation opened from the panel's queue: on a phone the panel comes back on the same tile.
+    onLeave: () => { const again = fromPanel && !isWide(); fromPanel = false; if (again) setTimeout(() => drawer?.open('conversations'), 0); } });
   details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update(), openConversation: (key) => goView?.('conversations', key) });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
-    feed,
+    feed, convQuick: convActions, limits: config,
     onCreateProject: (project) => composer.queue(makeProjectChange(crypto.randomUUID(), { op: 'create', status: 'active', ...project })).catch((error) => notify(error.message)),
-    onContact: (key) => goView?.('conversations', key),
-    onQueue: () => feed.mode() === 'conversations' && chatView.key() ? chatView.leave() : goView?.('conversations'),
+    onContact: (key) => goView?.('conversations', key, { panel: true }),
+    onPerson: (id) => details.openPerson(id),
+    onTask: (id) => details.openTask(id),
     onTasks: () => goView?.('tasks'),
     pinned: () => composer.pinned(),
     onFilterChange: updateFilter,
@@ -220,7 +225,7 @@ async function main() {
   const convQuickRef = { decorate: (row, conversation) => convQuick?.decorate(row, conversation), newTask: (...args) => convQuick?.newTask(...args),
     snooze: (...args) => convQuick?.snooze(...args), requeue: (...args) => convQuick?.requeue(...args) };
   const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
-    quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open(),
+    quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open('tasks'),
     // The open project (CONCEPT.md §2.11): its changes and a task added to one of its sections.
     projectActions: {
       saveProject: (change) => { const project = feedRef.project(); if (project) composerRef.queue(makeProjectChange(project.id, { op: 'update', ...change })).catch((error) => notify(error.message)); },
@@ -248,10 +253,10 @@ async function main() {
   setupViews(feed);
   setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });
   setupMessageActions(feed, composer, config);
-  // Screen swipes (25 / 50 / 25): Беседы ⇄ Задачи, the left panel before them, the right one after them.
+  // Screen swipes (25 / 50 / 25): the left panel from the left, the right one from the right (one tab: no views to
+  // swipe between since the view switch is gone).
   setupSwipeZones({ isWide, notify, drawer, details,
-    tabs: { index: () => (feed.mode() === 'tasks' ? 1 : 0), count: () => 2,
-      go: async (index, dir) => { await goView(index === 1 ? 'tasks' : 'conversations'); slideIn(document.querySelector('#feed-list'), dir); } },
+    tabs: { index: () => 0, count: () => 1, go: async () => {} },
     openRight: () => details.reopen() }); // the day plan, or what was open there
   window.addEventListener('queue-change', () => feed.render().catch((error) => notify(error.message)));
   const live = startLive({
@@ -268,7 +273,7 @@ async function main() {
   // Fallback only: while the live stream is up, new messages arrive without polling.
   setInterval(() => { if (!document.hidden && !live.connected()) feed.refresh(); }, config.feed_refresh_ms);
   // The pulse counts time (waiting hours, minutes in work, midnight): redraw it each minute while it is on screen.
-  setInterval(() => { if (!document.hidden && feed.mode() === 'tasks') feed.render(); }, 60_000);
+  setInterval(() => { if (!document.hidden && feed.mode() === 'home') feed.render(); }, 60_000);
 
   // Back from Google's sign-in (googlebox.js): say how it went, then drop the mark from the address.
   const googleResult = googleNotice(location.search);

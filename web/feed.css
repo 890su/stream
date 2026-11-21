@@ -107,11 +107,6 @@ dialog .switch-row input { width: 20px; height: 20px; accent-color: var(--accent
 .link-panel .new-tag { padding: 0 12px; }
 .chip.linked { max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
 
-/* The view switch at the right end of the row (viewswitch.js) */
-.view-switch { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 20px; background: var(--chip); color: var(--chip-text); font-size: 14px; font-weight: 600; white-space: nowrap; }
-.view-switch:active { opacity: .7; }
-.view-switch-count { min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent-strong); color: #fff; font-size: 12.5px; line-height: 20px; text-align: center; }
-.view-switch-count[hidden] { display: none; }
 .chip.suggest { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
 .chip.on { background: var(--accent-strong); color: #fff; }
 .chip.auto { background: var(--chip); color: var(--chip-text); box-shadow: inset 0 0 0 1.5px var(--accent-strong); }

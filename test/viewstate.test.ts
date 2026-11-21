@@ -103,6 +103,8 @@ test('eight shortcuts in the panel order; the default is my active tasks', () =>
   assert.deepEqual(entries.map((item: any) => item.count), [2, 10, 2, 1, 3, 2, 1, 1]);
   assert.deepEqual(DEFAULT_VIEW, { when: 'all', whose: 'mine', where: {} });
   assert.equal(WHEN.some((item: any) => item.id === 'pulse'), false);
+  assert.equal(viewTitle({ when: 'all', whose: 'mine', where: {} }), 'Активные', 'a list opened from the panel is named as there');
+  assert.equal(viewTitle({ when: 'all', whose: 'mine', where: { project: 'p1' } }, { projects: [{ id: 'p1', title: 'Сеть' }] }), 'Все открытые · Делаю я · ▸ Сеть');
 });
 
 test('the view store keeps filters and saved views from devices with an old layout preference', async () => {

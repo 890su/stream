@@ -1,27 +1,25 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { counterFor } from '../web/viewswitch.js';
+import { backTarget } from '../web/viewswitch.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { likelyConversations, likelyTasks } from '../web/linkwindow.js';
 
-// The view switch counter (CONCEPT.md §5) and the order of the link window (§2.9). Names are made up.
+// The system back of the centre (design 2026-11-21) and the order of the link window (§2.9). Names are made up.
 const task = (id: string, status = 'todo', extra: Record<string, unknown> = {}) => ({ id, status, filed: false, updatedAt: '2026-11-19T08:00:00', ...extra });
 // `moment` — waiting in the queue since then (queue.js); null — out of the queue.
 const conv = (key: string, moment: string | null, tasks: any[] = [], last = '2026-11-19T09:00:00') => ({ key, queue: { waiting: Boolean(moment), moment }, tasks, last, title: key, views: [] });
 const list = [conv('tg:1', '2026-11-19T09:00:00', [task('a'), task('b', 'done')]), conv('tg:2', '2026-11-19T08:00:00', [task('a')]), conv('tel:+48', null, [task('c', 'todo', { filed: true })]), conv('me', null)];
 
-test('on Беседы the switch counts tasks for today, inside a conversation its open tasks', () => {
-  assert.deepEqual(counterFor({ mode: 'conversations', conversations: list, todayCount: 4 }), { target: 'tasks', count: 4, open: null });
-  assert.deepEqual(counterFor({ mode: 'conversations', conversationKey: 'tg:1', conversations: list }), { target: 'tasks', count: 1, open: 'tg:1' });
-  assert.equal(counterFor({ mode: 'conversations', conversationKey: 'tel:+48', conversations: list }).count, 0, 'filed tasks do not count');
-});
-
-test('on Задачи the switch counts conversations waiting for me: all, of an open task, of a filter', () => {
-  assert.deepEqual(counterFor({ mode: 'tasks', conversations: list }), { target: 'conversations', count: 2, open: null });
-  assert.deepEqual(counterFor({ mode: 'tasks', taskId: 'a', conversations: list }), { target: 'conversations', count: 2, open: 'tg:1' });
-  assert.deepEqual(counterFor({ mode: 'tasks', taskId: 'c', conversations: list }), { target: 'conversations', count: 0, open: 'tel:+48' });
-  assert.deepEqual(counterFor({ mode: 'feed', conversationKey: 'tel:+48', conversations: list }), { target: 'conversations', count: 0, open: 'tel:+48' });
+test('back lands on the dashboard from a list, a conversation or the Лента; on the view under a conversation', () => {
+  assert.equal(backTarget('tasks', null), 'home');
+  assert.equal(backTarget('conversations', null), 'home');
+  assert.equal(backTarget('feed', { overlay: 1, page: 'x' }), 'home');
+  assert.equal(backTarget('conversations', { view: 'tasks' }), 'tasks', 'a conversation opened over a list goes back to it');
+  assert.equal(backTarget('home', null), null, 'the dashboard is the root: the system leaves the app');
+  assert.equal(backTarget('tasks', { view: 'tasks' }), null, 'landed on the view\'s own entry: a panel above it closed');
+  assert.equal(backTarget('tasks', { drawer: true }), null);
+  assert.equal(backTarget('home', { conversation: true }), null);
 });
 
 test('the link window lists the open conversation first, then the queue from its oldest, without own notes', () => {
@@ -35,21 +33,6 @@ test('the link window lists open tasks: the one in details, the conversation\'s,
   assert.deepEqual(ordered, ['open', 'conv', 'today', 'new', 'old']);
 });
 
-test('the switch is an icon: ☑ leads to Задачи, 💬 to Беседы', async () => {
-  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { switchIcon } = await import('../web/viewswitch.js');
-  assert.deepEqual([switchIcon('tasks'), switchIcon('conversations')], ['☑', '💬']);
-});
-
-test('the system back leads to the queue: from Задачи or Лента with nothing open on top; never past it', async () => {
-  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { rootBack } = await import('../web/viewswitch.js');
-  assert.equal(rootBack('tasks', null), 'conversations');
-  assert.equal(rootBack('feed', { overlay: 1, page: 'x' }), 'conversations');
-  assert.equal(rootBack('tasks', { view: 'tasks' }), null, 'landed on the view\'s own entry: a panel above it closed');
-  assert.equal(rootBack('tasks', { drawer: true }), null);
-  assert.equal(rootBack('conversations', null), null, 'the queue is the root: the system leaves the app');
-});
 
 test('favourites in the left panel: pinned chats, opened as their conversations', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
@@ -58,12 +41,13 @@ test('favourites in the left panel: pinned chats, opened as their conversations'
   assert.deepEqual(favourites(items), [{ key: 'tg:501', title: 'Анна' }]);
 });
 
-test('back to the queue takes the view\'s history entry away instead of leaving a dead one', async () => {
+test('home takes the view\'s or the conversation\'s history entry away instead of leaving a dead one', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { toQueue } = await import('../web/viewswitch.js');
-  assert.equal(toQueue({ view: 'tasks' }), 'back', 'Задачи → the queue pops the entry Задачи pushed');
-  assert.equal(toQueue(null), 'stay');
-  assert.equal(toQueue({ drawer: true }), 'stay');
+  const { toHome } = await import('../web/viewswitch.js');
+  assert.equal(toHome({ view: 'tasks' }), 'back', 'Задачи → home pops the entry Задачи pushed');
+  assert.equal(toHome({ conversation: true }), 'back');
+  assert.equal(toHome(null), 'stay');
+  assert.equal(toHome({ drawer: true }), 'stay');
 });
 
 test('drawer search finds conversations outside the queue and shows nothing without a query', async () => {
@@ -81,6 +65,6 @@ test('drawer search finds conversations outside the queue and shows nothing with
 
 test('back from a task card stays where the card was opened: its entry is the card\'s own', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { rootBack } = await import('../web/viewswitch.js');
-  assert.equal(rootBack('tasks', { task: true }), null);
+  const { backTarget } = await import('../web/viewswitch.js');
+  assert.equal(backTarget('tasks', { task: true }), null);
 });

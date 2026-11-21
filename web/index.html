@@ -29,8 +29,8 @@
     <button id="planner-button" type="button" class="icon-button" aria-label="План: задачи по дням" aria-controls="details">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h3M13.5 13h3M7.5 16.5h3"/></svg>
     </button>
-    <button id="drawer-button" type="button" class="icon-button" aria-label="Фильтры задач, беседы, избранные" aria-controls="drawer">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5L4 5Z"/></svg>
+    <button id="drawer-button" type="button" class="icon-button" aria-label="Беседы, контакты, задачи" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9 4.5v15M5.5 8.5h1.5M5.5 11.5h1.5"/></svg>
     </button>
     <button id="archive-toggle" type="button" class="icon-button" aria-pressed="false" aria-label="Показывать архив">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="4.5" rx="1"/><path d="M5 9v9.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/></svg>
@@ -58,34 +58,47 @@
   </div>
 
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
-  <aside id="drawer" class="drawer" hidden aria-label="Фильтры">
+  <!-- The left panel (drawer.js, design 2026-11-21): conversations, contacts or task filters, switched by the icons
+       at its foot. -->
+  <aside id="drawer" class="drawer" hidden aria-label="Беседы, контакты, задачи">
     <header class="drawer-head">
-      <h2 id="drawer-title">Фильтры</h2>
+      <h2 id="drawer-title">Беседы</h2>
+      <button id="drawer-search-toggle" type="button" class="icon-button" aria-label="Найти беседу" aria-expanded="false" aria-controls="drawer-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></svg>
+      </button>
       <button id="drawer-close" type="button" class="icon-button" aria-label="Закрыть панель">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </header>
     <div class="drawer-body">
-      <div class="drawer-queue-tools">
-        <button id="drawer-queue" type="button" class="drawer-queue">💬 Беседы</button>
-        <button id="drawer-search-toggle" type="button" class="icon-button" aria-label="Найти беседу" aria-expanded="false" aria-controls="drawer-search">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></svg>
-        </button>
-      </div>
-      <div id="drawer-search" hidden>
-        <input id="drawer-search-input" class="view-search" type="search" placeholder="Имя или номер" aria-label="Имя или номер собеседника">
-        <div id="drawer-search-results"></div>
-      </div>
-      <div id="drawer-mode"></div>
-      <details id="drawer-favourites" class="drawer-disclosure" hidden>
-        <summary class="drawer-summary">Избранные</summary>
-        <div id="drawer-contacts"></div>
-      </details>
-      <details id="drawer-tag-section" class="drawer-disclosure">
-        <summary class="drawer-summary">Метки<span id="drawer-tag-count" class="drawer-count" hidden></span></summary>
-        <div id="drawer-tags" class="chips"></div>
-      </details>
+      <section id="panel-conversations" class="panel-body">
+        <div id="drawer-search" hidden>
+          <input id="drawer-search-input" class="view-search" type="search" placeholder="Имя или номер" aria-label="Имя или номер собеседника">
+          <div id="drawer-search-results"></div>
+        </div>
+        <details id="drawer-favourites" class="drawer-disclosure" hidden>
+          <summary class="drawer-summary">Избранные</summary>
+          <div id="drawer-contacts"></div>
+        </details>
+        <div id="queue-box" class="queue-box"></div>
+      </section>
+      <section id="panel-contacts" class="panel-body" hidden></section>
+      <section id="panel-tasks" class="panel-body" hidden>
+        <div id="drawer-mode"></div>
+        <details id="drawer-tag-section" class="drawer-disclosure">
+          <summary class="drawer-summary">Метки<span id="drawer-tag-count" class="drawer-count" hidden></span></summary>
+          <div id="drawer-tags" class="chips"></div>
+        </details>
+      </section>
     </div>
+    <nav class="panel-modes" aria-label="Что показывать в панели">
+      <button type="button" data-panel="conversations" aria-label="Беседы">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4 3.5v-3.5h-2z"/></svg><span>Беседы</span></button>
+      <button type="button" data-panel="contacts" aria-label="Контакты">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg><span>Контакты</span></button>
+      <button type="button" data-panel="tasks" aria-label="Задачи">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg><span>Задачи</span></button>
+    </nav>
   </aside>
 
   <div id="details-backdrop" class="drawer-backdrop" hidden></div>
@@ -210,7 +223,6 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
       </button>
       <div id="tag-chips" class="row-chips" role="group" aria-label="С чем уйдёт сообщение: беседа или задача, адресат, метки"></div>
-      <button id="view-switch" type="button" class="view-switch row-end"><span id="view-switch-label" aria-hidden="true">☑</span><span id="view-switch-count" class="view-switch-count" hidden></span></button>
     </div>
     <form id="composer" class="composer" autocomplete="off">
       <div id="recording-bar" class="recording-bar" hidden>

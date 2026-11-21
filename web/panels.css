@@ -117,9 +117,6 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .bubble.system { align-self: center; max-width: 92%; background: var(--panel); color: var(--muted); font-size: 14px; box-shadow: none; border-radius: 12px; cursor: pointer; }
 .bubble.system .link-row, .bubble.system .more { display: none; }
 /* «Беседы» on top of the left panel (drawer.js): back to the queue, the main screen. */
-.drawer-queue-tools { display: flex; gap: 6px; margin: 8px 6px 0; }
-.drawer-queue { flex: 1; min-height: 44px; padding: 8px 12px; border-radius: 10px; background: var(--chip); color: var(--chip-text); font: inherit; font-weight: 600; text-align: left; }
-.drawer-queue:active, .drawer-queue:hover { background: var(--press); }
 #drawer-search-toggle[aria-expanded="true"] { background: var(--chip); color: var(--link); }
 #drawer-search { margin: 8px 6px 0; }
 
@@ -136,3 +133,14 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .participant-result-name, .participant-result-channel { overflow-wrap: anywhere; }
 .participant-result-channel, .participant-empty { color: var(--muted); font-size: 13px; }
 .participant-empty { margin: 8px 6px; }
+/* The left panel's bodies and the icons at its foot (drawer.js, design 2026-11-21). */
+.drawer-head h2 { flex: 1; }
+.panel-body[hidden] { display: none; }
+.queue-box { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
+#drawer-search { margin: 6px 4px; }
+.panel-modes { flex: none; display: flex; border-top: 1px solid var(--line); background: var(--panel); padding: 2px 4px calc(2px + env(safe-area-inset-bottom, 0px)); }
+.panel-modes button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 48px; padding: 6px 0 4px; border-radius: 10px; color: var(--muted); font: inherit; font-size: 11.5px; }
+.panel-modes svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.panel-modes button[aria-pressed="true"] { color: var(--accent-strong); }
+.panel-modes button:active { background: var(--press); }
+.contacts-search { margin: 8px 4px; }

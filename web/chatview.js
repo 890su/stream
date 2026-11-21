@@ -16,7 +16,7 @@ const $ = (selector) => document.querySelector(selector);
 // the chat of the latest incoming message. With none chosen (switched off, a phone number, a chat with only my
 // messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
 // plain notes. «Не отслеживать» for Telegram conversations.
-export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {}, openCounterparty = () => {}, convQuick = null, queueConfig = null }) {
+export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {}, openCounterparty = () => {}, convQuick = null, queueConfig = null, onLeave = () => {} }) {
   const bar = $('#chat-bar');
   let key = null;
   let applied = null; // the reply chat this view put into the composer
@@ -103,6 +103,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     composer.chat(null);
     if (composer.topic() === topic) composer.leaveTopic();
     await feed.openConversation(null);
+    onLeave();
   };
   // «назад», ×, the selected «Беседы» tab: through history when the entry is ours, so the system back stays in step.
   const leave = () => { if (history.state?.conversation) history.back(); else close(); };
