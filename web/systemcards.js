@@ -56,6 +56,13 @@ export function aiStatsLines(decisions) {
   return lines.length ? lines : ['За 7 дней решений ИИ не было'];
 }
 
+// How the AI makes new tasks (src/ownersettings.ts, design 2026-11-21): the two choices, the current one `on`.
+export function triageModeChoice(value) {
+  const current = value === 'confirmed' ? 'confirmed' : 'unconfirmed';
+  return [{ value: 'unconfirmed', title: 'ИИ предлагает — я подтверждаю' }, { value: 'confirmed', title: 'ИИ создаёт сразу' }]
+    .map((item) => ({ ...item, on: item.value === current }));
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;

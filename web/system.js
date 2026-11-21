@@ -6,7 +6,7 @@ import { getSetting } from './db.js';
 import { accountTitle } from './tgbubble.js';
 import { googleBox } from './googlebox.js';
 import { keyRows } from './keysbox.js';
-import { systemGroups, card, aiStatsLines } from './systemcards.js';
+import { systemGroups, card, aiStatsLines, triageModeChoice } from './systemcards.js';
 
 const ACTION = { proposed: 'ждёт', approved: 'в очереди', running: 'отправляется', done: 'отправлено', failed: 'не отправлено', rejected: 'отменено' };
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -44,6 +44,7 @@ export function setupSystem({ notify, onTrack }) {
   const dialog = document.querySelector('#system');
   const body = document.querySelector('#system-body');
   const opened = new Set(); // cards the owner opened, kept across redraws
+  let triageMode = null; // the AI mode just chosen here, before the triage reports it (src/ownersettings.ts)
 
   async function call(path, init = {}) {
     const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${await getSetting('ownerToken')}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
@@ -149,6 +150,19 @@ export function setupSystem({ notify, onTrack }) {
       if (item.source === 'google_calendar') nodes.push(...await googleBox(ctx));
       if (item.source === 'ai_triage') {
         nodes.push(...await keyRows(['ai'], ctx));
+        // «Новые задачи»: the triage reports its mode on its next pass; the choice just made shows at once.
+        const chips = element('div', 'chips');
+        for (const option of triageModeChoice(triageMode ?? item.info?.new_tasks)) {
+          const chip = element('button', `chip ${option.on ? 'on' : 'suggest'}`, option.title);
+          chip.type = 'button';
+          chip.setAttribute('aria-pressed', String(option.on));
+          chip.onclick = async () => {
+            try { await call('/api/settings/triage-new-tasks', { method: 'POST', body: JSON.stringify({ value: option.value }) }); triageMode = option.value; notify(`Новые задачи: ${option.title}`); render(); }
+            catch (error) { notify(error.message); }
+          };
+          chips.append(chip);
+        }
+        nodes.push(...section('Новые задачи', [chips]));
         const lines = aiStatsLines(item.info?.decisions);
         if (lines.length) nodes.push(...section('За 7 дней', lines.map((line) => element('p', 'system-detail', line))));
       }

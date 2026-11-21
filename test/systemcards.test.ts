@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { systemGroups, cardFacts, aiStatsLines } from '../web/systemcards.js';
+import { systemGroups, cardFacts, aiStatsLines, triageModeChoice } from '../web/systemcards.js';
 
 // The System screen by cards (owner, 2026-11-21): channels and services; what needs attention first.
 const source = (id: string, state: string, extra: Record<string, unknown> = {}) => ({ source: id, title: id, state, on: state !== 'off', pulse_at: null, last_event_at: null, detail: null, failed_24h: 0, ...extra });
@@ -38,4 +38,10 @@ test('the AI triage card says what became of its proposals and tasks over the we
   ]);
   assert.deepEqual(aiStatsLines({}), ['За 7 дней решений ИИ не было']);
   assert.deepEqual(aiStatsLines(undefined), []);
+});
+
+test('the triage mode choice marks the current value; unknown reads as unconfirmed', () => {
+  assert.deepEqual(triageModeChoice('confirmed').map((item: any) => [item.value, item.title, item.on]),
+    [['unconfirmed', 'ИИ предлагает — я подтверждаю', false], ['confirmed', 'ИИ создаёт сразу', true]]);
+  assert.deepEqual(triageModeChoice(undefined).map((item: any) => item.on), [true, false]);
 });
