@@ -14,14 +14,18 @@ const KIND_ICONS = { chat: '💬', group: '👥', phone: '📞', me: '📝' };
 const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many);
 export const tasksLabel = (n) => `${n} ${plural(n, 'задача', 'задачи', 'задач')}`;
 
-// The task a swipe or a tap opens: overdue, due today, waiting for a decision, then the most recently changed.
-export function pickTask(conversation, now = new Date()) {
+// Urgency of open tasks: overdue, due today, waiting for a decision, then the most recently changed (topic.js too).
+export function byUrgency(now = new Date()) {
   const rank = (task) => {
     const due = dueState(task, now);
     return due === 'overdue' ? 0 : due === 'today' ? 1 : ['inbox', 'review'].includes(task.status) ? 2 : 3;
   };
-  return conversation.tasks.filter((task) => isOpen(task) && !task.filed)
-    .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))[0] ?? null;
+  return (a, b) => rank(a) - rank(b) || (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+}
+
+// The task a swipe or a tap opens: the most urgent open one (byUrgency).
+export function pickTask(conversation, now = new Date()) {
+  return conversation.tasks.filter((task) => isOpen(task) && !task.filed).sort(byUrgency(now))[0] ?? null;
 }
 
 // The task of a tile: the most urgent open one holding a waiting message — the AI put it there (`guessed`) —, else
