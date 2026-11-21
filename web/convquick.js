@@ -1,7 +1,7 @@
 // Actions on a «Беседы» queue tile (CONCEPT.md §5, docs/plans/2026-11-20-queue-and-task-screen-design.md):
 // swipe right-to-left — to the archive (`answered` on the latest message; a new message brings it back); swipe
 // left-to-right — the task: confirms the one the AI chose for what waits (the owner's link takes it out of the queue),
-// opens the owner's own, or makes one from what waits; «⏱» — `snooze`, «↥» — `requeue`, «+ задача…» — a new task
+// opens the owner's own, or makes one from what waits; «⏱» — `snooze`, «↧» — `requeue`, «+ задача…» — a new task
 // of mine with everything that waits. Each with «Вернуть» in the toast where it can be undone. swipePlan and the
 // message choices are pure.
 import { swipe } from './swipe.js';

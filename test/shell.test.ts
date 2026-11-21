@@ -86,7 +86,7 @@ test('capture config carries the pulse thresholds and weights (registry/pulse.js
   } finally { await f.stop(); }
 });
 
-test('an open conversation\'s bar has «⏱ Отложить», «↥ В конец очереди» and «В архив» (the queue, CONCEPT.md §5)', async () => {
+test('an open conversation\'s bar has «⏱ Отложить», «↧ В конец очереди» and «В архив» (the queue, CONCEPT.md §5)', async () => {
   const { readFileSync } = await import('node:fs');
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   for (const [id, label] of [['chat-snooze', 'Отложить'], ['chat-requeue', 'В конец очереди'], ['chat-archive', 'В архив']]) {

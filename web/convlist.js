@@ -1,8 +1,8 @@
 // A tile of the «Беседы» queue (CONCEPT.md §5, docs/plans/2026-11-20-queue-and-task-screen-design.md): line 1 —
 // the kind of chat, the channel and the contact, the time; line 2 — the conversation's task (with «?» when the AI
-// chose it) or «+ задача…» to type one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↥ В конец
+// chose it) or «+ задача…» to type one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↧ В конец
 // очереди»; a small line — how long it waits, how many messages, the counterparty, a tag or two. A tile of the archive
-// above the queue (`archived`) has no «⏱»/«↥» and says when it was handled or until when it is snoozed. tileTask,
+// under the queue (`archived`) has no «⏱»/«↧» and says when it was handled or until when it is snoozed. tileTask,
 // pickTask and tileFacts are pure (tested in node); convRow builds the DOM.
 import { snippet } from './projection.js';
 import { isOpen, dueState } from './taskfold.js';
@@ -139,13 +139,13 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
   body.append(head, taskLine, text, meta);
   body.onclick = () => on.open(conversation.key);
   body.onkeydown = (event) => { if (event.key === 'Enter' && event.target === body) on.open(conversation.key); };
-  // Right: the time, then «⏱» and «↥» spanning the rest.
+  // Right: the time, then «⏱» and «↧» spanning the rest.
   const side = element('div', 'conv-side');
   const snooze = element('button', 'conv-act', '⏱');
   snooze.type = 'button';
   snooze.setAttribute('aria-label', 'Отложить');
   snooze.onclick = (event) => { event.stopPropagation(); on.snooze(snooze); };
-  const requeue = element('button', 'conv-act', '↥');
+  const requeue = element('button', 'conv-act', '↧');
   requeue.type = 'button';
   requeue.setAttribute('aria-label', 'В конец очереди');
   requeue.onclick = (event) => { event.stopPropagation(); on.requeue(); };

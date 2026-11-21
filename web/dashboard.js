@@ -1,7 +1,7 @@
-// The dashboard — the centre by default (docs/plans/2026-11-21-workspace-redesign-design.md). It reads bottom-up like
-// the conversation queue: the task in work at the bottom by the input («Готово», «⏸ Пауза»), or «Вернуться к…» when
-// nothing is in work; above it the paused tasks; above them the next ones in the order of «До конца дня», the
-// nearest next lowest. Data: pulse.js; actions: taskquick.js. dashboardOrder is pure.
+// The dashboard — the centre by default (docs/plans/2026-11-21-workspace-redesign-design.md). It reads top-down, the
+// most important on top (owner, 2026-11-21): the task in work first («Готово», «⏸ Пауза»), or «Вернуться к…» when
+// nothing is in work; under it the paused tasks, the latest first; under them the next ones in the order of «До конца
+// дня». Data: pulse.js; actions: taskquick.js. dashboardOrder is pure.
 import { pulseBlocks } from './pulse.js';
 import { workedMinutes, isMineToDo } from './focus.js';
 import { taskRow } from './tasklist.js';
@@ -21,12 +21,12 @@ function button(className, text, onClick, label) {
   return node;
 }
 
-// Top to bottom: [{ kind: 'next' | 'paused' | 'work', task }].
+// Top to bottom: [{ kind: 'work' | 'paused' | 'next', task }].
 export function dashboardOrder({ work = null, paused = [], today = [] }) {
   return [
-    ...[...today].reverse().map((task) => ({ kind: 'next', task })),
-    ...[...paused].reverse().map((task) => ({ kind: 'paused', task })),
     ...(work ? [{ kind: 'work', task: work }] : []),
+    ...paused.map((task) => ({ kind: 'paused', task })),
+    ...today.map((task) => ({ kind: 'next', task })),
   ];
 }
 
@@ -38,7 +38,7 @@ const nextOf = (task) => (task.resumeNote && task.resumeNote !== 'в работ�
 export function dashboardNodes(ctx) {
   const { tasks, viewsOf, now, quick, config } = ctx;
   const blocks = pulseBlocks({ tasks, projects: ctx.projects ?? [], now, config });
-  // Nothing in work: the newest paused task becomes «Вернуться к…» at the bottom.
+  // Nothing in work: the newest paused task becomes «Вернуться к…» on top.
   const back = blocks.work ? null : blocks.paused[0] ?? null;
   const rows = dashboardOrder({ work: blocks.work, paused: back ? blocks.paused.slice(1) : blocks.paused, today: blocks.today });
   const nodes = [];
@@ -47,12 +47,6 @@ export function dashboardNodes(ctx) {
     if (quick?.start && isMineToDo(task) && task.status !== 'waiting') item.append(button('pulse-start', '▶', () => quick.start(task, blocks.work), `В работу: ${task.title}`));
     return item;
   };
-  let label = null;
-  for (const { kind, task } of rows) {
-    if (kind === 'work') continue;
-    if (kind !== label) { nodes.push(element('div', 'dash-label', kind === 'next' ? 'Следующие' : '⏸ На паузе')); label = kind; }
-    nodes.push(row(task));
-  }
   if (blocks.work) {
     const card = element('section', 'pulse-work');
     card.append(element('span', 'pulse-work-label', '⏵ В работе'));
@@ -69,6 +63,12 @@ export function dashboardNodes(ctx) {
     actions.append(button('chip', 'Вернуться', () => quick?.start(back, null)));
     card.append(actions);
     nodes.push(card);
+  }
+  let label = null;
+  for (const { kind, task } of rows) {
+    if (kind === 'work') continue;
+    if (kind !== label) { nodes.push(element('div', 'dash-label', kind === 'next' ? 'Следующие' : '⏸ На паузе')); label = kind; }
+    nodes.push(row(task));
   }
   if (!nodes.length) nodes.push(element('div', 'empty', 'Всё спокойно.'));
   return nodes;

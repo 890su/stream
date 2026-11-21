@@ -107,7 +107,7 @@ export function project(events, pendingIds = new Set()) {
       // A message split off its chat into a conversation of its own (task manager spec; «Вернуть в беседу» undoes).
       case 'split': view.split = true; break;
       case 'unsplit': view.split = false; break;
-      // The queue (CONCEPT.md §2.5): «⏱ Отложить» and «↥ В конец очереди» stack up; their undo takes the last one off.
+      // The queue (CONCEPT.md §2.5): «⏱ Отложить» and «↧ В конец очереди» stack up; their undo takes the last one off.
       case 'snooze': view.snoozes.push({ at: correction.ts, until: correction.payload.data.until }); break;
       case 'unsnooze': view.snoozes.pop(); break;
       case 'requeue': view.requeues.push(correction.ts); break;

@@ -1,7 +1,8 @@
-// The conversation queue in the left panel (docs/plans/2026-11-21-workspace-redesign-design.md): the oldest waiting
-// at the bottom, above it the folded «Архив» of handled conversations, five at a time (convarchive.js); pinned chats
-// («Избранные») and a search by name or number on top. A redraw keeps the row being read where it was (scrollpin.js);
-// the first one goes to the bottom. Tiles, swipes, ⏱ and ↥ as before (convlist.js, convquick.js).
+// The conversation queue in the left panel (docs/plans/2026-11-21-workspace-redesign-design.md): the longest waiting
+// on top (owner, 2026-11-21: the most important on top), the newest last, under them the folded «Архив» of handled
+// conversations, five at a time (convarchive.js); pinned chats («Избранные») and a search by name or number above.
+// A redraw keeps the row being read where it was (scrollpin.js); the first one starts at the top. Tiles, swipes, ⏱
+// and ↧ as before (convlist.js, convquick.js).
 import { convRow } from './convlist.js';
 import { queueList, archiveList } from './queue.js';
 import { createArchive } from './convarchive.js';
@@ -10,7 +11,7 @@ import { snoozeMenu } from './snooze.js';
 import { favourites, searchConversations } from './favourites.js';
 import { PULSE_DEFAULTS } from './pulse.js';
 
-const NEAR_BOTTOM = 120;
+const NEAR_TOP = 40;
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -83,16 +84,16 @@ export function createQueuePanel({ box, scroller, feed, convQuick, limits, activ
       snooze: (anchor) => snoozeMenu(anchor, { config, onPick: (until) => convQuick?.snooze(item, until) }),
       requeue: () => convQuick?.requeue(item),
     } });
-    const children = [...archive.nodes(archiveList(shown), (item) => tile(item, true))];
-    for (const item of waiting) children.push(tile(item, false));
-    if (!waiting.length) children.push(element('div', 'empty', feed.tagFilter().length ? 'Под фильтр ничего не подходит.' : 'Очередь пуста — всё разобрано. Новые сообщения появятся здесь, внизу.'));
-    const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
-    const held = saved ?? (rendered && !pin && !nearBottom ? rowOnScreen(scroller, box) : null);
+    const children = waiting.map((item) => tile(item, false));
+    if (!waiting.length) children.push(element('div', 'empty', feed.tagFilter().length ? 'Под фильтр ничего не подходит.' : 'Очередь пуста — всё разобрано. Новые сообщения появятся здесь.'));
+    children.push(...archive.nodes(archiveList(shown), (item) => tile(item, true)));
+    const nearTop = scroller.scrollTop < NEAR_TOP;
+    const held = saved ?? (rendered && !pin && !nearTop ? rowOnScreen(scroller, box) : null);
     saved = null;
     box.replaceChildren(...children);
     if (pin && putBack(scroller, box, pin)) { /* the row stays where it was */ }
     else if (held) putBack(scroller, box, held);
-    else scroller.scrollTop = scroller.scrollHeight; // the oldest waiting by the bottom edge
+    else scroller.scrollTop = 0; // the longest waiting on top
     if (reveal) archive.reveal();
     rendered = true;
   }

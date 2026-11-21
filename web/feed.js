@@ -68,8 +68,9 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     try { localStorage.setItem('stream.taskGrouping', grouping); } catch { /* storage may be blocked */ }
     return render({ top: true, quiet: true });
   };
-  // Lists read from the top; a conversation and the Лента read from the bottom, like a chat.
-  const readsDown = () => mode === 'tasks'; // the queue and a chat start at the bottom, by the input
+  // Lists and the dashboard read from the top (the most important on top); a conversation and the Лента read from the
+  // bottom, like a chat.
+  const readsDown = () => mode === 'tasks' || mode === 'home' || (mode === 'conversations' && !conversationKey);
   // The queue settings (registry/conversations.json); a cached registry of an older version has none.
   const queueConfig = () => (limits.conversations?.queue ? limits.conversations : DEFAULT_CONVERSATIONS);
   const load = createMediaLoader();
@@ -174,7 +175,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };
     const filtered = Boolean((mode === 'feed' && sourceFilter) || tagFilter.size || conversationKey);
     if (mode === 'home' || (mode === 'conversations' && !inside)) {
-      // The dashboard: in work at the bottom by the input, paused and next above it (dashboard.js).
+      // The dashboard: in work on top, paused and next under it (dashboard.js).
       const viewsOf = (task) => task.messages.map((id) => views.get(id)).filter(Boolean);
       children.push(...dashboardNodes({ tasks: taskList, projects: projectList, viewsOf, now, quick, config: limits.pulse ?? PULSE_DEFAULTS, onOpen: onOpenTask }));
     } else if (mode === 'tasks') {

@@ -46,10 +46,10 @@ test('a new message in a queued conversation keeps its moment', () => {
   assert.equal(queue.pending.length, 2);
 });
 
-test('order: the newest moment first (top), the oldest last (by the input); a new message moves nothing', () => {
+test('order: the longest waiting first (top), the newest last; a new message moves nothing', () => {
   const events = [tg('1', '2026-11-18T08:00:00', 'a'), tg('2', '2026-11-18T09:00:00', 'b'), tg('3', '2026-11-18T10:00:00', 'c')];
-  assert.deepEqual(queueList(run(events)).map((c: any) => c.key), ['tg:3', 'tg:2', 'tg:1']);
-  assert.deepEqual(queueList(run([...events, tg('1', '2026-11-18T11:00:00', 'ещё')])).map((c: any) => c.key), ['tg:3', 'tg:2', 'tg:1']);
+  assert.deepEqual(queueList(run(events)).map((c: any) => c.key), ['tg:1', 'tg:2', 'tg:3']);
+  assert.deepEqual(queueList(run([...events, tg('1', '2026-11-18T11:00:00', 'ещё')])).map((c: any) => c.key), ['tg:1', 'tg:2', 'tg:3']);
 });
 
 test('my reply, the archive mark or an owner task link close what came before; a later incoming waits again', () => {

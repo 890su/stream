@@ -106,7 +106,7 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .tg-delivery { font-size: 13px; color: var(--bubble-meta); padding-top: 2px; }
 .tg-delivery.failed { color: var(--danger); font-weight: 600; }
 .tg-delivery .link-button { font-size: 13px; min-height: 32px; color: inherit; text-decoration: underline; }
-/* The bar of an open conversation: «назад», the title, ⏱ ↥ 🗄 on the first line; the text actions wrap to a second
+/* The bar of an open conversation: «назад», the title, ⏱ ↧ 🗄 on the first line; the text actions wrap to a second
    line when the phone is too narrow (the title keeps at least 120 px). */
 .chat-bar { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 2px 4px 4px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 14.5px; }
 .chat-bar .card-row { display: flex; align-items: center; gap: 4px; min-width: 0; }

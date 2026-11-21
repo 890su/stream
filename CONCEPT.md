@@ -21,7 +21,7 @@ updated: 2026-11-19
   answer, tap «Готово» and correct the triage.
 - **Model.** An append-only event journal; recomputable layers over it: normalization → interpretation → tasks
   and actions. Every task leads back to its source message. Edits, archive, delete and status changes are events too.
-- **Screen.** «Беседы» — the queue of what waits for me, oldest at the bottom by the input, handled bottom-up; a
+- **Screen.** «Беседы» — the queue of what waits for me, the longest waiting on top, handled top-down; a
   conversation is always two: me and a person (or a group chat). «Задачи» — what to do (the pulse, saved lists); a
   task opens full-screen with its people and the conversation with each (2026-11-20). The message feed is a technical
   view from the menu. Input is one row at the bottom.
@@ -178,8 +178,9 @@ request and the job given to a partner).
   channel, also typed on the phone), a task made or chosen by me for its messages (AI linking is not my action),
   the archive (`answered`), «⏱ Отложить» (`snooze` with `until`). An action closes the waiting messages up to the
   last one it touches. A conversation's place is its queue moment: the first waiting incoming, or a later `requeue`
-  («↥ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back at once). The
-  oldest is at the bottom by the input, new ones arrive on top; a new message in a queued conversation and opening
+  («↧ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back at once). The
+  longest waiting is on top, new ones arrive at the end (owner, 2026-11-21: the most important on top; before that the
+  queue read bottom-up from the input); a new message in a queued conversation and opening
   it without an action do not move it. No urgency order for now (owner, 2026-11-20). Incoming from before the queue started (`queue.since`, `registry/conversations.json`) waits for nobody — the history
   imported with the channels; after it nothing drops out of the queue by age. Calls: a missed or rejected call waits, an
   answered one does not; my outgoing call or SMS is a reply.
@@ -570,8 +571,8 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 what follows where they differ): the left panel has three bodies switched by flat icons at its foot — «Беседы» (the
 queue with its archive, favourites, search), «Контакты» (the address book) and «Задачи» (filters: current, active,
 control, waiting, future, unconfirmed, done, cancelled; projects, saved views, tags); the mode is kept on the device.
-The centre opens on the dashboard, read bottom-up like the queue: the task in work at the bottom, paused ones above,
-the next ones in the order of «До конца дня» above them. There is no view switch by the input; the dashboard is the
+The centre opens on the dashboard, read top-down like the queue: the task in work on top, paused ones under it,
+the next ones in the order of «До конца дня» under them. There is no view switch by the input; the dashboard is the
 root of the system back, a conversation opened over a list goes back to it, one opened from the queue on a phone goes
 back to the panel on the same tile. Deploy 2 (shipped the same day): a conversation and a task are one card. A conversation's head:
 who and the channel, the topic line («+ задача…», the AI's offer with ✓ ✕, the task, the «задача» switch), «ждёт …»
@@ -605,7 +606,8 @@ root; the paragraphs on «Беседы» states, «Завершённые» and 
   Its counter belongs to the open context: the Беседы list — tasks for «Сегодня»; an open conversation — its open
   tasks (a tap shows Задачи filtered by it); the Задачи list — conversations «срочно» and «ждёт меня»; an open task —
   its conversations in those states (a tap opens the first of them, or its first conversation).
-- **«Беседы»** — the queue (§2.5, 2026-11-20): oldest waiting at the bottom by the input, scrolled there on opening.
+- **«Беседы»** — the queue (§2.5, 2026-11-20; top-down since 2026-11-21): the longest waiting on top, opening starts
+  there; the folded «🗄 Архив» under the newest waiting, opening downward five at a time.
   A tile of four lines: chat kind icon, channel short name — contact; the conversation's task (a tap opens it) or
   «+ задача…» to type one; two lines of the last message; on the right the time and two buttons — «⏱ Отложить»
   (15 min, 1 h, 3 h, noon, evening, morning — offered by the time of day; «📅» — a date) and «↥ В конец очереди»;

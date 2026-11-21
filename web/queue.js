@@ -1,7 +1,7 @@
 // The queue of conversations (CONCEPT.md §2.5, docs/plans/2026-11-20-queue-and-task-screen-design.md): which
 // conversations wait for the owner and since when. Only the owner's actions take a conversation out: a reply, a task
 // made or chosen by the owner for its messages (an AI link is not one), the archive mark (`answered`), «⏱ Отложить»
-// (`snooze`). Its place is its queue moment — the first waiting message, lifted by «↥» (`requeue`) or by the end of a
+// (`snooze`). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
 // snooze; a new message in a queued conversation does not move it. Pure — no DOM.
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe } from './taskfold.js';
@@ -72,10 +72,10 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   return { waiting: true, moment, since: pending[0].event.ts, pending, snoozedUntil: null };
 }
 
-// The waiting conversations as the screen shows them top to bottom: the newest moment first, the oldest last (by
-// the input).
+// The waiting conversations as the screen shows them top to bottom: the longest waiting first, the newest moment
+// last (owner, 2026-11-21: the most important on top).
 export function queueList(list) {
-  return list.filter((item) => item.queue?.waiting).sort((a, b) => time(b.queue.moment) - time(a.queue.moment) || a.key.localeCompare(b.key));
+  return list.filter((item) => item.queue?.waiting).sort((a, b) => time(a.queue.moment) - time(b.queue.moment) || a.key.localeCompare(b.key));
 }
 
 // When the owner last dealt with a conversation: its latest message (a reply is one), the archive mark, a snooze, a

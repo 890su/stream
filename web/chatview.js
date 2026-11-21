@@ -15,7 +15,7 @@ const $ = (selector) => document.querySelector(selector);
 
 // One conversation (CONCEPT.md §2.5, §5): the head of its card on top (design 2026-11-21) — who and which channel
 // (a tap — the person's card), the topic line (cardhead.js: «+ задача…», the AI's offer with ✓ ✕, the task, the
-// «задача» switch), how long it waits with ⏱ ↥ 🗄, «≡» unfolds every cut, the folded details. In Беседы it is the
+// «задача» switch), how long it waits with ⏱ ↧ 🗄, «≡» unfolds every cut, the folded details. In Беседы it is the
 // conversation screen («назад» or the system back); in Задачи and Лента it is the contact filter (× removes it).
 // The composer's recipient is the chat chosen in the line of interlocutors over the input (peoplerow.js): by default
 // the chat of the latest incoming message. With none chosen (switched off, a phone number, a chat with only my
@@ -167,7 +167,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   window.addEventListener('popstate', () => { if (key && !history.state?.conversation) close(); });
   $('#chat-close').onclick = leave;
   $('#chat-back').onclick = leave;
-  // ⏱ ↥ 🗄: the mark goes on the conversation's latest message, then back to the queue. Leaving without them keeps
+  // ⏱ ↧ 🗄: the mark goes on the conversation's latest message, then back to the queue. Leaving without them keeps
   // the conversation's place (owner, 2026-11-20).
   const queued = (run) => { const conversation = feed.conversation(); if (!conversation || !convQuick) return; run(conversation); leave(); };
   $('#chat-snooze').onclick = (event) => {
