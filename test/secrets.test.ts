@@ -7,7 +7,8 @@ import { SecretStore, SECRETS } from '../src/secrets.ts';
 import { fixture } from './helpers.ts';
 
 // Keys entered on the System screen (owner, 2026-11-21: «как WhatsApp» — connected from the app). Values are made up.
-const TG = '123456789:AAEhBP0av28X3dYvUpJl9qW0d3w1eQ1oVrc';
+// Not a real token: built from a repeated letter so no secret scanner takes it for one.
+const TG = `123456789:${'x'.repeat(31)}oVrc`;
 
 test('a key entered in the app wins over .env, is kept privately, never described with its value', () => {
   const dir = mkdtempSync(join(tmpdir(), 'secrets-'));
@@ -50,10 +51,10 @@ test('the routes: the owner sets and removes a key, never reads it back; Google 
     assert.equal((await put('STREAM_TG_BY_BOT_TOKEN', 'nope')).status, 400);
     assert.equal((await f.request('/api/google/connect')).status, 409, 'no Google client yet');
     assert.equal((await put('STREAM_GOOGLE_CLIENT_ID', '1234-abc.apps.googleusercontent.com')).status, 200);
-    assert.equal((await put('STREAM_GOOGLE_CLIENT_SECRET', 'GOCSPX-made-up-secret-value')).status, 200);
+    assert.equal((await put('STREAM_GOOGLE_CLIENT_SECRET', 'test-client-secret-value')).status, 200);
     const listed = await (await f.request('/api/secrets')).json() as { secrets: { name: string; set: boolean }[] };
     assert.ok(listed.secrets.find((item) => item.name === 'STREAM_GOOGLE_CLIENT_SECRET')!.set);
-    assert.ok(!JSON.stringify(listed).includes('made-up-secret'), 'never read back');
+    assert.ok(!JSON.stringify(listed).includes('client-secret-value'), 'never read back');
     assert.equal((await f.request('/api/google/connect')).status, 200, 'Google is on at once');
     assert.equal((await f.request('/api/secrets/STREAM_GOOGLE_CLIENT_SECRET', { method: 'DELETE' })).status, 200);
     assert.equal((await f.request('/api/google/connect')).status, 409);
