@@ -260,3 +260,6 @@ body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix
 .cut span { flex: 0 1 auto; max-width: 70%; text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cut.open { color: var(--accent-strong); }
 .in-cut { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+/* ✨ at the right of the tags row (magic.js) and its menu; «скоро» items are greyed. */
+.tag-row .magic-button { font-size: 16px; }
+.magic-menu button:disabled { opacity: .5; }

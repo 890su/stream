@@ -28,6 +28,8 @@ import { setupViewTitle, backTarget, toHome } from './viewswitch.js';
 import { googleNotice } from './googlebox.js';
 import { isWide } from './layout.js';
 import { setupSwipeZones } from './swipezones.js';
+import { setupMagic } from './magic.js';
+import { topicOf } from './topic.js';
 import { visibleTasks } from './filters.js';
 
 let details; // right panel «Подробности» (CONCEPT.md §5)
@@ -253,6 +255,21 @@ async function main() {
   setupViews(feed);
   setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });
   setupMessageActions(feed, composer, config);
+  // ✨ in the tags row (magic.js): about the open task card, else the open conversation.
+  setupMagic({ button: $('#magic-button'),
+    topic: () => {
+      const open = details?.taskOpen() ? feed.task(details.current()?.id ?? '') ?? null : null;
+      if (open) return { state: open.unconfirmed ? 'unconfirmed' : 'task', tasks: [open] };
+      const conversation = feed.mode() === 'conversations' ? feed.conversation() : null;
+      return conversation ? topicOf(conversation) : null;
+    },
+    on: {
+      create: () => {
+        const open = details?.taskOpen() ? feed.task(details.current()?.id ?? '') : null;
+        if (open?.unconfirmed) quick.act(open, { unconfirmed: false }, `Задача подтверждена: «${open.title}»`); else chatView?.makeTask();
+      },
+      finish: (task) => quick.done(task),
+    } });
   // Screen swipes (25 / 50 / 25): the left panel from the left, the right one from the right (one tab: no views to
   // swipe between since the view switch is gone).
   setupSwipeZones({ isWide, notify, drawer, details,

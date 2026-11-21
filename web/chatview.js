@@ -210,5 +210,6 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     leave();
     notify(`«${conversation.title}» больше не отслеживается`, { label: 'Отменить', run: () => Promise.all(anchors.map((anchor) => correct(anchor, 'track'))) });
   });
-  return { open, close, leave, sync, key: () => key };
+  // ✨ «Создать задачу» (magic.js): the topic switch on.
+  return { open, close, leave, sync, key: () => key, makeTask: () => topicActs.toggle(true) };
 }
