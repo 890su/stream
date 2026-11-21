@@ -303,7 +303,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     return view && !view.deleted && (!conversationKey || convKeys.get(id) === conversationKey) && [...tagFilter].every((tag) => view.tags.includes(tag));
   });
   // A project in Задачи (null — back to the lists).
-  function setProject(id) { quick?.reset?.(); if (id) viewStore.replace({ when: 'all', where: { project: id } }); else viewStore.reset(); return render({ top: true, quiet: true }); }
+  function setProject(id) { quick?.reset?.(); if (id) viewStore.replace({ when: 'all', whose: 'all', where: { project: id } }); else viewStore.reset(); return render({ top: true, quiet: true }); }
   viewStore.onChange(() => { quick?.reset?.(); void render({ top: true, quiet: true }); });
   function setTaskFilter(id) {
     quick?.reset?.();

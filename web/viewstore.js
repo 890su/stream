@@ -9,6 +9,7 @@ export function createViewStore(storage = browserStorage()) {
   const read = (key, fallback) => { try { const raw = storage?.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; } };
   const write = (key, value) => { try { storage?.setItem(key, JSON.stringify(value)); } catch { /* storage may be blocked */ } };
   let view = { ...DEFAULT_VIEW, ...read(KEYS.view, {}) };
+  if (view.when === 'pulse') view = { ...DEFAULT_VIEW }; // the pulse became the dashboard (2026-11-21)
   view.where = { ...(view.where ?? {}) };
   let saved = read(KEYS.saved, []);
   const listeners = new Set();

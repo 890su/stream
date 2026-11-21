@@ -27,7 +27,7 @@ export function taskViewNodes(ctx) {
 
   if (ctx.project) {
     // One project: its header, then every section (empty ones too: the plan stays visible), loose tasks first.
-    const shown = applyView(tasks, { ...view, when: 'pulse' }, data).filter((task) => task.status !== 'cancelled' && (task.status !== 'done' || ctx.showDone));
+    const shown = applyView(tasks, { ...view, when: 'any' }, data).filter((task) => task.status !== 'cancelled' && (task.status !== 'done' || ctx.showDone));
     nodes.push(projectHead(ctx.project, shown, ctx.projectActions));
     for (const section of projectSections(ctx.project, shown)) {
       if (section.title) nodes.push(projectSectionHead(section, ctx.project, ctx.projectActions));

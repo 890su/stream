@@ -2,19 +2,20 @@
 import { DEFAULT_VIEW, WHEN, WHOSE, applyView, countsFor, viewTitle, isDefaultView } from './viewstate.js';
 import { projectTreeBlock } from './projectpanel.js';
 
+// The panel's filters, in order (docs/plans/2026-11-21-workspace-redesign-design.md).
 const SHORTCUTS = [
-  DEFAULT_VIEW,
-  { ...DEFAULT_VIEW, when: 'inbox' },
-  { ...DEFAULT_VIEW, when: 'all', whose: 'review' },
-  { ...DEFAULT_VIEW, when: 'all' },
+  { title: 'Текущие', view: { when: 'current', whose: 'all', where: {} } },
+  { title: 'Активные', view: { when: 'all', whose: 'mine', where: {} } },
+  { title: 'На контроле', view: { when: 'all', whose: 'control', where: {} } },
+  { title: 'В ожидании', view: { when: 'waiting', whose: 'all', where: {} } },
+  { title: 'Будущие', view: { when: 'future', whose: 'all', where: {} } },
+  { title: 'Неподтверждённые', view: { when: 'unconfirmed', whose: 'all', where: {} } },
+  { title: 'Законченные', view: { when: 'done', whose: 'all', where: {} } },
+  { title: 'Отменённые', view: { when: 'cancelled', whose: 'all', where: {} } },
 ];
 
 export function taskShortcuts(tasks, data) {
-  return SHORTCUTS.map((view) => ({
-    view,
-    title: view.whose === 'review' ? WHOSE.find((item) => item.id === 'review').title : viewTitle(view),
-    count: view.when === 'pulse' ? null : applyView(tasks, view, data).length,
-  }));
+  return SHORTCUTS.map(({ title, view }) => ({ view, title, count: applyView(tasks, view, data).length }));
 }
 
 function element(tag, className, text) {
@@ -56,7 +57,7 @@ export function viewPanel(ctx) {
   const data = { now: new Date(), projects, people };
   const box = element('div', 'view-panel');
   const open = (next) => { store.replace(next); done(); };
-  const set = (change) => store.set(view.when === 'pulse' ? { when: 'all', ...change } : change);
+  const set = (change) => store.set(change);
 
   const shortcuts = taskShortcuts(tasks, data);
   const located = Object.values(view.where ?? {}).some(Boolean);
@@ -69,11 +70,11 @@ export function viewPanel(ctx) {
 
   const project = view.where?.project;
   const tree = projectTreeBlock({ projects, tasks, current: project, onCreate: ctx.onCreateProject,
-    onOpen: (id) => open({ when: 'all', where: { project: id } }) });
+    onOpen: (id) => open({ when: 'all', whose: 'all', where: { project: id } }) });
   box.append(section('projects', 'Проекты', expanded, Boolean(project), tree));
 
   const chips = (axis, options) => {
-    const counts = countsFor(tasks, view.when === 'pulse' ? { ...view, when: 'all' } : view, axis, data);
+    const counts = countsFor(tasks, view, axis, data);
     const wrap = element('div', 'chips view-axis');
     for (const option of options) {
       const on = view[axis] === option.id;
@@ -85,7 +86,7 @@ export function viewPanel(ctx) {
     return wrap;
   };
   const options = [
-    element('h3', 'drawer-section', 'Срок и состояние'), chips('when', WHEN.filter((option) => option.id !== 'pulse')),
+    element('h3', 'drawer-section', 'Срок и состояние'), chips('when', WHEN),
     element('h3', 'drawer-section', 'Роль'), chips('whose', WHOSE),
     directorySearch(ctx, view, data, set),
     ...savedViews(ctx, view, data, open),
@@ -112,7 +113,7 @@ function directorySearch(ctx, view, data, set) {
       const other = key === 'person' ? 'counterparty' : 'person';
       const on = view.where[key] === item.id;
       const where = { [key]: on ? null : item.id, [other]: null };
-      const count = applyView(ctx.tasks, { ...view, when: view.when === 'pulse' ? 'all' : view.when,
+      const count = applyView(ctx.tasks, { ...view, when: view.when,
         where: { ...view.where, [key]: item.id, [other]: null } }, data).length;
       return row(name(item), count, on, () => { set({ where }); ctx.done(); });
     });

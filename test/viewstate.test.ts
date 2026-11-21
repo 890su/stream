@@ -50,27 +50,59 @@ test('where: a project with its children, a counterparty, a person by their poin
   assert.deepEqual(ids({ when: 'all', where: { person: 'h1' } }, { people }), ['жду']);
 });
 
-test('counts per option keep the other axes; the title names the view; default is the pulse', () => {
+test('counts per option keep the other axes; the title names the view; the default view', () => {
   const counts = countsFor(tasks, { ...DEFAULT_VIEW, whose: 'watch' }, 'when', { now, projects: [], people: [] });
   assert.equal(counts.get('all'), 2);
   assert.equal(counts.get('done'), 0);
   assert.equal(viewTitle({ when: 'all', whose: 'watch', where: { counterparty: 'c1' } }, { counterparties: [{ id: 'c1', title: 'ООО Пример' }] }), 'Все открытые · Слежу · ◆ ООО Пример');
   assert.equal(isDefaultView(DEFAULT_VIEW), true);
-  assert.equal(isDefaultView({ ...DEFAULT_VIEW, whose: 'mine' }), false);
-  assert.ok(WHEN.length >= 7 && WHOSE.length === 5);
+  assert.equal(isDefaultView({ ...DEFAULT_VIEW, whose: 'watch' }), false);
+  assert.ok(WHEN.length >= 7 && WHOSE.length === 6);
 });
 
 test('a list by dates: overdue, today, tomorrow, this week, later, no date', () => {
-  const groups = dueGroups(applyView(tasks, { ...DEFAULT_VIEW, when: 'all' }, { now, projects: [], people: [] }), now);
+  const groups = dueGroups(applyView(tasks, { ...DEFAULT_VIEW, when: 'all', whose: 'all' }, { now, projects: [], people: [] }), now);
   assert.deepEqual(groups.map((group: any) => [group.title, group.tasks.length]), [['Просрочено', 1], ['Сегодня', 1], ['Позже', 1], ['Без срока', 6]]);
 });
 
-test('the panel has one dashboard and shortcuts with counts for inbox, review and open tasks', () => {
-  const entries = taskShortcuts(tasks, { now, projects: [], people: [] });
-  assert.deepEqual(entries.map(({ title, count }: { title: string; count: number | null }) => [title, count]),
-    [['Пульт', null], ['Входящие', 1], ['На проверке', 1], ['Все открытые', 9]]);
-  assert.deepEqual(entries[0].view, DEFAULT_VIEW);
-  assert.deepEqual(entries[2].view, { when: 'all', whose: 'review', where: {} });
+// The panel's filters (design 2026-11-21): current, active, control, waiting, future, unconfirmed, done, cancelled.
+const extra = [...tasks,
+  t('в работе', { status: 'doing' }),
+  t('пауза', { resumeNote: 'на шаге 2' }),
+  t('план', { plan: { start: '2026-11-22T09:00:00' } }),
+  t('отменено', { status: 'cancelled' }),
+  t('ии', { unconfirmed: true }),
+];
+const idsOf = (view: object) => applyView(extra, { ...DEFAULT_VIEW, ...view }, { now, projects: [], people: [] }).map((task: any) => task.id).sort();
+
+test('panel filters: current, waiting, future, unconfirmed, done, cancelled', () => {
+  assert.deepEqual(idsOf({ when: 'current', whose: 'all' }), ['в работе', 'пауза'].sort());
+  assert.deepEqual(idsOf({ when: 'waiting', whose: 'all' }), ['жду']);
+  const future = idsOf({ when: 'future', whose: 'all' });
+  for (const id of ['через неделю', 'отложено', 'план']) assert.ok(future.includes(id), id);
+  assert.equal(future.includes('сегодня'), false);
+  assert.deepEqual(idsOf({ when: 'unconfirmed', whose: 'all' }), ['ии', 'новое'].sort());
+  assert.deepEqual(idsOf({ when: 'done', whose: 'all' }), ['готово']);
+  assert.deepEqual(idsOf({ when: 'cancelled', whose: 'all' }), ['отменено']);
+});
+
+test('control: delegated and review, not waiting', () => {
+  assert.deepEqual(idsOf({ when: 'all', whose: 'control' }), ['поручено', 'проверить'].sort());
+});
+
+test('an unconfirmed task shows only under «Неподтверждённые»', () => {
+  for (const option of WHEN.filter((item: any) => item.id !== 'unconfirmed')) {
+    assert.equal(idsOf({ when: option.id, whose: 'all' }).includes('ии'), false, option.id);
+  }
+});
+
+test('eight shortcuts in the panel order; the default is my active tasks', () => {
+  const entries = taskShortcuts(extra, { now, projects: [], people: [] });
+  assert.deepEqual(entries.map((item: any) => item.title),
+    ['Текущие', 'Активные', 'На контроле', 'В ожидании', 'Будущие', 'Неподтверждённые', 'Законченные', 'Отменённые']);
+  assert.deepEqual(entries.map((item: any) => item.count), [2, 10, 2, 1, 3, 2, 1, 1]);
+  assert.deepEqual(DEFAULT_VIEW, { when: 'all', whose: 'mine', where: {} });
+  assert.equal(WHEN.some((item: any) => item.id === 'pulse'), false);
 });
 
 test('the view store keeps filters and saved views from devices with an old layout preference', async () => {
@@ -83,7 +115,7 @@ test('the view store keeps filters and saved views from devices with an old layo
   store.set({ whose: 'watch' });
   store.set({ where: { project: 'p1' } });
   store.set({ where: { counterparty: 'c1' } });
-  assert.deepEqual(store.get(), { when: 'pulse', whose: 'watch', where: { project: 'p1', counterparty: 'c1' } });
+  assert.deepEqual(store.get(), { when: 'all', whose: 'watch', where: { project: 'p1', counterparty: 'c1' } });
   store.set({ where: { project: null } });
   assert.deepEqual(store.get().where, { counterparty: 'c1' });
   const saved = store.save('Выезды');
@@ -96,6 +128,8 @@ test('the view store keeps filters and saved views from devices with an old layo
   assert.equal(store.saved().length, 0);
   assert.equal(store.layout, undefined);
   assert.equal(data.get('stream.taskPanel.layout'), '"tree"', 'the legacy choice is ignored');
+  const old = createViewStore({ getItem: (key: string) => (key === 'stream.taskView.v1' ? '{"when":"pulse","whose":"all","where":{}}' : null), setItem: () => {} });
+  assert.deepEqual(old.get(), DEFAULT_VIEW, 'a stored pulse view reads as the default');
 });
 
 test('«Не учтено»: closed tasks whose report has gaps', () => {
