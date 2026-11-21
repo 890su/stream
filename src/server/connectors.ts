@@ -11,6 +11,7 @@ import type { Namer } from '../tasks/namer.ts';
 import { createGoogle, type GoogleOptions } from './google.ts';
 import type { SecretStore } from '../secrets.ts';
 import type { ConnectorSwitches } from '../switches.ts';
+import type { TriageNewTasks } from '../ownersettings.ts';
 import { sourceTitle } from './system.ts';
 import { nameId } from '../ids.ts';
 
@@ -19,7 +20,8 @@ import { nameId } from '../ids.ts';
 // or a switch flipped on the System screen applies at once — a bot or a client restarts or stops, the triage pauses,
 // Google stops reading. Switching is written to the feed.
 
-export type TriageOptions = { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number; factory?: (key: string) => { planner: Planner; namer: Namer } };
+export type TriageOptions = { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number; factory?: (key: string) => { planner: Planner; namer: Namer };
+  newTasks?: () => TriageNewTasks }; // how the AI makes new tasks (src/ownersettings.ts)
 
 export function createConnections({ store, live, ownerToken, telegram, whatsapp, triage, google, secrets, switches }: {
   store: JournalStore; live: LiveFeed; ownerToken: string;
@@ -58,7 +60,7 @@ export function createConnections({ store, live, ownerToken, telegram, whatsapp,
   // The triage: its AI key from the System screen or .env; paused while switched off.
   const aiKey = () => secrets?.get('ANTHROPIC_API_KEY');
   const made = aiKey() && triage?.factory ? triage.factory(aiKey()!) : null;
-  const triageWorker = triage ? new Triage({ store, live, planner: made?.planner ?? triage.planner, namer: made?.namer ?? triage.namer ?? null, reason: triage.reason }) : null;
+  const triageWorker = triage ? new Triage({ store, live, planner: made?.planner ?? triage.planner, namer: made?.namer ?? triage.namer ?? null, reason: triage.reason, ...(triage.newTasks ? { newTasks: triage.newTasks } : {}) }) : null;
   let triaging = false;
   function syncTriage(): void {
     if (!triageWorker) return;

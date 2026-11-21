@@ -20,6 +20,7 @@ import type { GoogleOptions } from './google.ts';
 import type { SecretStore } from '../secrets.ts';
 import { secretsRoute } from './secrets.ts';
 import { ConnectorSwitches } from '../switches.ts';
+import { OwnerSettings } from '../ownersettings.ts';
 import { createConnections, type TriageOptions } from './connectors.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
@@ -34,13 +35,14 @@ const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`)
 // secrets (optional) — keys entered on the System screen (src/secrets.ts): the Google client, the bot tokens, the AI
 // key, used over .env and applied at once. switches (optional) — connections switched off there (src/switches.ts).
 // The connections themselves run in src/server/connectors.ts.
-export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google, secrets, switches }: {
+export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google, secrets, switches, settings }: {
   store: JournalStore; ownerToken: string; phoneToken?: string; viberToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
   triage?: TriageOptions;
   whatsapp?: { accounts: string[]; authRoot: string; factory?: SocketFactory; retryMs?: number };
   google?: GoogleOptions;
   secrets?: SecretStore;
   switches?: ConnectorSwitches;
+  settings?: OwnerSettings; // the owner's settings from the System screen (src/ownersettings.ts)
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
@@ -88,6 +90,16 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           try { body = JSON.parse((await readBody(request, 1024)).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'Некорректный JSON'); }
           if (typeof body.on !== 'boolean') throw new HttpError(400, 'Нужно on: true или false');
           switches.set(toggle[1]!, body.on);
+          json(response, 200, { ok: true });
+          return;
+        }
+        // How the AI makes new tasks (design 2026-11-21): «ИИ предлагает — я подтверждаю» or «ИИ создаёт сразу».
+        if (url.pathname === '/api/settings/triage-new-tasks' && request.method === 'POST') {
+          if (!settings) throw new HttpError(404, 'Настройки недоступны');
+          let body: { value?: unknown };
+          try { body = JSON.parse((await readBody(request, 1024)).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'Некорректный JSON'); }
+          if (!OwnerSettings.isMode(body.value)) throw new HttpError(400, 'Нужно value: unconfirmed или confirmed');
+          settings.setTriageNewTasks(body.value);
           json(response, 200, { ok: true });
           return;
         }

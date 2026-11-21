@@ -498,3 +498,24 @@ test('an existing task is never changed by the AI: a proposal with its reason wa
     assert.equal(s.tasks().find((task) => task.id === site!.id)!.proposed, 'done');
   } finally { s.cleanup(); }
 });
+
+test('triage v16 makes new tasks unconfirmed unless the owner chose otherwise; filed notes never wait', async () => {
+  for (const mode of ['unconfirmed', 'confirmed'] as const) {
+    const storage = temporaryStore();
+    try {
+      const plan = (input: PlanInput): PlanOutput => ({ conversation_only: [], tasks: [
+        { task_id: null, title: 'Настроить роутер', responsible: 'me', executors: [], author: null, template: null, due: null, message_ids: [input.messages[0]!.id], confidence: 0.9, note: null, filed: false, done: false, alternatives: [] },
+        { task_id: null, title: 'Дневник', responsible: 'me', executors: [], author: null, template: 'diary', due: null, message_ids: [input.messages[1]!.id], confidence: 0.9, note: null, filed: true, done: false, alternatives: [] },
+      ] });
+      const triage = new Triage({ store: storage.store, live: new LiveFeed(), planner: async (input) => plan(input), newTasks: () => mode });
+      storage.store.appendEvent(event({ payload: { text: 'роутер у клиента' } }));
+      storage.store.appendEvent(event({ payload: { text: 'сегодня был у клиента' } }));
+      for (const batch of triage.ready(Date.now() + QUIET + 1000)) await triage.run(batch);
+      const tasks = foldTasks(storage.store.triage.taskEvents());
+      const router = tasks.find((task) => task.title === 'Настроить роутер')!;
+      const diary = tasks.find((task) => task.title === 'Дневник')!;
+      assert.equal(router.unconfirmed, mode === 'unconfirmed' ? true : undefined, mode);
+      assert.equal(diary.unconfirmed, undefined, 'a filed note is not asked about');
+    } finally { storage.cleanup(); }
+  }
+});

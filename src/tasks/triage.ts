@@ -1,3 +1,4 @@
+import type { TriageNewTasks } from '../ownersettings.ts';
 import { createHash } from 'node:crypto';
 import type { JournalStore } from '../store/store.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
@@ -99,10 +100,13 @@ export class Triage {
   #reason: string;
   #timer?: ReturnType<typeof setInterval>;
   #busy = false;
+  #newTasks: () => TriageNewTasks;
 
   // `planner` null — triage is off (no AI key); `reason` says why on the System screen.
   // `namer` — titles of tasks the owner made by hand (namer.ts); none — they keep the text they were made from.
-  constructor({ store, live, planner, namer = null, reason = 'нет ключа ИИ' }: { store: JournalStore; live: LiveFeed; planner: Planner | null; namer?: Namer | null; reason?: string }) {
+  // `newTasks` — how new tasks are made (src/ownersettings.ts, v16): `unconfirmed` waits for the owner's ✓.
+  constructor({ store, live, planner, namer = null, reason = 'нет ключа ИИ', newTasks = () => 'confirmed' }: { store: JournalStore; live: LiveFeed; planner: Planner | null; namer?: Namer | null; reason?: string; newTasks?: () => TriageNewTasks }) {
+    this.#newTasks = newTasks;
     this.#store = store;
     this.#live = live;
     this.#planner = planner;
@@ -114,7 +118,7 @@ export class Triage {
     const month = new Date().toISOString().slice(0, 7);
     const week = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const info = { model: tasksConfig.ai.model, spent_usd: Number(this.#store.triage.spent(month).toFixed(4)), budget_usd: tasksConfig.ai.monthly_budget_usd, quiet_s: tasksConfig.quiet_s, quiet_s_by_stream: tasksConfig.quiet_s_by_stream,
-      decisions: this.#store.ailog.stats(week) }; // the AI log over 7 days, for the System card
+      decisions: this.#store.ailog.stats(week), new_tasks: this.#newTasks() }; // the AI log over 7 days and the mode, for the System card
     const previous = this.#store.status.pulse(TRIAGE_SOURCE, state, detail, info, new Date().toISOString());
     stateChanged(this.#store, this.#live, TRIAGE_SOURCE, state, previous, detail);
   }
@@ -281,6 +285,8 @@ export class Triage {
           op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles: rolesOf(planned, add),
           status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
           add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked, ...checklist, ...placed,
+          // v16: a new task waits for the owner unless he chose «ИИ создаёт сразу»; filed notes and «Разобрать» never wait.
+          ...(this.#newTasks() === 'unconfirmed' && !planned.filed && planned !== fallback ? { unconfirmed: true } : {}),
           ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
           ...(reason ? { reason: reason.slice(0, 500) } : {}),

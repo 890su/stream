@@ -9,6 +9,7 @@ import { createApp } from '../src/server/http.ts';
 import type { JournalEvent } from '../src/contracts/validate.ts';
 import type { SocketFactory } from '../src/whatsapp/types.ts';
 import { SecretStore } from '../src/secrets.ts';
+import { OwnerSettings } from '../src/ownersettings.ts';
 import { ConnectorSwitches } from '../src/switches.ts';
 
 export const token = 'test-owner-token-for-local-tests-only';
@@ -38,7 +39,8 @@ export async function fixture({ phone = phoneToken, telegram, whatsapp, google, 
     google: google ? { clientId: 'test-client', clientSecret: 'test-secret', publicUrl: 'https://stream.example', dir: join(storage.directory, 'google'), fetch: google.fetch }
       : secrets ? { publicUrl: 'https://stream.example', dir: join(storage.directory, 'google') } : undefined,
     secrets: secrets ? new SecretStore(join(storage.directory, 'secrets.json'), {}) : undefined,
-    switches: secrets ? new ConnectorSwitches(join(storage.directory, 'switches.json')) : undefined });
+    switches: secrets ? new ConnectorSwitches(join(storage.directory, 'switches.json')) : undefined,
+    settings: secrets ? new OwnerSettings(join(storage.directory, 'settings.json')) : undefined });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
