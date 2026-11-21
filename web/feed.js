@@ -168,6 +168,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         item.append(...group.map((view, index) => node(view, index === 0)));
       }
       item.classList.toggle('close', close && children.at(-1)?.className !== 'date-pill');
+      item.classList.remove('in-cut'); // bubbles are cached: a tint from an unfolded cut must not stay
       children.push(item);
     }
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };

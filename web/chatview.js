@@ -44,7 +44,8 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   } });
   const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
   const detailsOpen = new Set(); // conversations whose details the owner unfolded (this session)
-  const save = (id, change) => composer.queue(makeTaskChange(id, change)).catch((error) => { notify(error.message); throw error; });
+  // true when the change is queued; a failure is said and the act stops (no success toast after it).
+  const save = (id, change) => composer.queue(makeTaskChange(id, change)).then(() => true, (error) => { notify(error.message); return false; });
   // The topic line's acts (cardhead.js); each with «Вернуть».
   const topicActs = {
     openTask: (id) => openTask(id),
@@ -54,16 +55,16 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
       const ids = waiting.length ? waiting : [topic.last()?.id].filter(Boolean);
       if (!ids.length) return;
       const id = crypto.randomUUID();
-      await save(id, { ...ownTask(title, ids[0]), add: ids }).catch(() => null);
-      notify(`Задача: «${title}»`, { label: 'Вернуть', run: () => save(id, { op: 'update', status: 'cancelled', remove: ids }).catch(() => {}) });
+      if (!await save(id, { ...ownTask(title, ids[0]), add: ids })) return;
+      notify(`Задача: «${title}»`, { label: 'Вернуть', run: () => save(id, { op: 'update', status: 'cancelled', remove: ids }).then(() => {}) });
     },
     async confirm(task) {
-      await save(task.id, { op: 'update', unconfirmed: false }).catch(() => null);
-      notify(`Задача подтверждена: «${task.title}»`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', unconfirmed: true }).catch(() => {}) });
+      if (!await save(task.id, { op: 'update', unconfirmed: false })) return;
+      notify(`Задача подтверждена: «${task.title}»`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', unconfirmed: true }).then(() => {}) });
     },
     async reject(task) {
-      await save(task.id, { op: 'update', status: 'cancelled' }).catch(() => null);
-      notify(`Без задачи: «${task.title}» отклонена`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', status: task.status, unconfirmed: true }).catch(() => {}) });
+      if (!await save(task.id, { op: 'update', status: 'cancelled' })) return;
+      notify(`Без задачи: «${task.title}» отклонена`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', status: task.status, unconfirmed: true }).then(() => {}) });
     },
     async toggle(on) {
       const conversation = feed.conversation();
@@ -72,8 +73,8 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
       if (!on) {
         const task = current.tasks.find((item) => !item.unconfirmed);
         if (!task) return;
-        await save(task.id, { op: 'update', unconfirmed: true }).catch(() => null);
-        notify(`«${task.title}» — снова тема, не задача`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', unconfirmed: false }).catch(() => {}) });
+        if (!await save(task.id, { op: 'update', unconfirmed: true })) return;
+        notify(`«${task.title}» — снова тема, не задача`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', unconfirmed: false }).then(() => {}) });
         return;
       }
       const offered = current.tasks.find((item) => item.unconfirmed);
@@ -109,7 +110,9 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     $('#chat-title').textContent = [channels.join(', '), conversation?.title ?? 'Беседа'].filter(Boolean).join(' · ');
     // The topic line and the facts: own notes and task notes have no topic of their own.
     const topical = conversation && key !== 'me' && !key.startsWith('task:');
-    $('#chat-topic').replaceChildren(...(topical ? [topicLine({ topic: topicOf(conversation), on: topicActs })] : []));
+    // A title being typed in «+ задача…» survives live updates.
+    const typing = $('#chat-topic').contains(document.activeElement) && document.activeElement.value;
+    if (!typing) $('#chat-topic').replaceChildren(...(topical ? [topicLine({ topic: topicOf(conversation), on: topicActs })] : []));
     $('#chat-topic').hidden = !topical;
     const facts = conversation?.queue?.waiting ? tileFacts(conversation, { now: new Date(), hotHours: 2, counterparties: feed.counterparties() }) : null;
     $('#chat-facts').textContent = facts ? `ждёт ${facts.waited}` : conversation?.queue?.snoozedUntil ? 'отложена' : '';
