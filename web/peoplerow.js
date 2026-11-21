@@ -1,10 +1,11 @@
-// Participants of an open conversation (owner's design, 2026-11-19): one sideways line over the tags row with the
-// same tiles as the task card (participants.js). A conversation and its task have one set of participants and roles:
-// the line edits the conversation's task. Without a task the line shows who writes in the chat, read-only.
-// Pure helpers are tested in node.
-import { participantsBlock } from './participants.js';
+// The line over the input of an open conversation (owner, 2026-11-21): only who I talk with — one tile per chat
+// that can be answered (a person in Telegram BY or PL, Viber, WhatsApp; a group), no roles, no «Я», no «Система».
+// As in the task card, the chosen one stands leftmost with 📣 and gets the reply; a tap on another chooses it, a tap
+// on the chosen one switches it off — the next message is then a note in the conversation. Roles stay in the task
+// card. Pure helpers are tested in node.
+import { chatOf } from './projection.js';
 import { partyOfEvent } from './parties.js';
-import { makeTaskChange, makePersonChange, makeCounterpartyChange } from './shared.js';
+import { accountTitle } from './tgbubble.js';
 
 // The task of a conversation: the one it is named after (`task:<id>`), else its latest changed open task.
 export function conversationTask(conversation) {
@@ -15,7 +16,7 @@ export function conversationTask(conversation) {
   return [...open].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0] ?? null;
 }
 
-// Who writes in a conversation without a task: me and every other author, once.
+// Who writes in a conversation: me and every other author, once.
 export function chatParties(conversation) {
   const parties = ['me'];
   for (const view of conversation?.views ?? []) {
@@ -26,25 +27,71 @@ export function chatParties(conversation) {
   return parties;
 }
 
-// deps: { feed, queue(entry), notify, openCounterparty(id) }
-export function setupPeopleRow({ feed, queue, notify, openCounterparty }) {
+// The chats of a conversation a reply can go to, the latest first: { key, account, chat_id, title, group, last }.
+// Only messenger chats with an address (a WhatsApp or Viber chat without a phone cannot be answered from here).
+export function replyChats(conversation) {
+  const chats = new Map();
+  for (const view of conversation?.views ?? []) {
+    if (view.deleted) continue;
+    const data = view.event?.payload?.data ?? {};
+    if (!data.telegram && !data.viber && !data.whatsapp && !data.outbound) continue;
+    const chat = chatOf(view.event);
+    if (!chat || chat.chat_id === '' || chat.chat_id === undefined || chat.chat_id === null) continue;
+    const last = view.event.ts;
+    const known = chats.get(chat.key);
+    if (!known || last >= known.last) chats.set(chat.key, { ...chat, last, title: chat.title || known?.title || 'Чат' });
+  }
+  return [...chats.values()].sort((a, b) => b.last.localeCompare(a.last) || a.key.localeCompare(b.key));
+}
+
+// The tiles' order: the chosen chat leftmost, then the rest, the latest first.
+export function rowOrder(chats, chosenKey) {
+  const chosen = chats.find((chat) => chat.key === chosenKey);
+  return chosen ? [chosen, ...chats.filter((chat) => chat !== chosen)] : chats;
+}
+
+const PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>';
+const GROUP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.8a3 3 0 0 1 0 5.4M17.5 14.2A5.5 5.5 0 0 1 20.5 19"/></svg>';
+const channel = (account) => (account === 'viber' ? 'Viber' : account.startsWith('whatsapp_') ? 'WA' : accountTitle(account).replace(/^Telegram\s*/, ''));
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// `chosen(conversation)` — the chosen chat or null; `onPick(chat | null)` — a tap chose one or switched it off.
+export function setupPeopleRow({ chosen, onPick }) {
   const row = document.querySelector('#people-row');
-  const send = (entry) => queue(entry).catch((error) => notify(error.message));
   function render(conversation) {
-    if (!conversation || conversation.key === 'me') { row.hidden = true; row.replaceChildren(); return; }
-    const scroll = row.querySelector('.people-cloud')?.scrollLeft ?? 0;
-    const task = conversationTask(conversation);
-    const shown = task ?? { id: `conversation:${conversation.key}`, roles: { members: chatParties(conversation) }, muted: [] };
-    row.replaceChildren(participantsBlock(shown, {
-      strip: true, views: conversation.views, people: feed.people(), counterparties: feed.counterparties(),
-      save: (change) => send(makeTaskChange(task.id, change)),
-      savePerson: (id, change) => send(makePersonChange(id, change)), saveCounterparty: (id, change) => queue(makeCounterpartyChange(id, change)),
-      onOpenCounterparty: openCounterparty,
-      readOnly: task ? null : () => notify('Роли и участники — у задачи беседы: создайте её кнопкой «+ Задача»'),
-    }));
+    const chats = conversation && conversation.key !== 'me' ? replyChats(conversation) : [];
+    if (!chats.length) { row.hidden = true; row.replaceChildren(); return; }
+    const current = chosen(conversation);
+    const box = element('div', 'card-people strip');
+    const line = element('div', 'people-row');
+    const cloud = element('div', 'people-cloud');
+    const inner = element('div', 'people-cloud-inner');
+    for (const chat of rowOrder(chats, current?.key)) {
+      const on = chat.key === current?.key;
+      const tile = element('span', `person-tile${on ? ' selected' : ''}`);
+      const body = element('button', 'person-tile-body');
+      body.type = 'button';
+      body.setAttribute('aria-pressed', String(on));
+      body.setAttribute('aria-label', `${chat.title}, ${accountTitle(chat.account)}: ${on ? 'ответ уходит сюда, выключить' : 'отвечать сюда'}`);
+      const icon = element('span', 'person-tile-icon');
+      icon.innerHTML = chat.group ? GROUP : PERSON;
+      body.append(icon, element('span', 'person-tile-caption', chat.title), element('small', 'person-tile-channel', channel(chat.account)));
+      body.onclick = () => onPick(on ? null : chat);
+      tile.append(body);
+      if (on) tile.append(element('span', 'person-tile-speaker', '📣'));
+      inner.append(tile);
+    }
+    cloud.append(inner);
+    line.append(cloud);
+    box.append(line);
+    row.replaceChildren(box);
     row.hidden = false;
-    const cloud = row.querySelector('.people-cloud');
-    if (cloud) cloud.scrollLeft = scroll;
   }
   return { render };
 }

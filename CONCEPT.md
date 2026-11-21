@@ -198,6 +198,12 @@ request and the job given to a partner).
   conversation back from the archive by itself. Its tasks stay in «Задачи» as they are.
 - Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
   reply goes through the chosen channel (the input row, §2.9); each message shows to whom, where and when.
+- **Over the input of an open conversation** (owner, 2026-11-21): a line of interlocutors only — one tile per chat
+  that can be answered (a person in Telegram BY or PL, Viber, WhatsApp; a group), no roles, no «Я», no «Система».
+  As in the task card, the chosen one stands leftmost with 📣 and gets the reply; by default — the chat of the latest
+  incoming message. A tap on another chooses it; a tap on the chosen one switches it off, and the next message stays
+  in the conversation as a note. Roles are edited in the task card. The row under it: «связь», the tags, the switch —
+  the recipient chip shows there only when «связь» chose someone other than the line.
 
 **Message links** (2026-11-14) — hints for triage, from reliable to guessed:
 1. explicit owner signals: «продолжить» on a message, «связать…» while typing, «Связать» / «Отделить»

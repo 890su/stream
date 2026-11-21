@@ -35,8 +35,10 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
   let topic = null; // { last: () => view }
   // While messages are selected (select.js) the tag row acts on the selection: link, unlink, tags.
   let selection = null; // { link(), unlink(), toggleTag(tag), stateOf(tag) }
-  // Chips before the tags: link / unlink for a selection; else the chosen conversation or task and the recipient.
-  const lead = () => (selection ? leadButtons({ selection }) : [link.chip(), recipients.chip()].filter(Boolean));
+  // Chips before the tags: link / unlink for a selection; else the conversation or task chosen in «связь» and the
+  // recipient — unless it is the one chosen in an open conversation's line of interlocutors (peoplerow.js).
+  const lead = () => (selection ? leadButtons({ selection })
+    : [link.chip(), chatDefault && recipients.selected()?.key === chatDefault.key ? null : recipients.chip()].filter(Boolean));
   // The connection of the draft: the explicit "continue" mode, a conversation chosen in the window, or the topic.
   const continuation = () => (mode?.type === 'continue' ? { target: mode.view.id, on: true }
     : link.continuation() ?? (topic?.last() ? { target: topic.last().id, on: true } : undefined));

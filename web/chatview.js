@@ -12,15 +12,31 @@ const $ = (selector) => document.querySelector(selector);
 
 // One conversation (CONCEPT.md §2.5, §5): the bar on top with its title. In Беседы it is the conversation screen
 // («назад» or the system back returns to the list); in Задачи and Лента it is the contact filter (× removes it).
-// The composer's recipient is the conversation's reply chat. Without one (a phone number, a chat with only my
+// The composer's recipient is the chat chosen in the line of interlocutors over the input (peoplerow.js): by default
+// the chat of the latest incoming message. With none chosen (switched off, a phone number, a chat with only my
 // messages) the composer continues the conversation's last message, so the note stays in it; own notes («Я») are
 // plain notes. «Не отслеживать» for Telegram conversations.
 export function setupChatView({ feed, composer, correct, notify, openTask = () => {}, openPerson = () => {}, openCounterparty = () => {}, convQuick = null, queueConfig = null }) {
   const bar = $('#chat-bar');
-  // Participants over the tags: the same set as the conversation's task (peoplerow.js).
-  const people = setupPeopleRow({ feed, queue: composer.queue, notify, openCounterparty });
   let key = null;
   let applied = null; // the reply chat this view put into the composer
+  // The chat chosen in the line per conversation: a chat, or null — switched off. Not chosen yet — the default.
+  const picked = new Map();
+  // The default: the chat of the latest incoming message, unless its participant is switched off in the task.
+  const chosen = (conversation) => {
+    if (!conversation) return null;
+    if (picked.has(conversation.key)) return picked.get(conversation.key);
+    return conversation.reply && answerable(conversation, conversationTask(conversation)?.muted ?? []) ? conversation.reply : null;
+  };
+  // Interlocutors over the tags (peoplerow.js): a tap chooses whom the reply goes to.
+  const people = setupPeopleRow({ chosen, onPick: (chat) => {
+    const conversation = feed.conversation();
+    if (!conversation) return;
+    picked.set(conversation.key, chat);
+    composer.chat(chat);
+    applied = chat;
+    sync();
+  } });
   const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
 
   // The composer follows the conversation: its reply chat once known (unless another recipient was chosen), else
@@ -28,10 +44,10 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   // off in the conversation (its task's `muted`) is not the recipient by default.
   function steer() {
     const conversation = feed.conversation();
-    const muted = !conversation?.reply || !answerable(conversation, conversationTask(conversation)?.muted ?? []);
-    const reply = muted ? null : conversation.reply;
-    if (muted && applied && composer.recipient()?.key === applied.key) { composer.chat(null); applied = null; }
-    if (reply && !applied && !composer.recipient()) { composer.chat(reply); applied = reply; }
+    const reply = chosen(conversation);
+    // The line's choice goes into the composer unless the owner chose another recipient in «связь».
+    const ours = !composer.recipient() || composer.recipient().key === applied?.key;
+    if (ours && (reply?.key ?? null) !== (applied?.key ?? null)) { composer.chat(reply); applied = reply; }
     const wanted = Boolean(key && key !== 'me' && !reply && conversation);
     if (wanted && !composer.topic()) composer.enterTopic(topic, 'Сообщение в беседу');
     else if (!wanted && composer.topic() === topic) composer.leaveTopic();
