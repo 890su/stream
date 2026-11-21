@@ -4,6 +4,7 @@ import { isParty, partyOfEvent, PARTY_LABELS } from './parties.js';
 import { chatOf } from './projection.js';
 import { TRIGGER_PX, zoneOf } from './swipezones.js';
 import { describeChange } from './taskfold.js';
+import { cutSegments } from './topic.js';
 
 export function conversationParty(conversation) {
   const { key, group, title } = conversation;
@@ -46,6 +47,12 @@ export function cardOrder(parties, { stored = [], lastAuthor = null } = {}) {
   return [...new Set([...recent, ...first, ...parties])];
 }
 
+// After a swipe the chosen tile moves leftmost only once the owner starts typing (design 2026-11-21).
+export function frontOrder(order, party, typed) {
+  if (!typed || !order.includes(party)) return order;
+  return [party, ...order.filter((item) => item !== party)];
+}
+
 // The pager keeps its order even while the strip moves the selected tile to the front.
 export function pagerOrder(parties, previous = []) {
   return [...previous.filter((party) => parties.includes(party)), ...parties.filter((party) => !previous.includes(party))];
@@ -71,35 +78,18 @@ export function bindTalkSwipe(screen, active, move) {
   }, { passive: true });
 }
 
-// The pane's items: each message, and in «fold» mode runs of other tasks' messages as one fold.
-// [{ kind: 'message', view, other } | { kind: 'fold', views }]
-export function talkItems(views, taskId, mode = 'dim', linked = new Set()) {
-  const items = [];
-  for (const view of views) {
-    const other = !linked.has(view.id) && !(view.taskIds ?? []).includes(taskId);
-    const last = items.at(-1);
-    if (other && mode === 'fold') {
-      if (last?.kind === 'fold') last.views.push(view); else items.push({ kind: 'fold', views: [view] });
-    } else items.push({ kind: 'message', view, other });
-  }
-  return items;
-}
-
 // The task's own feed: messages and changes ({ ts, text }) by time.
 export function withLog(views, log = []) {
   const items = [...views.map((view) => ({ kind: 'message', view, ts: view.event.ts })), ...log.map((entry) => ({ kind: 'log', ts: entry.ts, text: entry.text }))];
   return items.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
 }
 
-const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many);
-export const foldLabel = (n) => `· ${n} ${plural(n, 'сообщение', 'сообщения', 'сообщений')} по другим делам ·`;
-
 const ORDER_KEY = 'stream.cardOrder.';
-const MODE_KEY = 'stream.cardOthers';
 export const readOrder = (taskId) => { try { return JSON.parse(localStorage.getItem(ORDER_KEY + taskId) ?? '[]'); } catch { return []; } };
 export const writeOrder = (taskId, order) => { try { localStorage.setItem(ORDER_KEY + taskId, JSON.stringify(order.slice(0, 12))); } catch { /* storage may be blocked */ } };
-export const readMode = () => { try { return localStorage.getItem(MODE_KEY) === 'fold' ? 'fold' : 'dim'; } catch { return 'dim'; } };
-const writeMode = (mode) => { try { localStorage.setItem(MODE_KEY, mode); } catch { /* storage may be blocked */ } };
+// Unfolded cuts per task for this session: { open: Set of cut keys, all: «≡» }.
+const unfolded = new Map();
+const cutsOf = (taskId) => { if (!unfolded.has(taskId)) unfolded.set(taskId, { open: new Set(), all: false }); return unfolded.get(taskId); };
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 export function taskActivity(task) {
@@ -117,11 +107,12 @@ function element(tag, className, text) {
   return node;
 }
 
-// One conversation of the task. ctx: { task, party, conversation (or null), taskViews, bubble(view), unlink(id), name,
-// onMode(), log ([{ ts, text }] — the task's changes, shown in «Я») }.
-export function talkPane({ task, party, conversation, taskViews, bubble, unlink, name, onMode, log = [] }) {
+// One conversation of the task. ctx: { task, party, conversation (or null), taskViews, tasksById, bubble(view),
+// unlink(id), name, onMode() — a redraw, log ([{ ts, text }] — the task's changes, shown in «Я») }. The task's own
+// messages (and their continuations) are open; the rest fold into cuts by task (topic.js), «≡» unfolds them all.
+export function talkPane({ task, party, conversation, taskViews, tasksById = new Map(), bubble, unlink, name, onMode, log = [] }) {
   const box = element('div', 'card-talk');
-  const mode = readMode();
+  const cuts = cutsOf(task.id);
   const internal = Object.hasOwn(PARTY_LABELS, party);
   const views = party === 'me' ? taskViews : internal ? taskViews.filter((view) => partyOfEvent(view.event) === party)
     : (conversation?.views ?? []).filter((view) => !view.deleted);
@@ -130,10 +121,12 @@ export function talkPane({ task, party, conversation, taskViews, bubble, unlink,
   if (!internal && conversation) {
     box.setAttribute('role', 'region');
     box.setAttribute('aria-label', `Переписка: ${name}`);
-    const toggle = element('button', 'link-button card-talk-mode', mode === 'fold' ? '◐ другие дела: свёрнуты' : '◐ другие дела: бледнее');
+    head.append(element('span', 'card-talk-title', name));
+    const toggle = element('button', 'icon-button card-talk-all', '≡');
     toggle.type = 'button';
-    toggle.setAttribute('aria-label', mode === 'fold' ? 'Показать сообщения по другим делам бледнее' : 'Свернуть сообщения по другим делам');
-    toggle.onclick = () => { writeMode(mode === 'fold' ? 'dim' : 'fold'); onMode(); };
+    toggle.setAttribute('aria-pressed', String(cuts.all));
+    toggle.setAttribute('aria-label', cuts.all ? 'Свернуть другие темы' : 'Развернуть все темы');
+    toggle.onclick = () => { cuts.all = !cuts.all; if (!cuts.all) cuts.open.clear(); onMode(); };
     head.append(toggle);
   }
   box.append(head);
@@ -166,12 +159,15 @@ export function talkPane({ task, party, conversation, taskViews, bubble, unlink,
     box.append(list);
     return box;
   }
-  for (const item of talkItems(views, task.id, mode, new Set(taskViews.map((view) => view.id)))) {
-    if (item.kind === 'message') { list.append(message(item.view, item.other)); continue; }
-    const fold = element('button', 'card-talk-fold', foldLabel(item.views.length));
-    fold.type = 'button';
-    fold.onclick = () => fold.replaceWith(...item.views.map((view) => message(view, true)));
-    list.append(fold);
+  for (const segment of cutSegments(views, { focus: task.id, tasksById, keep: new Set(taskViews.map((view) => view.id)), open: cuts.open, all: cuts.all })) {
+    if (segment.kind === 'open') { for (const view of segment.views) list.append(message(view, false)); continue; }
+    const line = element('button', `cut${segment.open ? ' open' : ''}`);
+    line.type = 'button';
+    line.setAttribute('aria-expanded', String(segment.open));
+    line.append(element('span', null, `${segment.title} · ${segment.views.length}`));
+    line.onclick = () => { if (segment.open) { cuts.open.delete(segment.key); cuts.all = false; } else cuts.open.add(segment.key); onMode(); };
+    list.append(line);
+    if (segment.open) for (const view of segment.views) { const item = message(view, true); item.classList.add('in-cut'); list.append(item); }
   }
   if (!views.length) list.append(element('p', 'drawer-empty', 'Сообщений с этим участником пока нет'));
   box.append(list);

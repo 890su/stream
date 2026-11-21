@@ -10,7 +10,7 @@ import { partyName, PARTY_LABELS } from './parties.js';
 import { STATUSES } from './taskfold.js';
 import { dueChips } from './taskactions.js';
 import { taskChips } from './taskchips.js';
-import { partyConversation, cardOrder, pagerOrder, readOrder, talkPane, lastSpeaker, taskActivity } from './cardtalk.js';
+import { partyConversation, cardOrder, pagerOrder, readOrder, talkPane, lastSpeaker, taskActivity, frontOrder } from './cardtalk.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -85,7 +85,7 @@ export { personParty } from './parties.js'; // moved: the action bar types peopl
 const namer = (directory, conversations, views) => (party) => directory?.people.find((person) => person.status !== 'deleted' && person.points.includes(party))?.name
   ?? (!Object.hasOwn(PARTY_LABELS, party) ? partyConversation(party, conversations)?.title : null) ?? partyName(party, views);
 
-function peopleRows(task, { directory, conversations, views, save, onTalk, onAdd }, groups, order, selected) {
+function peopleRows(task, { directory, conversations, views, save, onTalk, onAdd, talk }, groups, order, selected) {
   const node = element('div', 'task-people');
   const options = { strip: true, views, nameOf: namer(directory, conversations, views), people: directory?.people ?? [],
     save, savePerson: directory?.savePerson };
@@ -95,7 +95,8 @@ function peopleRows(task, { directory, conversations, views, save, onTalk, onAdd
     internal.classList.add('task-internal-people');
     node.append(internal);
   }
-  const front = order.includes(selected) ? [selected, ...order.filter((party) => party !== selected)] : order;
+  // The chosen tile goes leftmost — after a swipe only once the owner types (cardtalk.js frontOrder, details.js).
+  const front = frontOrder(order, selected, !talk?.swiped);
   const external = participantsBlock(task, { ...options, onAdd, menuGroup: 'chat', emptyLabel: 'Нет собеседников', select: select(front) });
   external.classList.add('task-external-people');
   const toggle = button('icon-button card-talk-open', '', () => onTalk(null), selected ? 'Свернуть переписку' : 'Беседы задачи');
@@ -133,7 +134,7 @@ export function taskDetails(task, ctx) {
     const sticky = element('div', 'task-chat-head');
     sticky.append(head, people);
     const conversation = Object.hasOwn(PARTY_LABELS, selected) ? null : partyConversation(selected, conversations);
-    box.append(sticky, talkPane({ task, party: selected, conversation, taskViews: views, bubble, name: namer(directory, conversations, views)(selected),
+    box.append(sticky, talkPane({ task, party: selected, conversation, taskViews: views, tasksById: ctx.tasksById, bubble, name: namer(directory, conversations, views)(selected),
       log: taskActivity(task), unlink: (id) => save({ op: 'update', remove: [id] }), onMode: redraw }));
     onConversation((task.muted ?? []).includes(selected) || selected.startsWith('name:') ? null : conversation);
     return { node: box, order, selected };

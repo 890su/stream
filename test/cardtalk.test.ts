@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { partyConversation, cardOrder, talkItems, foldLabel, taskActivity } from '../web/cardtalk.js';
+import { partyConversation, cardOrder, taskActivity, frontOrder } from '../web/cardtalk.js';
 
 // The conversation in the task card (design 2026-11-20, stage 2). Names are made up.
 const conversations = [{ key: 'tg:501' }, { key: 'tg:-900' }, { key: 'tel:+48600100200' }];
@@ -28,13 +28,22 @@ test('tile order: the chosen one leftmost, recent next; at first whoever wrote l
   assert.deepEqual(cardOrder(parties, { stored: ['tel:+48600100200', 'tg:999', 'me'], lastAuthor: 'tg:501' }), ['tel:+48600100200', 'me', 'tg:501'], 'a party no longer in the task is skipped');
 });
 
-test('other tasks\' messages: dimmed one by one, or folded in runs', () => {
+test('a task\'s conversation: its own messages open, the rest under cuts by task; its continuations count as its own', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { cutSegments } = await import('../web/topic.js');
   const v = (id: string, tasks: string[]) => ({ id, taskIds: tasks });
+  const tasksById = new Map([['t1', { id: 't1', title: 'Роутер', status: 'todo' }], ['t2', { id: 't2', title: 'Счёт', status: 'todo' }]]);
   const views = [v('a', ['t1']), v('b', ['t2']), v('c', []), v('d', ['t1', 't2']), v('e', ['t2'])];
-  assert.deepEqual(talkItems(views, 't1', 'dim').map((item: any) => [item.view.id, item.other]), [['a', false], ['b', true], ['c', true], ['d', false], ['e', true]]);
-  assert.deepEqual(talkItems(views, 't1', 'fold').map((item: any) => (item.kind === 'fold' ? item.views.map((x: any) => x.id).join('') : item.view.id)), ['a', 'bc', 'd', 'e']);
-  assert.deepEqual([foldLabel(1), foldLabel(3), foldLabel(5)], ['· 1 сообщение по другим делам ·', '· 3 сообщения по другим делам ·', '· 5 сообщений по другим делам ·']);
-  assert.deepEqual(talkItems(views, 't1', 'dim', new Set(['c'])).filter((item: any) => !item.other).map((item: any) => item.view.id), ['a', 'c', 'd'], 'continuations in the task are highlighted too');
+  const shape = (keep: Set<string>) => cutSegments(views, { focus: 't1', tasksById, keep }).map((item: any) => (item.kind === 'open' ? item.views.map((x: any) => x.id).join('') : `[${item.title}:${item.views.map((x: any) => x.id).join('')}]`));
+  assert.deepEqual(shape(new Set()), ['a', '[Счёт:b]', '[Без задачи:c]', 'd', '[Счёт:e]']);
+  assert.deepEqual(shape(new Set(['c'])), ['a', '[Счёт:b]', 'cd', '[Счёт:e]'], 'a continuation in the task is open');
+});
+
+test('the swiped-to tile moves leftmost only once typing starts', () => {
+  const order = ['tg:1', 'tg:2', 'tel:+48600100200'];
+  assert.deepEqual(frontOrder(order, 'tg:2', false), order, 'a swipe alone keeps the row');
+  assert.deepEqual(frontOrder(order, 'tg:2', true), ['tg:2', 'tg:1', 'tel:+48600100200']);
+  assert.deepEqual(frontOrder(order, 'tg:9', true), order, 'a party not in the row changes nothing');
 });
 
 test('the activity log separates owner, AI and system entries', () => {

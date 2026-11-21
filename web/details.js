@@ -15,7 +15,7 @@ import { STATUSES, taskOfMessage } from './taskfold.js';
 import { accountTitle } from './tgbubble.js';
 import { versionCard } from './versioncard.js';
 import { taskDetails } from './taskdetails.js';
-import { bindTalkSwipe, writeOrder } from './cardtalk.js';
+import { bindTalkSwipe, writeOrder, frontOrder } from './cardtalk.js';
 import { slideIn } from './swipezones.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
@@ -128,7 +128,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save,
       notify, projects: feed.projects(), doneCards, fields: config.tasks?.report_fields ?? {}, cardSettings: config.tasks?.card,
       directory: directory(), bar: showBar && quick ? barContext(task, { feed, quick, openConversation }) : null,
-      conversations: feed.conversations(), talk, redraw: redrawTask, onConversation: steer, onTalk: openTalk, onExpand: leaveTalk,
+      conversations: feed.conversations(), tasksById: tasksById(), talk, redraw: redrawTask, onConversation: steer, onTalk: openTalk, onExpand: leaveTalk,
       onAdd: (anchor) => addParticipant(task, anchor),
       onDone: () => { if (['done', 'cancelled'].includes(task.status)) quick?.act(task, { status: 'todo' }, `Снова в работе: «${task.title}»`); else quick?.done(task); },
     });
@@ -147,8 +147,19 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     requestAnimationFrame(place); // the input row changes height (its participants line hides under the card)
   }
 
+  // A swipe moves to the next interlocutor without reordering the tiles; the first keystroke then puts him leftmost.
+  let swipedTo = null;
+  document.querySelector('#message').addEventListener('input', () => {
+    if (!swipedTo || !talk || talk.party !== swipedTo) { swipedTo = null; return; }
+    const order = frontOrder(talk.order, swipedTo, true);
+    swipedTo = null;
+    talk.swiped = false;
+    writeOrder(taskId, order);
+    drawTask();
+  });
+
   // Keep one history step while a conversation is expanded inside the card.
-  function openTalk(party) {
+  function openTalk(party, { swiped = false } = {}) {
     if (!taskId) return;
     if (talk && (!party || party === talk.party)) { leaveTalk(); return; }
     if (!talk) {
@@ -156,9 +167,11 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       history.pushState({ task: true, talk: true }, '');
     }
     talk.party = party;
+    swipedTo = swiped ? party : null;
+    talk.swiped = swiped;
     screenBody.scrollTop = 0;
     drawTask();
-    if (talk.order.includes(talk.party)) writeOrder(taskId, [talk.party, ...talk.order.filter((item) => item !== talk.party)]);
+    if (!swiped && talk.order.includes(talk.party)) writeOrder(taskId, frontOrder(talk.order, talk.party, true));
     const match = [...screenBody.querySelectorAll('.details-message.task-linked')].at(-1)
       ?? [...screenBody.querySelectorAll('.details-message')].at(-1);
     const header = screenBody.querySelector('.task-chat-head');
@@ -363,7 +376,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     const { order, party } = talk;
     const index = order.indexOf(party);
     if (order.length < 2 || index < 0) return;
-    openTalk(order[(index + step + order.length) % order.length]);
+    openTalk(order[(index + step + order.length) % order.length], { swiped: true });
     slideIn(screenBody.querySelector('.card-talk'), step > 0 ? 'next' : 'prev');
   });
   // Crossing the breakpoint: a column of its own, or a panel that slides over the feed.
