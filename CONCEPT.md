@@ -353,7 +353,10 @@ conversation. A date, an imperative inside a quotation, and a change of recipien
 direction and available forward metadata, and explicitly returns `conversation_only` IDs. Those messages are
 handled by a versioned `triage_result` journal event, regardless of channel or phrasing. The queue reads this outcome
 without a hidden task. If a message adds an independent request alongside an announcement, the task describes only
-the request. Own notes and material shared into Stream remain captures.
+the request. Own notes and material shared into Stream remain captures. A question or consultation answered in
+the conversation or by a call (how to, what to choose, what it costs, what an error means) is frequent and not billed,
+so it stays in the conversation; a task starts only when work grows out of it (a visit, remote access, a setup, an
+order, an invoice, an offer) or the owner promises to do something later (owner, 2026-11-21, `triage-ai-v17`).
 
 **Which task a message belongs to** (2026-11-18). Triage sees all open tasks (latest changed,
 `open_tasks_in_context`) with their last messages, chats and last activity, plus tasks closed or cancelled within

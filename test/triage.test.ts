@@ -471,6 +471,13 @@ test('the triage keeps personal talk and consultations in the conversation; item
   }
 });
 
+test('the triage keeps a question or consultation answered by message or call in the conversation: it is not billed', async () => {
+  const { PLAN_INSTRUCTIONS } = await import('../src/tasks/planner.ts');
+  for (const rule of ['вопрос или консультация', 'решается ответом в переписке или звонком', 'в оплату не идёт']) {
+    assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
+  }
+});
+
 test('an existing task is never changed by the AI: a proposal with its reason waits for the owner; the log keeps both', async () => {
   let round = 0;
   const s = setup((input) => {
