@@ -101,3 +101,33 @@ CREATE TABLE IF NOT EXISTS ai_usage (
   output_tokens INTEGER NOT NULL,
   cost_usd REAL NOT NULL
 );
+-- The AI log (docs/plans/2026-11-21-ai-proposals-design.md, src/store/ailog.ts): triage runs and their decisions with
+-- reasons and the owner's verdicts — for measuring and improving the triage. Inputs and outputs are gzipped JSON.
+CREATE TABLE IF NOT EXISTS ai_runs (
+  id TEXT PRIMARY KEY,
+  at TEXT NOT NULL,
+  processor TEXT NOT NULL,
+  model TEXT NOT NULL,
+  stream TEXT NOT NULL,
+  messages INTEGER NOT NULL,
+  input_tokens INTEGER NOT NULL,
+  output_tokens INTEGER NOT NULL,
+  cost_usd REAL NOT NULL,
+  input BLOB,
+  output BLOB
+);
+CREATE TABLE IF NOT EXISTS ai_decisions (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  at TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  task_id TEXT,
+  message_ids TEXT NOT NULL,
+  confidence REAL,
+  reason TEXT,
+  status TEXT NOT NULL,
+  resolved_at TEXT,
+  resolved_task_id TEXT
+);
+CREATE INDEX IF NOT EXISTS ai_decisions_open ON ai_decisions (kind, status);
+CREATE INDEX IF NOT EXISTS ai_decisions_at ON ai_decisions (at);

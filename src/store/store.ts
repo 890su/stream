@@ -18,6 +18,7 @@ import { TelegramQueries } from './telegram.ts';
 import { ConnectionStore } from './connections.ts';
 import { RecipientQueries } from './recipients.ts';
 import { TriageStore } from './triage.ts';
+import { AiLog } from './ailog.ts';
 import { HttpError } from '../server/errors.ts';
 import { captureConfig } from '../config.ts';
 import { repeatChange } from '../tasks/repeat.ts';
@@ -48,6 +49,7 @@ export class JournalStore {
   readonly connections: ConnectionStore;
   readonly recipients: RecipientQueries;
   readonly triage: TriageStore;
+  readonly ailog: AiLog;
 
   constructor(directory: string) {
     mkdirSync(directory, { recursive: true });
@@ -61,6 +63,7 @@ export class JournalStore {
     this.connections = new ConnectionStore(this.#db);
     this.recipients = new RecipientQueries(this.#db, this.connections, this.telegram);
     this.triage = new TriageStore(this.#db);
+    this.ailog = new AiLog(this.#db);
   }
 
   close(): void { this.#db.close(); }
@@ -84,6 +87,7 @@ export class JournalStore {
       const result = this.#insertEvent(input);
       const next = result.created ? repeatChange(result.event, (id) => this.triage.taskEvents(id)) : null;
       const related = next ? this.#insertEvent(next).event : undefined;
+      if (result.created) this.ailog.observe(result.event); // the owner's answers settle the AI's proposals
       this.#db.exec('COMMIT');
       return related ? { ...result, related } : result;
     } catch (error) { this.#db.exec('ROLLBACK'); throw error; }

@@ -48,3 +48,20 @@ test('queue marks: snooze needs a date and time, requeue and the undos need noth
     await f.stop();
   }
 });
+
+test('«✕» on an AI proposal names the proposal it rejects', async () => {
+  const f = await fixture();
+  const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const original = event({ payload: { text: 'ecolofin сделал' } });
+    assert.equal((await post(original)).status, 201);
+    for (const data of [{ op: 'reject_proposal' }, { op: 'reject_proposal', proposal: 'не id' }]) {
+      const response = await post(correction(original.id, data));
+      assert.equal(response.status, 400, JSON.stringify(data));
+      assert.match((await response.json()).error, /Отказ от предложения ИИ должен указывать proposal/);
+    }
+    assert.equal((await post(correction(original.id, { op: 'reject_proposal', proposal: '00000000-0000-4000-8000-000000000777' }))).status, 201);
+  } finally {
+    await f.stop();
+  }
+});

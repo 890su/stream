@@ -2,7 +2,7 @@ import { HttpError } from '../server/errors.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Owner actions on a message are new journal events (CONCEPT.md §2.4); the original never changes.
-export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive', 'untrack', 'track', 'remote_delete', 'pin', 'unpin', 'answered', 'unanswered', 'split', 'unsplit', 'snooze', 'unsnooze', 'requeue', 'unrequeue'] as const;
+export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive', 'untrack', 'track', 'remote_delete', 'pin', 'unpin', 'answered', 'unanswered', 'split', 'unsplit', 'snooze', 'unsnooze', 'requeue', 'unrequeue', 'reject_proposal'] as const;
 
 // Shape rules that need no database. `target` is checked separately, inside the write transaction.
 export function checkCorrectionShape(event: JournalEvent): void {
@@ -23,6 +23,11 @@ export function checkCorrectionShape(event: JournalEvent): void {
   if (op === 'snooze') {
     const until = event.payload.data?.until;
     if (typeof until !== 'string' || Number.isNaN(Date.parse(until))) throw new HttpError(400, 'Отложить можно только до даты и времени (until)');
+  }
+  // «✕» under an AI proposal (docs/plans/2026-11-21-ai-proposals-design.md): which proposal is rejected.
+  if (op === 'reject_proposal') {
+    const proposal = event.payload.data?.proposal;
+    if (typeof proposal !== 'string' || !/^[0-9a-f-]{36}$/i.test(proposal)) throw new HttpError(400, 'Отказ от предложения ИИ должен указывать proposal — id предложения');
   }
   if (op === 'link') {
     const target = event.payload.data?.target;
