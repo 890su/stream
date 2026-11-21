@@ -80,9 +80,9 @@ function check(value: unknown, rule: Schema, path: string): void {
 export function validateEvent(value: unknown): asserts value is JournalEvent {
   check(value, schema, 'event');
   const event = value as JournalEvent;
-  const result = event.payload.data?.triage as { conversation_only: string[]; proposals?: unknown[] } | undefined;
+  const result = event.payload.data?.triage as { conversation_only: string[]; proposals?: unknown[]; last_message?: string } | undefined;
   if (event.kind === 'triage_result') {
-    if (event.source !== 'system' || event.author !== 'system' || !(result?.conversation_only.length || result?.proposals?.length)) {
+    if (event.source !== 'system' || event.author !== 'system' || !(result?.conversation_only.length || result?.proposals?.length || result?.last_message)) {
       throw new HttpError(400, 'Итог разбора должен содержать хотя бы одно сообщение и иметь автора «система»');
     }
   } else if (result) {

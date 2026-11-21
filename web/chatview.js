@@ -115,7 +115,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     if (!typing) $('#chat-topic').replaceChildren(...(topical ? [topicLine({ topic: topicOf(conversation), on: topicActs })] : []));
     $('#chat-topic').hidden = !topical;
     const facts = conversation?.queue?.waiting ? tileFacts(conversation, { now: new Date(), hotHours: 2, counterparties: feed.counterparties() }) : null;
-    $('#chat-facts').textContent = facts ? `ждёт ${facts.waited}` : conversation?.queue?.snoozedUntil ? 'отложена' : '';
+    $('#chat-facts').textContent = facts ? facts.state : conversation?.queue?.snoozedUntil ? 'отложена' : '';
     const unfolded = detailsOpen.has(key);
     $('#chat-details').hidden = !unfolded;
     $('#chat-more').setAttribute('aria-expanded', String(unfolded));

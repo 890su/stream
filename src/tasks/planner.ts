@@ -51,6 +51,9 @@ export interface PlannedReport { note: string | null; duration_min: number | nul
 export interface PlanOutput {
   tasks: PlannedTask[];
   conversation_only: string[];
+  // Whether the conversation is over after these messages (owner, 2026-11-21, triage-ai-v18): what the other side still
+  // waits for from the owner when no task covers it, else null. Keeps the conversation in the queue (web/queue.js).
+  unfinished?: string | null;
   usage?: { input_tokens: number; output_tokens: number };
 }
 
@@ -60,9 +63,10 @@ export type Planner = (input: PlanInput) => Promise<PlanOutput>;
 export const PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['tasks', 'conversation_only'],
+  required: ['tasks', 'conversation_only', 'unfinished'],
   properties: {
     conversation_only: { type: 'array', items: { type: 'string' } },
+    unfinished: { type: ['string', 'null'] },
     tasks: {
       type: 'array',
       items: {
@@ -124,6 +128,9 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
     Такое бывает часто и в оплату не идёт, поэтому задачи нет. Задача — только когда из разговора выросла работа:
     выезд, удалённое подключение, настройка, заказ, счёт, оферта, или владелец обещал что-то сделать позже;
   * рассказ о себе и своих делах, мнения, новости, обсуждение без поручения;
+- Договорились о выезде, встрече, звонке или приезде к владельцу на день или время («в субботу в 14», «завтра
+  после обеда») — это дело, а не согласование: задача (выезд, встреча) с due на этот день, даже если остальная
+  переписка — просто подбор времени. «Ок», «принято», «до встречи» в такой переписке подтверждают договорённость.
   * то, что уже сделано в этой же переписке, без отчёта о работе для клиента (пароль отправлен, ссылку скинул).
 - Если материал нужно сохранить отдельно, верни задачу с filed: true — она сразу закрыта. Для этого
   шаблоны с filed: true: diary (самочувствие, события дня — только из своих заметок владельца, source me, не из
@@ -176,6 +183,11 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
   действия собеседника, сделанное («отправлен», «исправлено»), факты и статусы («офис закажет в понедельник»),
   советы, просьбы к владельцу внутри личной переписки. Такое — в note задачи или ничего. Сомневаешься — items: [].
 - Приветствия, «ок» без принятия дела и служебный обмен остаются в conversation_only.
+- unfinished — закончена ли беседа после новых сообщений (смотри и context). Если собеседник ещё ждёт от владельца
+  действия — выезда, звонка, ответа по существу, расчёта, присылки, — и ни одна задача это не покрывает (ни новая из
+  tasks этого ответа, ни открытая из open_tasks этого собеседника), напиши коротко, чего ждут, со сроком, если он
+  назван: «ждёт выезд в субботу в 14:00», «ждёт цену на камеры». Иначе null: разговор исчерпан, ответ дан, договорённость
+  уже в задаче, ждёт сам владелец или это личная переписка без обязательства.
 - Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, executors — из шаблона.
 - ${TITLE_RULE}
 - responsible — кто отвечает за итог: me, если просят владельца или он сам взялся; иначе — сторона того, кого просят

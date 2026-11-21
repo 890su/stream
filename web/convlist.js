@@ -82,6 +82,9 @@ export function tileFacts(conversation, { now = new Date(), hotHours = 2, counte
     mine: last?.event.author === 'me' && !['call', 'sms'].includes(last.event.kind),
     when: at.toDateString() === now.toDateString() ? time.format(at) : date.format(at),
     waited: waitedLabel(waitedMs),
+    // Unfinished (queue.js): what the other side still waits for; the state line says it instead of «ждёт».
+    open: conversation.queue?.open ?? null,
+    state: conversation.queue?.open ? `${conversation.queue.open} · ${waitedLabel(waitedMs)}` : `ждёт ${waitedLabel(waitedMs)}`,
     hot: waitedMs >= hotHours * 3_600_000,
     count: pending.length,
     counterparty,
@@ -108,7 +111,7 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
   const body = element('div', 'conv-body');
   body.setAttribute('role', 'button');
   body.tabIndex = 0;
-  const state = archived ? (facts.snoozedUntil ? `⏱ отложена до ${facts.snoozedUntil}` : facts.handled ? `разобрана ${facts.handled}` : '') : `ждёт ${facts.waited}`;
+  const state = archived ? (facts.snoozedUntil ? `⏱ отложена до ${facts.snoozedUntil}` : facts.handled ? `разобрана ${facts.handled}` : '') : facts.state;
   body.setAttribute('aria-label', [facts.title, facts.channel, facts.task?.title, facts.snippet, state].filter(Boolean).join(', '));
   const head = element('div', 'conv-head');
   head.append(element('span', 'conv-kind', KIND_ICONS[facts.kind]), element('span', 'conv-channel', facts.channel), element('span', 'conv-title', facts.title));

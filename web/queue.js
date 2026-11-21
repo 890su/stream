@@ -4,7 +4,7 @@
 // (`snooze`). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
 // snooze; a new message in a queued conversation does not move it. Pure — no DOM.
 import { conversationOf, directionOf } from './conversations.js';
-import { involvesMe } from './taskfold.js';
+import { involvesMe, isOpen } from './taskfold.js';
 
 const time = (ts) => Date.parse(ts);
 const later = (a, b) => (time(b) > time(a) ? b : a);
@@ -57,9 +57,10 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   const start = time(config.queue.since);
   const pending = views.filter((view) => time(view.event.ts) > handled && time(view.event.ts) >= start && directionOf(view.event) === 'in'
     && !answeredCall(view) && !note(view) && meaningful(view) && matters(view));
-  if (!pending.length) return NONE;
+  const open = pending.length ? null : unfinishedOf(conversation, views, start);
+  if (!pending.length && !open) return NONE;
 
-  let moment = pending[0].event.ts;
+  let moment = pending[0]?.event.ts ?? open.moment;
   const requeue = views.flatMap((view) => view.requeues ?? []).filter((ts) => time(ts) > handled).sort((a, b) => time(a) - time(b)).at(-1);
   if (requeue) moment = later(moment, requeue);
   const snooze = views.flatMap((view) => view.snoozes ?? []).filter((item) => time(item.at) > handled).sort((a, b) => time(a.at) - time(b.at)).at(-1);
@@ -69,7 +70,26 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
     else if (now.getTime() < time(snooze.until)) return { ...NONE, pending, snoozedUntil: snooze.until };
     else moment = later(moment, snooze.until);
   }
-  return { waiting: true, moment, since: pending[0].event.ts, pending, snoozedUntil: null };
+  return { waiting: true, moment, since: pending[0]?.event.ts ?? open.moment, pending, snoozedUntil: null, open: open?.reason ?? null };
+}
+
+// No message waits, yet the conversation is not over (owner, 2026-11-21): the latest triage verdict says the other side
+// still waits for me and no task covers it, or an AI task waits for ✓ or ✕. My reply does not end it; the archive mark,
+// a task of mine for its messages or a later verdict «finished» does. → { reason, moment (the last incoming) } or null.
+function unfinishedOf(conversation, views, start) {
+  const ids = new Set(views.map((view) => view.id));
+  let cleared = -Infinity;
+  for (const view of views) if (view.answered && view.answeredAt) cleared = Math.max(cleared, time(view.answeredAt));
+  for (const task of conversation.tasks) {
+    for (const entry of task.history ?? []) if (entry.author === 'me' && (entry.change?.add ?? []).some((id) => ids.has(id))) cleared = Math.max(cleared, time(entry.ts));
+  }
+  const lastIn = views.filter((view) => directionOf(view.event) === 'in').at(-1);
+  const at = (ts) => (lastIn ? lastIn.event.ts : ts);
+  const offer = conversation.tasks.find((task) => task.unconfirmed && isOpen(task) && time(task.createdAt) > cleared);
+  if (offer) return { reason: 'ИИ предлагает задачу', moment: at(offer.createdAt) };
+  const verdict = views.filter((view) => view.verdict).at(-1)?.verdict;
+  if (!verdict?.unfinished || time(verdict.ts) <= cleared || time(verdict.ts) < start) return null;
+  return { reason: verdict.unfinished, moment: at(verdict.ts) };
 }
 
 // The waiting conversations as the screen shows them top to bottom: the longest waiting first, the newest moment

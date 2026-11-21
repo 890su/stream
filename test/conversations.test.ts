@@ -88,6 +88,10 @@ test('a queue tile: channel, task (guessed when the AI linked it), two lines of 
   assert.deepEqual([tileFacts({ ...person, handledAt: '2026-11-18T10:15:00' }, { now }).handled, tileFacts({ ...person, handledAt: '2026-11-16T10:15:00' }, { now }).handled],
     ['10:15', '16 нояб., 10:15']);
   assert.equal(tileFacts({ ...person, queue: { ...person.queue, snoozedUntil: '2026-11-18T18:00:00' } }, { now }).snoozedUntil, '18:00');
+  // Unfinished (queue.js): the tile says what the other side waits for and how long, instead of «ждёт».
+  const open = tileFacts({ ...person, queue: { ...person.queue, pending: [], open: 'ждёт выезд в субботу' } }, { now });
+  assert.deepEqual([open.open, open.state], ['ждёт выезд в субботу', 'ждёт выезд в субботу · 3 ч']);
+  assert.equal(facts.state, 'ждёт 3 ч');
 });
 
 test('task plaques: open tasks only, executor in words, due date', async () => {

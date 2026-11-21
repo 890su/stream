@@ -57,10 +57,13 @@ export function project(events, pendingIds = new Set()) {
   const corrections = [];
   const deliveries = new Map(); // reply event id -> the latest action_result for it
   const conversationOnly = new Set();
+  const verdicts = new Map(); // message id -> { unfinished, ts }: the triage verdict on the batch it ends (queue.js)
   for (const event of events) {
     if (event.kind === 'correction') { corrections.push(event); continue; }
     if (event.kind === 'triage_result') {
-      for (const id of event.payload?.data?.triage?.conversation_only ?? []) conversationOnly.add(id);
+      const triage = event.payload?.data?.triage;
+      for (const id of triage?.conversation_only ?? []) conversationOnly.add(id);
+      if (triage?.last_message) verdicts.set(triage.last_message, { unfinished: triage.unfinished ?? null, ts: event.ts });
       continue;
     }
     // Folded separately (taskfold.js, projects.js, contacts.js).
@@ -126,6 +129,7 @@ export function project(events, pendingIds = new Set()) {
   }
   for (const view of views.values()) {
     if (conversationOnly.has(view.id)) view.conversationOnly = true;
+    if (verdicts.has(view.id)) view.verdict = verdicts.get(view.id);
     const parentId = view.event.reply_to;
     if (!parentId) continue;
     const parent = views.get(parentId);

@@ -147,6 +147,8 @@
               "properties": {
                 "processor": { "type": "string", "pattern": "^\\S+$" },
                 "conversation_only": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+                "last_message": { "type": "string", "format": "uuid", "description": "The batch's last message: the verdict below is about the conversation after it (triage-ai-v18)." },
+                "unfinished": { "type": ["string", "null"], "maxLength": 200, "description": "What the other side still waits for from the owner when no task covers it; null — the conversation is over (web/queue.js keeps it waiting)." },
                 "proposals": {
                   "type": "array",
                   "description": "Changes of existing tasks the triage proposes; the owner accepts, moves or rejects each (docs/plans/2026-11-21-ai-proposals-design.md).",

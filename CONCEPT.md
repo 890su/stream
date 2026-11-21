@@ -181,7 +181,12 @@ request and the job given to a partner).
   («↧ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back at once). The
   longest waiting is on top, new ones arrive at the end (owner, 2026-11-21: the most important on top; before that the
   queue read bottom-up from the input); a new message in a queued conversation and opening
-  it without an action do not move it. No urgency order for now (owner, 2026-11-20). Incoming from before the queue started (`queue.since`, `registry/conversations.json`) waits for nobody — the history
+  it without an action do not move it. No urgency order for now (owner, 2026-11-20). **Unfinished** (owner, 2026-11-21, `triage-ai-v18`): a task appeared —
+  the conversation may leave; no task and the conversation is not over — it stays even after my reply. Every triage batch
+  says on its last message whether the other side still waits for something from me that no task covers («ждёт выезд в
+  субботу в 14:00» — the tile and the card head show it instead of «ждёт»); an AI task waiting for ✓ or ✕ keeps the
+  conversation too. My reply does not end it; the archive mark, a task of mine for its messages, a later verdict
+  «finished», ✓ or ✕ do; a snooze hides it until its time. Incoming from before the queue started (`queue.since`, `registry/conversations.json`) waits for nobody — the history
   imported with the channels; after it nothing drops out of the queue by age. Calls: a missed or rejected call waits, an
   answered one does not; my outgoing call or SMS is a reply.
 - **The archive above the queue** (owner, 2026-11-21): over the newest waiting conversation a folded «🗄 Архив»
@@ -357,7 +362,8 @@ without a hidden task. If a message adds an independent request alongside an ann
 the request. Own notes and material shared into Stream remain captures. A question or consultation answered in
 the conversation or by a call (how to, what to choose, what it costs, what an error means) is frequent and not billed,
 so it stays in the conversation; a task starts only when work grows out of it (a visit, remote access, a setup, an
-order, an invoice, an offer) or the owner promises to do something later (owner, 2026-11-21, `triage-ai-v17`).
+order, an invoice, an offer) or the owner promises to do something later (owner, 2026-11-21, `triage-ai-v17`). A visit, meeting or call agreed for
+a day or a time is work: a task due that day, even when the rest is picking the time (`triage-ai-v18`).
 
 **Which task a message belongs to** (2026-11-18). Triage sees all open tasks (latest changed,
 `open_tasks_in_context`) with their last messages, chats and last activity, plus tasks closed or cancelled within

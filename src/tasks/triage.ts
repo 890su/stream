@@ -299,11 +299,14 @@ export class Triage {
         if (result.created) { this.#live.publish(result.event); written += 1; }
       } catch (error) { console.error('Triage: task change rejected', error instanceof Error ? error.message : error); }
     });
-    // What stays in the conversation and what is proposed: one triage result per batch (written once).
-    if ((conversationOnly.size || proposals.length) && !prior) {
+    // What stays in the conversation, what is proposed and whether the conversation is over (on the batch's last
+    // message — web/queue.js): one triage result per batch, written once, always.
+    if (!prior) {
+      const lastMessage = batch.filter((event) => batchIds.has(event.id)).sort((a, b) => a.ts.localeCompare(b.ts)).at(-1)!.id;
+      const unfinished = typeof output.unfinished === 'string' && output.unfinished.trim() ? output.unfinished.trim().slice(0, 200) : null;
       const result = this.#store.appendEvent({
         id: resultId, schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'triage_result',
-        payload: { data: { triage: { processor: tasksConfig.ai.processor, conversation_only: [...conversationOnly], ...(proposals.length ? { proposals } : {}) } } },
+        payload: { data: { triage: { processor: tasksConfig.ai.processor, conversation_only: [...conversationOnly], last_message: lastMessage, unfinished, ...(proposals.length ? { proposals } : {}) } } },
       });
       if (result.created) { this.#live.publish(result.event); written += proposals.length; }
     }

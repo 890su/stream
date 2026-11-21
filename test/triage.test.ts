@@ -526,3 +526,34 @@ test('triage v16 makes new tasks unconfirmed unless the owner chose otherwise; f
     } finally { storage.cleanup(); }
   }
 });
+
+test('the triage result always says whether the conversation is over: «unfinished» on the batch\'s last message', async () => {
+  let round = 0;
+  const s = setup((input) => {
+    round += 1;
+    const ids = input.messages.map((message) => message.id);
+    return round === 1
+      ? { tasks: [], conversation_only: ids, unfinished: 'ждёт выезд в субботу в 14:00' }
+      : { tasks: [planned({ title: 'Клиент: выезд', message_ids: ids })], unfinished: null };
+  });
+  try {
+    s.add(telegram('7301', 'договорились на субботу?'));
+    const last = s.add(telegram('7301', 'тогда в 14:00'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const first = s.store.triage.results().at(-1)!.payload.data!.triage as Record<string, unknown>;
+    assert.equal(first.unfinished, 'ждёт выезд в субботу в 14:00');
+    assert.equal(first.last_message, last.id);
+    // A batch that became a task still writes its verdict: finished.
+    const next = s.add(telegram('7301', 'жду'));
+    for (const batch of s.triage.ready(Date.now() + 2 * CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const second = s.store.triage.results().at(-1)!.payload.data!.triage as Record<string, unknown>;
+    assert.equal(second.unfinished, null);
+    assert.equal(second.last_message, next.id);
+  } finally { s.cleanup(); }
+});
+
+test('the instructions: an agreed visit or meeting is a task; «unfinished» when the other side still waits and no task covers it', async () => {
+  const { PLAN_INSTRUCTIONS, PLAN_SCHEMA } = await import('../src/tasks/planner.ts');
+  for (const rule of ['Договорились о выезде', 'unfinished', 'ни одна задача']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
+  assert.ok((PLAN_SCHEMA.required as readonly string[]).includes('unfinished'));
+});

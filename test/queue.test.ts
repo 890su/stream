@@ -162,3 +162,43 @@ test('the archive: what waits for nothing, the last handled first; own notes sta
   assert.deepEqual(archiveList(run(snoozed)).map((item: any) => item.key), ['tg:704'], 'snoozed: in the archive until it ends');
   assert.deepEqual(archiveList(run(snoozed, new Date('2026-11-18T19:00:00'))), [], 'snooze over: back in the queue');
 });
+
+// Unfinished (owner, 2026-11-21): a task appeared — the conversation may leave; no task and the other side still waits
+// for me — it stays, even after my reply.
+const verdict = (ids: string[], last: string, ts: string, unfinished: string | null) => ({
+  id: `q${++n}`, schema_version: 1, source: 'system', author: 'system', ts, kind: 'triage_result',
+  payload: { data: { triage: { processor: 'triage-ai-v18', conversation_only: ids, last_message: last, unfinished } } },
+});
+
+test('unfinished: the other side waits for me and no task covers it — my reply does not take the conversation out', () => {
+  const ask = tg('950', '2026-11-18T10:00:00', 'приедете в субботу в 14?');
+  const ok = mine('950', '2026-11-18T10:05:00', 'ок');
+  const base = [ask, ok, verdict([ask.id, ok.id], ok.id, '2026-11-18T10:08:00', 'ждёт выезд в субботу в 14:00')];
+  const queue = run(base).find((c: any) => c.key === 'tg:950').queue;
+  assert.equal(queue.waiting, true);
+  assert.equal(queue.open, 'ждёт выезд в субботу в 14:00');
+  assert.equal(queue.moment, ask.ts, 'its place is the last incoming');
+  assert.deepEqual(queue.pending, []);
+  // The archive mark after the verdict takes it out.
+  assert.equal(run([...base, mark(ok.id, '2026-11-18T10:20:00', 'answered')]).find((c: any) => c.key === 'tg:950').queue.waiting, false);
+  // A task made by me for its messages takes it out.
+  assert.equal(run([...base, change('tv', '2026-11-18T10:20:00', { op: 'create', title: 'Выезд', status: 'todo', add: [ask.id] }, 'me')]).find((c: any) => c.key === 'tg:950').queue.waiting, false);
+  // A later verdict «finished» takes it out.
+  const thanks = mine('950', '2026-11-18T10:30:00', 'до субботы');
+  assert.equal(run([...base, thanks, verdict([thanks.id], thanks.id, '2026-11-18T10:33:00', null)]).find((c: any) => c.key === 'tg:950').queue.waiting, false);
+  // A snooze hides it until the time.
+  const snoozed = run([...base, mark(ok.id, '2026-11-18T10:20:00', 'snooze', { until: '2026-11-18T15:00:00' })]).find((c: any) => c.key === 'tg:950').queue;
+  assert.equal(snoozed.waiting, false);
+  assert.equal(snoozed.snoozedUntil, '2026-11-18T15:00:00');
+});
+
+test('an unconfirmed AI task keeps its conversation in the queue until ✓ or ✕', () => {
+  const ask = tg('951', '2026-11-18T10:00:00', 'нужен счёт');
+  const ok = mine('951', '2026-11-18T10:05:00', 'сделаю');
+  const made = change('tu', '2026-11-18T10:08:00', { op: 'create', title: 'Счёт', status: 'todo', add: [ask.id, ok.id], unconfirmed: true });
+  const queue = run([ask, ok, made]).find((c: any) => c.key === 'tg:951').queue;
+  assert.equal(queue.waiting, true);
+  assert.equal(queue.open, 'ИИ предлагает задачу');
+  assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { unconfirmed: false }, 'me')]).find((c: any) => c.key === 'tg:951').queue.waiting, false, '✓');
+  assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { status: 'cancelled' }, 'me')]).find((c: any) => c.key === 'tg:951').queue.waiting, false, '✕');
+});
