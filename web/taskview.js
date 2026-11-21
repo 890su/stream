@@ -1,10 +1,8 @@
-// The «Задачи» centre (task view panel, 2026-11-19): what the left panel's view (viewstate.js) asks for — the pulse of
-// its tasks, one project by its sections (the view's project with «Все открытые»), or a list by dates (or by tags /
-// people) under a head with the view in words and «← Пульт». Returns the nodes; feed.js places them.
+// The «Задачи» centre (task view panel, 2026-11-19): what the left panel's view (viewstate.js) asks for — one project
+// by its sections (the view's project with «Все открытые»), or a list by dates (or by tags / people) under a head with
+// the view in words. Returns the nodes; feed.js places them. The pulse became the dashboard (dashboard.js, 2026-11-21).
 import { taskRow, sectionHeader, listHead, groupsOf } from './tasklist.js';
 import { projectHead, projectSectionHead, projectSections } from './projectview.js';
-import { pulseNodes } from './pulseview.js';
-import { PULSE_DEFAULTS } from './pulse.js';
 import { applyView, dueGroups, viewTitle, DEFAULT_VIEW } from './viewstate.js';
 
 function element(tag, className, text) {
@@ -35,11 +33,8 @@ export function taskViewNodes(ctx) {
     }
     return nodes;
   }
-  // The pulse of the view's tasks (task manager spec §5): narrowed by whose and where, if chosen.
-  if (view.when === 'pulse') return pulseNodes({ ...ctx, tasks: applyView(tasks, view, data), config: ctx.pulseConfig ?? PULSE_DEFAULTS });
-
   const shown = applyView(tasks, view, data);
-  nodes.push(listHead({ title: viewTitle(view, ctx) }, shown.length, { onBack: ctx.onResetView, grouping: ctx.grouping, onGroup: ctx.onGroup }));
+  nodes.push(listHead({ title: viewTitle(view, ctx) }, shown.length, { grouping: ctx.grouping, onGroup: ctx.onGroup }));
   const grouped = ctx.grouping === 'due' || !ctx.grouping ? dueGroups(shown, now) : groupsOf(shown, ctx.grouping, viewsOf);
   for (const group of grouped) {
     const key = `view:${group.id}`;

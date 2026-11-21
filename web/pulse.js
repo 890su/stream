@@ -1,7 +1,7 @@
 // Groups tasks for the «Задачи» dashboard and scores their importance.
 // Blocks: in work and paused (focus.js), «До конца дня», «Слежу», «Проекты», «Дальше». Every task is in one block,
 // checked top-down; order inside a block is a computed importance (spec §4.5), weights in registry/pulse.json.
-// Pure: no DOM — tested in node; pulseview.js draws it.
+// Pure: no DOM — tested in node; dashboard.js draws the work, paused and next blocks.
 import { dueState, involvesMe, isOpen } from './taskfold.js';
 import { inWork, isMineToDo } from './focus.js';
 

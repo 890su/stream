@@ -12,6 +12,7 @@ import { proposalsByMessage, proposalOptions } from './proposals.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
+import { dashboardNodes } from './dashboard.js';
 import { foldPeople, foldCounterparties, markCounterparties } from './contacts.js';
 import { viewStore } from './viewstore.js';
 import { foldProjects, markNext } from './projects.js';
@@ -28,7 +29,7 @@ import { grow, shrink, reduced, play } from './motion.js';
 
 const NEAR_BOTTOM = 120;
 const NEAR_TOP = 160;
-const MODES = ['conversations', 'tasks', 'feed'];
+const MODES = ['home', 'conversations', 'tasks', 'feed']; // home — the dashboard (dashboard.js)
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
 const DEFAULT_CONVERSATIONS = { queue: { since: '2026-11-13T00:00:00Z', snooze: { minutes: [15, 60, 180], noon: { hour: 12, until_hour: 11 }, evening: { hour: 18, until_hour: 17 },
   tomorrow_day: { hour: 13, from_hour: 17 }, morning: { hour: 9 } } } };
@@ -175,7 +176,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     }
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };
     const filtered = Boolean((mode === 'feed' && sourceFilter) || tagFilter.size || conversationKey);
-    if (mode === 'tasks') {
+    if (mode === 'home') {
+      // The dashboard: in work at the bottom by the input, paused and next above it (dashboard.js).
+      const viewsOf = (task) => task.messages.map((id) => views.get(id)).filter(Boolean);
+      children.push(...dashboardNodes({ tasks: taskList, projects: projectList, viewsOf, now, quick, config: limits.pulse ?? PULSE_DEFAULTS, onOpen: onOpenTask }));
+    } else if (mode === 'tasks') {
       // A saved list, or one project by its sections (taskview.js, CONCEPT.md §5, §2.11).
       const viewsOf = (task) => task.messages.map((id) => views.get(id)).filter(Boolean);
       children.push(...taskViewNodes({ tasks: taskList, viewsOf, now, filters: taskFilters, filter: taskFilter(), matches: taskMatches(), grouping, onGroup: nextGrouping,
