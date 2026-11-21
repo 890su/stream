@@ -13,6 +13,7 @@ import { counterpartyChange } from './counterparty.ts';
 import { foldPeople, foldCounterparties, personOf, peopleOf } from '../contacts/fold.ts';
 import { foldProjects, defaultProject, type Project } from './projects.ts';
 import { defaultController, isParty, partyOfEvent } from './parties.ts';
+import type { AiDecision } from '../store/ailog.ts';
 import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
@@ -193,11 +194,9 @@ export class Triage {
       messages,
     };
     const output = await this.#planner!(input);
-    if (output.usage) {
-      const price = tasksConfig.ai.price_per_mtok;
-      this.#store.triage.addUsage(at.slice(0, 7), output.usage.input_tokens, output.usage.output_tokens,
-        (output.usage.input_tokens * price.input + output.usage.output_tokens * price.output) / 1e6);
-    }
+    const price = tasksConfig.ai.price_per_mtok;
+    const cost = output.usage ? (output.usage.input_tokens * price.input + output.usage.output_tokens * price.output) / 1e6 : 0;
+    if (output.usage) this.#store.triage.addUsage(at.slice(0, 7), output.usage.input_tokens, output.usage.output_tokens, cost);
     const batchIds = new Set(messages.map((message) => message.id));
     const openIds = new Set(open.map((task) => task.id));
     const closedById = new Map(closed.map((task) => [task.id, task]));
@@ -209,18 +208,24 @@ export class Triage {
     const prior = this.#store.getEvent(resultId);
     const stored = prior?.payload.data?.triage as { conversation_only: string[] } | undefined;
     const conversationOnly = new Set((stored?.conversation_only ?? output.conversation_only).filter((id) => batchIds.has(id)));
-    if (conversationOnly.size && !prior) {
-      const result = this.#store.appendEvent({
-        id: resultId, schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'triage_result',
-        payload: { data: { triage: { processor: tasksConfig.ai.processor, conversation_only: [...conversationOnly] } } },
-      });
-      if (result.created) this.#live.publish(result.event);
-    }
+    // The AI log (src/store/ailog.ts): the run — what the AI was shown and answered — and each decision with its reason.
+    const runId = nameId(`ai-run|${batchKey}`);
+    const { usage, ...answer } = output;
+    this.#store.ailog.run({ id: runId, at, processor: tasksConfig.ai.processor, model: tasksConfig.ai.model, stream, messages: messages.length,
+      input_tokens: usage?.input_tokens ?? 0, output_tokens: usage?.output_tokens ?? 0, cost_usd: cost, input, output: answer });
+    this.#store.ailog.prune(new Date(Date.parse(at) - tasksConfig.ai_log.keep_days * 86_400_000).toISOString());
+    const decisions: AiDecision[] = [];
+    const decide = (key: string, kind: AiDecision['kind'], taskId: string | null, ids: string[], confidence: number | null, reason: string | null, status: AiDecision['status'] = 'auto', id = nameId(`ai-decision|${batchKey}|${key}`)) =>
+      decisions.push({ id, run_id: runId, at, kind, task_id: taskId, message_ids: ids, confidence, reason: reason?.slice(0, 500) ?? null, status });
+    if (conversationOnly.size) decide('conversation_only', 'conversation_only', null, [...conversationOnly], null, null);
+    // Changes of existing tasks are only proposed (docs/plans/2026-11-21-ai-proposals-design.md): the owner answers.
+    const proposals: Record<string, unknown>[] = [];
     const covered = new Set(output.tasks.flatMap((planned) => planned.message_ids));
     const missed = [...batchIds].filter((id) => !conversationOnly.has(id) && !covered.has(id));
-    const outcomes = [...output.tasks];
+    const outcomes: PlannedTask[] = [...output.tasks];
+    let fallback: PlannedTask | null = null; // the «Разобрать» task for messages the AI left out
     if (missed.length) {
-      outcomes.push({ task_id: null, title: tasksConfig.unsorted.title, responsible: 'me', executors: [], author: null, template: null, due: null,
+      outcomes.push(fallback = { task_id: null, title: tasksConfig.unsorted.title, responsible: 'me', executors: [], author: null, template: null, due: null,
         message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false, done: false, alternatives: [] });
     }
     // Parties the planner may name: the owner, AI, the system and everyone who wrote in this batch or its context;
@@ -252,19 +257,31 @@ export class Triage {
       const asked = alternatives.length ? { alternatives } : {};
       const taskId = existing ?? nameId(`task|${batchKey}|${index}`);
       const confidence = Math.max(0, Math.min(1, planned.confidence));
+      const reason = planned.reason?.trim() || null;
       // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
       const proposal = planned.done && !planned.filed ? { proposed: 'done', ...reportDraft(planned, existing ? taskById.get(existing) : undefined) } : {};
       const checklist = checklistChange(taskId, planned, existing ? taskById.get(existing) : undefined);
       const placed = { ...projectChange(planned, existing ? taskById.get(existing) : undefined, projects),
         ...counterpartyChange(planned, existing ? taskById.get(existing) : undefined, counterparties) };
+      // An existing task — a proposal, applied when the owner accepts it; a filed note gets its filed message as before.
+      if (existing && !(filedTask && planned.filed)) {
+        const id = nameId(`proposal|${batchKey}|${index}`);
+        proposals.push({ id, task_id: existing, message_ids: add, reason: (reason ?? '').slice(0, 500), confidence, alternatives,
+          change: { op: 'update', add, ...reopened, ...proposal, ...checklist, ...placed } });
+        decide(String(index), 'link', existing, add, confidence, reason, 'pending', id);
+        return;
+      }
+      decide(String(index), existing || planned.filed ? 'filed' : planned === fallback ? 'unsorted' : 'create',
+        taskId, add, confidence, reason);
       const change: Record<string, unknown> = existing
-        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked, ...checklist, ...placed }
+        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked, ...checklist, ...placed, ...(reason ? { reason: reason.slice(0, 500) } : {}) }
         : {
           op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles: rolesOf(planned, add),
           status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
           add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked, ...checklist, ...placed,
           ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
+          ...(reason ? { reason: reason.slice(0, 500) } : {}),
         };
       try {
         const result = this.#store.appendEvent({
@@ -274,6 +291,15 @@ export class Triage {
         if (result.created) { this.#live.publish(result.event); written += 1; }
       } catch (error) { console.error('Triage: task change rejected', error instanceof Error ? error.message : error); }
     });
+    // What stays in the conversation and what is proposed: one triage result per batch (written once).
+    if ((conversationOnly.size || proposals.length) && !prior) {
+      const result = this.#store.appendEvent({
+        id: resultId, schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'triage_result',
+        payload: { data: { triage: { processor: tasksConfig.ai.processor, conversation_only: [...conversationOnly], ...(proposals.length ? { proposals } : {}) } } },
+      });
+      if (result.created) { this.#live.publish(result.event); written += proposals.length; }
+    }
+    this.#store.ailog.decide(decisions);
     this.#store.triage.mark([...batchIds, ...skipped], written, at);
     return written;
   }

@@ -85,7 +85,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
     for (const message of change.add ?? []) if (!task.messages.includes(message)) task.messages.push(message);
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
     foldItems(task.items, change);
-    if (change.op === 'update' && change.title !== undefined && event.author === 'me') task.owner_titled = true;
+    if (change.op === 'update' && change.title !== undefined && event.author === 'me' && !change.proposal) task.owner_titled = true; // an accepted AI rename stays the AI's
     task.updated_at = event.ts;
   }
   for (const task of tasks.values()) {

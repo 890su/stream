@@ -31,6 +31,7 @@ export interface PlannedTask {
   due: string | null;
   message_ids: string[];
   confidence: number;
+  reason?: string | null; // why these messages go to this task (or a new one), one line — the AI log (triage-ai-v15)
   note: string | null;
   filed: boolean; // nothing to do but file it: the task is created already done
   done: boolean; // the messages say the work is finished: the owner is asked to close it with a report
@@ -67,9 +68,10 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'reason', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'],
         properties: {
           task_id: { type: ['string', 'null'] },
+          reason: { type: ['string', 'null'] },
           title: { type: 'string' },
           responsible: { type: 'string' },
           executors: { type: 'array', items: { type: 'string' } },
@@ -178,4 +180,8 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сооб�
   напарник — другого напарника; тогда me не ставится ни в одну роль.
 - due — дата ISO, только если она прямо следует из текста; иначе null.
 - confidence от 0 до 1 — насколько ты уверен в задаче и её составе.
+- reason — одна строка: почему эти сообщения относятся к этой задаче или почему нужна новая — какие слова, люди, чат,
+  адрес связывают их. Привязка к существующей задаче (task_id) — только предложение владельцу: он видит reason и
+  решает. Сообщение из другого чата, чем у задачи, относи к ней, только если оно явно о том же деле; упоминание той же
+  темы или того же сайта в разговоре о другом — не повод.
 - Не придумывай фактов, которых нет в сообщениях.`;

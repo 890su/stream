@@ -13,6 +13,7 @@ import type { JournalEvent } from '../src/contracts/validate.ts';
 const QUIET = 60_000;
 const CHAT_QUIET = 180_000;
 type ScriptedPlan = Omit<PlanOutput, 'conversation_only'>;
+interface Proposal { id: string; task_id: string; message_ids: string[]; reason: string; confidence: number; alternatives: string[]; change: Record<string, unknown> }
 const telegram = (chat: string, text: string, from = chat): JournalEvent => event({
   source: 'telegram', author: `contact:tg:by:${from}`, payload: { text, data: { telegram: { account: 'by', chat_id: chat, chat_type: 'private', chat_title: 'Клиент', message_id: Math.floor(Math.random() * 1e6) + 1, sent_at: '2026-11-17T10:00:00.000Z' } } },
 });
@@ -23,7 +24,18 @@ function setup(plan: (input: PlanInput) => ScriptedPlan) {
   const triage = new Triage({ store: storage.store, live: new LiveFeed(), planner: async (input) => { calls.push(input); return { conversation_only: [], ...plan(input) }; } });
   const add = (item: JournalEvent) => storage.store.appendEvent(item).event;
   const tasks = () => foldTasks(storage.store.triage.taskEvents());
-  return { ...storage, triage, calls, add, tasks };
+  // Changes of existing tasks come as proposals (docs/plans/2026-11-21-ai-proposals-design.md); `accept` answers
+  // every one not answered yet as the owner would with ✓.
+  const proposals = () => storage.store.triage.results().flatMap((result) => (result.payload.data?.triage as { proposals?: Proposal[] }).proposals ?? []);
+  const accepted = new Set<string>();
+  const accept = () => {
+    for (const proposal of proposals().filter((item) => !accepted.has(item.id))) {
+      accepted.add(proposal.id);
+      storage.store.appendEvent({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'task_change',
+        payload: { ref: { type: 'task', id: proposal.task_id }, data: { task: { ...proposal.change, proposal: proposal.id } } } });
+    }
+  };
+  return { ...storage, triage, calls, add, tasks, proposals, accept };
 }
 
 test('a stream waits for its quiet window; streams are separate batches', async () => {
@@ -82,6 +94,8 @@ test('a later message is added to an open task instead of a new one; «гото�
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
     const second = s.add(event({ payload: { text: 'перезвонил, готово' }, ts: '2026-11-11T10:05:00.000Z' }));
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    assert.deepEqual(s.tasks()[0]!.messages, [first.id], 'the AI only proposes');
+    s.accept();
     const tasks = s.tasks();
     assert.equal(tasks.length, 1);
     assert.deepEqual(tasks[0]!.messages, [first.id, second.id]);
@@ -165,6 +179,7 @@ test('a later batch of a conversation sees its earlier messages as context, othe
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     const later = s.add(telegram('7001', 'в пятницу после 17'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.accept();
     const call = s.calls.at(-1)!;
     assert.deepEqual(call.context.map((message) => message.id), [first.id], 'only this chat');
     assert.equal(call.context[0]!.in_tasks.length, 1, 'context carries its task');
@@ -194,11 +209,12 @@ test('a closed case comes back when a message continues it; a doubtful message c
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
     const later = s.add(event({ payload: { text: 'опять не работает Wi-Fi' }, ts: '2026-11-11T10:10:00.000Z' }));
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    const asked = s.proposals().at(-1)!;
+    assert.equal(asked.alternatives.length, 1, 'only known tasks, not the chosen one');
+    s.accept();
     const back = s.tasks().find((task) => task.id === wifi.id)!;
     assert.equal(back.status, 'todo', 'the closed case is back at work');
     assert.ok(back.messages.includes(later.id));
-    const asked = s.store.triage.taskEvents().at(-1)!.payload.data!.task as { alternatives?: string[] };
-    assert.equal(asked.alternatives?.length, 1, 'only known tasks, not the chosen one');
   } finally { s.cleanup(); }
 });
 
@@ -291,6 +307,7 @@ test('a follow-up request becomes a checklist item of the job, which gets a gene
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     s.add(telegram('7002', 'и почту настройте'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.accept();
     const [job] = s.tasks();
     assert.equal(job!.title, 'Клиент: настройка компьютера');
     assert.deepEqual(job!.items.map((item) => item.text), ['установить программу', 'настроить почту'], 'no duplicate, no empty item');
@@ -298,6 +315,7 @@ test('a follow-up request becomes a checklist item of the job, which gets a gene
     s.add({ ...event({ kind: 'task_change', payload: { ref: { type: 'task', id: job!.id }, data: { task: { op: 'update', title: 'Мой заголовок' } } } }), ts: new Date(Date.now() + 1000).toISOString(), source: 'app', author: 'me' } as JournalEvent);
     s.add(telegram('7002', 'и принтер ещё'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.accept();
     assert.equal(s.tasks()[0]!.title, 'Мой заголовок');
   } finally { s.cleanup(); }
 });
@@ -348,6 +366,7 @@ test('triage puts tasks into projects: the planner\'s choice by the project scop
     reply = (input) => ({ tasks: [{ ...base, task_id: printer.id, title: printer.title, message_ids: [input.messages[0]!.id], project: P2, section: 'next', project_options: [] }] });
     s.add(telegram('7101', 'всё ещё не печатает'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.accept();
     assert.equal(s.tasks().find((task) => task.id === printer.id)!.project, P1);
   } finally { s.cleanup(); }
 });
@@ -395,6 +414,7 @@ test('«готово» with what was done drafts the report; the owner still con
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     s.add(telegram('7004', 'готово, настроил печать из дома, полчаса, 120 злотых', 'me'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.accept();
     const [task] = s.tasks();
     assert.equal(task!.status, 'todo', 'not closed silently');
     assert.equal(task!.proposed, 'done');
@@ -439,6 +459,7 @@ test('triage sets the counterparty of a task, or options and a hint; a set one s
     reply = (input) => ({ tasks: [{ ...base, task_id: bill.id, title: bill.title, message_ids: [input.messages[0]!.id], counterparty: C2, counterparty_options: [], counterparty_hint: null }] });
     s.add(telegram('7201', 'счёт на другую фирму?'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.accept();
     assert.equal((s.tasks().find((task) => task.id === bill.id) as any).counterparty, C1);
   } finally { s.cleanup(); }
 });
@@ -448,4 +469,32 @@ test('the triage keeps personal talk and consultations in the conversation; item
   for (const rule of ['Остаётся в беседе', 'консультация', 'личная и семейная переписка', 'Пункт — только шаг', 'conversation_only']) {
     assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   }
+});
+
+test('an existing task is never changed by the AI: a proposal with its reason waits for the owner; the log keeps both', async () => {
+  let round = 0;
+  const s = setup((input) => {
+    round += 1;
+    const ids = [input.messages[0]!.id];
+    if (round === 1) return { tasks: [planned({ title: 'Надежда: правки сайта', message_ids: ids, reason: 'просит поправить тексты' })] };
+    return { tasks: [planned({ task_id: input.open_tasks[0]!.id, title: 'Надежда: правки сайта', message_ids: ids, done: true, confidence: 0.6, reason: 'упомянут тот же сайт' })] };
+  });
+  try {
+    s.add(telegram('7301', 'поправьте тексты на сайте'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const [site] = s.tasks();
+    const other = s.add(telegram('7302', 'сайт сделал', 'me'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const after = s.tasks().find((task) => task.id === site!.id)!;
+    assert.deepEqual([after.messages.length, after.proposed], [1, undefined], 'the task is untouched');
+    const [proposal] = s.proposals();
+    assert.deepEqual([proposal!.task_id, proposal!.message_ids, proposal!.reason, (proposal!.change as any).proposed], [site!.id, [other.id], 'упомянут тот же сайт', 'done']);
+    assert.equal(s.store.ailog.decision(proposal!.id)!.status, 'pending');
+    const created = s.store.triage.taskEvents().find((item) => (item.payload.data!.task as any).op === 'create')!;
+    assert.equal((created.payload.data!.task as any).reason, 'просит поправить тексты', 'a created task carries its reason');
+    assert.deepEqual(s.store.ailog.stats('2000-01-01T00:00:00.000Z'), { create: { auto: 1 }, link: { pending: 1 } });
+    s.accept();
+    assert.equal(s.store.ailog.decision(proposal!.id)!.status, 'accepted');
+    assert.equal(s.tasks().find((task) => task.id === site!.id)!.proposed, 'done');
+  } finally { s.cleanup(); }
 });
