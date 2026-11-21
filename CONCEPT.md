@@ -558,6 +558,16 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 | Right | what is this | details of what was tapped: a task, a conversation or a message |
 | Bottom | what to say | the input row, always there; above it the tags and recipients row (§2.9) |
 
+**Redesign 2026-11-21** (`docs/plans/2026-11-21-workspace-redesign-design.md`, deploy 1 of 2 shipped; it overrides
+what follows where they differ): the left panel has three bodies switched by flat icons at its foot — «Беседы» (the
+queue with its archive, favourites, search), «Контакты» (the address book) and «Задачи» (filters: current, active,
+control, waiting, future, unconfirmed, done, cancelled; projects, saved views, tags); the mode is kept on the device.
+The centre opens on the dashboard, read bottom-up like the queue: the task in work at the bottom, paused ones above,
+the next ones in the order of «До конца дня» above them. There is no view switch by the input; the dashboard is the
+root of the system back, a conversation opened over a list goes back to it, one opened from the queue on a phone goes
+back to the panel on the same tile. Deploy 2: a conversation and a task are one card (topic line, cuts by task, ✨),
+and AI-made tasks may wait unconfirmed.
+
 **Redesign 2026-11-20** (`docs/plans/2026-11-20-queue-and-task-screen-design.md`, stage by stage; what it replaces
 below holds until its stage ships): the queue of conversations is the root screen — the system back always ends
 there; the left panel has one layout for «Беседы» and «Задачи», with a queue shortcut, conversation search, task

@@ -85,19 +85,22 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 |---|---|
 | `index.html` | markup of the single screen, dialogs and panels |
 | `styles.css` → `feed.css` → `panels.css` → `screens.css` → `wide.css` | styles, loaded in this order (cascade); `wide.css` — three columns from 1100 px |
-| `layout.js` | the wide-screen breakpoint the panels follow (docked or sliding) |
+| `layout.js` | the wide-screen breakpoint the panels follow (docked or sliding); none in node tests |
 | `app.js` | entry: wires everything, message action dispatch, view changes (old saved views map to new), the link window's context |
-| `viewswitch.js` | the ☑ / 💬 switch at the right of the input row and its counter (`counterFor`, `switchIcon`; Задачи count the queue); the view title in the top bar; `rootBack` — the system back from Задачи or Лента leads to the queue |
+| `viewswitch.js` | the views of the centre and the system back: the dashboard is the root (`backTarget` — the view under a conversation, else home; `toHome`); the view title in the top bar (`setupViewTitle`). No switch by the input since 2026-11-21 |
 | `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
-| `feed.js` | the centre in three views: Беседы (the list; an open conversation — task plaques + messages in a row), Задачи (task rows by a saved filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter |
+| `feed.js` | the centre: home (the dashboard), one conversation (task plaques + messages in a row), Задачи (task rows by the panel's filter), Лента (bursts, chain lines); builds the conversation list for the panel's queue; the open conversation doubles as the contact filter in Задачи and Лента |
+| `dashboard.js` | the dashboard, bottom-up like the queue: in work at the bottom («Готово», «Пауза») or «Вернуться к…», paused above, next in the order of «До конца дня» above them (`dashboardOrder`, `dashboardNodes`) |
 | `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history; `fill` back to `queue.since` at once, `hasOlder`) |
+| `queuepanel.js` | the conversation queue in the left panel: favourites and search on top, the folded «Архив», waiting tiles with the oldest at the bottom; keeps the row being read across redraws and while the panel is hidden (`createQueuePanel`) |
+| `contactspanel.js` | the address book of the left panel: people alphabetically with the latest conversation of any point, search by name or digits (`contactList`, `contactsNodes`) |
 | `convarchive.js` / `scrollpin.js` | the folded «Архив» above the queue: the last handled conversations five at a time, «Загрузить ещё» and growing on scroll up (`createArchive`); keeping the row read across a redraw (`rowOnScreen`, `putBack`) |
 | `tasklist.js` / `days.js` | the «Задачи» view: the head of a list opened from the left panel («← Пульт», name, grouping — `listHead`), sections of a list (`sectionsOf`, `listCount`) or groups by tag / person (`groupsOf`), a task row (mark, title, facts with checklist progress, due word — `dueLabel`); day pill labels |
 | `taskview.js` | the «Задачи» centre by the view: the pulse of its tasks, one project by its sections, or a list by dates / tags / people (`taskViewNodes`) |
-| `viewstate.js` | pure: the view of «Задачи» — when (`WHEN`) · whose (`WHOSE`) · where (project, counterparty, person); `applyView`, `countsFor`, `viewTitle`, `dueGroups` |
+| `viewstate.js` | pure: the view of «Задачи» — when (`WHEN`: current, waiting, future, unconfirmed, done, cancelled and older ones) · whose (`WHOSE`, with `control`) · where (project, counterparty, person); the panel's filters `PANEL_FILTERS`; `applyView`, `countsFor`, `viewTitle`, `dueGroups`; an unconfirmed task only under «Неподтверждённые» |
 | `viewstore.js` | device storage of the current view and «Мои виды»; listeners redraw (`viewStore`) |
-| `viewpanel.js` | task shortcuts with counts (`taskShortcuts`), project tree, expandable filters and saved views |
-| `pulse.js` / `pulseview.js` | the «Задачи» dashboard: in work, paused, today (incl. overdue work), watch with alerts, projects, later; `pulseBlocks`, `importance`, `projectHealth`, `pulseCount`, and `pulseNodes` |
+| `viewpanel.js` | the panel's eight task filters with counts (`taskShortcuts`), project tree, expandable filters and saved views |
+| `pulse.js` | pure: the blocks the dashboard draws — in work, paused, today (incl. overdue work), watch with alerts, projects, later; `pulseBlocks`, `importance`, `projectHealth`, `pulseCount` |
 | `focus.js` | pure: one task of mine in work (`inWork`, `isMineToDo`), «▶ В работу» / «Пауза» changes with `resume_note` (`startWork`, `pauseWork`, `resumeNoteOf`), `workedMinutes` from the status history |
 | `contacts.js` | pure: the directory (mirror of `src/contacts/fold.ts`), `markCounterparties` (titles for rows) |
 | `counterpartyline.js` | «Контрагент» / «Кто контрагент?» in task details: options, «+ Создать» by the hint, «+ Новый» (organization or address, side), linking the author with a job title |
@@ -139,7 +142,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `recipients.js` | recipients: address book, the chosen one's chip, items and pins for the Контакты section |
 | `actions.js` | tap / long press / context menu → action panel and ops |
 | `select.js` / `bulk.js` | selection mode; bulk actions on the selection |
-| `drawer.js` / `favourites.js` | left panel: queue shortcut, conversation lookup by name or number (`searchConversations`), task filters, pinned chats (`favourites`), tags; Лента — «Завершённые» and sources |
+| `drawer.js` / `favourites.js` | the left panel: three bodies by the icons at its foot — Беседы (queuepanel.js), Контакты (contactspanel.js), Задачи (filters, projects, tags; in the Лента — «Завершённые» and sources), the mode kept on the device (`panelMode`); sliding on a phone, a column on a wide screen; pinned chats (`favourites`) and conversation lookup (`searchConversations`) |
 | `taskfold.js` | pure: tasks from `task_change` (with history, roles, checklist — `foldItems`, `itemsProgress`, `ownerTitled`), due state, a task's messages (`taskMembers`), the task a message leads to (`taskOfMessage`) |
 | `filters.js` | pure: saved task filters (`registry/filters.json`) — `matchesFilter` (fields incl. `snoozed`), `visibleTasks` |
 | `conversations.js` / `queue.js` | pure: messages → conversations (one per chat or number), each with `queue` — waiting for the owner and since when (`queueOf`: only the owner's reply, own task link, `answered`, `snooze` take it out; `requeue` and a snooze's end lift its moment; nothing before `queue.since` waits), `queueList` (newest moment on top), `archiveList` / `handledAt` (the archive above the queue, the last handled first), `ownerLinked`; `isArchived`; `conversationKeys` (an own note joins the conversation it continues or answers; else a note in a task of its own → `task:<id>`; a split message and its chain → `split:<id>`); `withWhom` |
