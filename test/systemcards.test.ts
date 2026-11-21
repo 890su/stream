@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { systemGroups, cardFacts } from '../web/systemcards.js';
+import { systemGroups, cardFacts, aiStatsLines } from '../web/systemcards.js';
 
 // The System screen by cards (owner, 2026-11-21): channels and services; what needs attention first.
 const source = (id: string, state: string, extra: Record<string, unknown> = {}) => ({ source: id, title: id, state, on: state !== 'off', pulse_at: null, last_event_at: null, detail: null, failed_24h: 0, ...extra });
@@ -28,4 +28,14 @@ test('a card says its state in words and when it was last heard from', () => {
   assert.deepEqual([failed.state, failed.when, failed.attention], ['работает · не отправлено: 2', 'сигнал только что', true]);
   assert.equal(cardFacts(source('android_phone', 'silent'), now).when, 'ещё ни разу');
   assert.match(cardFacts(source('telegram_by', 'ok'), now).guide!, /TELEGRAM\.md$/);
+});
+
+test('the AI triage card says what became of its proposals and tasks over the week', () => {
+  assert.deepEqual(aiStatsLines({ link: { pending: 2, accepted: 5, redirected: 1, rejected: 3 }, create: { auto: 7, undone: 1 }, filed: { auto: 4 }, conversation_only: { auto: 6 } }), [
+    'Предложил связать с задачей: 11 — принято 5, в другую задачу 1, отклонено 3, ждут ответа 2',
+    'Создал задач: 8, из них отменено или разобрано иначе 1',
+    'Подшил без дела: 4; оставил в беседе: 6',
+  ]);
+  assert.deepEqual(aiStatsLines({}), ['За 7 дней решений ИИ не было']);
+  assert.deepEqual(aiStatsLines(undefined), []);
 });

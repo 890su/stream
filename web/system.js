@@ -6,7 +6,7 @@ import { getSetting } from './db.js';
 import { accountTitle } from './tgbubble.js';
 import { googleBox } from './googlebox.js';
 import { keyRows } from './keysbox.js';
-import { systemGroups, card } from './systemcards.js';
+import { systemGroups, card, aiStatsLines } from './systemcards.js';
 
 const ACTION = { proposed: 'ждёт', approved: 'в очереди', running: 'отправляется', done: 'отправлено', failed: 'не отправлено', rejected: 'отменено' };
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -147,7 +147,11 @@ export function setupSystem({ notify, onTrack }) {
         if (groups.length) nodes.push(element('p', 'system-detail', `Группы: ${groups.map((group) => `${group.title ?? group.chat_id}${group.allowed ? '' : ' (не читается)'}`).join(', ')}`));
       }
       if (item.source === 'google_calendar') nodes.push(...await googleBox(ctx));
-      if (item.source === 'ai_triage') nodes.push(...await keyRows(['ai'], ctx));
+      if (item.source === 'ai_triage') {
+        nodes.push(...await keyRows(['ai'], ctx));
+        const lines = aiStatsLines(item.info?.decisions);
+        if (lines.length) nodes.push(...section('За 7 дней', lines.map((line) => element('p', 'system-detail', line))));
+      }
       if (showsQr(item)) nodes.push(qrBlock(item));
       if (item.info?.chats !== undefined) nodes.push(element('p', 'system-detail', `Чатов ${item.info.chats}, групп ${item.info.groups}, отключено ${item.info.excluded}`));
       const failed = data.actions.filter((action) => action.connector === item.source && action.status === 'failed');

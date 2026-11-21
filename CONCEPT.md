@@ -363,6 +363,16 @@ the request. Own notes and material shared into Stream remain captures.
 - Several likely tasks: the message goes to the most likely one, and under it appears «О каком деле?» with the
   chosen one (✓), up to three alternatives and «Новое дело». A tap moves the message (a closed task reopens);
   tapping the chosen one confirms. The answer is a task event and a golden example.
+- **An existing task is only proposed** (owner, 2026-11-21, `triage-ai-v15`, docs/plans/2026-11-21-ai-proposals-design.md):
+  the triage never changes an existing task by itself. Messages it relates to one, with the checklist items, «Готово?»,
+  project and counterparty it would add, become a proposal in its `triage_result`; under the message — «ИИ предлагает в
+  задачу: …», the reason in one line, other likely tasks, «+ Новое дело», «✕ Ни с чем». ✓ applies the whole proposal;
+  until the owner answers, the messages are in no task and the conversation waits in the queue. New tasks are still
+  made by the triage itself; a «без дела» or diary message joining the same filed note is not asked about.
+- **The AI log** (same date): every run (what the AI was shown and answered, gzipped, wiped after
+  `ai_log.keep_days`) and every decision with its reason and the owner's verdict — accepted, moved to another task,
+  rejected; a task the AI made becomes «undone» when the owner cancels it or takes its messages out. The «Разбор
+  задач (ИИ)» card on the System screen shows the week; the weekly analyst (§9) reads the log later.
 
 **AI now, scripts later.** The AI does all triage for now (`registry/tasks.json`: model, spending limit, templates
 with instructions). A repeated scenario (rule of three, §9) gets its own script; then AI is called only for unclear

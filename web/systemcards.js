@@ -40,6 +40,22 @@ export function cardFacts(item, now = Date.now()) {
   return { state, when, attention: needsAttention(item), guide: GUIDES[item.source] ? `${REPO}${GUIDES[item.source]}` : null };
 }
 
+// The AI triage card (docs/plans/2026-11-21-ai-proposals-design.md): what became of its decisions over 7 days —
+// `decisions` is { kind: { status: count } } of the AI log; undefined — not reported yet.
+export function aiStatsLines(decisions) {
+  if (!decisions) return [];
+  const sum = (group) => Object.values(group ?? {}).reduce((a, b) => a + b, 0);
+  const lines = [];
+  const link = decisions.link ?? {};
+  if (sum(link)) lines.push(`Предложил связать с задачей: ${sum(link)} — принято ${link.accepted ?? 0}, в другую задачу ${link.redirected ?? 0}, отклонено ${link.rejected ?? 0}, ждут ответа ${link.pending ?? 0}`);
+  const made = { auto: (decisions.create?.auto ?? 0) + (decisions.unsorted?.auto ?? 0), undone: (decisions.create?.undone ?? 0) + (decisions.unsorted?.undone ?? 0) };
+  if (made.auto + made.undone) lines.push(`Создал задач: ${made.auto + made.undone}, из них отменено или разобрано иначе ${made.undone}`);
+  const filed = sum(decisions.filed);
+  const kept = sum(decisions.conversation_only);
+  if (filed || kept) lines.push(`Подшил без дела: ${filed}; оставил в беседе: ${kept}`);
+  return lines.length ? lines : ['За 7 дней решений ИИ не было'];
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;

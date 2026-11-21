@@ -52,6 +52,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `connections.ts` | bot connections, owner trust, groups | `ConnectionStore` |
 | `recipients.ts` | address book of the «кому» row: chats, bot groups, pins, frequency, 24 h window (`/api/recipients`) | `RecipientQueries` |
 | `triage.ts` | pending messages, task events, context-only results, AI spending | `TriageStore` |
+| `ailog.ts` | the AI log: triage runs (input and output gzipped, wiped after `ai_log.keep_days`) and decisions with reasons; the owner's answers settle them as they are appended (`observe`); week numbers (`stats`) | `AiLog` |
 | **telegram/** (§8.2) | | |
 | `bot.ts` | one account bot: `getUpdates` loop, update handling, sending (personal chats via business connection, groups as the bot), health | `TelegramBot`, `sendError` |
 | `convert.ts` | Bot API message → ingest item (files, forwards, service text) | `toItem` |
@@ -67,7 +68,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `calendar.ts` | the poll: calendar lists and events of the visible calendars over `window_days`, a shared calendar once, shown/hidden kept in `settings.json`, last good events kept on errors | `CalendarPoller`, `normalizeEvent` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface and structured results: tasks and `conversation_only` ids | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
+| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), changes of existing tasks only as proposals with a reason (v15), every run and decision into the AI log, alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) and the namer of hand-made tasks | `anthropicPlanner`, `anthropicNamer` |
 | `namer.ts` | titles «Контрагент: суть» (`TITLE_RULE`, shared with the planner); tasks the owner made by hand are named once by AI after 10 s unless he named them | `nameTasks`, `unnamed`, `TITLE_RULE` |
 | `messages.ts` | planner message context: text after edits, sender, direction and forward metadata | `describe`, `from`, `messageDirection`, `hasForwardOrigin` |
@@ -119,7 +120,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `peoplerow.js` | the line of interlocutors over the input of an open conversation: one tile per chat that can be answered (`replyChats`), the chosen one leftmost with 📣 gets the reply (`rowOrder`); `conversationTask`, `chatParties` |
 | `swipezones.js` | screen swipes by columns 25 / 50 / 25: tabs Беседы · Задачи, the left panel before them, the right one after; in the right panel — the card's tabs, close before the first (`zoneOf`, `swipeAction`) |
 | `convquick.js` | actions on a queue tile: swipe left — archive (`answered`), right — confirm the AI's task, open the owner's or make one from what waits (`swipePlan`); ⏱ `snooze`, ↥ `requeue`, «+ задача…» (`newTask`), each with «Вернуть»; `anchorOf`, `sourceOf` |
-| `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms |
+| `question.js` | «О каком деле?» under a message: options from the triage's alternatives, the owner's pick moves or confirms; since v15 also «ИИ предлагает в задачу» with the reason, «+ Новое дело», «✕ Ни с чем» |
+| `proposals.js` | pure: the AI's waiting proposals by message (`proposalsByMessage`: an owner answer, `reject_proposal` or a hand link settles one) and their options (`proposalOptions`) |
 | `donecard.js` | card «Задача выполнена?» (triage's `proposed: done`): «Да, готово» closes in one tap, «Ещё нет»; «Заполнить отчёт» on a closed task fills the missing fields; pure report parsing |
 | `backclose.js` | the system back closes what is open on top (link window, attach menu, message actions, dialogs) instead of leaving the app: history entries per window (`createBackStack`, `watchDialogs`) |
 | `holdrender.js` | redraws of the left panel, details and centre wait while an input or a list of choices there is in use (`holdRender`, `holding`) |

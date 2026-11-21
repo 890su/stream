@@ -112,7 +112,9 @@ export class Triage {
 
   #health(state: SourceState, detail: string | null) {
     const month = new Date().toISOString().slice(0, 7);
-    const info = { model: tasksConfig.ai.model, spent_usd: Number(this.#store.triage.spent(month).toFixed(4)), budget_usd: tasksConfig.ai.monthly_budget_usd, quiet_s: tasksConfig.quiet_s, quiet_s_by_stream: tasksConfig.quiet_s_by_stream };
+    const week = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const info = { model: tasksConfig.ai.model, spent_usd: Number(this.#store.triage.spent(month).toFixed(4)), budget_usd: tasksConfig.ai.monthly_budget_usd, quiet_s: tasksConfig.quiet_s, quiet_s_by_stream: tasksConfig.quiet_s_by_stream,
+      decisions: this.#store.ailog.stats(week) }; // the AI log over 7 days, for the System card
     const previous = this.#store.status.pulse(TRIAGE_SOURCE, state, detail, info, new Date().toISOString());
     stateChanged(this.#store, this.#live, TRIAGE_SOURCE, state, previous, detail);
   }

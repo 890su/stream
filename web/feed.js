@@ -8,6 +8,7 @@ import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey } from './projection.js';
 import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } from './taskfold.js';
 import { questionOptions } from './question.js';
+import { proposalsByMessage, proposalOptions } from './proposals.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
@@ -98,9 +99,10 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const tasksById = new Map(taskList.map((task) => [task.id, task]));
     const now = new Date();
     const questions = questionsByMessage([...events.values()]);
+    const proposals = proposalsByMessage([...events.values()]); // the AI's proposals wait for the owner (proposals.js)
     for (const view of projected) {
       view.taskIds = byMessage.get(view.id) ?? [];
-      view.question = questionOptions(view, questions.get(view.id), tasksById);
+      view.question = proposalOptions(view, proposals.get(view.id), tasksById) ?? questionOptions(view, questions.get(view.id), tasksById);
     }
     views = new Map(projected.map((view) => [view.id, view]));
     viewList = projected;
