@@ -195,3 +195,12 @@ test('a tile shows no unconfirmed task as its task', async () => {
   assert.equal(tileTask({ tasks: [ai], queue: { pending: [{ id: 'm1' }] } }), null);
   assert.equal(tileTask({ tasks: [ai, real], queue: { pending: [{ id: 'm1' }] } })?.task.id, 'real');
 });
+
+test('a number conversation keeps the person\'s name when my own WhatsApp message from the phone comes last (it carries only the number)', () => {
+  const wa = (author: string, ts: string, chat: string, out = false) => ({
+    id: `m${++n}`, schema_version: 1, source: 'whatsapp', author, ts, kind: 'text',
+    payload: { text: 'x', data: { whatsapp: { account: 'pl', chat, jid: '1@lid', phone: '+48600100200', out } } },
+  });
+  const list = run([wa('contact:whatsapp:+48600100200', '2026-11-18T10:00:00', 'Пётр Пример'), wa('me', '2026-11-18T10:05:00', '+48600100200', true)]);
+  assert.equal(list.find((item: any) => item.key === 'tel:+48600100200').title, 'Пётр Пример');
+});

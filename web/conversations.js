@@ -39,6 +39,16 @@ const channelOf = (event, key) => {
 const workOf = (view, taskById) => (view?.taskIds ?? []).map((id) => taskById.get(id)).find((task) => task && !task.filed) ?? null;
 const snippetOf = (view) => (view?.text ?? view?.event?.payload?.text ?? '').trim().split(/\r?\n/)[0].slice(0, 60) || 'Сообщение';
 
+// The name a call, an SMS or a messenger message by number gives its person (or the number itself).
+const NUMBER_LIKE = /^\+?[\d\s()-]*$/;
+const phoneName = (event) => {
+  const data = event.kind === 'call' ? event.payload?.data?.call : event.kind === 'sms' ? event.payload?.data?.sms : null;
+  const outbound = event.payload?.data?.outbound;
+  const byPhone = outbound && (outbound.connector === 'viber' || outbound.connector.startsWith('whatsapp_'));
+  const messenger = event.payload?.data?.viber?.chat ?? event.payload?.data?.whatsapp?.chat ?? (byPhone ? outbound.chat_title : null);
+  return (data?.name ?? '').trim() || (messenger ?? '').trim();
+};
+
 const titleOf = (view, key, taskById = new Map(), views = []) => {
   if (key === 'me') return 'Заметки';
   if (key.startsWith('task:')) return taskById.get(key.slice(5))?.title ?? 'Заметка';
@@ -48,11 +58,12 @@ const titleOf = (view, key, taskById = new Map(), views = []) => {
   }
   const event = view.event;
   if (key.startsWith('tel:')) {
-    const data = event.kind === 'call' ? event.payload?.data?.call : event.kind === 'sms' ? event.payload?.data?.sms : null;
-    const outbound = event.payload?.data?.outbound;
-    const byPhone = outbound && (outbound.connector === 'viber' || outbound.connector.startsWith('whatsapp_'));
-    const messenger = event.payload?.data?.viber?.chat ?? event.payload?.data?.whatsapp?.chat ?? (byPhone ? outbound.chat_title : null);
-    return (data?.name ?? '').trim() || (messenger ?? '').trim() || key.slice(4);
+    // The latest real name of either side: my own WhatsApp message from the phone carries only the number.
+    for (const item of [view, ...[...views].reverse()]) {
+      const name = phoneName(item.event);
+      if (name && !NUMBER_LIKE.test(name)) return name;
+    }
+    return key.slice(4);
   }
   return chatOf(event)?.title ?? 'Чат';
 };
