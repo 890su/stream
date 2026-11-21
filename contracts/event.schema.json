@@ -728,6 +728,10 @@
                   "format": "uuid",
                   "description": "The triage proposal this owner change answers (triage_result proposals)."
                 },
+                "unconfirmed": {
+                  "type": "boolean",
+                  "description": "Made by the AI and waiting for the owner (true), or confirmed (false); absent — a real task (design 2026-11-21)."
+                },
                 "proposed": {
                   "type": [
                     "string",

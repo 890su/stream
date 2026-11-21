@@ -75,6 +75,9 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
     foldItems(task.items, change);
     if (change.op === 'update' && change.title !== undefined && event.author === 'me' && !change.proposal) task.ownerTitled = true; // an accepted AI rename stays the AI's
+    // Unconfirmed (design 2026-11-21): set by the AI's create or the topic switch; any other owner change confirms.
+    if (change.unconfirmed !== undefined) task.unconfirmed = change.unconfirmed;
+    else if (event.author === 'me' && task.unconfirmed) task.unconfirmed = false;
     task.history.push({ ts: event.ts, author: event.author, change });
     task.updatedAt = event.ts;
   }

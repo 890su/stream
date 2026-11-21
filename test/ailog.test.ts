@@ -76,3 +76,14 @@ test('numbers for the System screen; old inputs are wiped, the decisions stay', 
     assert.ok(store.ailog.runInput('new'));
   } finally { store.close(); done(); }
 });
+
+test('the owner confirming an AI task settles its create as accepted', () => {
+  const { store, done } = fresh();
+  try {
+    store.appendEvent(message(1));
+    store.ailog.decide([decision('c1', 'create', uuid(50), [uuid(1)]), decision('c2', 'create', uuid(51), [uuid(2)])]);
+    store.appendEvent(change(uuid(50), { op: 'update', unconfirmed: false }, 1));
+    store.appendEvent(change(uuid(51), { op: 'update', unconfirmed: true }, 2));
+    assert.deepEqual(['c1', 'c2'].map((id) => store.ailog.decision(id)?.status), ['accepted', 'auto']);
+  } finally { store.close(); done(); }
+});

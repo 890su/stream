@@ -28,10 +28,11 @@ export function pickTask(conversation, now = new Date()) {
 // the conversation's most urgent open task, else null.
 export function tileTask(conversation, now = new Date()) {
   const pending = new Set((conversation.queue?.pending ?? []).map((view) => view.id));
-  const holding = conversation.tasks.filter((task) => (task.messages ?? []).some((id) => pending.has(id)));
+  const real = conversation.tasks.filter((task) => !task.unconfirmed); // the AI's unconfirmed task is the topic's offer, not its task
+  const holding = real.filter((task) => (task.messages ?? []).some((id) => pending.has(id)));
   const guessed = pickTask({ tasks: holding }, now);
   if (guessed) return { task: guessed, guessed: true };
-  const task = pickTask(conversation, now);
+  const task = pickTask({ tasks: real }, now);
   return task ? { task, guessed: false } : null;
 }
 

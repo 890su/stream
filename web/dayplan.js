@@ -47,7 +47,7 @@ export function plannerDays(tasks, { now = new Date(), days = 4, events = [] } =
   const byKey = new Map(list.map((day) => [day.key, day]));
   const overdue = [];
   for (const task of tasks) {
-    if (!isOpen(task) || task.filed || !involvesMe(task)) continue;
+    if (!isOpen(task) || task.filed || task.unconfirmed || !involvesMe(task)) continue; // unconfirmed: the AI's, not yet mine
     const when = whenOf(task);
     if (!when) continue;
     if (when.key < today) overdue.push({ task, time: when.time, key: when.key });

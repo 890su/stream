@@ -192,3 +192,20 @@ test('plain participants (members) and switched-off ones (muted) fold on the cli
     assert.deepEqual(task.muted, ['tg:9']);
   }
 });
+
+// Unconfirmed tasks (design 2026-11-21): an AI-made task waits for the owner; any owner change confirms it, except
+// the topic switch's own `unconfirmed: true`. Without the field a task is real.
+test('an AI-made task with unconfirmed stays so until the owner touches it', async () => {
+  const fold = (events: unknown[]) => foldTasks(events)[0];
+  const made = change('u1', '2026-11-21T10:00:00Z', { op: 'create', title: 'Сайт: правки', status: 'todo', unconfirmed: true });
+  assert.equal(fold([made]).unconfirmed, true);
+  assert.equal(fold([made, change('u1', '2026-11-21T10:01:00Z', { op: 'update', note: 'разбор' })]).unconfirmed, true, 'the AI\'s own change does not confirm');
+  assert.equal(fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', title: 'Сайт: правки меню' }, 'me')]).unconfirmed, false);
+  assert.equal(fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', unconfirmed: false }, 'me'), change('u1', '2026-11-21T10:03:00Z', { op: 'update', unconfirmed: true }, 'me')]).unconfirmed, true);
+  assert.equal(fold([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]).unconfirmed, undefined);
+  const { foldTasks: serverFold } = await import('../src/tasks/fold.ts');
+  const server = (events: unknown[]) => serverFold(events as any)[0]!.unconfirmed;
+  assert.equal(server([made]), true);
+  assert.equal(server([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', due: '2026-11-22' }, 'me')]), false);
+  assert.equal(server([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]), undefined);
+});

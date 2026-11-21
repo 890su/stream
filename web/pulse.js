@@ -60,7 +60,7 @@ export function pulseBlocks({ tasks, projects = [], now = new Date(), config }) 
   const current = focus.current;
   const paused = focus.paused.filter((task) => !dueNow(task, now)); // a paused task with a deadline today goes to «До конца дня»
   const taken = new Set([current, ...paused].filter(Boolean).map((task) => task.id));
-  const eligible = tasks.filter((task) => !taken.has(task.id) && isOpen(task) && !task.filed && !task.idea
+  const eligible = tasks.filter((task) => !taken.has(task.id) && isOpen(task) && !task.filed && !task.idea && !task.unconfirmed
     && !snoozed(task, now) && involvesMe(task));
   const today = [];
   const watch = [];

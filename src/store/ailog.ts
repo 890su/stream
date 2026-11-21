@@ -60,7 +60,7 @@ export class AiLog {
   // A new journal event: the owner's answer to a proposal, a hand link of a waiting message, or an undo of what the AI made.
   observe(event: JournalEvent): void {
     if (event.author !== 'me') return;
-    const data = event.payload.data as { op?: string; proposal?: string; task?: { proposal?: string; add?: string[]; remove?: string[]; status?: string } } | undefined;
+    const data = event.payload.data as { op?: string; proposal?: string; task?: { proposal?: string; add?: string[]; remove?: string[]; status?: string; unconfirmed?: boolean } } | undefined;
     if (event.kind === 'correction' && data?.op === 'reject_proposal' && data.proposal) { this.#settle(data.proposal, 'rejected', event.ts, null, ['pending']); return; }
     if (event.kind !== 'task_change' || !data?.task) return;
     const task = event.payload.ref!.id;
@@ -76,6 +76,7 @@ export class AiLog {
     const removed = new Set(change.remove ?? []);
     for (const decision of this.#open('create', 'auto')) {
       if (decision.task_id !== task) continue;
+      if (change.unconfirmed === false && change.status !== 'cancelled') { this.#settle(decision.id, 'accepted', event.ts, task, ['auto']); continue; } // confirmed (design 2026-11-21)
       if (change.status === 'cancelled' || decision.message_ids.some((id) => removed.has(id))) this.#settle(decision.id, 'undone', event.ts, task, ['auto']);
     }
   }

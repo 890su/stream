@@ -12,7 +12,8 @@ const newestFirst = (a, b) => b.updatedAt.localeCompare(a.updatedAt);
 
 // { current, paused }: current — my newest `doing`; paused — my other `doing` and my open tasks with a resume note,
 // newest first (the last paused comes back first).
-export function inWork(tasks) {
+export function inWork(all) {
+  const tasks = all.filter((task) => !task.unconfirmed); // the AI's unconfirmed tasks are not in work
   const doing = tasks.filter((task) => task.status === 'doing' && isMineToDo(task)).sort(newestFirst);
   const current = doing[0] ?? null;
   // Only a plain paused task waits for return: deferred, waiting or filed ones live in their own places.

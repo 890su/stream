@@ -132,3 +132,14 @@ test('paused tasks with due dates and active reminders come back to today', () =
   assert.deepEqual(titles(b.watch), ['пауза и жду']);
   assert.deepEqual(titles(b.today), ['пауза и срок сегодня', 'напоминание пришло']);
 });
+
+test('the dashboard leaves unconfirmed tasks out', () => {
+  const tasks = foldTasks([
+    taskEvent('real', '2026-11-19T09:00:00Z', { op: 'create', title: 'Настоящая', status: 'inbox' }),
+    taskEvent('ai', '2026-11-19T09:00:00Z', { op: 'create', title: 'От ИИ', status: 'inbox', unconfirmed: true }),
+    taskEvent('ai-doing', '2026-11-19T09:00:00Z', { op: 'create', title: 'От ИИ в работе', status: 'doing', unconfirmed: true }),
+  ]);
+  const blocks = pulseBlocks({ tasks, now, config });
+  assert.deepEqual(blocks.today.map((task: any) => task.id), ['real']);
+  assert.equal(blocks.work, null);
+});

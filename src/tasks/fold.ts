@@ -20,6 +20,7 @@ export interface Task {
   report?: Record<string, unknown>; // the closing report or its draft from the conversation
   counterparty?: string | null; counterparty_options?: string[]; counterparty_hint?: string | null; // contacts design §6
   muted?: string[]; // participants switched off: answers from the task do not go to them (2026-11-19)
+  unconfirmed?: boolean; // made by the AI, not yet confirmed by the owner (design 2026-11-21)
   repeat?: Repeat | null;
   note?: string;
   items: ChecklistItem[]; owner_titled: boolean; // the checklist (CONCEPT.md §2.8); the owner gave the title
@@ -86,6 +87,9 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
     foldItems(task.items, change);
     if (change.op === 'update' && change.title !== undefined && event.author === 'me' && !change.proposal) task.owner_titled = true; // an accepted AI rename stays the AI's
+    // Unconfirmed (design 2026-11-21): set by the AI's create or the topic switch; any other owner change confirms.
+    if (change.unconfirmed !== undefined) task.unconfirmed = change.unconfirmed;
+    else if (event.author === 'me' && task.unconfirmed) task.unconfirmed = false;
     task.updated_at = event.ts;
   }
   for (const task of tasks.values()) {
