@@ -75,15 +75,14 @@ const safe = (email: string) => { if (!/^[^/\\\s]+@[^/\\\s]+$/.test(email)) thro
 // The linked accounts: `<dir>/<email>.json` = { email, refresh_token }.
 export class GoogleAccounts {
   #dir: string;
-  #clientId: string;
-  #clientSecret: string;
+  #credentials: () => { clientId: string; clientSecret: string };
   #fetch: Fetch;
   #cache = new Map<string, { token: string; until: number }>();
 
-  constructor(dir: string, { clientId, clientSecret, fetch }: { clientId: string; clientSecret: string; fetch: Fetch }) {
+  // The client may change while the server runs (entered on the System screen): `credentials` is asked each time.
+  constructor(dir: string, { clientId = '', clientSecret = '', credentials, fetch }: { clientId?: string; clientSecret?: string; credentials?: () => { clientId: string; clientSecret: string }; fetch: Fetch }) {
     this.#dir = dir;
-    this.#clientId = clientId;
-    this.#clientSecret = clientSecret;
+    this.#credentials = credentials ?? (() => ({ clientId, clientSecret }));
     this.#fetch = fetch;
     mkdirSync(dir, { recursive: true });
   }
@@ -113,7 +112,8 @@ export class GoogleAccounts {
     try { refresh = (JSON.parse(readFileSync(join(this.#dir, `${safe(email)}.json`), 'utf8')) as { refresh_token: string }).refresh_token; }
     catch { throw new NeedsLogin(email); }
     try {
-      const body = await token(this.#fetch, { grant_type: 'refresh_token', refresh_token: refresh, client_id: this.#clientId, client_secret: this.#clientSecret });
+      const { clientId, clientSecret } = this.#credentials();
+      const body = await token(this.#fetch, { grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId, client_secret: clientSecret });
       this.#cache.set(email, { token: String(body.access_token), until: now + (Number(body.expires_in ?? 3600) - 60) * 1000 });
       return String(body.access_token);
     } catch (error) {

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { JournalStore } from './store/store.ts';
 import { createApp } from './server/http.ts';
+import { SecretStore } from './secrets.ts';
 import { anthropicPlanner, anthropicNamer } from './tasks/anthropic.ts';
 import { captureConfig, telegramConfig, whatsappConfig } from './config.ts';
 
@@ -27,10 +28,11 @@ const triage = { planner: aiKey ? anthropicPlanner(aiKey) : null, namer: aiKey ?
 // WhatsApp linked devices (deploy/WHATSAPP.md): STREAM_WA_<ACCOUNT>_ENABLED=1; session keys in <DATA_DIR>/whatsapp/<account>.
 const whatsappAccounts = Object.keys(whatsappConfig.accounts).filter((account) => process.env[`STREAM_WA_${account.toUpperCase()}_ENABLED`] === '1');
 const whatsapp = whatsappAccounts.length ? { accounts: whatsappAccounts, authRoot: resolve(dataDir, 'whatsapp') } : undefined;
-// Google Calendar (deploy/GOOGLE.md): the owner's Google client; without it «Система» says how to set it up.
-const google = { clientId: process.env.STREAM_GOOGLE_CLIENT_ID || undefined, clientSecret: process.env.STREAM_GOOGLE_CLIENT_SECRET || undefined,
-  publicUrl: process.env.STREAM_PUBLIC_URL || 'https://stream.sekond.pl', dir: resolve(dataDir, 'google') };
-const server = createApp({ store, ownerToken, phoneToken, viberToken, telegram: { tokens, apiBase: process.env.TELEGRAM_API_BASE || undefined }, triage, whatsapp, google });
+// Keys entered on the System screen (src/secrets.ts): over .env, applied at once.
+const secrets = new SecretStore(resolve(dataDir, 'secrets.json'));
+// Google Calendar (deploy/GOOGLE.md): the owner's Google client — from the System screen or .env.
+const google = { publicUrl: process.env.STREAM_PUBLIC_URL || 'https://stream.sekond.pl', dir: resolve(dataDir, 'google') };
+const server = createApp({ store, ownerToken, phoneToken, viberToken, telegram: { tokens, apiBase: process.env.TELEGRAM_API_BASE || undefined }, triage, whatsapp, google, secrets });
 // Bind to loopback by default; the container sets HOST=0.0.0.0 and Docker publishes only on host loopback.
 const host = process.env.HOST || '127.0.0.1';
 server.listen(port, host, () => console.log(`Stream http://${host}:${port}`));

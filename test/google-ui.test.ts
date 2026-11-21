@@ -21,3 +21,12 @@ test('the notice after Google sends the owner back', () => {
   assert.match(googleNotice('?google=scope'), /разрешите доступ к календарю/);
   assert.equal(googleNotice('?mode=tasks'), null);
 });
+
+test('a key row: set — where from and its last four characters; not set — a field to enter it', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { keyFacts } = await import('../web/keysbox.js');
+  assert.equal(keyFacts({ title: 'Telegram BY — токен бота', set: true, source: 'app', tail: 'oVrc' }).status, 'задан на «Системе», …oVrc');
+  assert.equal(keyFacts({ title: 'Google — Client ID', set: true, source: 'env', tail: '.com' }).status, 'задан в .env на сервере, ….com');
+  assert.deepEqual([keyFacts({ title: 'x', set: false, source: null, tail: '' }).status, keyFacts({ set: false }).editable], ['не задан', true]);
+  assert.equal(keyFacts({ set: true, source: 'env' }).removable, false, 'a .env key is changed by replacing, not removed here');
+});

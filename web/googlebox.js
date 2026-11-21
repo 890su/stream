@@ -3,6 +3,8 @@
 // owner's Google client on the server it says how to set it up (deploy/GOOGLE.md). calendarToggles and googleNotice
 // are pure (tested in node).
 
+import { keyRows } from './keysbox.js';
+
 const STATE = { ok: 'работает', login_required: 'нужен вход', error: 'ошибка' };
 const GUIDE = 'https://github.com/890su/stream/blob/main/deploy/GOOGLE.md';
 
@@ -39,9 +41,11 @@ function button(className, text, onClick) {
 export async function googleBox({ call, notify, rerender }) {
   let data;
   try { data = await call('/api/calendar'); } catch (error) { return [element('p', 'system-empty', error.message)]; }
+  // The Google client's keys: entered here (or in .env); without them — how to get them.
+  const keys = await keyRows(['google'], { call, notify, rerender });
   if (!data.configured) {
-    const guide = Object.assign(document.createElement('a'), { className: 'link-button', href: GUIDE, target: '_blank', rel: 'noopener', textContent: 'Как настроить' });
-    return [element('p', 'system-empty', 'Не настроен: нужен свой проект Google Cloud и две строки в /srv/stream/.env.'), guide];
+    const guide = Object.assign(document.createElement('a'), { className: 'link-button', href: GUIDE, target: '_blank', rel: 'noopener', textContent: 'Как получить ключи' });
+    return [element('p', 'system-empty', 'Не настроен: нужен свой проект Google Cloud — его Client ID и Client secret введите ниже.'), guide, ...keys];
   }
   const nodes = [];
   for (const account of data.accounts) {
@@ -69,5 +73,9 @@ export async function googleBox({ call, notify, rerender }) {
       nodes.push(label);
     }
   }
+  const more = document.createElement('details');
+  more.className = 'system-keys';
+  more.append(Object.assign(document.createElement('summary'), { className: 'picker-section', textContent: 'Ключи Google' }), ...keys);
+  nodes.push(more);
   return nodes;
 }

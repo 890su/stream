@@ -22,6 +22,8 @@ import { system, watchSilence } from './system.ts';
 import { staticFile } from './static.ts';
 import { LiveFeed } from './live.ts';
 import { createGoogle, type GoogleOptions } from './google.ts';
+import { SecretStore } from '../secrets.ts';
+import { secretsRoute } from './secrets.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
@@ -32,11 +34,14 @@ const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`)
 // whatsapp (optional) — WhatsApp accounts as linked devices in this process (deploy/WHATSAPP.md); session keys in
 // <authRoot>/<account>; `factory` replaces Baileys in tests.
 // google — the Google Calendar connector (deploy/GOOGLE.md): the owner's Google client, tokens in `dir`; `fetch` in tests.
-export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google }: {
+// secrets (optional) — keys entered on the System screen (src/secrets.ts): the Google client and the bot tokens, used
+// over .env and applied at once (a bot restarts, Google turns on).
+export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google, secrets }: {
   store: JournalStore; ownerToken: string; phoneToken?: string; viberToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
   triage?: { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number };
   whatsapp?: { accounts: string[]; authRoot: string; factory?: SocketFactory; retryMs?: number };
   google?: GoogleOptions;
+  secrets?: SecretStore;
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
@@ -45,7 +50,9 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
   const expectedPhone = phoneToken === undefined ? undefined : bearer(phoneToken);
   const expectedViber = viberToken === undefined ? undefined : bearer(viberToken);
   const live = new LiveFeed();
-  const googleConnector = google ? createGoogle({ store, live, ownerToken, options: google }) : null;
+  const googleOptions = google ?? (secrets ? { dir: '' } as GoogleOptions : undefined);
+  const googleConnector = googleOptions?.dir ? createGoogle({ store, live, ownerToken, options: { ...googleOptions,
+    credentials: secrets ? () => ({ clientId: secrets.get('STREAM_GOOGLE_CLIENT_ID') ?? googleOptions.clientId, clientSecret: secrets.get('STREAM_GOOGLE_CLIENT_SECRET') ?? googleOptions.clientSecret }) : googleOptions.credentials } }) : null;
   const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
@@ -74,6 +81,10 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           return await system(request, response, url.pathname.slice('/api/'.length), store, live, bots);
         }
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
+        if (url.pathname === '/api/secrets' || url.pathname.startsWith('/api/secrets/')) {
+          if (!secrets) throw new HttpError(404, 'Ключи на этом сервере задаются только в .env');
+          return await secretsRoute(request, response, url, secrets);
+        }
         if (url.pathname === '/api/calendar' || url.pathname.startsWith('/api/google/')) {
           if (googleConnector && await googleConnector.route(request, response, url)) return;
           if (url.pathname === '/api/calendar') { json(response, 200, { configured: false, accounts: [], calendars: [], events: [] }); return; }
@@ -110,14 +121,31 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
     }
   });
   const stopWatching = watchSilence(store, live);
-  const bots = Object.entries(telegram?.tokens ?? {}).filter(([account, token]) => token && telegramConfig.accounts[account])
-    .map(([account, token]) => new TelegramBot({ account, token, store, live, apiBase: telegram?.apiBase }));
+  // One bot per account with a token: the System screen's key, else .env. A key changed there restarts that bot.
+  const tokenOf = (account: string) => secrets?.get(`STREAM_TG_${account.toUpperCase()}_BOT_TOKEN` as never) ?? telegram?.tokens[account] ?? '';
+  const bots = Object.keys(telegramConfig.accounts).filter((account) => tokenOf(account))
+    .map((account) => new TelegramBot({ account, token: tokenOf(account), store, live, apiBase: telegram?.apiBase }));
+  let listening = false;
+  secrets?.onChange((name) => {
+    if (name.startsWith('STREAM_GOOGLE_')) { googleConnector?.reconfigure(); return; }
+    const account = /^STREAM_TG_([A-Z]+)_BOT_TOKEN$/.exec(name)?.[1]?.toLowerCase();
+    if (!account || !telegramConfig.accounts[account]) return;
+    const index = bots.findIndex((bot) => bot.account === account);
+    if (index >= 0) { bots[index]!.stop(); bots.splice(index, 1); }
+    const token = tokenOf(account);
+    if (!token) return;
+    const bot = new TelegramBot({ account, token, store, live, apiBase: telegram?.apiBase });
+    bots.push(bot);
+    if (listening) void bot.start();
+    console.log(`Telegram ${account}: token changed on the System screen, bot restarted`);
+  });
   // Baileys is loaded only when a WhatsApp account is on (and never in tests, which pass a fake socket).
   const socketFactory: SocketFactory = whatsapp?.factory ?? (async (dir) => (await import('../whatsapp/socket.ts')).createSocket(dir));
   const whatsappClients = (whatsapp?.accounts ?? []).filter((account) => whatsappConfig.accounts[account])
     .map((account) => new WhatsAppClient({ account, store, live, authDir: join(whatsapp!.authRoot, account), factory: socketFactory, retryMs: whatsapp?.retryMs }));
   const triageWorker = triage ? new Triage({ store, live, planner: triage.planner, namer: triage.namer ?? null, reason: triage.reason }) : null;
   server.on('listening', () => {
+    listening = true;
     for (const bot of bots) void bot.start();
     for (const client of whatsappClients) client.start().catch((error) => console.error(`WhatsApp ${client.account}: start failed`, error instanceof Error ? error.message : error));
     triageWorker?.start(triage?.everyMs);

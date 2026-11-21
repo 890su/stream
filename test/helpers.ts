@@ -8,6 +8,7 @@ import { JournalStore } from '../src/store/store.ts';
 import { createApp } from '../src/server/http.ts';
 import type { JournalEvent } from '../src/contracts/validate.ts';
 import type { SocketFactory } from '../src/whatsapp/types.ts';
+import { SecretStore } from '../src/secrets.ts';
 
 export const token = 'test-owner-token-for-local-tests-only';
 export const phoneToken = 'test-phone-token-for-local-tests-only';
@@ -25,15 +26,17 @@ export function temporaryStore() {
 
 // `phone: ''` starts a server without a phone token; `telegram` runs account bots against a fake Bot API;
 // `whatsapp` runs linked-device clients on a fake socket (test/fakewa.ts), reconnecting after 10 ms.
-// `google` runs the calendar connector against a fake Google (`fetch`).
-export async function fixture({ phone = phoneToken, telegram, whatsapp, google }: {
+// `google` runs the calendar connector against a fake Google (`fetch`); `secrets` — keys entered on the System screen.
+export async function fixture({ phone = phoneToken, telegram, whatsapp, google, secrets }: {
   phone?: string; telegram?: { tokens: Record<string, string>; apiBase: string }; whatsapp?: { accounts: string[]; factory: SocketFactory };
-  google?: { fetch: (url: string | URL | Request, init?: RequestInit) => Promise<Response> };
+  google?: { fetch: (url: string | URL | Request, init?: RequestInit) => Promise<Response> }; secrets?: boolean;
 } = {}) {
   const storage = temporaryStore();
   const server = createApp({ store: storage.store, ownerToken: token, phoneToken: phone || undefined, viberToken, telegram,
     whatsapp: whatsapp && { ...whatsapp, authRoot: join(storage.directory, 'whatsapp'), retryMs: 10 },
-    google: google && { clientId: 'test-client', clientSecret: 'test-secret', publicUrl: 'https://stream.example', dir: join(storage.directory, 'google'), fetch: google.fetch } });
+    google: google ? { clientId: 'test-client', clientSecret: 'test-secret', publicUrl: 'https://stream.example', dir: join(storage.directory, 'google'), fetch: google.fetch }
+      : secrets ? { publicUrl: 'https://stream.example', dir: join(storage.directory, 'google') } : undefined,
+    secrets: secrets ? new SecretStore(join(storage.directory, 'secrets.json'), {}) : undefined });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

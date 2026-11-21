@@ -55,7 +55,8 @@ Telegram · §9 ИИ-аналитик · §10 Не делаем · §11 Откр
 
 Агент сам коммитит, пушит и выкладывает каждую правку: srv-150 (192.168.0.149), `/srv/stream`,
 `sudo -n bash /srv/stream/app/deploy/install.sh [ref]`; проверка — https://stream.sekond.pl/healthz.
-Секреты — только `/srv/stream/.env`. Репозиторий публичный: https://github.com/890su/stream.
+Секреты — в `/srv/stream/.env` или ключами на «Системе» (Google, боты Telegram; хранятся в томе данных, обратно не
+показываются — `src/secrets.ts`); в git и журнал — никогда. Репозиторий публичный: https://github.com/890su/stream.
 
 ## Правила
 

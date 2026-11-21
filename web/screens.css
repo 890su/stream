@@ -350,3 +350,9 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 /* Google Calendar events in «План» (dayplan.js): grey, not tasks. */
 .day-plan-event { color: var(--muted); text-decoration: none; opacity: .85; }
 .day-plan-event .task-title { color: var(--muted); }
+
+/* Keys on the System screen (keysbox.js): a hidden field per key, the value never shown. */
+.system-key-form { display: flex; gap: 6px; align-items: center; padding: 4px 0 8px; }
+.system-key-form[hidden] { display: none; }
+.system-key-form input { flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; }
+.system-keys summary { cursor: pointer; margin-top: 8px; }

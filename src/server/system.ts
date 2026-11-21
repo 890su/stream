@@ -62,7 +62,7 @@ export async function system(request: IncomingMessage, response: ServerResponse,
     const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
     const known = new Map(store.status.all().map((item) => [item.source, item]));
     for (const account of Object.values(telegramConfig.accounts)) if (!known.has(account.connector)) {
-      known.set(account.connector, { source: account.connector, state: 'silent', detail: 'нет токена бота в /srv/stream/.env — см. deploy/TELEGRAM.md', pulse_at: null, last_event_at: null, info: null });
+      known.set(account.connector, { source: account.connector, state: 'silent', detail: 'нет токена бота — введите его ниже, в «Ключах», см. deploy/TELEGRAM.md', pulse_at: null, last_event_at: null, info: null });
     }
     const sources = [...known.values()].map((item) => ({ ...item, title: sourceTitle(item.source), failed_24h: store.actions.failedSince(item.source, dayAgo) }));
     const telegram = {

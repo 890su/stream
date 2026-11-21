@@ -4,6 +4,7 @@
 import { getSetting } from './db.js';
 import { accountTitle } from './tgbubble.js';
 import { googleBox } from './googlebox.js';
+import { keyRows } from './keysbox.js';
 
 const STATE = { ok: 'работает', silent: 'молчит', login_required: 'нужен вход', error: 'ошибка' };
 const ACTION = { proposed: 'ждёт', approved: 'в очереди', running: 'отправляется', done: 'отправлено', failed: 'не отправлено', rejected: 'отменено' };
@@ -42,7 +43,10 @@ export function setupSystem({ notify, onTrack }) {
 
   async function call(path, init = {}) {
     const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${await getSetting('ownerToken')}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
-    if (!response.ok) throw new Error(response.status === 401 ? 'Токен не принят' : 'Сервер недоступен');
+    if (!response.ok) {
+      const said = response.status === 401 ? null : await response.json().then((body) => body?.error, () => null);
+      throw new Error(response.status === 401 ? 'Токен не принят' : said ? said.replace(/^\d{3} /, '') : 'Сервер недоступен');
+    }
     return response.status === 204 ? null : response.json();
   }
 
@@ -160,7 +164,9 @@ export function setupSystem({ notify, onTrack }) {
       const data = await call('/api/system');
       stopQr();
       sources.replaceChildren(...data.sources.map(sourceRow));
-      telegramBox.replaceChildren(...telegramRows(data.telegram ?? {}));
+      // The bot tokens first: entered here, a bot starts at once (deploy/TELEGRAM.md says how to get one).
+      const tokens = await keyRows(['telegram:by', 'telegram:pl'], { call, notify, rerender: render });
+      telegramBox.replaceChildren(...tokens, ...telegramRows(data.telegram ?? {}).filter((node) => !(tokens.length && node.textContent.startsWith('Боты Telegram не настроены'))));
       googleSlot.replaceChildren(...await googleBox({ call, notify, rerender: render }));
       actions.replaceChildren(...(data.actions.length ? data.actions.map(actionRow) : [element('p', 'system-empty', 'Ответов наружу ещё не было')]));
       exclusions.replaceChildren(...(data.exclusions.length ? data.exclusions.map(exclusionRow) : [element('p', 'system-empty', 'Все чаты отслеживаются')]));

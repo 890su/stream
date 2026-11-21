@@ -13,18 +13,23 @@ import { stateChanged } from './system.ts';
 // /api/google/connect — the sign-in URL (owner token); /api/google/callback — Google's redirect back (no owner token:
 // a signed state instead); /api/calendar — the linked accounts, their calendars and the events for «План»;
 // /api/google/calendars — show or hide a calendar; /api/google/accounts/<email> DELETE — forget an account.
-// Without the owner's Google client (env) the connector is off and the routes say so.
+// Without the owner's Google client (entered on the System screen, or in .env) the connector is off and says so; the
+// client entered while the server runs turns it on at once (`reconfigure`).
 
 export const GOOGLE_SOURCE = 'google_calendar';
-export type GoogleOptions = { clientId?: string; clientSecret?: string; publicUrl?: string; dir: string; fetch?: Fetch };
+export type GoogleOptions = { clientId?: string; clientSecret?: string; credentials?: () => { clientId?: string; clientSecret?: string }; publicUrl?: string; dir: string; fetch?: Fetch };
 
 export function createGoogle({ store, live, ownerToken, options }: { store: JournalStore; live: LiveFeed; ownerToken: string; options: GoogleOptions }) {
-  const { clientId = '', clientSecret = '', publicUrl = 'https://stream.sekond.pl', dir } = options;
+  const { publicUrl = 'https://stream.sekond.pl', dir } = options;
   const fetch = options.fetch ?? globalThis.fetch;
-  const configured = Boolean(clientId && clientSecret);
+  const credentials = () => {
+    const given = options.credentials?.() ?? { clientId: options.clientId, clientSecret: options.clientSecret };
+    return { clientId: given.clientId ?? '', clientSecret: given.clientSecret ?? '' };
+  };
+  const isConfigured = () => { const { clientId, clientSecret } = credentials(); return Boolean(clientId && clientSecret); };
   const redirectUri = `${publicUrl.replace(/\/$/, '')}/api/google/callback`;
   const key = createHash('sha256').update(`google-state|${ownerToken}`).digest('base64url'); // never leaves the server
-  const accounts = new GoogleAccounts(dir, { clientId, clientSecret, fetch });
+  const accounts = new GoogleAccounts(dir, { credentials, fetch });
   const health = (state: 'ok' | 'login_required' | 'error', detail: string | null) => {
     const previous = store.status.pulse(GOOGLE_SOURCE, state, detail, {}, new Date().toISOString());
     stateChanged(store, live, GOOGLE_SOURCE, state, previous, detail);
@@ -36,7 +41,8 @@ export function createGoogle({ store, live, ownerToken, options }: { store: Jour
   // The owner arrives here in the browser: always a redirect back to Stream with the outcome, never an error page.
   async function callback(response: ServerResponse, url: URL): Promise<void> {
     const back = (result: string) => { response.writeHead(302, { Location: `/?google=${result}` }); response.end(); };
-    if (!configured) { back('error'); return; }
+    if (!isConfigured()) { back('error'); return; }
+    const { clientId, clientSecret } = credentials();
     const state = url.searchParams.get('state') ?? '';
     const nonce = stateNonce(state);
     const fresh = checkState(key, state) && nonce !== null && issued.has(nonce);
@@ -62,7 +68,8 @@ export function createGoogle({ store, live, ownerToken, options }: { store: Jour
   // The routes behind the owner token. True when the path was ours.
   async function route(request: IncomingMessage, response: ServerResponse, url: URL): Promise<boolean> {
     if (url.pathname === '/api/google/connect' && request.method === 'GET') {
-      if (!configured) throw new HttpError(409, 'Google не настроен: нет STREAM_GOOGLE_CLIENT_ID и STREAM_GOOGLE_CLIENT_SECRET в /srv/stream/.env (deploy/GOOGLE.md)');
+      if (!isConfigured()) throw new HttpError(409, 'Google не настроен: введите Client ID и Client secret на экране «Система» (deploy/GOOGLE.md)');
+      const { clientId } = credentials();
       const now = Date.now();
       for (const [nonce, until] of issued) if (until < now) issued.delete(nonce);
       const state = signState(key, now);
@@ -75,6 +82,7 @@ export function createGoogle({ store, live, ownerToken, options }: { store: Jour
       const from = url.searchParams.get('from') ?? new Date(now - 86_400_000).toISOString();
       const to = url.searchParams.get('to') ?? new Date(now + googleConfig.window_days * 86_400_000).toISOString();
       if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) throw new HttpError(400, 'Некорректный интервал');
+      const configured = isConfigured();
       json(response, 200, { configured, accounts: configured ? poller.accountStates() : [], calendars: configured ? poller.calendars() : [], events: configured ? poller.events(from, to) : [] });
       return true;
     }
@@ -96,5 +104,12 @@ export function createGoogle({ store, live, ownerToken, options }: { store: Jour
     return false;
   }
 
-  return { configured, callback, route, start: () => { if (configured) poller.start(); }, stop: () => poller.stop() };
+  let started = false; // the server is listening
+  let polling = false;
+  const reconfigure = () => {
+    if (!started) return;
+    if (isConfigured() && !polling) { poller.start(); polling = true; }
+    else if (!isConfigured() && polling) { poller.stop(); polling = false; }
+  };
+  return { callback, route, reconfigure, start: () => { started = true; reconfigure(); }, stop: () => { started = false; polling = false; poller.stop(); } };
 }

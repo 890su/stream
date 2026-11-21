@@ -18,6 +18,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 
 | File | Job | Key exports |
 |---|---|---|
+| `secrets.ts` | keys entered on the System screen (Google client, bot tokens): `secrets.json` in the data volume (600), over .env, never sent back, applied at once | `SecretStore`, `SECRETS` |
 | `main.ts` | entry: `.env`, store, HTTP, bots, WhatsApp (`STREAM_WA_<ACCOUNT>_ENABLED`), triage | — |
 | `config.ts` | registry files loaded at start | `captureConfig`, `tagConfig`, `telegramConfig`, `whatsappConfig`, `tasksConfig`, `conversationsConfig`, `filtersConfig` |
 | `ids.ts` | name-based UUIDs (idempotent ids) | `nameId` |
@@ -33,6 +34,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `share.ts` | Android share target | `share` |
 | `phone.ts` | `/api/phone/*` calls, SMS, notes (§8.1) | `phone`, `phoneEventId` |
 | `viber.ts` | `/api/viber/*` for the Viber bridge on the agent desktop: messages, pulse, reply actions one by one, hello (deploy/DESKTOP.md) | `viber`, `viberMessage` |
+| `secrets.ts` | `/api/secrets`: the keys of the System screen — list what is set (never a value), set one, remove one | `secretsRoute` |
 | `google.ts` | Google Calendar routes: `/api/google/connect` (sign-in URL), `/api/google/callback` (no owner token — a signed state), `/api/calendar` (accounts, calendars, events for «План»), show/hide a calendar, forget an account; the connector's health | `createGoogle` |
 | `whatsapp.ts` | `/api/whatsapp/<account>/qr`: the linking QR as a PNG while WhatsApp waits (System screen) | `whatsappQr` |
 | `system.ts` | `/api/system`, retries, trust; state notes | `system`, `stateChanged`, `actionChanged`, `watchSilence` |
@@ -106,6 +108,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `taskcard.js` / `cardtalk.js` | card contact links and folding sections; inline conversation lookup, recent and swipe order, highlighted task messages and activity timelines |
 | `taskchips.js` | editable planned start, duration, deadline and repeat beside project and counterparty (`taskChips`, `chipFacts`) |
 | `dayplan.js` | the right panel by default: my open tasks by days — «День · 4 дня · 7 дней», overdue first — and Google Calendar events grey among them (`plannerDays`, `dayPlan`) |
+| `keysbox.js` | keys on the System screen: a hidden field per key, «задан, …последние 4», «Заменить», «Удалить» (`keyFacts`, `keyRows`) |
 | `googlebox.js` | Google on the System screen: «Подключить Google», accounts with «Отключить», a switch per calendar; the toast after the sign-in (`calendarToggles`, `googleNotice`) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
 | `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows), only from the middle column: follow, arm, act; not a tap |

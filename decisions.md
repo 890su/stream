@@ -890,3 +890,17 @@ WhatsApp может давать адрес анонимно (LID): номер �
 замыслу. Содержимое событий не пишется ни в журнал, ни в лог.
 **Affected:** `src/google/`, `src/server/google.ts`, `src/server/http.ts`, `src/main.ts`, `web/dayplan.js`,
 `web/googlebox.js`, `web/system.js`, `registry/google.json`, `deploy/GOOGLE.md`, `deploy/install.sh`
+
+## 2026-11-21 — Ключи подключений вводятся на «Системе», как подключается WhatsApp
+**What:** Client ID и Client secret Google, токены ботов Telegram BY и PL вводятся на «Системе» скрытым полем; хранятся
+в томе данных (`<DATA_DIR>/secrets.json`, 600), обратно не отдаются (только «задан, …последние 4»), работают сразу:
+бот перезапускается, Google включается. Ключ из приложения главнее `.env`; ключи из `.env` работают как раньше. Токен
+владельца и прочие секреты остаются в `.env`.
+**Why:** Владелец 2026-11-21: «нельзя сделать, чтобы ключи вводились в самом приложении… касается и телеграмма» — «как
+WhatsApp» (тот подключается целиком из приложения).
+**Boundary:** Меняет правило «Секреты — только `/srv/stream/.env`» (`CONTEXT.md`). Резервная копия тома данных теперь
+содержит эти ключи. Кто открыл Stream с токеном владельца, может ключ заменить, но не прочитать. Ключ ИИ-разбора
+(Anthropic) — пока только в `.env`.
+**Affected:** `src/secrets.ts`, `src/server/secrets.ts`, `src/server/http.ts`, `src/server/google.ts`,
+`src/google/oauth.ts`, `src/main.ts`, `web/keysbox.js`, `web/googlebox.js`, `web/system.js`, `deploy/GOOGLE.md`,
+`deploy/TELEGRAM.md`, `CONTEXT.md`
