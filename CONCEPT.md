@@ -369,6 +369,11 @@ the request. Own notes and material shared into Stream remain captures.
   задачу: …», the reason in one line, other likely tasks, «+ Новое дело», «✕ Ни с чем». ✓ applies the whole proposal;
   until the owner answers, the messages are in no task and the conversation waits in the queue. New tasks are still
   made by the triage itself; a «без дела» or diary message joining the same filed note is not asked about.
+- **Unconfirmed tasks** (owner, 2026-11-21, `triage-ai-v16`, docs/plans/2026-11-21-workspace-redesign-design.md): every
+  conversation is a topic; its task is empty, unconfirmed or real. The System screen chooses how the AI makes new tasks:
+  «ИИ предлагает — я подтверждаю» (default: `task_change.unconfirmed: true`) or «ИИ создаёт сразу». An unconfirmed task
+  shows only in its conversation («ИИ: «…»» ✓ ✕ with the reason) and under «Неподтверждённые»; the owner's ✓ or any
+  edit confirms it, the «задача» switch turns a task back into a topic. Filed notes and «Разобрать» never wait.
 - **The AI log** (same date): every run (what the AI was shown and answered, gzipped, wiped after
   `ai_log.keep_days`) and every decision with its reason and the owner's verdict — accepted, moved to another task,
   rejected; a task the AI made becomes «undone» when the owner cancels it or takes its messages out. The «Разбор
@@ -565,8 +570,13 @@ control, waiting, future, unconfirmed, done, cancelled; projects, saved views, t
 The centre opens on the dashboard, read bottom-up like the queue: the task in work at the bottom, paused ones above,
 the next ones in the order of «До конца дня» above them. There is no view switch by the input; the dashboard is the
 root of the system back, a conversation opened over a list goes back to it, one opened from the queue on a phone goes
-back to the panel on the same tile. Deploy 2: a conversation and a task are one card (topic line, cuts by task, ✨),
-and AI-made tasks may wait unconfirmed.
+back to the panel on the same tile. Deploy 2 (shipped the same day): a conversation and a task are one card. A conversation's head:
+who and the channel, the topic line («+ задача…», the AI's offer with ✓ ✕, the task, the «задача» switch), «ждёт …»
+with ⏱ ↥ 🗄 and «≡», folded details; its messages run in open stretches and cuts — a centred line with a task's title
+and count; in a conversation task runs fold and loose ones stay open, in a task its own stay open (messages waiting for
+an answer never fold); «≡» unfolds all. A task opens with its fields open; a tile folds them and shows that person's
+conversation with the same cuts; a swipe moves to the next person, whose tile goes leftmost once typing starts. ✨ at
+the right of the tags row: «Создать задачу», «Завершить задачу»; AI help and translation later.
 
 **Redesign 2026-11-20** (`docs/plans/2026-11-20-queue-and-task-screen-design.md`, stage by stage; what it replaces
 below holds until its stage ships): the queue of conversations is the root screen — the system back always ends

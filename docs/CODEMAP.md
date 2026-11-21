@@ -19,6 +19,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | File | Job | Key exports |
 |---|---|---|
 | `switches.ts` | connections switched off and on from the System screen (`switches.json` in the data volume); off keeps every setting | `ConnectorSwitches`, `CONNECTORS` |
+| `ownersettings.ts` | the owner's settings from the System screen (`settings.json` in the data volume): how the AI makes new tasks — `unconfirmed` (default) or `confirmed`; `POST /api/settings/triage-new-tasks` | `OwnerSettings`, `TriageNewTasks` |
 | `secrets.ts` | keys entered on the System screen (Google client, bot tokens): `secrets.json` in the data volume (600), over .env, never sent back, applied at once | `SecretStore`, `SECRETS` |
 | `main.ts` | entry: `.env`, store, HTTP, bots, WhatsApp (`STREAM_WA_<ACCOUNT>_ENABLED`), triage | — |
 | `config.ts` | registry files loaded at start | `captureConfig`, `tagConfig`, `telegramConfig`, `whatsappConfig`, `tasksConfig`, `conversationsConfig`, `filtersConfig` |
@@ -112,7 +113,10 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `tasksheet.js` | the sheet a long press (right click) on a task row opens: title + action bar; `barContext` for the card too |
 | `participants.js` | participant tiles, role editing, muting and removal; `taskParties` splits owner, AI and system from contacts, the task tile body selects the conversation, the icon edits roles |
 | `participantpicker.js` | participant dialog anchored to the card's plus; pinned and frequent entries in an empty search, all matching eligible contacts and conversations on input |
-| `taskcard.js` / `cardtalk.js` | card contact links and folding sections; inline conversation lookup, recent and swipe order, highlighted task messages and activity timelines |
+| `taskcard.js` / `cardtalk.js` | card contact links and folding sections; inline conversation lookup, recent and swipe order (a swiped-to tile goes leftmost once typing starts — `frontOrder`), the task's conversation with cuts by task and «≡», activity timelines |
+| `topic.js` | pure: a conversation's topic — empty, unconfirmed or real task (`topicOf`); its messages in open runs and cuts by task (`cutSegments`: in a conversation task runs fold, in a task the rest folds; waiting messages never fold) |
+| `cardhead.js` | the topic line of a card: «+ задача…», the AI's offer «ИИ: «…»» with ✓ ✕ and «Почему», the task, the «задача» switch (`topicLine`, `reasonOf`) |
+| `magic.js` | ✨ at the right of the tags row: «Создать задачу», «Завершить задачу»; «Подсказать ответ», «Перевести» — «скоро» (`magicItems`, `setupMagic`) |
 | `taskchips.js` | editable planned start, duration, deadline and repeat beside project and counterparty (`taskChips`, `chipFacts`) |
 | `dayplan.js` | the right panel by default: my open tasks by days — «День · 4 дня · 7 дней», overdue first — and Google Calendar events grey among them (`plannerDays`, `dayPlan`) |
 | `system.js` / `systemcards.js` | the System screen by cards: «Требуют внимания», Каналы, Сервисы — dot, state, last heard, on/off switch; opened — keys, QR, bot accounts, Google, failed sends; the journal below (`systemGroups`, `cardFacts`, `card`) |
@@ -149,7 +153,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `details.js` / `taskdetails.js` | task card fields and inline conversation, title stays visible and restores the fields; Back closes the conversation before the card; the right panel: the day plan, a message, a person, a counterparty |
 | `taskactions.js` | pure: actions a task offers by status (`actionsFor`; «Готово» in every open status), the change of each (`changeFor`, `closeChange` — done at once, report fields to `missing`), its undo (`undoOf`), due chips, delegate and «Жду…» options (callers included) |
 | `parties.js` | pure: parties and roles (mirror of `src/tasks/parties.ts`) and `partyName` — a party in words for rows, plaques and details |
-| `chatview.js` | the bar of an open conversation: title, ⏱ ↥ 🗄 (then back to the queue), «назад» to the list (Беседы, also the system back via a history entry) or × (filter elsewhere), reply recipient or else a continuation of the last message, «+ Задача» (a task for the conversation), «Не отслеживать» |
+| `chatview.js` | the head of a conversation's card: who and the channel (a tap — the person), the topic line (cardhead.js) and its acts with «Вернуть», «ждёт …» with ⏱ ↥ 🗄 and «≡», the folded details («Контакт», «В Telegram», «Не отслеживать»); «назад» (also the system back) or × (filter elsewhere), reply recipient or else a continuation of the last message |
 | `system.js` | System screen: sources, connections, sends, exclusions |
 | `versioncard.js` / `picker.js` | versions of a message (left to right); link picker |
 | `shared.js` | builders of entries: message, share, correction, task change, the owner's own task (`ownTask`) |
