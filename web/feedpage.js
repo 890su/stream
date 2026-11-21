@@ -18,16 +18,22 @@ export function createMediaLoader() {
   };
 }
 
-// `render` redraws the centre; `readsDown` — a list (reads from the top) rather than a chat (from the bottom).
-export function createPager({ scroller, historyState, notify, render, readsDown }) {
+// `render` redraws the centre and keeps the reader's place (feed.js); `fillSince()` — how far back the history must
+// reach right away (the queue's start: a conversation waiting since then must not wait for a scroll to show up).
+// Pages of older history arrive at the top of a chat; in the queue they would add tiles anywhere — so the queue is
+// filled once, quietly, and its scroll no longer pulls history (only the opened archive does, through loadOlder).
+export function createPager({ scroller, historyState, notify, render, fillSince = () => null }) {
   let before;
   let loadingOlder = false;
   let refreshing;
 
-  async function fetchPage(older) {
+  async function fetchPage(older, limit = null) {
     const token = await getSetting('ownerToken');
     if (!token || !navigator.onLine) return false;
-    const query = older && before ? `?before=${encodeURIComponent(before)}` : '';
+    const params = new URLSearchParams();
+    if (older && before) params.set('before', before);
+    if (limit) params.set('limit', String(limit));
+    const query = params.size ? `?${params}` : '';
     const response = await fetch(`/api/events${query}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(response.status === 401 ? 'Токен не принят. Откройте ⋮ → Доступ' : 'Лента временно недоступна');
     const page = await response.json();
@@ -45,10 +51,24 @@ export function createPager({ scroller, historyState, notify, render, readsDown 
     refreshing ??= (async () => {
       try { await fetchPage(false); } catch (error) { notify(error.message); }
       await render();
-      // A short feed cannot be scrolled to the top, so fetch older history right away.
+      await fill();
+      // A short chat cannot be scrolled to the top, so fetch older history right away.
       if (before && scroller.scrollHeight <= scroller.clientHeight) await loadOlder();
     })().finally(() => { refreshing = undefined; });
     return refreshing;
+  }
+
+  // Older pages back to `fillSince()`, in big pages and with one redraw at the end.
+  async function fill() {
+    const since = fillSince();
+    if (!since || loadingOlder) return;
+    loadingOlder = true;
+    let fetched = false;
+    try {
+      while (before && Date.parse(before) > Date.parse(since)) { if (!await fetchPage(true, 100)) break; fetched = true; }
+    } catch (error) { notify(error.message); }
+    finally { loadingOlder = false; }
+    if (fetched) await render({ quiet: true });
   }
 
   async function loadOlder() {
@@ -56,14 +76,12 @@ export function createPager({ scroller, historyState, notify, render, readsDown 
     loadingOlder = true;
     historyState.hidden = false;
     historyState.textContent = 'Загружаем раньше…';
-    const anchor = scroller.scrollHeight - scroller.scrollTop;
     try {
       await fetchPage(true);
       await render({ quiet: true });
-      if (!readsDown()) scroller.scrollTop = scroller.scrollHeight - anchor; // keep the reading position
     } catch (error) { notify(error.message); }
     finally { loadingOlder = false; historyState.hidden = true; }
   }
 
-  return { refresh, loadOlder };
+  return { refresh, loadOlder, hasOlder: () => Boolean(before) };
 }

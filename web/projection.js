@@ -102,7 +102,7 @@ export function project(events, pendingIds = new Set()) {
       // Deleted by its author in Telegram: the message stays, marked (CONCEPT.md §8.2).
       case 'remote_delete': view.remoteDeleted = true; break;
       // «Отвечено» on a conversation (CONCEPT.md §2.5): nothing up to this message waits for me.
-      case 'answered': view.answered = true; break;
+      case 'answered': view.answered = true; view.answeredAt = correction.ts; break;
       case 'unanswered': view.answered = false; break;
       // A message split off its chat into a conversation of its own (task manager spec; «Вернуть в беседу» undoes).
       case 'split': view.split = true; break;

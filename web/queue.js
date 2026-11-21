@@ -77,3 +77,27 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
 export function queueList(list) {
   return list.filter((item) => item.queue?.waiting).sort((a, b) => time(b.queue.moment) - time(a.queue.moment) || a.key.localeCompare(b.key));
 }
+
+// When the owner last dealt with a conversation: its latest message (a reply is one), the archive mark, a snooze, a
+// task of theirs taking its messages — whichever is latest.
+export function handledAt(conversation) {
+  const ids = new Set(conversation.views.map((view) => view.id));
+  let at = conversation.last;
+  for (const view of conversation.views) {
+    if (view.answered && view.answeredAt) at = later(at, view.answeredAt);
+    for (const item of view.snoozes ?? []) at = later(at, item.at);
+  }
+  for (const task of conversation.tasks) {
+    for (const entry of task.history ?? []) if (entry.author === 'me' && (entry.change?.add ?? []).some((id) => ids.has(id))) at = later(at, entry.ts);
+  }
+  return at;
+}
+
+// The archive above the queue (owner, 2026-11-21): the conversations that wait for nothing (read, answered, archived,
+// snoozed), each with `handledAt`, the last handled first — the screen shows it nearest the «Архив» divider. Own
+// notes («Заметки», a task's notes) are not conversations with anyone and stay out.
+export function archiveList(list) {
+  return list.filter((item) => !item.queue?.waiting && item.key !== 'me' && !item.key.startsWith('task:'))
+    .map((item) => ({ ...item, handledAt: handledAt(item) }))
+    .sort((a, b) => time(b.handledAt) - time(a.handledAt) || a.key.localeCompare(b.key));
+}

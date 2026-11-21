@@ -183,6 +183,11 @@ request and the job given to a partner).
   it without an action do not move it. No urgency order for now (owner, 2026-11-20). Incoming from before the queue started (`queue.since`, `registry/conversations.json`) waits for nobody — the history
   imported with the channels; after it nothing drops out of the queue by age. Calls: a missed or rejected call waits, an
   answered one does not; my outgoing call or SMS is a reply.
+- **The archive above the queue** (owner, 2026-11-21): over the newest waiting conversation a folded «🗄 Архив»
+  divider. Opened, it shows above itself the five conversations handled last (they wait for nothing: answered,
+  archived, made a task, read before the queue started, snoozed — with «⏱ до …»); the latest handled stands nearest
+  the divider, earlier ones higher. «Загрузить ещё» on top, or scrolling on up, adds the next five (from older history
+  when the loaded part runs out). A tile there says «разобрана <когда>» and has no ⏱ / ↥.
 - «ждёт меня» uses the triage outcome, not just the last message: an incoming "ok, thanks" filed as «без дела»
   waits for nothing. In a group a message waits for me only when addressed to me or part of my task. My reply in
   any channel of the conversation is an answer.

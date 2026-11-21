@@ -1,8 +1,9 @@
 // A tile of the «Беседы» queue (CONCEPT.md §5, docs/plans/2026-11-20-queue-and-task-screen-design.md): line 1 —
 // the kind of chat, the channel and the contact, the time; line 2 — the conversation's task (with «?» when the AI
 // chose it) or «+ задача…» to type one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↥ В конец
-// очереди»; a small line — how long it waits, how many messages, the counterparty, a tag or two. tileTask, pickTask
-// and tileFacts are pure (tested in node); convRow builds the DOM.
+// очереди»; a small line — how long it waits, how many messages, the counterparty, a tag or two. A tile of the archive
+// above the queue (`archived`) has no «⏱»/«↥» and says when it was handled or until when it is snoozed. tileTask,
+// pickTask and tileFacts are pure (tested in node); convRow builds the DOM.
 import { snippet } from './projection.js';
 import { isOpen, dueState } from './taskfold.js';
 
@@ -49,6 +50,8 @@ function channelOf(event) {
   return 'Я';
 }
 
+const moment = (iso, now) => { const at = new Date(iso); return at.toDateString() === now.toDateString() ? time.format(at) : `${date.format(at)}, ${time.format(at)}`; };
+
 const waitedLabel = (ms) => {
   const minutes = Math.max(0, Math.floor(ms / 60_000));
   if (minutes < 60) return `${minutes} мин`;
@@ -78,6 +81,9 @@ export function tileFacts(conversation, { now = new Date(), hotHours = 2, counte
     count: pending.length,
     counterparty,
     tags: [...new Set(pending.flatMap((view) => view.tags ?? []))].slice(0, 2),
+    // The archive (queue.js archiveList): handled when, or snoozed until when.
+    handled: conversation.handledAt ? moment(conversation.handledAt, now) : null,
+    snoozedUntil: conversation.queue?.snoozedUntil ? moment(conversation.queue.snoozedUntil, now) : null,
   };
 }
 
@@ -88,15 +94,17 @@ function element(tag, className, text) {
   return node;
 }
 
-// The tile. `on` — { open(key), task(id), newTask(title), snooze(anchor), requeue() }; `decorate` adds the swipes.
-export function convRow(conversation, { now = new Date(), hotHours, counterparties, on, decorate }) {
+// The tile. `on` — { open(key), task(id), newTask(title), snooze(anchor), requeue() }; `decorate` adds the swipes;
+// `archived` — a tile of the archive above the queue.
+export function convRow(conversation, { now = new Date(), hotHours, counterparties, on, decorate, archived = false }) {
   const facts = tileFacts(conversation, { now, hotHours, counterparties });
-  const row = element('div', `conv-tile${facts.hot ? ' hot' : ''}`);
+  const row = element('div', `conv-tile${archived ? ' archived' : facts.hot ? ' hot' : ''}`);
   row.dataset.conversation = conversation.key;
   const body = element('div', 'conv-body');
   body.setAttribute('role', 'button');
   body.tabIndex = 0;
-  body.setAttribute('aria-label', [facts.title, facts.channel, facts.task?.title, facts.snippet, `ждёт ${facts.waited}`].filter(Boolean).join(', '));
+  const state = archived ? (facts.snoozedUntil ? `⏱ отложена до ${facts.snoozedUntil}` : facts.handled ? `разобрана ${facts.handled}` : '') : `ждёт ${facts.waited}`;
+  body.setAttribute('aria-label', [facts.title, facts.channel, facts.task?.title, facts.snippet, state].filter(Boolean).join(', '));
   const head = element('div', 'conv-head');
   head.append(element('span', 'conv-kind', KIND_ICONS[facts.kind]), element('span', 'conv-channel', facts.channel), element('span', 'conv-title', facts.title));
   // Line 2: the task (a tap opens it) or a field to make one from what waits.
@@ -122,7 +130,7 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
     };
   }
   const text = element('div', 'conv-snippet', `${facts.mine ? 'Вы: ' : ''}${facts.snippet}`);
-  const meta = element('div', 'conv-meta', [`ждёт ${facts.waited}`, facts.count > 1 ? `${facts.count} новых` : '', facts.counterparty ?? '', ...facts.tags].filter(Boolean).join(' · '));
+  const meta = element('div', 'conv-meta', [state, !archived && facts.count > 1 ? `${facts.count} новых` : '', facts.counterparty ?? '', ...facts.tags].filter(Boolean).join(' · '));
   body.append(head, taskLine, text, meta);
   body.onclick = () => on.open(conversation.key);
   body.onkeydown = (event) => { if (event.key === 'Enter' && event.target === body) on.open(conversation.key); };
@@ -136,7 +144,8 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
   requeue.type = 'button';
   requeue.setAttribute('aria-label', 'В конец очереди');
   requeue.onclick = (event) => { event.stopPropagation(); on.requeue(); };
-  side.append(element('span', 'conv-time', facts.when), snooze, requeue);
+  side.append(element('span', 'conv-time', facts.when));
+  if (!archived) side.append(snooze, requeue);
   row.append(body, side);
   decorate?.(row, conversation); // swipes: to the archive and the task (convquick.js)
   return row;

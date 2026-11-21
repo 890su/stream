@@ -3,7 +3,7 @@ import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { conversations } from '../web/conversations.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { queueList, ownerLinked } from '../web/queue.js';
+import { queueList, ownerLinked, archiveList } from '../web/queue.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { project } from '../web/projection.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
@@ -141,4 +141,24 @@ test('a group waits only for a message answering me or in my task', () => {
 test('own notes never wait', () => {
   const note = { id: `q${++n}`, schema_version: 1, source: 'app', author: 'me', ts: '2026-11-18T09:00:00', kind: 'text', payload: { text: 'идея', data: {} } };
   assert.equal(queueOf([note]).waiting, false);
+});
+
+// The archive above the queue (owner, 2026-11-21): conversations that wait for nothing, the last handled first —
+// a fresh archive mark, reply, own task or snooze puts it nearest the divider.
+test('the archive: what waits for nothing, the last handled first; own notes stay out; a snoozed one is there until it ends', () => {
+  const a = tg('701', '2026-11-18T08:00:00', 'a');
+  const b = tg('702', '2026-11-18T09:00:00', 'b');
+  const c = tg('703', '2026-11-18T10:00:00', 'c');
+  const d = tg('704', '2026-11-18T11:00:00', 'ждёт');
+  const note = { id: `q${++n}`, schema_version: 1, source: 'app', author: 'me', ts: '2026-11-18T11:30:00', kind: 'text', payload: { text: 'идея', data: {} } };
+  const events = [a, b, c, d, note,
+    mark(a.id, '2026-11-18T11:50:00', 'answered'),                    // archived last: nearest the divider
+    mine('702', '2026-11-18T09:30:00', 'ок'),                          // answered by me at 9:30
+    change('t9', '2026-11-18T11:40:00', { op: 'create', title: 'Дело', status: 'todo', add: [c.id] }, 'me'),
+  ];
+  assert.deepEqual(archiveList(run(events)).map((item: any) => item.key), ['tg:701', 'tg:703', 'tg:702']);
+  assert.equal(archiveList(run(events))[0].handledAt, '2026-11-18T11:50:00');
+  const snoozed = [d, mark(d.id, '2026-11-18T11:55:00', 'snooze', { until: '2026-11-18T18:00:00' })];
+  assert.deepEqual(archiveList(run(snoozed)).map((item: any) => item.key), ['tg:704'], 'snoozed: in the archive until it ends');
+  assert.deepEqual(archiveList(run(snoozed, new Date('2026-11-18T19:00:00'))), [], 'snooze over: back in the queue');
 });

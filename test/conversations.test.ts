@@ -84,6 +84,10 @@ test('a queue tile: channel, task (guessed when the AI linked it), two lines of 
   assert.deepEqual([quiet.kind, quiet.channel, quiet.task, quiet.waited, quiet.hot], ['phone', 'Тел', null, '30 мин', false]);
   assert.deepEqual([1, 3, 5, 21].map(tasksLabel), ['1 задача', '3 задачи', '5 задач', '21 задача']);
   assert.deepEqual(withWhom(person.views), ['Анна Тестова']);
+  // An archive tile says when it was handled (today — the time, earlier — the date too) or until when it is snoozed.
+  assert.deepEqual([tileFacts({ ...person, handledAt: '2026-11-18T10:15:00' }, { now }).handled, tileFacts({ ...person, handledAt: '2026-11-16T10:15:00' }, { now }).handled],
+    ['10:15', '16 нояб., 10:15']);
+  assert.equal(tileFacts({ ...person, queue: { ...person.queue, snoozedUntil: '2026-11-18T18:00:00' } }, { now }).snoozedUntil, '18:00');
 });
 
 test('task plaques: open tasks only, executor in words, due date', async () => {
