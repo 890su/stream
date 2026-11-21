@@ -529,7 +529,8 @@
                     "ok",
                     "silent",
                     "login_required",
-                    "error"
+                    "error",
+                    "off"
                   ]
                 },
                 "previous": {
@@ -538,6 +539,7 @@
                     "silent",
                     "login_required",
                     "error",
+                    "off",
                     "unknown"
                   ]
                 }

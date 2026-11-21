@@ -17,7 +17,7 @@ import { stateChanged } from './system.ts';
 // client entered while the server runs turns it on at once (`reconfigure`).
 
 export const GOOGLE_SOURCE = 'google_calendar';
-export type GoogleOptions = { clientId?: string; clientSecret?: string; credentials?: () => { clientId?: string; clientSecret?: string }; publicUrl?: string; dir: string; fetch?: Fetch };
+export type GoogleOptions = { clientId?: string; clientSecret?: string; credentials?: () => { clientId?: string; clientSecret?: string }; enabled?: () => boolean; publicUrl?: string; dir: string; fetch?: Fetch };
 
 export function createGoogle({ store, live, ownerToken, options }: { store: JournalStore; live: LiveFeed; ownerToken: string; options: GoogleOptions }) {
   const { publicUrl = 'https://stream.sekond.pl', dir } = options;
@@ -108,8 +108,9 @@ export function createGoogle({ store, live, ownerToken, options }: { store: Jour
   let polling = false;
   const reconfigure = () => {
     if (!started) return;
-    if (isConfigured() && !polling) { poller.start(); polling = true; }
-    else if (!isConfigured() && polling) { poller.stop(); polling = false; }
+    const on = isConfigured() && (options.enabled?.() ?? true); // switched off on the System screen: no reading
+    if (on && !polling) { poller.start(); polling = true; }
+    else if (!on && polling) { poller.stop(); polling = false; }
   };
   return { callback, route, reconfigure, start: () => { started = true; reconfigure(); }, stop: () => { started = false; polling = false; poller.stop(); } };
 }

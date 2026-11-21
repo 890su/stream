@@ -39,7 +39,7 @@ test('only known keys, each checked by its shape', () => {
     assert.throws(() => store.set('STREAM_TG_BY_BOT_TOKEN', 'not a token'), /токен бота/);
     assert.throws(() => store.set('STREAM_GOOGLE_CLIENT_ID', 'abc'), /Client ID/);
     store.set('STREAM_GOOGLE_CLIENT_ID', '1234-abc.apps.googleusercontent.com');
-    assert.deepEqual(SECRETS.map((item) => item.name), ['STREAM_GOOGLE_CLIENT_ID', 'STREAM_GOOGLE_CLIENT_SECRET', 'STREAM_TG_BY_BOT_TOKEN', 'STREAM_TG_PL_BOT_TOKEN']);
+    assert.deepEqual(SECRETS.map((item) => item.name), ['STREAM_GOOGLE_CLIENT_ID', 'STREAM_GOOGLE_CLIENT_SECRET', 'STREAM_TG_BY_BOT_TOKEN', 'STREAM_TG_PL_BOT_TOKEN', 'ANTHROPIC_API_KEY']);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

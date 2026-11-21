@@ -356,3 +356,31 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 .system-key-form[hidden] { display: none; }
 .system-key-form input { flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--bar-text); font: inherit; }
 .system-keys summary { cursor: pointer; margin-top: 8px; }
+
+/* The System screen by cards (system.js, systemcards.js, 2026-11-21). */
+.system-attention { margin: 4px 0 10px; padding: 6px 8px 2px; border-radius: 14px; background: color-mix(in srgb, var(--danger) 10%, var(--panel)); }
+.system-attention-title { margin: 4px 4px 6px; font-weight: 600; color: var(--danger); }
+.system-all-ok { margin: 6px 4px 10px; color: #2e9d4f; font-weight: 600; }
+.system-card { border-bottom: 1px solid var(--line); }
+.system-card-head { display: flex; align-items: center; gap: 8px; }
+.system-card-open { flex: 1; min-width: 0; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "dot name state" "dot when when"; gap: 0 8px;
+  padding: 10px 2px; border: 0; background: none; color: var(--bar-text); font: inherit; text-align: left; cursor: pointer; }
+.system-card-open .system-dot { grid-area: dot; margin-top: 6px; }
+.system-card-open .system-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.system-card-state { grid-area: state; font-size: 13px; color: var(--muted); }
+.system-card.attention .system-card-state { color: var(--danger); }
+.system-card-when { grid-area: when; font-size: 12.5px; color: var(--muted); }
+.system-card-body { padding: 0 2px 12px 20px; }
+.system-dot.off { background: var(--line); }
+.system-switch { position: relative; flex: none; width: 46px; height: 28px; cursor: pointer; }
+.system-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.system-switch-track { position: absolute; inset: 0; border-radius: 14px; background: var(--line); transition: background .15s; }
+.system-switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: var(--shadow); transition: transform .15s; }
+.system-switch input:checked + .system-switch-track { background: #2e9d4f; }
+.system-switch input:checked + .system-switch-track::after { transform: translateX(18px); }
+.system-switch input:focus-visible + .system-switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.system-journal summary { cursor: pointer; }
+.system-guide { display: inline-block; margin-top: 8px; }
+.system-card-body .system-qr { grid-column: auto; }
+.system-dot.unset { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.system-attention-item { display: block; width: 100%; padding: 6px 4px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--bar-text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }

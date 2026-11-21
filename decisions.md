@@ -904,3 +904,19 @@ WhatsApp» (тот подключается целиком из приложен
 **Affected:** `src/secrets.ts`, `src/server/secrets.ts`, `src/server/http.ts`, `src/server/google.ts`,
 `src/google/oauth.ts`, `src/main.ts`, `web/keysbox.js`, `web/googlebox.js`, `web/system.js`, `deploy/GOOGLE.md`,
 `deploy/TELEGRAM.md`, `CONTEXT.md`
+
+## 2026-11-21 — «Система» карточками подключений; выключатель у каждого
+**What:** Экран «Система» — карточки подключений в группах «Каналы» (Telegram BY и PL, WhatsApp PL, Viber, Телефон) и
+«Сервисы» (Google Календарь, Разбор задач): точка, состояние словом, когда был последний сигнал, выключатель; раскрытая
+карточка — её ключи, QR, аккаунты бота, Google, неудачные отправки, «Как подключить». Сверху — «Требуют внимания»
+(ошибка, вход, молчание, неудачные отправки); ни разу не подключённое — «не подключён», не тревога. Внизу — журнал
+отправок и неотслеживаемых чатов. Выключатель (`switches.json` в томе данных) сохраняет все настройки: бот, клиент
+WhatsApp, Google останавливаются, разбор ставится на паузу; Viber и телефон получают 503 и держат очередь на
+устройстве. Включение и выключение — служебной записью в ленте. Ключ Anthropic тоже вводится на «Системе».
+**Why:** Владелец 2026-11-21: «переработай страницу система для логичного отображения коннекторов, отключения и
+управления коннекторами и секретами — сейчас какой-то черновик».
+**Boundary:** Событие `system` получило состояние `off` (добавочно). WhatsApp, выключенный в `.env`
+(`STREAM_WA_PL_ENABLED=0`), выключателем не включается.
+**Affected:** `src/switches.ts`, `src/server/connectors.ts`, `src/server/http.ts`, `src/server/system.ts`,
+`src/store/status.ts`, `src/tasks/triage.ts`, `src/secrets.ts`, `web/system.js`, `web/systemcards.js`,
+`contracts/event.schema.json`

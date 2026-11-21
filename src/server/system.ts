@@ -3,6 +3,7 @@ import type { JournalStore } from '../store/store.ts';
 import type { SourceState } from '../store/status.ts';
 import type { Action } from '../store/actions.ts';
 import { telegramConfig, whatsappConfig } from '../config.ts';
+import { CONNECTORS } from '../switches.ts';
 import { nameId } from '../ids.ts';
 import { HttpError } from './errors.ts';
 import { json } from './body.ts';
@@ -19,7 +20,7 @@ export function sourceTitle(source: string): string {
   const account = Object.values(telegramConfig.accounts).find((item) => item.connector === source)
     ?? Object.values(whatsappConfig.accounts).find((item) => item.connector === source);
   if (account) return account.title;
-  return source === 'android_phone' ? 'Телефон' : source === 'ai_triage' ? 'Разбор задач (ИИ)' : source === 'viber' ? 'Viber' : source === 'google_calendar' ? 'Google Календарь' : source;
+  return source === 'android_phone' ? 'Телефон (звонки и SMS)' : source === 'ai_triage' ? 'Разбор задач (ИИ)' : source === 'viber' ? 'Viber' : source === 'google_calendar' ? 'Google Календарь' : source;
 }
 
 export function stateChanged(store: JournalStore, live: LiveFeed, source: string, state: SourceState, previous: SourceState | 'unknown', detail: string | null): void {
@@ -46,25 +47,31 @@ export function actionChanged(store: JournalStore, live: LiveFeed, action: Actio
   if (result.created) live.publish(result.event);
 }
 
-export function watchSilence(store: JournalStore, live: LiveFeed): () => void {
+// `off()` — connections switched off on the System screen: not marked silent (they are quiet on purpose).
+export function watchSilence(store: JournalStore, live: LiveFeed, off: () => string[] = () => []): () => void {
   const timer = setInterval(() => {
     try {
       const before = new Date(Date.now() - telegramConfig.silent_after_s * 1000).toISOString();
-      for (const { source, previous } of store.status.markSilent(before)) stateChanged(store, live, source, 'silent', previous, null);
+      for (const { source, previous } of store.status.markSilent(before, off())) stateChanged(store, live, source, 'silent', previous, null);
     } catch (error) { console.error('Silence check failed', error instanceof Error ? error.message : error); }
   }, 30_000);
   timer.unref();
   return () => clearInterval(timer);
 }
 
-export async function system(request: IncomingMessage, response: ServerResponse, path: string, store: JournalStore, live: LiveFeed, bots: TelegramBot[] = []): Promise<void> {
+// The System screen's data: every connection (CONNECTORS) with its state — 'off' when switched off there — and `on`.
+export async function system(request: IncomingMessage, response: ServerResponse, path: string, store: JournalStore, live: LiveFeed,
+  { bots = [], isOn = () => true }: { bots?: TelegramBot[]; isOn?: (id: string) => boolean } = {}): Promise<void> {
   if (path === 'system' && request.method === 'GET') {
     const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
     const known = new Map(store.status.all().map((item) => [item.source, item]));
     for (const account of Object.values(telegramConfig.accounts)) if (!known.has(account.connector)) {
-      known.set(account.connector, { source: account.connector, state: 'silent', detail: 'нет токена бота — введите его ниже, в «Ключах», см. deploy/TELEGRAM.md', pulse_at: null, last_event_at: null, info: null });
+      known.set(account.connector, { source: account.connector, state: 'unset' as never, detail: 'нет токена бота — откройте карточку и введите токен из @BotFather', pulse_at: null, last_event_at: null, info: null });
     }
-    const sources = [...known.values()].map((item) => ({ ...item, title: sourceTitle(item.source), failed_24h: store.actions.failedSince(item.source, dayAgo) }));
+    // A connection never heard from is not set up yet ('unset'), not silent: nothing to worry about, just to do.
+    for (const id of CONNECTORS) if (!known.has(id)) known.set(id, { source: id, state: 'unset' as never, detail: null, pulse_at: null, last_event_at: null, info: null });
+    const sources = [...known.values()].map((item) => ({ ...item, state: isOn(item.source) ? item.state : 'off', on: isOn(item.source),
+      title: sourceTitle(item.source), failed_24h: store.actions.failedSince(item.source, dayAgo) }));
     const telegram = {
       bots: Object.fromEntries(bots.map((bot) => [bot.account, bot.username])),
       connections: store.connections.list(), groups: store.connections.groups(),

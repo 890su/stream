@@ -41,9 +41,10 @@ export class StatusStore {
   }
 
   // Sources with a pulse that stopped: switched to `silent`; returns the ones that changed now.
-  markSilent(before: string): { source: string; previous: SourceState }[] {
-    const rows = this.#db.prepare("SELECT source, state FROM source_status WHERE pulse_at IS NOT NULL AND pulse_at < ? AND state != 'silent'")
-      .all(before) as { source: string; state: SourceState }[];
+  // `skip` — connections switched off on the System screen: quiet on purpose, not silent.
+  markSilent(before: string, skip: string[] = []): { source: string; previous: SourceState }[] {
+    const rows = (this.#db.prepare("SELECT source, state FROM source_status WHERE pulse_at IS NOT NULL AND pulse_at < ? AND state != 'silent'")
+      .all(before) as { source: string; state: SourceState }[]).filter((row) => !skip.includes(row.source));
     for (const row of rows) this.#db.prepare("UPDATE source_status SET state = 'silent' WHERE source = ?").run(row.source);
     return rows.map((row) => ({ source: row.source, previous: row.state }));
   }

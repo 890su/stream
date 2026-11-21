@@ -1,12 +1,13 @@
-// The System screen (CONCEPT.md §5): what works without the owner — Telegram bots, WhatsApp, the phone companion —
-// its state (with the WhatsApp linking QR while it waits), the replies sent outside, and the chats switched off with
-// «Не отслеживать».
+// The System screen (CONCEPT.md §5; by cards since 2026-11-21): every connection as a card — channels and services,
+// what needs attention on top — with its state, an on/off switch and, opened, what belongs to it: keys (keysbox.js),
+// the WhatsApp linking QR, the accounts connected to a Telegram bot, Google's accounts and calendars (googlebox.js),
+// its failed sends. Below — the journal: all sends outside and the chats switched off with «Не отслеживать».
 import { getSetting } from './db.js';
 import { accountTitle } from './tgbubble.js';
 import { googleBox } from './googlebox.js';
 import { keyRows } from './keysbox.js';
+import { systemGroups, card } from './systemcards.js';
 
-const STATE = { ok: 'работает', silent: 'молчит', login_required: 'нужен вход', error: 'ошибка' };
 const ACTION = { proposed: 'ждёт', approved: 'в очереди', running: 'отправляется', done: 'отправлено', failed: 'не отправлено', rejected: 'отменено' };
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -14,6 +15,12 @@ function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
+  return node;
+}
+function button(className, text, onClick) {
+  const node = element('button', className, text);
+  node.type = 'button';
+  node.onclick = onClick;
   return node;
 }
 
@@ -35,34 +42,16 @@ export function ago(iso, now = Date.now()) {
 
 export function setupSystem({ notify, onTrack }) {
   const dialog = document.querySelector('#system');
-  const sources = document.querySelector('#system-sources');
-  const actions = document.querySelector('#system-actions');
-  const exclusions = document.querySelector('#system-exclusions');
-  const telegramBox = document.querySelector('#system-telegram');
-  const googleSlot = document.querySelector('#system-google');
+  const body = document.querySelector('#system-body');
+  const opened = new Set(); // cards the owner opened, kept across redraws
 
   async function call(path, init = {}) {
     const response = await fetch(path, { ...init, headers: { Authorization: `Bearer ${await getSetting('ownerToken')}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
     if (!response.ok) {
-      const said = response.status === 401 ? null : await response.json().then((body) => body?.error, () => null);
+      const said = response.status === 401 ? null : await response.json().then((data) => data?.error, () => null);
       throw new Error(response.status === 401 ? 'Токен не принят' : said ? said.replace(/^\d{3} /, '') : 'Сервер недоступен');
     }
     return response.status === 204 ? null : response.json();
-  }
-
-  function sourceRow(item) {
-    const row = element('div', 'system-source');
-    row.append(element('span', `system-dot ${item.state}`), element('span', 'system-name', `${item.title} — ${STATE[item.state] ?? item.state}`));
-    const facts = [];
-    if (item.pulse_at) facts.push(`сигнал ${ago(item.pulse_at)}`);
-    facts.push(`последнее сообщение ${ago(item.last_event_at)}`);
-    if (item.info?.chats !== undefined) facts.push(`чатов ${item.info.chats}, групп ${item.info.groups}, отключено ${item.info.excluded}`);
-    if (item.failed_24h) facts.push(`не отправлено за сутки: ${item.failed_24h}`);
-    const detail = element('span', 'system-detail', facts.join(' · '));
-    if (item.detail && item.state !== 'ok') detail.append(element('div', '', item.detail));
-    row.append(detail);
-    if (showsQr(item)) row.append(qrBlock(item));
-    return row;
   }
 
   // WhatsApp linking (deploy/WHATSAPP.md): the QR needs the owner token, so it is fetched and shown as a blob (the
@@ -100,78 +89,110 @@ export function setupSystem({ notify, onTrack }) {
     return box;
   }
 
+  async function retryAction(id) {
+    try { await call(`/api/actions/${id}/retry`, { method: 'POST' }); notify('Отправка повторится'); render(); }
+    catch (error) { notify(error.message); }
+  }
+
   function actionRow(action) {
     const row = element('div', 'system-row');
     row.append(element('span', '', `${action.params?.text ?? action.operation}`));
     row.title = action.error ?? '';
     row.append(element('span', `state ${action.status}`, `${ACTION[action.status] ?? action.status} · ${ago(action.updated_at)}`));
-    if (action.status === 'failed') {
-      const retry = element('button', 'link-button', 'Повторить');
-      retry.type = 'button';
-      retry.onclick = () => retryAction(action.id);
-      row.append(retry);
-    }
+    if (action.status === 'failed') row.append(button('link-button', 'Повторить', () => retryAction(action.id)));
     return row;
   }
 
-  // Accounts connected to the bots (CONCEPT.md §8.2): only trusted ones are read and answered.
+  // Accounts connected to a bot (CONCEPT.md §8.2): only trusted ones are read and answered.
   function connectionRow(item) {
     const row = element('div', 'system-row connection');
     const state = item.trusted === true ? (item.enabled ? 'принято' : 'бот отключён в Telegram') : item.trusted === false ? 'отклонено' : 'ждёт решения';
-    row.append(element('span', '', `${accountTitle(item.account)} · ${item.user_name ?? item.user_id}`), element('span', `state ${item.trusted === false ? 'failed' : ''}`, state));
-    const decide = (label, trusted) => {
-      const button = element('button', 'link-button', label);
-      button.type = 'button';
-      button.onclick = async () => {
-        try { await call('/api/telegram/trust', { method: 'POST', body: JSON.stringify({ account: item.account, user_id: item.user_id, trusted }) }); render(); }
-        catch (error) { notify(error.message); }
-      };
-      return button;
-    };
+    row.append(element('span', '', item.user_name ?? item.user_id), element('span', `state ${item.trusted === false ? 'failed' : ''}`, state));
+    const decide = (label, trusted) => button('link-button', label, async () => {
+      try { await call('/api/telegram/trust', { method: 'POST', body: JSON.stringify({ account: item.account, user_id: item.user_id, trusted }) }); render(); }
+      catch (error) { notify(error.message); }
+    });
     if (item.trusted !== true) row.append(decide('Принять', true));
     if (item.trusted !== false) row.append(decide(item.trusted ? 'Отключить' : 'Отклонить', false));
     return row;
   }
 
-  function telegramRows(data) {
-    const rows = [];
-    for (const [account, username] of Object.entries(data.bots ?? {})) {
-      rows.push(element('p', 'system-detail', `${accountTitle(account)}: бот @${username ?? '…'} — подключите его в Telegram: Настройки → Telegram для бизнеса → Чат-боты`));
-    }
-    rows.push(...(data.connections ?? []).map(connectionRow));
-    const groups = (data.groups ?? []).filter((group) => group.member);
-    if (groups.length) rows.push(element('p', 'system-detail', `Группы: ${groups.map((group) => `${group.title ?? group.chat_id} (${accountTitle(group.account)}${group.allowed ? '' : ', не читается'})`).join(', ')}`));
-    return rows.length ? rows : [element('p', 'system-empty', 'Боты Telegram не настроены — см. deploy/TELEGRAM.md')];
-  }
-
   function exclusionRow(item) {
     const row = element('div', 'system-row');
-    row.append(element('span', '', item.chat_title || item.chat_id));
-    const back = element('button', 'link-button', 'Вернуть');
-    back.type = 'button';
-    back.onclick = async () => { await onTrack(item.message); notify('Чат снова отслеживается: шлюз подтянет сегодняшние сообщения'); render(); };
-    row.append(back);
+    row.append(element('span', '', item.chat_title || item.chat_id),
+      button('link-button', 'Вернуть', async () => { await onTrack(item.message); notify('Чат снова отслеживается: шлюз подтянет сегодняшние сообщения'); render(); }));
     return row;
   }
 
-  async function retryAction(id) {
-    try { await call(`/api/actions/${id}/retry`, { method: 'POST' }); notify('Отправка повторится'); render(); }
-    catch (error) { notify(error.message); }
+  const section = (title, nodes) => [element('p', 'picker-section', title), ...nodes];
+  const fold = (title, nodes, empty) => {
+    const box = element('details', 'system-journal');
+    box.append(Object.assign(element('summary', 'picker-section'), { textContent: title }), ...(nodes.length ? nodes : [element('p', 'system-empty', empty)]));
+    return box;
+  };
+
+  // What one card shows inside: its keys, its own things, its failed sends.
+  function cardBody(item, data) {
+    return async () => {
+      const ctx = { call, notify, rerender: render };
+      const nodes = [];
+      const account = item.source.startsWith('telegram_') ? item.source.slice(9) : null;
+      if (account) {
+        nodes.push(...await keyRows([`telegram:${account}`], ctx));
+        const bot = data.telegram?.bots?.[account];
+        if (bot !== undefined) nodes.push(element('p', 'system-detail', `Бот @${bot ?? '…'} — подключите его в Telegram: Настройки → Telegram для бизнеса → Чат-боты.`));
+        const people = (data.telegram?.connections ?? []).filter((connection) => connection.account === account);
+        if (people.length) nodes.push(...section('Подключённые аккаунты', people.map(connectionRow)));
+        const groups = (data.telegram?.groups ?? []).filter((group) => group.member && group.account === account);
+        if (groups.length) nodes.push(element('p', 'system-detail', `Группы: ${groups.map((group) => `${group.title ?? group.chat_id}${group.allowed ? '' : ' (не читается)'}`).join(', ')}`));
+      }
+      if (item.source === 'google_calendar') nodes.push(...await googleBox(ctx));
+      if (item.source === 'ai_triage') nodes.push(...await keyRows(['ai'], ctx));
+      if (showsQr(item)) nodes.push(qrBlock(item));
+      if (item.info?.chats !== undefined) nodes.push(element('p', 'system-detail', `Чатов ${item.info.chats}, групп ${item.info.groups}, отключено ${item.info.excluded}`));
+      const failed = data.actions.filter((action) => action.connector === item.source && action.status === 'failed');
+      if (failed.length) nodes.push(...section('Не отправлено', failed.map(actionRow)));
+      return nodes;
+    };
+  }
+
+  function cardOf(item, data) {
+    return card(item, {
+      open: opened.has(item.source),
+      onToggle: (open) => { if (open) opened.add(item.source); else opened.delete(item.source); render(); },
+      onSwitch: async (on, input) => {
+        try { await call(`/api/connectors/${item.source}`, { method: 'POST', body: JSON.stringify({ on }) }); notify(`${item.title}: ${on ? 'включён' : 'выключен'}`); render(); }
+        catch (error) { input.checked = !on; notify(error.message); }
+      },
+      body: cardBody(item, data),
+    });
   }
 
   async function render() {
     try {
       const data = await call('/api/system');
       stopQr();
-      sources.replaceChildren(...data.sources.map(sourceRow));
-      // The bot tokens first: entered here, a bot starts at once (deploy/TELEGRAM.md says how to get one).
-      const tokens = await keyRows(['telegram:by', 'telegram:pl'], { call, notify, rerender: render });
-      telegramBox.replaceChildren(...tokens, ...telegramRows(data.telegram ?? {}).filter((node) => !(tokens.length && node.textContent.startsWith('Боты Telegram не настроены'))));
-      googleSlot.replaceChildren(...await googleBox({ call, notify, rerender: render }));
-      actions.replaceChildren(...(data.actions.length ? data.actions.map(actionRow) : [element('p', 'system-empty', 'Ответов наружу ещё не было')]));
-      exclusions.replaceChildren(...(data.exclusions.length ? data.exclusions.map(exclusionRow) : [element('p', 'system-empty', 'Все чаты отслеживаются')]));
+      const groups = systemGroups(data.sources);
+      const nodes = [];
+      // What needs attention: a short list on top; a tap opens that card in its group.
+      if (groups.attention.length) {
+        const banner = element('div', 'system-attention');
+        banner.append(element('p', 'system-attention-title', `⚠ Требуют внимания: ${groups.attention.length}`),
+          ...groups.attention.map((item) => button('system-attention-item', `${item.title} — ${item.detail ?? (item.failed_24h ? `не отправлено: ${item.failed_24h}` : '')}`.replace(/ — $/, ''), async () => {
+            opened.add(item.source);
+            await render();
+            body.querySelector(`[data-card="${item.source}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+          })));
+        nodes.push(banner);
+      } else nodes.push(element('p', 'system-all-ok', '✓ Всё подключённое работает'));
+      const cards = (list) => list.map((item) => { const node = cardOf(item, data); node.dataset.card = item.source; return node; });
+      nodes.push(...section('Каналы', cards(groups.channels)), ...section('Сервисы', cards(groups.services)));
+      nodes.push(element('p', 'picker-section', 'Журнал'),
+        fold(`Отправки наружу${data.actions.some((action) => action.status === 'failed') ? ` · не отправлено: ${data.actions.filter((action) => action.status === 'failed').length}` : ''}`, data.actions.map(actionRow), 'Ответов наружу ещё не было'),
+        fold(`Неотслеживаемые чаты · ${data.exclusions.length}`, data.exclusions.map(exclusionRow), 'Все чаты отслеживаются'));
+      body.replaceChildren(...nodes);
     } catch (error) {
-      sources.replaceChildren(element('p', 'system-empty', `${error.message}. Экран «Система» работает только в сети`));
+      body.replaceChildren(element('p', 'system-empty', `${error.message}. Экран «Система» работает только в сети`));
     }
   }
 

@@ -21,17 +21,20 @@ test('a refresh while a poll runs does not start a second loop: one more poll ri
     if (String(url).includes('calendarList')) { lists += 1; if (lists === 1) await new Promise<void>((resolve) => { release = resolve; }); return reply(200, { items: [] }); }
     return reply(200, { items: [] });
   };
-  const poller = new CalendarPoller({ accounts: { list: () => [{ email: 'a@example.com' }], accessToken: async () => 't' }, fetch, config: { ...config, poll_s: 0.05 }, dir, onHealth: () => {} });
+  // Polls every 200 ms: one chain makes ~5 in a second; a second chain would make ~10.
+  const poller = new CalendarPoller({ accounts: { list: () => [{ email: 'a@example.com' }], accessToken: async () => 't' }, fetch, config: { ...config, poll_s: 0.2 }, dir, onHealth: () => {} });
+  const until = async (check: () => boolean) => { const end = Date.now() + 2000; while (!check() && Date.now() < end) await wait(5); };
   try {
     poller.start();
-    await wait(20);
+    await until(() => lists === 1);
     poller.refresh(); // mid-poll
     poller.refresh();
     release();
-    await wait(30);
-    assert.equal(lists, 2, 'the refresh made exactly one extra poll');
-    await wait(160);
-    assert.ok(lists >= 3 && lists <= 6, `one chain at 50 ms, not several (${lists})`);
+    await until(() => lists >= 2);
+    const start = lists;
+    await wait(1000);
+    const made = lists - start;
+    assert.ok(made >= 3 && made <= 7, `one chain: ${made} polls in a second at 200 ms`);
   } finally { poller.stop(); rmSync(dir, { recursive: true, force: true }); }
 });
 

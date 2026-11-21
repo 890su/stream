@@ -295,6 +295,9 @@ export class Triage {
     } finally { this.#busy = false; }
   }
 
+  // A new AI key entered on the System screen (src/server/connectors.ts): the next round uses it.
+  use(planner: Planner | null, namer: Namer | null): void { this.#planner = planner; this.#namer = namer; }
+
   start(everyMs = 10_000): void { void this.tick(); this.#timer = setInterval(() => void this.tick(), everyMs); this.#timer.unref(); }
   stop(): void { clearInterval(this.#timer); }
 }

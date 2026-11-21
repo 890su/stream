@@ -5,25 +5,22 @@ import { join } from 'node:path';
 import type { JournalStore } from '../store/store.ts';
 import { captureConfig, tagConfig, telegramConfig, tasksConfig, conversationsConfig, filtersConfig, pulseConfig, whatsappConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
-import { json } from './body.ts';
+import { json, readBody } from './body.ts';
 import { events } from './events.ts';
 import { media } from './media.ts';
 import { share } from './share.ts';
 import { phone } from './phone.ts';
 import { viber } from './viber.ts';
-import { TelegramBot } from '../telegram/bot.ts';
-import { WhatsAppClient } from '../whatsapp/client.ts';
 import type { SocketFactory } from '../whatsapp/types.ts';
 import { whatsappQr } from './whatsapp.ts';
-import { Triage } from '../tasks/triage.ts';
-import type { Namer } from '../tasks/namer.ts';
-import type { Planner } from '../tasks/planner.ts';
 import { system, watchSilence } from './system.ts';
 import { staticFile } from './static.ts';
 import { LiveFeed } from './live.ts';
-import { createGoogle, type GoogleOptions } from './google.ts';
-import { SecretStore } from '../secrets.ts';
+import type { GoogleOptions } from './google.ts';
+import type { SecretStore } from '../secrets.ts';
 import { secretsRoute } from './secrets.ts';
+import { ConnectorSwitches } from '../switches.ts';
+import { createConnections, type TriageOptions } from './connectors.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
@@ -34,14 +31,16 @@ const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`)
 // whatsapp (optional) — WhatsApp accounts as linked devices in this process (deploy/WHATSAPP.md); session keys in
 // <authRoot>/<account>; `factory` replaces Baileys in tests.
 // google — the Google Calendar connector (deploy/GOOGLE.md): the owner's Google client, tokens in `dir`; `fetch` in tests.
-// secrets (optional) — keys entered on the System screen (src/secrets.ts): the Google client and the bot tokens, used
-// over .env and applied at once (a bot restarts, Google turns on).
-export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google, secrets }: {
+// secrets (optional) — keys entered on the System screen (src/secrets.ts): the Google client, the bot tokens, the AI
+// key, used over .env and applied at once. switches (optional) — connections switched off there (src/switches.ts).
+// The connections themselves run in src/server/connectors.ts.
+export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google, secrets, switches }: {
   store: JournalStore; ownerToken: string; phoneToken?: string; viberToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
-  triage?: { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number };
+  triage?: TriageOptions;
   whatsapp?: { accounts: string[]; authRoot: string; factory?: SocketFactory; retryMs?: number };
   google?: GoogleOptions;
   secrets?: SecretStore;
+  switches?: ConnectorSwitches;
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   if (phoneToken !== undefined && phoneToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_PHONE_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
@@ -50,9 +49,11 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
   const expectedPhone = phoneToken === undefined ? undefined : bearer(phoneToken);
   const expectedViber = viberToken === undefined ? undefined : bearer(viberToken);
   const live = new LiveFeed();
-  const googleOptions = google ?? (secrets ? { dir: '' } as GoogleOptions : undefined);
-  const googleConnector = googleOptions?.dir ? createGoogle({ store, live, ownerToken, options: { ...googleOptions,
-    credentials: secrets ? () => ({ clientId: secrets.get('STREAM_GOOGLE_CLIENT_ID') ?? googleOptions.clientId, clientSecret: secrets.get('STREAM_GOOGLE_CLIENT_SECRET') ?? googleOptions.clientSecret }) : googleOptions.credentials } }) : null;
+  const connections = createConnections({ store, live, ownerToken, telegram, whatsapp, triage, google, secrets, switches });
+  const { bots, whatsappClients, google: googleConnector } = connections;
+  // A channel that sends from a device (the phone, the Viber bridge) switched off answers 503: the device keeps its
+  // queue and sends it once the channel is on again (both retry on 5xx).
+  const deviceOff = (id: string) => { if (!connections.isOn(id)) throw new HttpError(503, `${id === 'viber' ? 'Viber' : 'Телефон'}: канал выключен на «Системе» — сообщения подождут на устройстве`); };
   const server = createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer');
@@ -75,10 +76,20 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           response.setHeader('WWW-Authenticate', 'Bearer');
           throw new HttpError(401, isPhonePath ? 'Проверьте токен телефона' : isViberPath ? 'Проверьте токен моста Viber' : 'Введите токен владельца в настройках');
         }
-        if (isPhonePath) return await phone(request, response, url.pathname.slice('/api/phone/'.length), store, live);
-        if (isViberPath) return await viber(request, response, url.pathname.slice('/api/viber/'.length), store, live);
+        if (isPhonePath) { deviceOff('android_phone'); return await phone(request, response, url.pathname.slice('/api/phone/'.length), store, live); }
+        if (isViberPath) { deviceOff('viber'); return await viber(request, response, url.pathname.slice('/api/viber/'.length), store, live); }
         if (url.pathname === '/api/system' || url.pathname.startsWith('/api/actions/') || url.pathname.startsWith('/api/telegram/')) {
-          return await system(request, response, url.pathname.slice('/api/'.length), store, live, bots);
+          return await system(request, response, url.pathname.slice('/api/'.length), store, live, { bots, isOn: connections.isOn });
+        }
+        const toggle = /^\/api\/connectors\/([a-z_]+)$/.exec(url.pathname);
+        if (toggle && request.method === 'POST') {
+          if (!switches || !ConnectorSwitches.known(toggle[1]!)) throw new HttpError(404, 'Неизвестное подключение');
+          let body: { on?: unknown };
+          try { body = JSON.parse((await readBody(request, 1024)).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'Некорректный JSON'); }
+          if (typeof body.on !== 'boolean') throw new HttpError(400, 'Нужно on: true или false');
+          switches.set(toggle[1]!, body.on);
+          json(response, 200, { ok: true });
+          return;
         }
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
         if (url.pathname === '/api/secrets' || url.pathname.startsWith('/api/secrets/')) {
@@ -120,37 +131,8 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
       json(response, status, { error: status === 500 ? 'Ошибка сервера. Запись останется в очереди' : (error as Error).message });
     }
   });
-  const stopWatching = watchSilence(store, live);
-  // One bot per account with a token: the System screen's key, else .env. A key changed there restarts that bot.
-  const tokenOf = (account: string) => secrets?.get(`STREAM_TG_${account.toUpperCase()}_BOT_TOKEN` as never) ?? telegram?.tokens[account] ?? '';
-  const bots = Object.keys(telegramConfig.accounts).filter((account) => tokenOf(account))
-    .map((account) => new TelegramBot({ account, token: tokenOf(account), store, live, apiBase: telegram?.apiBase }));
-  let listening = false;
-  secrets?.onChange((name) => {
-    if (name.startsWith('STREAM_GOOGLE_')) { googleConnector?.reconfigure(); return; }
-    const account = /^STREAM_TG_([A-Z]+)_BOT_TOKEN$/.exec(name)?.[1]?.toLowerCase();
-    if (!account || !telegramConfig.accounts[account]) return;
-    const index = bots.findIndex((bot) => bot.account === account);
-    if (index >= 0) { bots[index]!.stop(); bots.splice(index, 1); }
-    const token = tokenOf(account);
-    if (!token) return;
-    const bot = new TelegramBot({ account, token, store, live, apiBase: telegram?.apiBase });
-    bots.push(bot);
-    if (listening) void bot.start();
-    console.log(`Telegram ${account}: token changed on the System screen, bot restarted`);
-  });
-  // Baileys is loaded only when a WhatsApp account is on (and never in tests, which pass a fake socket).
-  const socketFactory: SocketFactory = whatsapp?.factory ?? (async (dir) => (await import('../whatsapp/socket.ts')).createSocket(dir));
-  const whatsappClients = (whatsapp?.accounts ?? []).filter((account) => whatsappConfig.accounts[account])
-    .map((account) => new WhatsAppClient({ account, store, live, authDir: join(whatsapp!.authRoot, account), factory: socketFactory, retryMs: whatsapp?.retryMs }));
-  const triageWorker = triage ? new Triage({ store, live, planner: triage.planner, namer: triage.namer ?? null, reason: triage.reason }) : null;
-  server.on('listening', () => {
-    listening = true;
-    for (const bot of bots) void bot.start();
-    for (const client of whatsappClients) client.start().catch((error) => console.error(`WhatsApp ${client.account}: start failed`, error instanceof Error ? error.message : error));
-    triageWorker?.start(triage?.everyMs);
-    googleConnector?.start();
-  });
-  server.on('close', () => { stopWatching(); for (const bot of bots) bot.stop(); for (const client of whatsappClients) client.stop(); triageWorker?.stop(); googleConnector?.stop(); });
+  const stopWatching = watchSilence(store, live, () => switches?.off() ?? []);
+  server.on('listening', () => connections.start());
+  server.on('close', () => { stopWatching(); connections.stop(); });
   return server;
 }
