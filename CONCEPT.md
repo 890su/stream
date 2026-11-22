@@ -584,8 +584,11 @@ shows the task's comments (notes of mine, the AI's, the system's and the task's 
 comment there, later other executors too. A comment never joins someone's chat.
 
 **Queue tile swipe 2026-11-22** (owner): a left swipe puts one row in the tile's place, no taller than the tile:
-three dials like a bike code lock — minutes (5 / 15 / 25 / 55), a part of the day (morning, day, evening, night), a
-date (today and the next ten; a tap opens the calendar) — turned by ︿ ﹀, the wheel or a drag; then «🗄» puts the
+dials like a bike code lock — ⏱ minutes (5 / 15 / 25 / 55), 🌗 the part of the day and 📅 the date, which are one
+wheel through the parts of the days ahead (📅 steps by days, a tap opens the calendar). Nothing dialled — the three
+icons; a dialled wheel spreads over the three places, turned back past its start — the icons again. A dial turns by
+︿ ﹀, the mouse wheel, or pressing it and moving the finger: it keeps going round while the finger moves and stays
+where it is let go. Then «🗄» puts the
 conversation away until the dialled time (a part of the day already gone means the next day; a date alone — its
 morning), or with nothing dialled into the archive until the task day or a new message; «↧» to the end of the queue;
 «✕» or a tap outside gives the tile back (registry `queue.swipe`). An archive tile swiped

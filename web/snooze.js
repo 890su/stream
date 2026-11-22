@@ -51,6 +51,33 @@ export function composeUntil(now, pick, choices) {
   return until.toISOString();
 }
 
+// The time wheel (owner, 2026-11-22: the part of the day and the calendar are one wheel): the parts of the days from
+// today to `lastDay` (a date from the calendar widens it), the gone ones left out. → [{ day, part, label, until }].
+export function timeSlots(now, choices, lastDay = choices.days.length - 1) {
+  const slots = [];
+  for (let day = 0; day <= lastDay; day += 1) {
+    for (const part of choices.parts) {
+      const until = at(now, day, part.hour);
+      if (until.getTime() > now.getTime()) slots.push({ day, part: part.key, label: `${dayWord(now, day)} · ${part.label}`, until: until.toISOString() });
+    }
+  }
+  return slots;
+}
+
+// One step of a wheel of `count` values: round through «nothing» (-1) like a code lock.
+export const turnIndex = (index, step, count) => ((index + 1 + step + (count + 1)) % (count + 1)) - 1;
+
+// One step of the date dial over the time wheel: the same part a day later or earlier (the day's first one when it has
+// no such part); from «nothing» up — tomorrow morning, down — the last day; past either end — «nothing».
+export function turnDay(index, step, slots) {
+  if (!slots.length) return -1;
+  const firstOf = (day) => slots.findIndex((slot) => slot.day === day);
+  if (index < 0) return step > 0 ? Math.max(0, firstOf(1)) : firstOf(slots.at(-1).day);
+  const { day, part } = slots[index];
+  const same = slots.findIndex((slot) => slot.day === day + step && slot.part === part);
+  return same >= 0 ? same : firstOf(day + step);
+}
+
 // A date and time from the system picker, as ISO; null if cancelled.
 export function pickDateTime(now = new Date()) {
   return new Promise((resolve) => {

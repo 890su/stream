@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { snoozeOptions, swipeChoices, composeUntil } from '../web/snooze.js';
+import { snoozeOptions, swipeChoices, composeUntil, timeSlots, turnIndex, turnDay } from '../web/snooze.js';
 import { conversationsConfig } from '../src/config.ts';
 
 // «⏱ Отложить» (CONCEPT.md §5, design 2026-11-20): the choices depend on the time of day.
@@ -57,4 +57,28 @@ test('the time the dials make: minutes from now; a part of the day today or, gon
   assert.equal(at({ day: 3 }), new Date(2026, 10, 25, 9).getTime(), 'a date alone: its morning');
   assert.equal(at({ day: 3, part: 'night' }), new Date(2026, 10, 25, 22).getTime());
   assert.equal(at({ day: 0, part: 'day' }), new Date(2026, 10, 23, 13).getTime(), 'the day of today is gone: tomorrow');
+});
+
+// One wheel for the part of the day and the date (owner, 2026-11-22): it runs through the parts of the days ahead.
+test('the time wheel: the parts of the days ahead, gone ones left out', () => {
+  const now = new Date(2026, 10, 22, 14, 30);
+  const slots = timeSlots(now, swipeChoices(now, swipe));
+  assert.deepEqual(slots.slice(0, 3).map((slot: any) => slot.label), ['сегодня · вечер', 'сегодня · ночь', 'завтра · утро']);
+  assert.equal(Date.parse(slots[2].until), new Date(2026, 10, 23, 9).getTime());
+  assert.equal(slots.length, 2 + 10 * 4, 'today two left, ten more days of four');
+  assert.equal(timeSlots(now, swipeChoices(now, swipe), 20).at(-1).day, 20, 'a date from the calendar widens it');
+});
+
+test('turning a wheel goes round through «nothing» like a lock; the date dial steps by days', () => {
+  assert.equal(turnIndex(-1, 1, 4), 0);
+  assert.equal(turnIndex(3, 1, 4), -1, 'past the last: nothing');
+  assert.equal(turnIndex(-1, -1, 4), 3, 'back from nothing: the last');
+  const now = new Date(2026, 10, 22, 14, 30);
+  const slots = timeSlots(now, swipeChoices(now, swipe));
+  const at = (index: number) => slots[index] && `${slots[index].day}:${slots[index].part}`;
+  assert.equal(at(turnDay(-1, 1, slots)), '1:morning', 'up from nothing: tomorrow morning');
+  assert.equal(at(turnDay(slots.findIndex((slot: any) => slot.day === 1 && slot.part === 'evening'), 1, slots)), '2:evening', 'the same part a day later');
+  assert.equal(at(turnDay(0, -1, slots)), undefined, 'before today: nothing');
+  assert.equal(turnDay(0, -1, slots), -1);
+  assert.equal(at(turnDay(-1, -1, slots)), '10:morning', 'down from nothing: the last day');
 });
