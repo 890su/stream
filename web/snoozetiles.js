@@ -1,6 +1,7 @@
 // In place of a queue tile after a left swipe (owner, 2026-11-22), one row in the tile's own height: dials like a
 // bike code lock — ⏱ minutes (5 / 15 / 25 / 55), 🌗 the part of the day and 📅 the date, which are one wheel through
-// the parts of the days ahead (📅 steps by days, a tap on it opens the calendar). Nothing dialled — the three icons;
+// the parts of the days ahead (📅 steps by days, a tap on the 📅 icon opens the calendar). Nothing dialled — the three
+// icons; a tap on a dialled value clears it back to them;
 // a dialled wheel spreads over all three places, and turning it back past its start brings the icons back. A dial
 // turns by its ︿ ﹀, the mouse wheel, the arrow keys, or pressing it and moving the finger up or down: it keeps going
 // round while the finger moves and stays where it is let go. The dials are built once and only change their text and
@@ -98,6 +99,9 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
     draw();
   }
 
+  // A tap on the dialled value: back to the three icons.
+  function clear() { minute = -1; slot = -1; draw(); }
+
   async function calendar() {
     const day = await pickDay(now);
     if (day === null || day < 0) return;
@@ -113,7 +117,7 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
     const shown = minute >= 0 ? 'minutes' : slot >= 0 ? timeDial : null;
     for (const [wheel, node] of Object.entries(nodes)) {
       const on = wheel === shown;
-      const text = !on ? ICONS[wheel] : wheel === 'minutes' ? `${choices.minutes[minute]} мин` : `${slots[slot].label} ${ICONS[wheel]}`;
+      const text = !on ? ICONS[wheel] : wheel === 'minutes' ? `${choices.minutes[minute]} мин` : slots[slot].label;
       node.classList.toggle('set', on);
       node.classList.toggle('wide', on);
       node.hidden = Boolean(shown) && !on;
@@ -136,7 +140,8 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
 
   // The finger: the row of dials holds it (setPointerCapture), so the dials can be redrawn under it. A press and a
   // move up or down turns the dial it started on, a step per STEP_PX, for as long as the finger moves; a press without
-  // a move is a tap — an arrow turns once, the date (or the wide time) opens the calendar, another value turns once.
+  // a move is a tap — an arrow turns once; on a dialled (wide) value it clears it back to the three icons; on the 📅
+  // icon it opens the calendar; on another icon it turns once.
   let drag = null;
   dials.addEventListener('pointerdown', (event) => {
     const dial = event.target.closest('.dial');
@@ -159,7 +164,8 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
     drag = null;
     if (!tap || moved) return;
     if (step) turn(wheel, step);
-    else if (wheel === 'day' || (wheel === 'part' && slot >= 0)) calendar();
+    else if (minute >= 0 || slot >= 0) clear();
+    else if (wheel === 'day') calendar();
     else turn(wheel, 1);
   };
   dials.addEventListener('pointerup', (event) => release(event, true));
@@ -178,7 +184,8 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
     const dial = event.target.closest('.dial');
     if (!dial) return;
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); turn(dial.dataset.wheel, event.key === 'ArrowUp' ? 1 : -1); }
-    else if (event.key === 'Enter' && (dial.dataset.wheel === 'day' || slot >= 0)) { event.preventDefault(); calendar(); }
+    else if ((event.key === 'Delete' || event.key === 'Backspace') && (minute >= 0 || slot >= 0)) { event.preventDefault(); clear(); }
+    else if (event.key === 'Enter' && dial.dataset.wheel === 'day' && minute < 0 && slot < 0) { event.preventDefault(); calendar(); }
   });
 
   draw();
