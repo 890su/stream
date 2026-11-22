@@ -55,7 +55,10 @@ function dialNode(wheel) {
   box.setAttribute('role', 'spinbutton');
   box.setAttribute('aria-label', NAMES[wheel]);
   const arrow = (up) => { const node = element('span', 'dial-arrow'); node.dataset.step = up ? '1' : '-1'; node.innerHTML = CHEVRON(up); return node; };
-  box.append(arrow(true), element('span', 'dial-value', ICONS[wheel]), arrow(false));
+  // The value: its main line and, when dialled, a small second line «до пн 09:00» — kept elements, changed in place.
+  const value = element('span', 'dial-value');
+  value.append(element('span', 'dial-main', ICONS[wheel]), element('span', 'dial-note'));
+  box.append(arrow(true), value, arrow(false));
   return box;
 }
 
@@ -115,21 +118,24 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
   // The dials change in place: their text, which one is wide, which are hidden.
   function draw() {
     const shown = minute >= 0 ? 'minutes' : slot >= 0 ? timeDial : null;
+    const time = until();
+    const when = time ? (new Date(time).toDateString() === now.toDateString() ? clock : short).format(new Date(time)) : '';
     for (const [wheel, node] of Object.entries(nodes)) {
       const on = wheel === shown;
       const text = !on ? ICONS[wheel] : wheel === 'minutes' ? `${choices.minutes[minute]} мин` : slots[slot].label;
       node.classList.toggle('set', on);
       node.classList.toggle('wide', on);
       node.hidden = Boolean(shown) && !on;
-      const value = node.querySelector('.dial-value');
-      if (value.textContent !== text) value.textContent = text;
-      node.setAttribute('aria-valuetext', on ? text : 'не выбрано');
+      const main = node.querySelector('.dial-main');
+      const note = node.querySelector('.dial-note');
+      if (main.textContent !== text) main.textContent = text;
+      note.textContent = on ? `до ${when}` : '';
+      node.setAttribute('aria-valuetext', on ? `${text}, до ${when}` : 'не выбрано');
     }
-    const time = until();
-    const when = time ? (new Date(time).toDateString() === now.toDateString() ? clock : short).format(new Date(time)) : '';
-    archiveButton.replaceChildren(element('span', 'choice-icon', time ? '⏱' : '🗄'), element('span', 'choice-hint', time ? `до ${when}` : 'архив'));
-    archiveButton.setAttribute('aria-label', time ? `Отложить до ${when}` : 'В архив');
+    // «🗄» stays «архив» (owner, 2026-11-22); until when it puts the conversation off is on the dial.
+    archiveButton.setAttribute('aria-label', time ? `В архив до ${when}` : 'В архив');
   }
+  archiveButton.append(element('span', 'choice-icon', '🗄'), element('span', 'choice-hint', 'архив'));
   endButton.append(element('span', 'choice-icon', '↧'), element('span', 'choice-hint', 'в конец'));
   endButton.setAttribute('aria-label', 'В конец очереди');
   closeButton.append(element('span', 'choice-icon', '✕'));
