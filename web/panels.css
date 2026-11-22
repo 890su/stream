@@ -157,7 +157,6 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 /* The left panel's bodies and the icons at its foot (drawer.js, design 2026-11-21). */
 .drawer-head h2 { flex: 1; }
 .panel-body[hidden] { display: none; }
-.queue-box { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
 #drawer-search { margin: 6px 4px; }
 .panel-modes { flex: none; display: flex; border-top: 1px solid var(--line); background: var(--panel); padding: 2px 4px calc(2px + env(safe-area-inset-bottom, 0px)); }
 .panel-modes button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 48px; padding: 6px 0 4px; border-radius: 10px; color: var(--muted); font: inherit; font-size: 11.5px; }

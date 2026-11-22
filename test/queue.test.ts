@@ -202,3 +202,28 @@ test('an unconfirmed AI task keeps its conversation in the queue until ✓ or �
   assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { unconfirmed: false }, 'me')]).find((c: any) => c.key === 'tg:951').queue.waiting, false, '✓');
   assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { status: 'cancelled' }, 'me')]).find((c: any) => c.key === 'tg:951').queue.waiting, false, '✕');
 });
+
+test('the archive or my task hides a conversation until its task day: on that day it waits again', () => {
+  const ask = tg('960', '2026-11-15T09:00:00', 'приедете в среду?');
+  const made = change('td', '2026-11-15T09:05:00', { op: 'create', title: 'Выезд', status: 'todo', due: '2026-11-18', roles: { author: 'me', responsible: 'me', executors: ['me'] }, add: [ask.id] }, 'me');
+  const before = run([ask, made], new Date('2026-11-17T20:00:00')).find((c: any) => c.key === 'tg:960').queue;
+  assert.equal(before.waiting, false, 'before the day it stays out');
+  const onDay = run([ask, made], new Date('2026-11-18T08:00:00')).find((c: any) => c.key === 'tg:960').queue;
+  assert.equal(onDay.waiting, true, 'on the task day it is back');
+  assert.match(onDay.open, /Выезд/);
+  assert.equal(Date.parse(onDay.moment), new Date(2026, 10, 18).getTime(), 'its place — the start of the day');
+  // Archived on that day: out again.
+  const archived = run([ask, made, mark(ask.id, '2026-11-18T08:30:00', 'answered')], new Date('2026-11-18T09:00:00')).find((c: any) => c.key === 'tg:960').queue;
+  assert.equal(archived.waiting, false, 'handled on the day');
+  // A finished task brings nothing back.
+  const done = change('td', '2026-11-16T10:00:00', { status: 'done' }, 'me');
+  assert.equal(run([ask, made, done], new Date('2026-11-18T08:00:00')).find((c: any) => c.key === 'tg:960').queue.waiting, false);
+});
+
+test('a planned start or a reminder is the task day too; without a day the archive waits for a new incoming', () => {
+  const ask = tg('961', '2026-11-15T09:00:00', 'когда созвонимся?');
+  const made = change('tp', '2026-11-15T09:05:00', { op: 'create', title: 'Звонок', status: 'todo', plan: { start: '2026-11-18T15:00:00' }, roles: { author: 'me', responsible: 'me', executors: ['me'] }, add: [ask.id] }, 'me');
+  assert.equal(run([ask, made], new Date('2026-11-18T07:00:00')).find((c: any) => c.key === 'tg:961').queue.waiting, true);
+  const bare = change('tb', '2026-11-15T09:05:00', { op: 'create', title: 'Без дня', status: 'todo', roles: { author: 'me', responsible: 'me', executors: ['me'] }, add: [ask.id] }, 'me');
+  assert.equal(run([ask, bare], new Date('2026-11-20T07:00:00')).find((c: any) => c.key === 'tg:961').queue.waiting, false);
+});

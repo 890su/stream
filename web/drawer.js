@@ -1,6 +1,7 @@
-// The left panel (docs/plans/2026-11-21-workspace-redesign-design.md): three bodies switched by the flat icons at its
-// foot — «Беседы» (the queue, queuepanel.js), «Контакты» (the address book, contactspanel.js) and «Задачи» (the task
-// filters, projects and tags, viewpanel.js; in the Лента — its sources). The choice is kept on this device. On a phone
+// The left panel (docs/plans/2026-11-21-workspace-redesign-design.md; the queue went to the centre 2026-11-22): two
+// bodies switched by the flat icons at its foot — «Задачи» («Сейчас», the task filters, projects and tags, viewpanel.js;
+// in the Лента — its sources) and «Контакты» (pinned chats, the address book and a conversation search,
+// contactspanel.js). The choice is kept on this device. On a phone
 // the panel slides in over the centre (the top-bar icon or a swipe from the left); on a wide screen it is a column.
 import { sourceKey } from './projection.js';
 import { viewPanel } from './viewpanel.js';
@@ -8,15 +9,15 @@ import { viewStore } from './viewstore.js';
 import { accountTitle } from './tgbubble.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
-import { createQueuePanel } from './queuepanel.js';
 import { contactsNodes } from './contactspanel.js';
+import { favourites, searchConversations } from './favourites.js';
 
-const MODES = ['conversations', 'contacts', 'tasks'];
+const MODES = ['tasks', 'contacts'];
 const MODE_KEY = 'stream.panelMode';
-const TITLES = { conversations: 'Беседы', contacts: 'Контакты', tasks: 'Задачи' };
+const TITLES = { contacts: 'Контакты', tasks: 'Задачи' };
 
-// The stored mode, or «Беседы».
-export const panelMode = (stored) => (MODES.includes(stored) ? stored : 'conversations');
+// The stored mode, or «Задачи».
+export const panelMode = (stored) => (MODES.includes(stored) ? stored : 'tasks');
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -25,18 +26,16 @@ function element(tag, className, text) {
   return node;
 }
 
-// `onContact(key)` — open a conversation; `onPerson(id)` — a person's card on the right; `onTask(id)` — a task;
-// `onTasks()` — show the list of the chosen filter.
-export function setupDrawer({ feed, convQuick, limits, onContact, onPerson = () => {}, onTask = () => {}, onTasks = () => {}, pinned = () => [], onFilterChange, onCreateProject = () => {} }) {
+// `onContact(key)` — open a conversation; `onPerson(id)` — a person's card on the right; `onTasks()` — show the list
+// of the chosen filter; `onNow()` — the dashboard.
+export function setupDrawer({ feed, onContact, onPerson = () => {}, onTasks = () => {}, onNow = () => {}, pinned = () => [], onFilterChange, onCreateProject = () => {} }) {
   const drawer = document.querySelector('#drawer');
   const backdrop = document.querySelector('#drawer-backdrop');
-  const body = drawer.querySelector('.drawer-body');
-  const bodies = { conversations: document.querySelector('#panel-conversations'), contacts: document.querySelector('#panel-contacts'), tasks: document.querySelector('#panel-tasks') };
+  const bodies = { contacts: document.querySelector('#panel-contacts'), tasks: document.querySelector('#panel-tasks') };
   const tagSection = document.querySelector('#drawer-tag-section');
   const tagCount = document.querySelector('#drawer-tag-count');
   const tagsBox = document.querySelector('#drawer-tags');
   const modeBox = document.querySelector('#drawer-mode');
-  const searchToggle = document.querySelector('#drawer-search-toggle');
   const expanded = new Map();
   const contactsState = { query: '' };
   let mode = panelMode((() => { try { return localStorage.getItem(MODE_KEY); } catch { return null; } })());
@@ -49,7 +48,6 @@ export function setupDrawer({ feed, convQuick, limits, onContact, onPerson = () 
     document.documentElement.style.setProperty('--drawer-bottom', `${Math.max(0, bottom)}px`);
   }
   const isOpen = () => drawer.classList.contains('open');
-  const visible = () => !drawer.hidden && (isWide() || isOpen() || drawer.classList.contains('dragging'));
 
   // A tap in the panel opens something in the centre: on a phone the panel closes first (its history entry is
   // popped), then `go` runs.
@@ -59,11 +57,6 @@ export function setupDrawer({ feed, convQuick, limits, onContact, onPerson = () 
     close();
     if (!pending) go();
   }
-
-  const queue = createQueuePanel({ box: document.querySelector('#queue-box'), scroller: body, feed, convQuick, limits, pinned,
-    active: () => visible() && mode === 'conversations',
-    open: (key) => leaveFor(() => onContact(key)),
-    openTask: (id) => leaveFor(() => onTask(id)) });
 
   function show(on) {
     if (isWide()) { render(); return; } // a column of its own on a wide screen: always open
@@ -77,7 +70,6 @@ export function setupDrawer({ feed, convQuick, limits, onContact, onPerson = () 
       drawer.classList.add('open');
       if (!history.state?.drawer) history.pushState({ drawer: true }, '');
     } else {
-      if (mode === 'conversations') queue.remember();
       drawer.classList.remove('open');
       backdrop.hidden = true;
       setTimeout(() => { if (!isWide() && !isOpen()) drawer.hidden = true; }, 230);
@@ -96,7 +88,6 @@ export function setupDrawer({ feed, convQuick, limits, onContact, onPerson = () 
   }
 
   function setMode(next, draw = true) {
-    if (mode === 'conversations' && next !== mode) queue.remember();
     mode = panelMode(next);
     try { localStorage.setItem(MODE_KEY, mode); } catch { /* storage may be blocked */ }
     if (draw) render();
@@ -175,6 +166,7 @@ export function setupDrawer({ feed, convQuick, limits, onContact, onPerson = () 
     modeBox.replaceChildren(viewPanel({
       store: viewStore, tasks: feed.tasks().filter(feed.taskMatches()), projects: feed.projects(), counterparties: feed.counterparties(), people: feed.people(),
       expanded, onCreateProject, inTasks: feed.mode() === 'tasks', showApply: !isWide() || feed.mode() !== 'tasks',
+      now: { on: feed.mode() === 'now', count: feed.pulseCount(), open: () => leaveFor(() => onNow()) },
       done() { leaveFor(() => onTasks()); },
     }));
   }
@@ -205,13 +197,15 @@ export function setupDrawer({ feed, convQuick, limits, onContact, onPerson = () 
   function render() {
     for (const [key, node] of Object.entries(bodies)) node.hidden = key !== mode;
     for (const button of drawer.querySelectorAll('.panel-modes [data-panel]')) button.setAttribute('aria-pressed', String(button.dataset.panel === mode));
-    searchToggle.hidden = mode !== 'conversations';
     const inFeed = feed.mode() === 'feed';
     document.querySelector('#drawer-title').textContent = mode === 'tasks' && inFeed ? 'Фильтры ленты' : TITLES[mode];
     if (drawer.hidden) return; // drawn when it opens
-    if (mode === 'conversations') queue.render();
-    else if (mode === 'contacts') {
+    if (mode === 'contacts') {
+      const known = new Map(feed.conversations().map((item) => [item.key, item]));
       bodies.contacts.replaceChildren(...contactsNodes({ people: feed.people(), conversations: feed.conversations(), state: contactsState,
+        pinned: favourites(pinned()).map((item) => ({ ...item, last: known.get(item.key)?.last ?? null })),
+        search: (query) => searchConversations(feed.conversations(), query),
+        onConversation: (key) => leaveFor(() => onContact(key)),
         onOpen: (contact) => leaveFor(() => { if (contact.key) onContact(contact.key); onPerson(contact.id); }) }));
     } else {
       if (inFeed) renderSources(); else renderTaskFilters();

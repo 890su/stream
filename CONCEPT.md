@@ -573,6 +573,15 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 | Right | what is this | details of what was tapped: a task, a conversation or a message |
 | Bottom | what to say | the input row, always there; above it the tags and recipients row (§2.9) |
 
+**Queue home 2026-11-22** (owner; it overrides the redesign below where they differ): the centre opens on the
+conversation queue again — the longest waiting on top, the folded archive under it; a conversation opened from it goes
+back to the same tile. The left panel has two bodies: «Задачи» (first «▶ Сейчас» — the dashboard, then the filters,
+projects, tags) and «Контакты» (folded «Избранные», the address book; its search also finds conversations by name or
+number). A tile's actions: ⏱ «Отложить», 🗄 «В архив», ↧ «В конец очереди». 🗄 takes the conversation out until the
+day of a task of mine in it (its planned start, due date or reminder) or a new incoming message, whichever comes
+first; with no such task — until a new incoming message. On the task day the tile says «сегодня: <задача>» (or
+«просрочено: …») until I deal with the conversation that day.
+
 **Redesign 2026-11-21** (`docs/plans/2026-11-21-workspace-redesign-design.md`, deploy 1 of 2 shipped; it overrides
 what follows where they differ): the left panel has three bodies switched by flat icons at its foot — «Беседы» (the
 queue with its archive, favourites, search), «Контакты» (the address book) and «Задачи» (filters: current, active,

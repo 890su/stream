@@ -1,4 +1,5 @@
-// Stream PWA entry point: wires the centre (the dashboard, a conversation, a list of Задачи, the Лента from ⋮), the
+// Stream PWA entry point: wires the centre (the conversation queue, a conversation, the dashboard, a list of Задачи,
+// the Лента from ⋮), the
 // left panel (conversations, contacts, task filters), details on the right, the composer, and starts sync and live
 // updates.
 import { getSetting } from './db.js';
@@ -44,11 +45,10 @@ let viewSwitch; // the view's name in the top bar (viewswitch.js)
 let goView; // switches the view and opens a conversation (setupViews)
 let convActions; // convquick.js: the queue marks on a conversation (snooze, requeue, archive)
 
-// The views (docs/plans/2026-11-21-workspace-redesign-design.md): the dashboard is the root — the app always starts
-// there and the system back ends there (backTarget, viewswitch.js); a list of Задачи and the Лента (⋮ → «Лента
+// The views (docs/plans/2026-11-21-workspace-redesign-design.md): the conversation queue is the root (2026-11-22) —
+// the app always starts there and the system back ends there (backTarget, viewswitch.js); a list of Задачи and the Лента (⋮ → «Лента
 // сообщений») get a history entry of their own, a conversation its own (chatview.js). Views saved by earlier versions
 // map to the new ones (feed.js).
-let fromPanel = false; // the open conversation came from the queue in the left panel: back on a phone shows it again
 function setupViews(feed) {
   const update = () => viewSwitch?.update();
   feed.setMode('home');
@@ -70,10 +70,9 @@ function setupViews(feed) {
     if (target) void show(target);
   });
   // `key` — a conversation to open; Задачи and the Лента keep an open conversation as a filter.
-  async function go(next, key = null, { panel = false } = {}) {
+  async function go(next, key = null) {
     // The card gives the screen to the view: its entry is popped first, so no dead entry stays behind.
     if (details?.taskOpen()) await details.leaveTask();
-    fromPanel = next === 'conversations' && panel;
     if (next === 'conversations') {
       if (!key) return;
       if (feed.mode() !== 'conversations') await feed.setMode('conversations');
@@ -81,7 +80,7 @@ function setupViews(feed) {
       after();
       return;
     }
-    // Home from a view or a conversation: pop its entry; the popstate above comes back with the dashboard.
+    // Home from a view or a conversation: pop its entry; the popstate above comes back with the queue.
     if (next === 'home') { if (toHome(history.state) === 'back') history.back(); else await show('home'); return; }
     if (next !== feed.mode()) enter(next);
     await feed.setMode(next);
@@ -150,18 +149,16 @@ function setupMessageActions(feed, composer, config) {
   } });
   bulk = setupBulk(feed, composer, { correct, link, pickLink, notify });
   chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id), openPerson: (id) => details.openPerson(id), openCounterparty: (id) => details.openCounterparty(id),
-    convQuick: convActions, queueConfig: () => feed.queueConfig(),
-    // Back from a conversation opened from the panel's queue: on a phone the panel comes back on the same tile.
-    onLeave: () => { const again = fromPanel && !isWide(); fromPanel = false; if (again) setTimeout(() => drawer?.open('conversations'), 0); } });
+    convQuick: convActions, queueConfig: () => feed.queueConfig() });
   details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update(), openConversation: (key) => goView?.('conversations', key) });
   system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
-    feed, convQuick: convActions, limits: config,
+    feed,
     onCreateProject: (project) => composer.queue(makeProjectChange(crypto.randomUUID(), { op: 'create', status: 'active', ...project })).catch((error) => notify(error.message)),
-    onContact: (key) => goView?.('conversations', key, { panel: true }),
+    onContact: (key) => goView?.('conversations', key),
     onPerson: (id) => details.openPerson(id),
-    onTask: (id) => details.openTask(id),
     onTasks: () => goView?.('tasks'),
+    onNow: () => goView?.('now'),
     pinned: () => composer.pinned(),
     onFilterChange: updateFilter,
   });
@@ -225,8 +222,8 @@ async function main() {
     start: (task, current) => quick?.start(task, current), pause: (task) => quick?.pause(task) };
   let convQuick = null; // swipes on conversation rows (convquick.js), once the composer's queue exists
   const convQuickRef = { decorate: (row, conversation) => convQuick?.decorate(row, conversation), newTask: (...args) => convQuick?.newTask(...args),
-    snooze: (...args) => convQuick?.snooze(...args), requeue: (...args) => convQuick?.requeue(...args) };
-  const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => chatView.open(key),
+    snooze: (...args) => convQuick?.snooze(...args), archive: (...args) => convQuick?.archive(...args), requeue: (...args) => convQuick?.requeue(...args) };
+  const feed = setupFeed({ notify, onQueue, limits: config, onOpenTask: (id) => details.openTask(id), onOpenConversation: (key) => goView?.('conversations', key),
     quick: quickRef, convQuick: convQuickRef, onMoreLists: () => drawer?.open('tasks'),
     // The open project (CONCEPT.md §2.11): its changes and a task added to one of its sections.
     projectActions: {
@@ -290,7 +287,7 @@ async function main() {
   // Fallback only: while the live stream is up, new messages arrive without polling.
   setInterval(() => { if (!document.hidden && !live.connected()) feed.refresh(); }, config.feed_refresh_ms);
   // The pulse counts time (waiting hours, minutes in work, midnight): redraw it each minute while it is on screen.
-  setInterval(() => { if (!document.hidden && feed.mode() === 'home') feed.render(); }, 60_000);
+  setInterval(() => { if (!document.hidden && (feed.mode() === 'home' || feed.mode() === 'now')) feed.render(); }, 60_000);
 
   // Back from Google's sign-in (googlebox.js): say how it went, then drop the mark from the address.
   const googleResult = googleNotice(location.search);

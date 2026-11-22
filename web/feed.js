@@ -1,8 +1,8 @@
-// The centre of the screen (CONCEPT.md §5): the dashboard (home, dashboard.js), one conversation (its task plaques
-// on top, its messages in a row — opened from the queue in the left panel, queuepanel.js), Задачи (a task list by
-// the panel's filter) and Лента (all messages in a row: bursts, chains, day pills); filters, paging and live updates.
-// A redraw keeps the row the reader looks at where it was. The conversation list (convList) is built here for the
-// panel.
+// The centre of the screen (CONCEPT.md §5): the conversation queue (home, queuehome.js), one conversation (its task
+// plaques on top, its messages in a row), the dashboard («Сейчас», dashboard.js, from «Задачи» in the left panel),
+// Задачи (a task list by the panel's filter) and Лента (all messages in a row: bursts, chains, day pills); filters,
+// paging and live updates. A redraw keeps the row the reader looks at where it was; back from a conversation the
+// queue shows the tile it was opened from.
 import { listEntries, cachedEvents, cacheEvents } from './db.js';
 import { createMediaLoader, createPager } from './feedpage.js';
 import { createBubble, bubbleSignature } from './bubble.js';
@@ -14,6 +14,7 @@ import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
 import { dashboardNodes } from './dashboard.js';
+import { createQueueHome } from './queuehome.js';
 import { foldPeople, foldCounterparties, markCounterparties } from './contacts.js';
 import { viewStore } from './viewstore.js';
 import { foldProjects, markNext } from './projects.js';
@@ -26,12 +27,12 @@ import { grow, shrink, reduced, play } from './motion.js';
 
 const NEAR_BOTTOM = 120;
 const NEAR_TOP = 160;
-const MODES = ['home', 'conversations', 'tasks', 'feed']; // home — the dashboard (dashboard.js)
+const MODES = ['home', 'now', 'conversations', 'tasks', 'feed']; // home — the queue (queuehome.js), now — the dashboard
 const OLD_MODES = { cases: 'conversations', messages: 'feed' }; // views saved by earlier versions
 const DEFAULT_CONVERSATIONS = { queue: { since: '2026-11-13T00:00:00Z', snooze: { minutes: [15, 60, 180], noon: { hour: 12, until_hour: 11 }, evening: { hour: 18, until_hour: 17 },
   tomorrow_day: { hour: 13, from_hour: 17 }, morning: { hour: 9 } } } };
 
-export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = null, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null }) {
+export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpenTask = () => {}, onOpenConversation = () => {}, taskCard = () => null, quick = null, convQuick = null, onMoreLists = () => {}, projectActions = null }) {
   const scroller = document.querySelector('#messages');
   const list = document.querySelector('#feed-list');
   const historyState = document.querySelector('#history-state');
@@ -70,18 +71,22 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   };
   // Lists and the dashboard read from the top (the most important on top); a conversation and the Лента read from the
   // bottom, like a chat.
-  const readsDown = () => mode === 'tasks' || mode === 'home' || (mode === 'conversations' && !conversationKey);
+  const readsDown = () => mode === 'tasks' || mode === 'home' || mode === 'now' || (mode === 'conversations' && !conversationKey);
+  const atQueue = () => mode === 'home' || (mode === 'conversations' && !conversationKey);
+  let queuePin = null; // the queue's row on screen when a conversation or another view took the screen
   // The queue settings (registry/conversations.json); a cached registry of an older version has none.
   const queueConfig = () => (limits.conversations?.queue ? limits.conversations : DEFAULT_CONVERSATIONS);
   const load = createMediaLoader();
   const { refresh, loadOlder, hasOlder } = createPager({ scroller, historyState, notify, render: (...args) => draw(...args), fillSince: () => queueConfig().queue.since });
 
   const pinRow = (node) => rowOnScreen(scroller, list, node);
+  const home = createQueueHome({ scroller, list, render: (options) => draw(options), active: atQueue, hasOlder, loadOlder, convQuick, limits,
+    open: (key) => onOpenConversation(key), openTask: (id) => onOpenTask(id) });
 
   // `keep` — { key, top }: the header that was tapped stays where it was; `quiet` — no animation of new rows;
   // `top` — a list goes to the top (true) or to a remembered position (a number); `pin` — rowOnScreen(): that row stays
-  // where it was.
-  async function render({ bottom = false, keep = null, quiet = false, top = false, pin = null } = {}) {
+  // where it was; `reveal` — the queue's archive was just opened.
+  async function render({ bottom = false, keep = null, quiet = false, top = false, pin = null, reveal = false } = {}) {
     const queued = await listEntries();
     const pending = new Map(queued.map((entry) => [entry.event.id, entry]));
     const events = new Map((await cachedEvents()).map((event) => [event.id, event]));
@@ -174,7 +179,10 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     }
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };
     const filtered = Boolean((mode === 'feed' && sourceFilter) || tagFilter.size || conversationKey);
-    if (mode === 'home' || (mode === 'conversations' && !inside)) {
+    if (atQueue()) {
+      // The queue: the longest waiting on top, the archive under it (queuehome.js).
+      children.push(...home.nodes({ conversations: convList, tags: [...tagFilter], counterparties: counterpartyList, config: queueConfig(), now }));
+    } else if (mode === 'now') {
       // The dashboard: in work on top, paused and next under it (dashboard.js).
       const viewsOf = (task) => task.messages.map((id) => views.get(id)).filter(Boolean);
       children.push(...dashboardNodes({ tasks: taskList, projects: projectList, viewsOf, now, quick, config: limits.pulse ?? PULSE_DEFAULTS, onOpen: onOpenTask }));
@@ -207,15 +215,15 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     }
     const chipsLeft = list.querySelector('.task-lists')?.scrollLeft ?? 0; // live redraws keep the chips where they were
     // Off the bottom, a redraw (a live message, older history, the archive) keeps the row on screen where it was.
-    const held = !readsDown() && rendered && !nearBottom && !pin ? pinRow() : null;
+    const held = rendered && !pin && (readsDown() ? atQueue() && top === false && scroller.scrollTop > NEAR_BOTTOM : !nearBottom) ? pinRow() : null;
     list.replaceChildren(...children);
     const chipsRow = list.querySelector('.task-lists');
     if (chipsRow) chipsRow.scrollLeft = chipsLeft;
     list.classList.toggle('reads-down', readsDown()); // a list starts at the top, a chat at the bottom
     const anchor = keep && list.querySelector(`[data-group="${CSS.escape(keep.key)}"]`);
     if (anchor) scroller.scrollTop += anchor.getBoundingClientRect().top - keep.top;
-    else if (readsDown()) { if (top !== false) scroller.scrollTop = typeof top === 'number' ? top : 0; }
     else if (pin && putBack(scroller, list, pin)) { /* the row stays where it was */ }
+    else if (readsDown()) { if (top !== false) scroller.scrollTop = typeof top === 'number' ? top : 0; else if (held) putBack(scroller, list, held); }
     else if (bottom || nearBottom || !rendered) {
       // A new message slides in and the feed glides to it; the first paint goes straight to the bottom.
       const fresh = !quiet && newcomers.length && newcomers.length <= 3;
@@ -224,6 +232,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     if (!quiet && newcomers.length <= 3) {
       for (const id of newcomers) { const node = nodes.get(id)?.node; if (node?.isConnected) play(node, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }]); }
     }
+    if (reveal && atQueue()) home.reveal();
     rendered = true;
     onRender();
   }
@@ -268,7 +277,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   scroller.addEventListener('scroll', () => {
     const atEnd = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < NEAR_BOTTOM;
     stick = !readsDown() && atEnd;
-    if (mode === 'home') return; // the dashboard needs no history pages
+    if (mode === 'now' || atQueue()) return; // the queue fills itself (feedpage.js), its archive grows by itself
     if (readsDown() ? atEnd : scroller.scrollTop < NEAR_TOP) loadOlder(); // a list reaches older history at its end
   }, { passive: true });
   list.addEventListener('load', () => { if (stick) scroller.scrollTop = scroller.scrollHeight; }, true);
@@ -282,18 +291,21 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     await draw();
   }
 
-  // Opens a conversation (with null it closes, and Беседы give the screen back to the dashboard); in Задачи and Лента
-  // it filters.
+  // Opens a conversation (with null it closes, and Беседы give the screen back to the queue, on the tile it was
+  // opened from); in Задачи and Лента it filters.
   async function openConversation(key) {
     const next = key || null;
     if (next === conversationKey) return;
     const entering = mode === 'conversations' && next && !conversationKey;
-    const leaving = mode === 'conversations' && !next && conversationKey;
+    // The system back may switch the view home before the conversation closes (app.js): leaving all the same.
+    const leaving = (mode === 'conversations' || mode === 'home') && !next && conversationKey;
     if (leaving) mode = 'home';
+    if (entering && atQueue()) queuePin = pinRow();
     conversationKey = next;
     openCuts = new Set(); allCuts = false; // each conversation opens folded
     stick = Boolean(next) && mode !== 'tasks';
-    await render({ bottom: true, top: true, quiet: true });
+    const pin = leaving ? queuePin : null;
+    await render({ bottom: true, top: true, quiet: true, pin });
     if (entering || leaving) play(list, [{ opacity: 0, transform: `translateX(${entering ? 24 : -24}px)` }, { opacity: 1, transform: 'none' }]);
   }
 
@@ -304,9 +316,11 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   function setMode(next) {
     quick?.reset?.();
     const wanted = OLD_MODES[next] ?? next;
+    if (atQueue()) queuePin = pinRow(); // the queue stays where it was read, and comes back there
     mode = MODES.includes(wanted) ? wanted : 'home';
     stick = !readsDown();
-    return render({ bottom: !readsDown(), top: true, quiet: true });
+    const pin = atQueue() ? queuePin : null;
+    return render({ bottom: !readsDown(), top: true, quiet: true, pin });
   }
   // Contact and tag filters match a task through any of its messages.
   const taskMatches = () => byMessages; // the project, people and counterparty are the view's (viewstate.js)

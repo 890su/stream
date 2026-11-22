@@ -1,10 +1,12 @@
 // The queue of conversations (CONCEPT.md §2.5, docs/plans/2026-11-20-queue-and-task-screen-design.md): which
 // conversations wait for the owner and since when. Only the owner's actions take a conversation out: a reply, a task
 // made or chosen by the owner for its messages (an AI link is not one), the archive mark (`answered`), «⏱ Отложить»
-// (`snooze`). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
+// (`snooze`). A conversation with a day task of mine comes back on that day (owner, 2026-11-22: the archive hides
+// it until the task day or a new incoming). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
 // snooze; a new message in a queued conversation does not move it. Pure — no DOM.
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe, isOpen } from './taskfold.js';
+import { whenOf } from './dayplan.js';
 
 const time = (ts) => Date.parse(ts);
 const later = (a, b) => (time(b) > time(a) ? b : a);
@@ -57,7 +59,7 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   const start = time(config.queue.since);
   const pending = views.filter((view) => time(view.event.ts) > handled && time(view.event.ts) >= start && directionOf(view.event) === 'in'
     && !answeredCall(view) && !note(view) && meaningful(view) && matters(view));
-  const open = pending.length ? null : unfinishedOf(conversation, views, start);
+  const open = pending.length ? null : unfinishedOf(conversation, views, start, handled, now);
   if (!pending.length && !open) return NONE;
 
   let moment = pending[0]?.event.ts ?? open.moment;
@@ -75,8 +77,10 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
 
 // No message waits, yet the conversation is not over (owner, 2026-11-21): the latest triage verdict says the other side
 // still waits for me and no task covers it, or an AI task waits for ✓ or ✕. My reply does not end it; the archive mark,
-// a task of mine for its messages or a later verdict «finished» does. → { reason, moment (the last incoming) } or null.
-function unfinishedOf(conversation, views, start) {
+// a task of mine for its messages or a later verdict «finished» does. Or the day of a task of mine has come (its
+// planned start, due date or reminder) and nothing was done in the conversation since that day began.
+// → { reason, moment } or null.
+function unfinishedOf(conversation, views, start, handled, now) {
   const ids = new Set(views.map((view) => view.id));
   let cleared = -Infinity;
   for (const view of views) if (view.answered && view.answeredAt) cleared = Math.max(cleared, time(view.answeredAt));
@@ -88,9 +92,28 @@ function unfinishedOf(conversation, views, start) {
   const offer = conversation.tasks.find((task) => task.unconfirmed && isOpen(task) && time(task.createdAt) > cleared);
   if (offer) return { reason: 'ИИ предлагает задачу', moment: at(offer.createdAt) };
   const verdict = views.filter((view) => view.verdict).at(-1)?.verdict;
-  if (!verdict?.unfinished || time(verdict.ts) <= cleared || time(verdict.ts) < start) return null;
-  return { reason: verdict.unfinished, moment: at(verdict.ts) };
+  if (verdict?.unfinished && time(verdict.ts) > cleared && time(verdict.ts) >= start) return { reason: verdict.unfinished, moment: at(verdict.ts) };
+  return taskDayOf(conversation, Math.max(cleared, handled), now);
 }
+
+// The earliest day task of mine whose day has begun after the conversation was last dealt with.
+function taskDayOf(conversation, since, now) {
+  const today = dayStart(now);
+  let found = null;
+  for (const task of conversation.tasks) {
+    if (!isOpen(task) || task.filed || task.unconfirmed || !involvesMe(task)) continue;
+    const key = whenOf(task)?.key;
+    if (!key) continue;
+    const [year, month, day] = key.split('-').map(Number);
+    const begins = new Date(year, month - 1, day).getTime();
+    if (begins > now.getTime() || begins <= since) continue;
+    if (!found || begins < found.begins) found = { begins, task };
+  }
+  if (!found) return null;
+  const label = found.begins >= today ? 'сегодня' : 'просрочено';
+  return { reason: `${label}: ${found.task.title}`, moment: new Date(found.begins).toISOString() };
+}
+const dayStart = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
 // The waiting conversations as the screen shows them top to bottom: the longest waiting first, the newest moment
 // last (owner, 2026-11-21: the most important on top).

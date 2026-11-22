@@ -75,42 +75,26 @@
        at its foot. -->
   <aside id="drawer" class="drawer" hidden aria-label="Беседы, контакты, задачи">
     <header class="drawer-head">
-      <h2 id="drawer-title">Беседы</h2>
-      <button id="drawer-search-toggle" type="button" class="icon-button" aria-label="Найти беседу" aria-expanded="false" aria-controls="drawer-search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></svg>
-      </button>
+      <h2 id="drawer-title">Задачи</h2>
       <button id="drawer-close" type="button" class="icon-button" aria-label="Закрыть панель">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </header>
     <div class="drawer-body">
-      <section id="panel-conversations" class="panel-body">
-        <div id="drawer-search" hidden>
-          <input id="drawer-search-input" class="view-search" type="search" placeholder="Имя или номер" aria-label="Имя или номер собеседника">
-          <div id="drawer-search-results"></div>
-        </div>
-        <details id="drawer-favourites" class="drawer-disclosure" hidden>
-          <summary class="drawer-summary">Избранные</summary>
-          <div id="drawer-contacts"></div>
-        </details>
-        <div id="queue-box" class="queue-box"></div>
-      </section>
-      <section id="panel-contacts" class="panel-body" hidden></section>
-      <section id="panel-tasks" class="panel-body" hidden>
+      <section id="panel-tasks" class="panel-body">
         <div id="drawer-mode"></div>
         <details id="drawer-tag-section" class="drawer-disclosure">
           <summary class="drawer-summary">Метки<span id="drawer-tag-count" class="drawer-count" hidden></span></summary>
           <div id="drawer-tags" class="chips"></div>
         </details>
       </section>
+      <section id="panel-contacts" class="panel-body" hidden></section>
     </div>
     <nav class="panel-modes" aria-label="Что показывать в панели">
-      <button type="button" data-panel="conversations" aria-label="Беседы">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4 3.5v-3.5h-2z"/></svg><span>Беседы</span></button>
-      <button type="button" data-panel="contacts" aria-label="Контакты">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg><span>Контакты</span></button>
       <button type="button" data-panel="tasks" aria-label="Задачи">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg><span>Задачи</span></button>
+      <button type="button" data-panel="contacts" aria-label="Контакты">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></svg><span>Контакты</span></button>
     </nav>
   </aside>
 

@@ -47,11 +47,13 @@ export function viewPanel(ctx) {
   const open = (next) => { store.replace(next); done(); };
   const set = (change) => store.set(change);
 
+  // «Сейчас» — the dashboard (in work, paused, next; dashboard.js), since the queue took the main screen (2026-11-22).
+  if (ctx.now) box.append(row('▶ Сейчас', ctx.now.count, ctx.now.on, ctx.now.open));
   const shortcuts = taskShortcuts(tasks, data);
   const located = Object.values(view.where ?? {}).some(Boolean);
   const simple = !located && shortcuts.some(({ view: next }) => next.when === view.when && next.whose === view.whose);
   for (const item of shortcuts) {
-    const on = ctx.inTasks && simple && item.view.when === view.when && item.view.whose === view.whose;
+    const on = ctx.inTasks && !ctx.now?.on && simple && item.view.when === view.when && item.view.whose === view.whose;
     box.append(row(item.title, item.count, on, () => open(item.view)));
   }
   if (!simple) box.append(element('div', 'view-scope', viewTitle(view, ctx)));

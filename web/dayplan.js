@@ -11,7 +11,7 @@ const dayMonth = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' 
 export const RANGES = [1, 4, 7];
 
 // When a task is planned: { key (local day), time ('HH:MM' or null) }, or null without a date.
-function whenOf(task) {
+export function whenOf(task) {
   const at = task.status === 'deferred' && task.remindAt ? task.remindAt : task.plan?.start ?? task.due ?? null;
   if (!at) return null;
   const text = String(at);
