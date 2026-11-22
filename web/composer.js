@@ -1,7 +1,7 @@
 // The composer: text, voice, files and modes (reply, edit, continue) of the next message; the row above it — the
 // «связь» button with its window (linkwindow.js), the chosen conversation or task (linkstate.js), the recipient
 // (recipients.js), tags (tagrow.js).
-import { makeEntry, makeCorrection } from './shared.js';
+import { makeEntry, makeCorrection, makeTaskChange } from './shared.js';
 import { snippet, chatOf } from './projection.js';
 import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
@@ -32,7 +32,7 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
 
   const recorder = createRecorder(config);
   // While a case is open in the details panel, every new message continues its latest message (details.js).
-  let topic = null; // { last: () => view }
+  let topic = null; // { last: () => view | null, task (an open task card's id) }
   // While messages are selected (select.js) the tag row acts on the selection: link, unlink, tags.
   let selection = null; // { link(), unlink(), toggleTag(tag), stateOf(tag) }
   // Chips before the tags: link / unlink for a selection; else the conversation or task chosen in «связь» and the
@@ -42,6 +42,12 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
   // The connection of the draft: the explicit "continue" mode, a conversation chosen in the window, or the topic.
   const continuation = () => (mode?.type === 'continue' ? { target: mode.view.id, on: true }
     : link.continuation() ?? (topic?.last() ? { target: topic.last().id, on: true } : undefined));
+  // After a message is queued: into the task chosen in «связь»; in an open task card a message that continues nothing
+  // of it (the first comment) is added to the task itself. `continued` — the continuation the entry was made with.
+  async function sent(entry, continued) {
+    await link.sent(entry);
+    if (topic?.task && !continued) await queue(makeTaskChange(topic.task, { op: 'update', add: [entry.event.id] }));
+  }
   let linkWindow = null;
   const rowChanged = () => { tagRow.render(); updateAction(); linkWindow?.refresh(); };
   const tagRow = createTagRow({
@@ -144,12 +150,13 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
       return;
     }
     const view = mode?.type === 'reply' ? mode.view : undefined;
-    const entry = await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
+    const continued = continuation();
+    const entry = await makeEntry({ kind: 'text', text: message, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continued,
       outbound: outboundData(chat, view, config), replyTo: view?.id });
     await queue(entry);
     text.value = '';
     if (mode) setMode(null);
-    await link.sent(entry);
+    await sent(entry, continued);
     recipients.reset(chatDefault);
     autosize(); resetTags(); closePanels();
   }
@@ -186,12 +193,13 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     const attached = draftFiles.list();
     const kind = !attached.length ? 'text' : attached.every((file) => file.type.startsWith('image/')) ? 'photo' : 'file';
     try {
-      const entry = await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(),
+      const continued = continuation();
+      const entry = await makeEntry({ kind, text: message, files: attached, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continued,
         replyTo: mode?.type === 'reply' ? mode.view.id : undefined });
       await queue(entry);
       text.value = ''; draftFiles.clear();
       if (mode) setMode(null);
-      await link.sent(entry);
+      await sent(entry, continued);
       autosize(); resetTags(); closePanels();
     } catch (error) { notify(`Сообщение не сохранено. ${error.message}`); }
     finally { busy = false; updateAction(); }
@@ -201,10 +209,11 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     pendingVoice = recording;
     try {
       const replyTo = mode?.type === 'reply' ? mode.view.id : undefined;
-      const entry = await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continuation(), replyTo });
+      const continued = continuation();
+      const entry = await makeEntry({ kind: 'voice', files: [recording.blob], duration: recording.duration, tags: tagRow.active(), tagging: tagRow.tagging(), continuation: continued, replyTo });
       await queue(entry);
       pendingVoice = undefined;
-      await link.sent(entry);
+      await sent(entry, continued);
       if (mode?.type === 'reply' || mode?.type === 'continue') setMode(null);
       resetTags();
     } catch (error) { notify(`Голосовое ждёт сохранения, нажмите «Отправить» ещё раз. ${error.message}`); }
@@ -303,6 +312,7 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     edit: (view) => setMode({ type: 'edit', view }),
     enterTopic: (state, placeholder = 'Сообщение в тему') => { topic = state; resetTags(tagRow.active()); text.placeholder = placeholder; },
     leaveTopic: () => { topic = null; resetTags(tagRow.active()); text.placeholder = 'Сообщение'; },
+    hint: (value) => { text.placeholder = value; },
     queue,
     attach: (next) => link.attach(next),
     record: () => { locked = true; return startRecording(); },

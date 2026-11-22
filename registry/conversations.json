@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "queue": {
     "since": "2026-11-13T00:00:00Z",
     "snooze": {
@@ -8,6 +8,17 @@
       "evening": { "hour": 18, "until_hour": 17 },
       "tomorrow_day": { "hour": 13, "from_hour": 17 },
       "morning": { "hour": 9 }
+    },
+    "swipe": {
+      "minutes": [15, 30, 60],
+      "parts": [
+        { "key": "morning", "label": "утро", "icon": "🌅", "hour": 9 },
+        { "key": "day", "label": "день", "icon": "🌞", "hour": 13 },
+        { "key": "evening", "label": "вечер", "icon": "🌆", "hour": 18 },
+        { "key": "night", "label": "ночь", "icon": "🌙", "hour": 22 }
+      ],
+      "days": 10,
+      "day_hour": 9
     }
   }
 }

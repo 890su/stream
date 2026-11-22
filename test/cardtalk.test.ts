@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { partyConversation, cardOrder, taskActivity, frontOrder } from '../web/cardtalk.js';
+import { partyConversation, cardOrder, taskActivity, frontOrder, pickParty, commentViews, messageParties } from '../web/cardtalk.js';
 
 // The conversation in the task card (design 2026-11-20, stage 2). Names are made up.
 const conversations = [{ key: 'tg:501' }, { key: 'tg:-900' }, { key: 'tel:+48600100200' }];
@@ -79,4 +79,38 @@ test('paging keeps its order when another participant moves to the front of the 
   const original = ['me', 'tg:501', 'tg:502'];
   assert.deepEqual(pagerOrder(['tg:501', 'me', 'tg:502'], original), original);
   assert.deepEqual(pagerOrder(['tg:502', 'me', 'tg:503'], original), ['me', 'tg:502', 'tg:503']);
+});
+
+// The task card reads like a conversation (owner, 2026-11-22): the chosen interlocutor's conversation, or the task's
+// comments when the chosen one is switched off.
+test('the card talks with the chosen one; switched off — the comments; not chosen yet — the last speaker', () => {
+  const parties = ['tg:1', 'tel:+48600100200'];
+  assert.equal(pickParty('tel:+48600100200', parties, ['tg:1', 'tel:+48600100200']), 'tel:+48600100200');
+  assert.equal(pickParty(null, parties, ['tg:1']), null, 'switched off');
+  assert.equal(pickParty(undefined, parties, ['tg:1', 'tel:+48600100200']), 'tg:1', 'the most recent');
+  assert.equal(pickParty(undefined, parties, ['tg:1', 'tel:+48600100200'], ['tg:1']), 'tel:+48600100200', 'a muted one is skipped');
+  assert.equal(pickParty(undefined, [], []), null, 'nobody to talk to: the comments');
+  assert.equal(pickParty('tg:9', parties, ['tg:1']), 'tg:1', 'one no longer in the task');
+});
+
+test('the comments of a task: notes of mine, the AI and the system; no chat messages, replies or calls', () => {
+  const view = (id: string, event: Record<string, unknown>) => ({ id, event: { kind: 'text', payload: {}, ...event } });
+  const views = [
+    view('note', { author: 'me', source: 'app' }),
+    view('ai', { author: 'ai', source: 'system' }),
+    view('reply', { author: 'me', source: 'app', payload: { data: { outbound: { connector: 'telegram_by', chat_id: '1' } } } }),
+    view('incoming', { author: 'contact:tg:by:1', source: 'telegram' }),
+    view('call', { author: 'me', kind: 'call', source: 'android_phone', payload: { data: { call: { direction: 'out', number: '+48600100200' } } } }),
+  ];
+  assert.deepEqual(commentViews(views).map((item: any) => item.id), ['note', 'ai']);
+});
+
+test('a task made from a conversation talks with its people even when they have no role', () => {
+  const conversations = [
+    { key: 'tg:7003', title: 'Анна Тестова', views: [{ id: 'm1' }, { id: 'm2' }] },
+    { key: 'tel:+48600100200', title: 'Пётр', views: [{ id: 'm3' }] },
+    { key: 'me', title: 'Заметки', views: [{ id: 'm4' }] },
+  ];
+  assert.deepEqual(messageParties({ messages: ['m2', 'm4'] }, conversations), ['tg:7003']);
+  assert.deepEqual(messageParties({ messages: ['m3', 'm1'] }, conversations), ['tg:7003', 'tel:+48600100200']);
 });

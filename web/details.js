@@ -1,5 +1,6 @@
-// What was chosen by a tap (CONCEPT.md §5). A task opens on the main screen, over the list (#task-screen, design
-// 2026-11-20 stage 2): its card and an inline conversation; the system back steps through both.
+// What was chosen by a tap (CONCEPT.md §5). A task opens on the main screen, over the list (#task-screen): since
+// 2026-11-22 it reads like a conversation — the head with the cuts, the conversation with the chosen interlocutor
+// (or the task's comments), the interlocutors at the bottom (taskdetails.js).
 // The right panel is the day plan (dayplan.js: tasks by days — a day, 4 or 7) by default — the 📅 button, a swipe from
 // the right, the column of a wide screen; a message, a person or a counterparty opens there too; a left-to-right
 // swipe closes it.
@@ -15,7 +16,7 @@ import { STATUSES, taskOfMessage } from './taskfold.js';
 import { accountTitle } from './tgbubble.js';
 import { versionCard } from './versioncard.js';
 import { taskDetails } from './taskdetails.js';
-import { bindTalkSwipe, writeOrder, frontOrder } from './cardtalk.js';
+import { bindTalkSwipe, writeOrder, frontOrder, commentViews } from './cardtalk.js';
 import { slideIn } from './swipezones.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
@@ -44,7 +45,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   const screenBody = document.querySelector('#task-screen-body');
   const moreButton = document.querySelector('#task-screen-more');
   let taskId = null; // the task open on the main screen
-  let talk = null; // the open conversation, with the expanded card's scroll position
+  let talk = null; // the card's conversation: { party (undefined — not chosen yet, null — the comments), order, swiped }
+  let fold = null; // the open cut of the card: 'description' | 'checklist' | 'more' | null
   let showBar = false; // ⋯ in the head: the action bar shown in the card
   let replyKey; // the chat the card put into the composer as the recipient (undefined — none yet: the first steer applies)
   let before = null; // the composer's recipient when the card opened, given back when it closes
@@ -121,14 +123,15 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     const task = feed.task(taskId);
     if (!task) { closeTask(); return; }
     const scroll = screenBody.scrollTop;
+    const atEnd = screenBody.scrollHeight - scroll - screenBody.clientHeight < 80; // a chat: the newest stays in view
     const draft = document.activeElement?.matches('.checklist-add input') && screenBody.contains(document.activeElement) ? document.activeElement.value : null;
-    moreButton.hidden = Boolean(talk);
     moreButton.setAttribute('aria-expanded', String(showBar));
     const drawn = taskDetails(task, {
       views: feed.taskViews(task.id), bubble: (view) => feed.bubble(view), save: (change) => save(task.id, change), saveTo: save,
       notify, projects: feed.projects(), doneCards, fields: config.tasks?.report_fields ?? {}, cardSettings: config.tasks?.card,
       directory: directory(), bar: showBar && quick ? barContext(task, { feed, quick, openConversation }) : null,
-      conversations: feed.conversations(), tasksById: tasksById(), talk, redraw: redrawTask, onConversation: steer, onTalk: openTalk, onExpand: leaveTalk,
+      conversations: feed.conversations(), tasksById: tasksById(), talk, redraw: redrawTask, onConversation: steer, onTalk: openTalk,
+      fold, onFold: (key) => { fold = fold === key ? null : key; drawTask(); }, onShowTalk: showTalk,
       onAdd: (anchor) => addParticipant(task, anchor),
       onDone: () => { if (['done', 'cancelled'].includes(task.status)) quick?.act(task, { status: 'todo' }, `Снова в работе: «${task.title}»`); else quick?.done(task); },
     });
@@ -136,8 +139,9 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       talk.order = drawn.order;
       talk.party = drawn.selected;
     }
+    composer.hint(drawn.selected ? 'Сообщение' : 'Комментарий к задаче');
     screenBody.replaceChildren(drawn.node);
-    screenBody.scrollTop = scroll;
+    screenBody.scrollTop = atEnd ? screenBody.scrollHeight : scroll;
     const input = screenBody.querySelector('.checklist-add input');
     if (input && draft !== null) {
       input.value = draft;
@@ -158,36 +162,30 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     drawTask();
   });
 
-  // Keep one history step while a conversation is expanded inside the card.
+  // A tap on a tile: that interlocutor's conversation; on the chosen one — off, the task's comments. The cuts fold
+  // and the newest messages show, as in a conversation.
   function openTalk(party, { swiped = false } = {}) {
-    if (!taskId) return;
-    if (talk && (!party || party === talk.party)) { leaveTalk(); return; }
-    if (!talk) {
-      talk = { scroll: screenBody.scrollTop, order: [] };
-      history.pushState({ task: true, talk: true }, '');
-    }
-    talk.party = party;
-    swipedTo = swiped ? party : null;
+    if (!taskId || !talk) return;
+    talk.party = !party || party === talk.party ? null : party;
+    swipedTo = swiped ? talk.party : null;
     talk.swiped = swiped;
-    screenBody.scrollTop = 0;
-    drawTask();
-    if (!swiped && talk.order.includes(talk.party)) writeOrder(taskId, frontOrder(talk.order, talk.party, true));
-    const match = [...screenBody.querySelectorAll('.details-message.task-linked')].at(-1)
-      ?? [...screenBody.querySelectorAll('.details-message')].at(-1);
-    const header = screenBody.querySelector('.task-chat-head');
-    if (match && header) screenBody.scrollTop = Math.max(0, match.getBoundingClientRect().top - header.getBoundingClientRect().bottom - 8);
+    if (!swiped && talk.party && talk.order.includes(talk.party)) writeOrder(taskId, frontOrder(talk.order, talk.party, true));
+    showTalk();
     screenBody.querySelector('.person-tile.selected .person-tile-body')?.focus({ preventScroll: true });
   }
-  function leaveTalk() {
-    if (!talk) return;
-    if (history.state?.talk) history.back(); else closeTalk();
-  }
-  function closeTalk() {
-    if (!talk) return;
-    const scroll = talk.scroll;
-    talk = null;
+  // 💬: the cuts fold, the conversation shows from its newest message.
+  function showTalk() {
+    fold = null;
     drawTask();
-    screenBody.scrollTop = scroll;
+    screenBody.scrollTop = screenBody.scrollHeight;
+  }
+
+  // What a message written in the card continues: in the comments the last comment (none yet — the composer adds it to
+  // the task itself), else the task's last message of a conversation — so a comment never joins someone's chat.
+  function topicLast(id) {
+    const views = feed.taskViews(id);
+    const notes = new Set(commentViews(views));
+    return (talk?.party === null ? [...notes] : views.filter((view) => !notes.has(view))).at(-1) ?? null;
   }
 
   // The answer goes to the participant chosen in the conversations when they have a chat; else it is a note in the task.
@@ -203,7 +201,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     const same = taskId === id;
     const wasOpen = Boolean(taskId);
     if (!wasOpen) { before = composer.recipient() ?? null; replyKey = undefined; }
-    if (!same) { talk = null; showBar = false; }
+    if (!same) { talk = { party: undefined, order: [], swiped: false }; fold = null; showBar = false; }
     taskId = id;
     place();
     screen.hidden = false;
@@ -213,10 +211,10 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     else if (!isWide() && history.state?.details) { hide(); if (wasOpen) history.back(); else history.replaceState({ task: true }, ''); }
     else if (!history.state?.task) history.pushState({ task: true }, '');
     if (!isWide() && current) hide();
-    composer.enterTopic({ last: () => feed.taskViews(id).at(-1) }, 'Сообщение в задачу');
+    composer.enterTopic({ task: id, last: () => topicLast(id) }, 'Сообщение в задачу');
     onRender();
     drawTask();
-    if (!same) screenBody.scrollTop = 0;
+    if (!same) screenBody.scrollTop = screenBody.scrollHeight; // the newest messages, like a conversation
   }
 
   function hideTask() {
@@ -367,12 +365,11 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
   window.addEventListener('popstate', () => {
     if (!isWide() && !history.state?.details) hide();
     if (taskId && !history.state?.task && !history.state?.details) hideTask();
-    else if (taskId && talk && !history.state?.talk) closeTalk(); // back from the conversations to the card
   });
-  // «назад» in the head: from the conversations to the card, from the card to where it was opened.
-  document.querySelector('#task-screen-back').onclick = () => { if (talk) leaveTalk(); else closeTask(); };
+  // «назад» in the head: from the card to where it was opened.
+  document.querySelector('#task-screen-back').onclick = () => closeTask();
   moreButton.onclick = () => { showBar = !showBar; drawTask(); };
-  bindTalkSwipe(screen, () => Boolean(talk), (step) => {
+  bindTalkSwipe(screen, () => Boolean(taskId && talk), (step) => {
     const { order, party } = talk;
     const index = order.indexOf(party);
     if (order.length < 2 || index < 0) return;

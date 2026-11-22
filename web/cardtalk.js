@@ -47,6 +47,30 @@ export function cardOrder(parties, { stored = [], lastAuthor = null } = {}) {
   return [...new Set([...recent, ...first, ...parties])];
 }
 
+// Who the card's conversation is with (owner, 2026-11-22): the chosen interlocutor; null — the task's comments (the
+// chosen one switched off, or nobody to talk to); not chosen yet (undefined, or one no longer in the task) — the most
+// recent one that is not muted.
+export function pickParty(chosen, parties, recent, muted = []) {
+  if (chosen === null) return null;
+  if (chosen && parties.includes(chosen)) return chosen;
+  return recent.find((party) => parties.includes(party) && !muted.includes(party)) ?? null;
+}
+
+// The people of the conversations the task's messages come from (a task made from a chat), in the order of the
+// conversations list — the card talks with them even when they have no role in the task.
+export function messageParties(task, conversations) {
+  const ids = new Set(task.messages ?? []);
+  const parties = conversations.filter((item) => item.views.some((view) => ids.has(view.id))).map(conversationParty).filter(Boolean);
+  return [...new Set(parties)];
+}
+
+// The task's comments: notes of mine, the AI's and the system's in the task — not chat messages, my replies to a chat
+// or calls and SMS (those are in the conversations).
+export function commentViews(views) {
+  return views.filter((view) => ['me', 'ai', 'system'].includes(view.event.author) && !view.event.payload?.data?.outbound
+    && view.event.kind !== 'call' && view.event.kind !== 'sms');
+}
+
 // After a swipe the chosen tile moves leftmost only once the owner starts typing (design 2026-11-21).
 export function frontOrder(order, party, typed) {
   if (!typed || !order.includes(party)) return order;
@@ -107,17 +131,19 @@ function element(tag, className, text) {
   return node;
 }
 
-// One conversation of the task. ctx: { task, party, conversation (or null), taskViews, tasksById, bubble(view),
-// unlink(id), name, onMode() — a redraw, log ([{ ts, text }] — the task's changes, shown in «Я») }. The task's own
-// messages (and their continuations) are open; the rest fold into cuts by task (topic.js), «≡» unfolds them all.
+// One conversation of the task. ctx: { task, party (null — the task's comments), conversation (or null), taskViews,
+// tasksById, bubble(view), unlink(id), name, onMode() — a redraw, log ([{ ts, text }] — the task's changes, shown in
+// the comments) }. The task's own messages (and their continuations) are open; the rest fold into cuts by task
+// (topic.js), «≡» unfolds them all.
 export function talkPane({ task, party, conversation, taskViews, tasksById = new Map(), bubble, unlink, name, onMode, log = [] }) {
   const box = element('div', 'card-talk');
   const cuts = cutsOf(task.id);
-  const internal = Object.hasOwn(PARTY_LABELS, party);
-  const views = party === 'me' ? taskViews : internal ? taskViews.filter((view) => partyOfEvent(view.event) === party)
+  const comments = party === null;
+  const internal = comments || Object.hasOwn(PARTY_LABELS, party);
+  const views = comments ? commentViews(taskViews) : party === 'me' ? taskViews : internal ? taskViews.filter((view) => partyOfEvent(view.event) === party)
     : (conversation?.views ?? []).filter((view) => !view.deleted);
   const head = element('div', 'card-talk-head');
-  if (internal || !conversation) head.append(element('span', 'card-talk-title', internal ? (party === 'me' ? 'Лента задачи' : name) : `${name}: переписки нет`));
+  if (internal || !conversation) head.append(element('span', 'card-talk-title', comments ? 'Комментарии задачи' : internal ? (party === 'me' ? 'Лента задачи' : name) : `${name}: переписки нет`));
   if (!internal && conversation) {
     box.setAttribute('role', 'region');
     box.setAttribute('aria-label', `Переписка: ${name}`);
@@ -144,7 +170,7 @@ export function talkPane({ task, party, conversation, taskViews, tasksById = new
     return item;
   };
   if (internal) {
-    const activity = party === 'me' ? log : log.filter((item) => item.party === party);
+    const activity = comments || party === 'me' ? log : log.filter((item) => item.party === party);
     for (const item of withLog(views, activity)) {
       if (item.kind === 'message') list.append(message(item.view, false));
       else {
@@ -155,7 +181,7 @@ export function talkPane({ task, party, conversation, taskViews, tasksById = new
         list.append(line);
       }
     }
-    if (!views.length && !activity.length) list.append(element('p', 'drawer-empty', 'Записей пока нет'));
+    if (!views.length && !activity.length) list.append(element('p', 'drawer-empty', comments ? 'Комментариев пока нет: напишите ниже — запись останется в задаче' : 'Записей пока нет'));
     box.append(list);
     return box;
   }

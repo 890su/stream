@@ -56,7 +56,8 @@ export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.js
 type SnoozeAt = { hour: number; until_hour?: number; from_hour?: number };
 export const conversationsConfig = JSON.parse(readFileSync(new URL('../registry/conversations.json', import.meta.url), 'utf8')) as {
   version: number;
-  queue: { since: string; snooze: { minutes: number[]; noon: SnoozeAt; evening: SnoozeAt; tomorrow_day: SnoozeAt; morning: SnoozeAt } };
+  queue: { since: string; snooze: { minutes: number[]; noon: SnoozeAt; evening: SnoozeAt; tomorrow_day: SnoozeAt; morning: SnoozeAt };
+    swipe?: { minutes: number[]; parts: { key: string; label: string; icon: string; hour: number }[]; days: number; day_hour: number } };
 };
 
 // Saved task filters (P14): conditions over folded tasks; the first one is the default (web/filters.js).

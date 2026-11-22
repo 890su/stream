@@ -573,6 +573,20 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 | Right | what is this | details of what was tapped: a task, a conversation or a message |
 | Bottom | what to say | the input row, always there; above it the tags and recipients row (§2.9) |
 
+**Task card as a conversation 2026-11-22** (owner; it overrides the card described below where they differ): a task
+reads like a conversation. On top — the title, the line of dates and the counterparty (when, due, project, repeat)
+and the cuts «Описание», «Чеклист», «Подробности» (roles of Я / ИИ / Система, how it was made, the report): one open
+at a time, all folded when the conversation is shown (💬). Under them — the conversation with the chosen interlocutor
+(the most recent one at first), with cuts by task as in a conversation; at the bottom over the input — the
+interlocutors' tiles: the people with roles and the people of the conversations its messages come from. A tap on a
+tile chooses whose conversation shows and gets the reply; a tap on the chosen one switches it off — then the card
+shows the task's comments (notes of mine, the AI's, the system's and the task's changes) and the input writes a
+comment there, later other executors too. A comment never joins someone's chat.
+
+**Queue tile swipe 2026-11-22** (owner): a left swipe puts tiles in the tile's place — 15 / 30 / 60 minutes, morning,
+day, evening, night (a part of the day already gone means tomorrow), a day of the next ten (registry
+`queue.swipe`), «↧ В конец очереди», «🗄 В архив»; ✕ or a tap outside gives the tile back.
+
 **Queue home 2026-11-22** (owner; it overrides the redesign below where they differ): the centre opens on the
 conversation queue again — the longest waiting on top, the folded archive under it; a conversation opened from it goes
 back to the same tile. The left panel has two bodies: «Задачи» (first «▶ Сейчас» — the dashboard, then the filters,

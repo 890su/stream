@@ -1,5 +1,6 @@
 // Actions on a «Беседы» queue tile (CONCEPT.md §5, docs/plans/2026-11-20-queue-and-task-screen-design.md):
-// swipe right-to-left — to the archive (`answered` on the latest message; a new message brings it back); swipe
+// swipe right-to-left — tiles in its place to put it off, to the end of the queue or to the archive (snoozetiles.js;
+// the archive — `answered` on the latest message: a new message or the task day brings it back); swipe
 // left-to-right — the task: confirms the one the AI chose for what waits (the owner's link takes it out of the queue),
 // opens the owner's own, or makes one from what waits; «⏱» — `snooze`, «↧» — `requeue`, «+ задача…» — a new task
 // of mine with everything that waits. Each with «Вернуть» in the toast where it can be undone. swipePlan and the
@@ -9,6 +10,7 @@ import { makeCorrection, makeTaskChange, ownTask } from './shared.js';
 import { snippet } from './projection.js';
 import { directionOf } from './conversations.js';
 import { pickTask, tileTask } from './convlist.js';
+import { snoozeTiles } from './snoozetiles.js';
 
 export { pickTask };
 
@@ -31,7 +33,8 @@ export function swipePlan(conversation, now = new Date()) {
   return { type: 'create', source: sourceOf(conversation), add: add.length ? add : [sourceOf(conversation)?.id].filter(Boolean) };
 }
 
-export function createConvQuick({ queue, notify, openTask }) {
+// `config()` — the queue settings (registry/conversations.json).
+export function createConvQuick({ queue, notify, openTask, config = () => ({ queue: {} }) }) {
   const fail = (error) => notify(error.message);
   const mark = (conversation, op, undo, text, options = {}) => {
     const anchor = anchorOf(conversation);
@@ -71,8 +74,13 @@ export function createConvQuick({ queue, notify, openTask }) {
     notify(`Задача из беседы «${conversation.title}»`, { label: 'Вернуть', run: () => queue(makeTaskChange(id, { op: 'update', status: 'cancelled', remove: plan.add })).catch(fail) });
   }
 
-  // Adds both swipes to a tile.
-  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'archive', labels: { right: { icon: '☑', text: 'Задача' }, left: { icon: '🗄', text: 'В архив' } }, onRight: () => task(conversation), onLeft: () => archive(conversation) });
+  // The tiles in place of the swiped one.
+  const choose = (row, conversation) => snoozeTiles(row, { config: config(), on: {
+    snooze: (until) => snooze(conversation, until), requeue: () => requeue(conversation), archive: () => archive(conversation) } });
+
+  // Adds both swipes to a tile; the tiles that replace it do not swipe.
+  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'later', skip: (event) => Boolean(event.target.closest?.('.conv-choices')),
+    labels: { right: { icon: '☑', text: 'Задача' }, left: { icon: '⏱', text: 'Отложить' } }, onRight: () => task(conversation), onLeft: () => choose(row, conversation) });
 
   return { decorate, archive, snooze, requeue, newTask };
 }

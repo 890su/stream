@@ -23,6 +23,28 @@ export function snoozeOptions(now, config) {
   return options;
 }
 
+// The tiles a left swipe on a queue tile shows in its place (owner, 2026-11-22; registry/conversations.json
+// `queue.swipe`): minutes, the parts of the day — one already gone today means tomorrow — and the next days at the
+// morning hour. → { times: [{ key, icon, label, until, tomorrow }], days: [{ key, label, until }] }.
+const SWIPE_DEFAULTS = { minutes: [15, 30, 60], parts: [{ key: 'morning', label: 'утро', icon: '🌅', hour: 9 }, { key: 'day', label: 'день', icon: '🌞', hour: 13 },
+  { key: 'evening', label: 'вечер', icon: '🌆', hour: 18 }, { key: 'night', label: 'ночь', icon: '🌙', hour: 22 }], days: 10, day_hour: 9 };
+const dayLabel = new Intl.DateTimeFormat('ru', { weekday: 'short', day: 'numeric' });
+
+export function swipeChoices(now, config) {
+  const preset = { ...SWIPE_DEFAULTS, ...(config.queue?.swipe ?? {}) };
+  const times = preset.minutes.map((minutes) => ({ key: `${minutes}m`, icon: '⏱', label: `${minutes} мин`, until: new Date(now.getTime() + minutes * 60_000).toISOString(), tomorrow: false }));
+  for (const part of preset.parts) {
+    const today = at(now, 0, part.hour);
+    const tomorrow = today.getTime() <= now.getTime();
+    times.push({ key: part.key, icon: part.icon, label: part.label, until: (tomorrow ? at(now, 1, part.hour) : today).toISOString(), tomorrow });
+  }
+  const days = Array.from({ length: preset.days }, (_, index) => {
+    const until = at(now, index + 1, preset.day_hour);
+    return { key: `d${index + 1}`, label: dayLabel.format(until), until: until.toISOString() };
+  });
+  return { times, days };
+}
+
 // A date and time from the system picker, as ISO; null if cancelled.
 export function pickDateTime(now = new Date()) {
   return new Promise((resolve) => {

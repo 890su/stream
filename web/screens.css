@@ -295,6 +295,17 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .task-people .card-people.strip .people-add { width: 40px; height: 40px; border: 1px solid var(--line); background: var(--panel); color: var(--link); }
 .task-people .people-add:hover { background: var(--chip); }
 .task-chat-head { position: sticky; top: -4px; z-index: 2; padding: 4px 0; background: var(--panel); border-bottom: 1px solid var(--line); }
+/* The task card as a conversation (taskdetails.js, 2026-11-22): cuts in the head, one open at a time; the
+   interlocutors stuck to the bottom over the input. */
+.card-cuts { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.card-cut { flex: 1 1 0; min-width: 0; min-height: 36px; padding: 4px 6px; border: 0; border-radius: 10px; background: none; color: var(--muted);
+  font: inherit; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 0 -1px 0 var(--line); }
+.card-cut:hover, .card-cut:active { background: var(--press); }
+.card-cut.open { color: var(--bar-text); background: var(--chip); box-shadow: inset 0 -2px 0 var(--accent-strong); }
+.card-cut-body { max-height: 45vh; overflow-y: auto; padding: 6px 2px 2px; }
+.card-as-chat { display: flex; flex-direction: column; min-height: 100%; }
+.card-as-chat > .card-talk { flex: 1; }
+.task-people-bottom { position: sticky; bottom: -16px; z-index: 2; margin: 6px 0 -16px; padding: 0 0 12px; background: var(--panel); }
 .card-expand { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .card-expand::after { content: '⌄'; flex: none; color: var(--muted); }
 .person-tile.selected { background: color-mix(in srgb, var(--accent) 22%, var(--chip)); box-shadow: inset 0 0 0 1.5px var(--accent-strong); }
