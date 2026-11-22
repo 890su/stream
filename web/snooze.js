@@ -23,26 +23,32 @@ export function snoozeOptions(now, config) {
   return options;
 }
 
-// The tiles a left swipe on a queue tile shows in its place (owner, 2026-11-22; registry/conversations.json
-// `queue.swipe`): minutes, the parts of the day — one already gone today means tomorrow — and the next days at the
-// morning hour. → { times: [{ key, icon, label, until, tomorrow }], days: [{ key, label, until }] }.
-const SWIPE_DEFAULTS = { minutes: [15, 30, 60], parts: [{ key: 'morning', label: 'утро', icon: '🌅', hour: 9 }, { key: 'day', label: 'день', icon: '🌞', hour: 13 },
+// The dials a left swipe on a queue tile shows in its place (owner, 2026-11-22; registry/conversations.json
+// `queue.swipe`): minutes, the parts of the day, a date — today and the next days. → { minutes: [n],
+// parts: [{ key, label, icon, hour }], days: [{ offset, label }], day_hour }.
+const SWIPE_DEFAULTS = { minutes: [5, 15, 25, 55], parts: [{ key: 'morning', label: 'утро', icon: '🌅', hour: 9 }, { key: 'day', label: 'день', icon: '🌞', hour: 13 },
   { key: 'evening', label: 'вечер', icon: '🌆', hour: 18 }, { key: 'night', label: 'ночь', icon: '🌙', hour: 22 }], days: 10, day_hour: 9 };
-const dayLabel = new Intl.DateTimeFormat('ru', { weekday: 'short', day: 'numeric' });
+const weekdayDay = new Intl.DateTimeFormat('ru', { weekday: 'short', day: 'numeric' });
+
+// A day `offset` days from today, in words: «сегодня», «завтра», «пн, 24».
+export const dayWord = (now, offset) => (offset === 0 ? 'сегодня' : offset === 1 ? 'завтра' : weekdayDay.format(at(now, offset, 12)));
 
 export function swipeChoices(now, config) {
   const preset = { ...SWIPE_DEFAULTS, ...(config.queue?.swipe ?? {}) };
-  const times = preset.minutes.map((minutes) => ({ key: `${minutes}m`, icon: '⏱', label: `${minutes} мин`, until: new Date(now.getTime() + minutes * 60_000).toISOString(), tomorrow: false }));
-  for (const part of preset.parts) {
-    const today = at(now, 0, part.hour);
-    const tomorrow = today.getTime() <= now.getTime();
-    times.push({ key: part.key, icon: part.icon, label: part.label, until: (tomorrow ? at(now, 1, part.hour) : today).toISOString(), tomorrow });
-  }
-  const days = Array.from({ length: preset.days }, (_, index) => {
-    const until = at(now, index + 1, preset.day_hour);
-    return { key: `d${index + 1}`, label: dayLabel.format(until), until: until.toISOString() };
-  });
-  return { times, days };
+  const days = Array.from({ length: preset.days + 1 }, (_, offset) => ({ offset, label: dayWord(now, offset) }));
+  return { minutes: preset.minutes, parts: preset.parts, days, day_hour: preset.day_hour };
+}
+
+// Until when the dialled choice puts the conversation off, as ISO; null — nothing dialled (the archive with no date).
+// `pick` — { minutes } or { part (key), day (offset from today) }: minutes count from now; a part of the day is that
+// hour of the day (today without a date); a date alone — its morning; a time already gone moves to the next day.
+export function composeUntil(now, pick, choices) {
+  if (pick.minutes) return new Date(now.getTime() + pick.minutes * 60_000).toISOString();
+  if (pick.part === undefined && pick.day === undefined) return null;
+  const hour = choices.parts.find((part) => part.key === pick.part)?.hour ?? choices.day_hour;
+  let until = at(now, pick.day ?? 0, hour);
+  if (until.getTime() <= now.getTime()) until = at(now, (pick.day ?? 0) + 1, hour);
+  return until.toISOString();
 }
 
 // A date and time from the system picker, as ISO; null if cancelled.

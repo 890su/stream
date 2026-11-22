@@ -10,7 +10,7 @@
       "morning": { "hour": 9 }
     },
     "swipe": {
-      "minutes": [15, 30, 60],
+      "minutes": [5, 15, 25, 55],
       "parts": [
         { "key": "morning", "label": "утро", "icon": "🌅", "hour": 9 },
         { "key": "day", "label": "день", "icon": "🌞", "hour": 13 },

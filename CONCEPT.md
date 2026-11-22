@@ -583,9 +583,12 @@ tile chooses whose conversation shows and gets the reply; a tap on the chosen on
 shows the task's comments (notes of mine, the AI's, the system's and the task's changes) and the input writes a
 comment there, later other executors too. A comment never joins someone's chat.
 
-**Queue tile swipe 2026-11-22** (owner): a left swipe puts tiles in the tile's place — 15 / 30 / 60 minutes, morning,
-day, evening, night (a part of the day already gone means tomorrow), a day of the next ten (registry
-`queue.swipe`), «↧ В конец очереди», «🗄 В архив»; ✕ or a tap outside gives the tile back. An archive tile swiped
+**Queue tile swipe 2026-11-22** (owner): a left swipe puts one row in the tile's place, no taller than the tile:
+three dials like a bike code lock — minutes (5 / 15 / 25 / 55), a part of the day (morning, day, evening, night), a
+date (today and the next ten; a tap opens the calendar) — turned by ︿ ﹀, the wheel or a drag; then «🗄» puts the
+conversation away until the dialled time (a part of the day already gone means the next day; a date alone — its
+morning), or with nothing dialled into the archive until the task day or a new message; «↧» to the end of the queue;
+«✕» or a tap outside gives the tile back (registry `queue.swipe`). An archive tile swiped
 either way comes back to the end of the queue («из архива»), a snooze is cancelled; «Вернуть» takes it back. Tiles
 have no buttons (owner, 2026-11-22): swipes do it; with a mouse the pointer near a tile's right edge slides it a
 little and shows the left-swipe action (⏱; on an archive tile ↩), near the left edge the right-swipe one (☑), a click
