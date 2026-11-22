@@ -114,7 +114,9 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
   const state = archived ? (facts.snoozedUntil ? `⏱ отложена до ${facts.snoozedUntil}` : facts.handled ? `разобрана ${facts.handled}` : '') : facts.state;
   body.setAttribute('aria-label', [facts.title, facts.channel, facts.task?.title, facts.snippet, state].filter(Boolean).join(', '));
   const head = element('div', 'conv-head');
-  head.append(element('span', 'conv-kind', KIND_ICONS[facts.kind]), element('span', 'conv-channel', facts.channel), element('span', 'conv-title', facts.title));
+  // The time at the end of the title line (owner, 2026-11-22): the lines under it run from edge to edge.
+  head.append(element('span', 'conv-kind', KIND_ICONS[facts.kind]), element('span', 'conv-channel', facts.channel), element('span', 'conv-title', facts.title),
+    element('span', 'conv-time', facts.when));
   // Line 2: the task (a tap opens it) or a field to make one from what waits.
   let taskLine;
   if (facts.task) {
@@ -142,11 +144,9 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
   body.append(head, taskLine, text, meta);
   body.onclick = () => on.open(conversation.key);
   body.onkeydown = (event) => { if (event.key === 'Enter' && event.target === body) on.open(conversation.key); };
-  // Right: the time. No buttons (owner, 2026-11-22): a swipe — or the mouse at an edge — puts it off, to the end of the
-  // queue or to the archive (convquick.js, snoozetiles.js); the conversation's head has ⏱ ↧ 🗄 too.
-  const side = element('div', 'conv-side');
-  side.append(element('span', 'conv-time', facts.when));
-  row.append(body, side);
+  // No buttons (owner, 2026-11-22): a swipe — or the mouse at an edge — puts it off, to the end of the queue or to the
+  // archive (convquick.js, snoozetiles.js); the conversation's head has ⏱ ↧ 🗄 too.
+  row.append(body);
   decorate?.(row, conversation); // swipes: to the archive and the task (convquick.js)
   return row;
 }
