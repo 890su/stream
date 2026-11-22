@@ -2,7 +2,8 @@
 // conversations wait for the owner and since when. Only the owner's actions take a conversation out: a reply, a task
 // made or chosen by the owner for its messages (an AI link is not one), the archive mark (`answered`), «⏱ Отложить»
 // (`snooze`). A conversation with a day task of mine comes back on that day (owner, 2026-11-22: the archive hides
-// it until the task day or a new incoming). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
+// it until the task day or a new incoming). «↧» after it was dealt with — a swipe on an archive tile — brings it back
+// to the end of the queue and cancels a snooze (owner, 2026-11-22). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
 // snooze; a new message in a queued conversation does not move it. Pure — no DOM.
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe, isOpen } from './taskfold.js';
@@ -59,13 +60,16 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   const start = time(config.queue.since);
   const pending = views.filter((view) => time(view.event.ts) > handled && time(view.event.ts) >= start && directionOf(view.event) === 'in'
     && !answeredCall(view) && !note(view) && meaningful(view) && matters(view));
-  const open = pending.length ? null : unfinishedOf(conversation, views, start, handled, now);
+  const requeue = views.flatMap((view) => view.requeues ?? []).filter((ts) => time(ts) > handled).sort((a, b) => time(a) - time(b)).at(-1);
+  // Back from the archive: a requeue later than every way it was dealt with (a reply, the archive mark, a task of mine).
+  const back = requeue && time(requeue) > clearedAt(conversation, views) ? requeue : null;
+  const open = pending.length ? null : unfinishedOf(conversation, views, start, handled, now) ?? (back ? { reason: 'из архива', moment: back } : null);
   if (!pending.length && !open) return NONE;
 
   let moment = pending[0]?.event.ts ?? open.moment;
-  const requeue = views.flatMap((view) => view.requeues ?? []).filter((ts) => time(ts) > handled).sort((a, b) => time(a) - time(b)).at(-1);
   if (requeue) moment = later(moment, requeue);
-  const snooze = views.flatMap((view) => view.snoozes ?? []).filter((item) => time(item.at) > handled).sort((a, b) => time(a.at) - time(b.at)).at(-1);
+  const snooze = views.flatMap((view) => view.snoozes ?? []).filter((item) => time(item.at) > handled && !(back && time(back) > time(item.at)))
+    .sort((a, b) => time(a.at) - time(b.at)).at(-1);
   if (snooze) {
     const after = pending.find((view) => time(view.event.ts) > time(snooze.at));
     if (after) moment = later(moment, after.event.ts);
@@ -81,12 +85,7 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
 // planned start, due date or reminder) and nothing was done in the conversation since that day began.
 // → { reason, moment } or null.
 function unfinishedOf(conversation, views, start, handled, now) {
-  const ids = new Set(views.map((view) => view.id));
-  let cleared = -Infinity;
-  for (const view of views) if (view.answered && view.answeredAt) cleared = Math.max(cleared, time(view.answeredAt));
-  for (const task of conversation.tasks) {
-    for (const entry of task.history ?? []) if (entry.author === 'me' && (entry.change?.add ?? []).some((id) => ids.has(id))) cleared = Math.max(cleared, time(entry.ts));
-  }
+  const cleared = clearedAt(conversation, views);
   const lastIn = views.filter((view) => directionOf(view.event) === 'in').at(-1);
   const at = (ts) => (lastIn ? lastIn.event.ts : ts);
   const offer = conversation.tasks.find((task) => task.unconfirmed && isOpen(task) && time(task.createdAt) > cleared);
@@ -94,6 +93,17 @@ function unfinishedOf(conversation, views, start, handled, now) {
   const verdict = views.filter((view) => view.verdict).at(-1)?.verdict;
   if (verdict?.unfinished && time(verdict.ts) > cleared && time(verdict.ts) >= start) return { reason: verdict.unfinished, moment: at(verdict.ts) };
   return taskDayOf(conversation, Math.max(cleared, handled), now);
+}
+
+// When the owner last took the conversation out by a mark: the archive mark, a task of mine taking its messages.
+function clearedAt(conversation, views) {
+  const ids = new Set(views.map((view) => view.id));
+  let cleared = -Infinity;
+  for (const view of views) if (view.answered && view.answeredAt) cleared = Math.max(cleared, time(view.answeredAt));
+  for (const task of conversation.tasks) {
+    for (const entry of task.history ?? []) if (entry.author === 'me' && (entry.change?.add ?? []).some((id) => ids.has(id))) cleared = Math.max(cleared, time(entry.ts));
+  }
+  return cleared;
 }
 
 // The earliest day task of mine whose day has begun after the conversation was last dealt with.

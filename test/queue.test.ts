@@ -227,3 +227,27 @@ test('a planned start or a reminder is the task day too; without a day the archi
   const bare = change('tb', '2026-11-15T09:05:00', { op: 'create', title: 'Без дня', status: 'todo', roles: { author: 'me', responsible: 'me', executors: ['me'] }, add: [ask.id] }, 'me');
   assert.equal(run([ask, bare], new Date('2026-11-20T07:00:00')).find((c: any) => c.key === 'tg:961').queue.waiting, false);
 });
+
+// Back from the archive (owner, 2026-11-22): a swipe on an archive tile puts the conversation at the end of the queue.
+test('a requeue after the conversation was handled brings it back to the end of the queue', () => {
+  const ask = tg('970', '2026-11-18T09:00:00', 'спасибо');
+  const reply = mine('970', '2026-11-18T09:10:00', 'пожалуйста');
+  assert.equal(queueOf([ask, reply]).waiting, false);
+  const back = mark(reply.id, '2026-11-18T11:00:00', 'requeue');
+  const queue = queueOf([ask, reply, back]);
+  assert.deepEqual([queue.waiting, queue.moment], [true, '2026-11-18T11:00:00']);
+  // «Вернуть» takes it back to the archive.
+  assert.equal(queueOf([ask, reply, back, mark(reply.id, '2026-11-18T11:01:00', 'unrequeue')]).waiting, false);
+  // Archived again or answered again: out.
+  assert.equal(queueOf([ask, reply, back, mark(reply.id, '2026-11-18T11:30:00', 'answered')]).waiting, false);
+});
+
+test('back from the archive: the archive mark is lifted and a snooze is cancelled', () => {
+  const ask = tg('971', '2026-11-18T09:00:00', 'вопрос');
+  const archived = mark(ask.id, '2026-11-18T09:30:00', 'answered');
+  assert.equal(queueOf([ask, archived]).waiting, false);
+  assert.equal(queueOf([ask, archived, mark(ask.id, '2026-11-18T11:00:00', 'requeue')]).waiting, true);
+  const snoozed = mark(ask.id, '2026-11-18T10:00:00', 'snooze', { until: '2026-11-19T09:00:00' });
+  assert.equal(queueOf([ask, snoozed]).waiting, false);
+  assert.equal(queueOf([ask, snoozed, mark(ask.id, '2026-11-18T11:00:00', 'requeue')]).waiting, true, 'the snooze is cancelled');
+});

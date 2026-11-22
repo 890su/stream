@@ -585,7 +585,8 @@ comment there, later other executors too. A comment never joins someone's chat.
 
 **Queue tile swipe 2026-11-22** (owner): a left swipe puts tiles in the tile's place — 15 / 30 / 60 minutes, morning,
 day, evening, night (a part of the day already gone means tomorrow), a day of the next ten (registry
-`queue.swipe`), «↧ В конец очереди», «🗄 В архив»; ✕ or a tap outside gives the tile back.
+`queue.swipe`), «↧ В конец очереди», «🗄 В архив»; ✕ or a tap outside gives the tile back. An archive tile swiped
+either way comes back to the end of the queue («из архива»), a snooze is cancelled; «Вернуть» takes it back.
 
 **Queue home 2026-11-22** (owner; it overrides the redesign below where they differ): the centre opens on the
 conversation queue again — the longest waiting on top, the folded archive under it; a conversation opened from it goes

@@ -1,6 +1,7 @@
 // The conversation queue on the main screen (owner, 2026-11-22: the queue is home again, the left panel keeps only
 // «Задачи» and «Контакты»): the longest waiting on top, the newest last, under them the folded «Архив» of handled
-// conversations, five at a time (convarchive.js). Tiles, swipes, ⏱, 🗄 and ↧ — convlist.js, convquick.js. feed.js
+// conversations, five at a time (convarchive.js); an archive tile swiped either way comes back to the queue. Tiles,
+// swipes, ⏱, 🗄 and ↧ — convlist.js, convquick.js. feed.js
 // places the nodes and keeps the row being read across redraws (scrollpin.js).
 import { convRow } from './convlist.js';
 import { queueList, archiveList } from './queue.js';
@@ -27,7 +28,7 @@ export function createQueueHome({ scroller, list, render, active, hasOlder, load
     const shown = conversations.filter((item) => item.views.some(tagged));
     const waiting = queueList(shown);
     const hotHours = (limits.pulse ?? PULSE_DEFAULTS).hot_wait_hours;
-    const tile = (item, inArchive) => convRow(item, { now, hotHours, counterparties, archived: inArchive, decorate: inArchive ? null : convQuick?.decorate, on: {
+    const tile = (item, inArchive) => convRow(item, { now, hotHours, counterparties, archived: inArchive, decorate: inArchive ? convQuick?.decorateArchived : convQuick?.decorate, on: {
       open: (key) => open(key),
       task: (id) => openTask(id),
       newTask: (title) => convQuick?.newTask(item, title),

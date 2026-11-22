@@ -3,7 +3,8 @@
 // the archive — `answered` on the latest message: a new message or the task day brings it back); swipe
 // left-to-right — the task: confirms the one the AI chose for what waits (the owner's link takes it out of the queue),
 // opens the owner's own, or makes one from what waits; «⏱» — `snooze`, «↧» — `requeue`, «+ задача…» — a new task
-// of mine with everything that waits. Each with «Вернуть» in the toast where it can be undone. swipePlan and the
+// of mine with everything that waits. An archive tile swiped either way comes back to the end of the queue (`requeue`,
+// queue.js; owner, 2026-11-22). Each with «Вернуть» in the toast where it can be undone. swipePlan and the
 // message choices are pure.
 import { swipe } from './swipe.js';
 import { makeCorrection, makeTaskChange, ownTask } from './shared.js';
@@ -47,6 +48,7 @@ export function createConvQuick({ queue, notify, openTask, config = () => ({ que
   const archive = (conversation) => mark(conversation, 'answered', 'unanswered', `В архиве: «${conversation.title}»`);
   const snooze = (conversation, until) => mark(conversation, 'snooze', 'unsnooze', `Отложено до ${new Date(until).toLocaleString('ru', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}: «${conversation.title}»`, { until });
   const requeue = (conversation) => mark(conversation, 'requeue', 'unrequeue', `В конце очереди: «${conversation.title}»`);
+  const reopen = (conversation) => mark(conversation, 'requeue', 'unrequeue', `Снова в очереди: «${conversation.title}»`);
 
   // A task of mine titled by the owner, with everything that waits.
   async function newTask(conversation, title) {
@@ -82,5 +84,10 @@ export function createConvQuick({ queue, notify, openTask, config = () => ({ que
   const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'later', skip: (event) => Boolean(event.target.closest?.('.conv-choices')),
     labels: { right: { icon: '☑', text: 'Задача' }, left: { icon: '⏱', text: 'Отложить' } }, onRight: () => task(conversation), onLeft: () => choose(row, conversation) });
 
-  return { decorate, archive, snooze, requeue, newTask };
+  // An archive tile: either swipe brings it back to the queue.
+  const back = { icon: '↩', text: 'В очередь' };
+  const decorateArchived = (row, conversation) => swipe(row, { right: 'back', left: 'back', labels: { right: back, left: back },
+    onRight: () => reopen(conversation), onLeft: () => reopen(conversation) });
+
+  return { decorate, decorateArchived, archive, snooze, requeue, newTask };
 }
