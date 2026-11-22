@@ -123,7 +123,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `keysbox.js` | keys on the System screen: a hidden field per key, «задан, …последние 4», «Заменить», «Удалить» (`keyFacts`, `keyRows`) |
 | `googlebox.js` | Google on the System screen: «Подключить Google», accounts with «Отключить», a switch per calendar; the toast after the sign-in (`calendarToggles`, `googleNotice`) |
 | `taskquick.js` | acting where a task is seen: the «Готово» mark, swipe right (done) / left («Когда?» due chips), every change with «Вернуть» in the toast (`act`, `done`); «▶ В работу» / «Пауза» of the pulse (`start`, `pause` — several tasks, one «Вернуть») |
-| `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows), only from the middle column: follow, arm, act; not a tap |
+| `swipe.js` | a horizontal swipe on a list item (task rows, plaques, conversation rows), only from the middle column: follow, arm, act; not a tap; with a mouse (`peek`) the pointer at an edge shows that side's action and a press runs it (`peekSide`) |
 | `peoplerow.js` | the line of interlocutors over the input of an open conversation: one tile per chat that can be answered (`replyChats`), the chosen one leftmost with 📣 gets the reply (`rowOrder`); `conversationTask`, `chatParties` |
 | `swipezones.js` | screen swipes by columns 25 / 50 / 25: tabs Беседы · Задачи, the left panel before them, the right one after; in the right panel — the card's tabs, close before the first (`zoneOf`, `swipeAction`) |
 | `convquick.js` | actions on a queue tile: swipe left — the snooze tiles (snoozetiles.js); an archive tile either way — back to the queue (`decorateArchived`, `requeue`); right — confirm the AI's task, open the owner's or make one from what waits (`swipePlan`); ⏱ `snooze`, 🗄 `answered`, ↧ `requeue`, «+ задача…» (`newTask`), each with «Вернуть»; `anchorOf`, `sourceOf` |
@@ -134,7 +134,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `holdrender.js` | redraws of the left panel, details and centre wait while an input or a list of choices there is in use (`holdRender`, `holding`) |
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `snooze.js` / `snoozetiles.js` | «⏱ Отложить»: choices by the time of day (`snoozeOptions`), the popover (`snoozeMenu`), a date from the system picker; the tiles in place of a left-swiped queue tile (`swipeChoices` — minutes, parts of the day, ten days; `snoozeTiles` with «↧» and «🗄») |
-| `convlist.js` / `convtasks.js` | a tile of the queue: four lines (kind · channel — contact; the task or «+ задача…»; two lines of the last message), time, ⏱, 🗄 and ↧, a small line «ждёт · новых · контрагент · метки» (`tileFacts`, `tileTask`, `pickTask`, `convRow`); task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |
+| `convlist.js` / `convtasks.js` | a tile of the queue: four lines (kind · channel — contact; the task or «+ задача…»; two lines of the last message), time (no buttons: swipes), a small line «ждёт · новых · контрагент · метки» (`tileFacts`, `tileTask`, `pickTask`, `convRow`); task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |
 | `projection.js` | pure: events → message views (corrections, delivery, context-only results), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |

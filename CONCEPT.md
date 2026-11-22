@@ -586,13 +586,16 @@ comment there, later other executors too. A comment never joins someone's chat.
 **Queue tile swipe 2026-11-22** (owner): a left swipe puts tiles in the tile's place — 15 / 30 / 60 minutes, morning,
 day, evening, night (a part of the day already gone means tomorrow), a day of the next ten (registry
 `queue.swipe`), «↧ В конец очереди», «🗄 В архив»; ✕ or a tap outside gives the tile back. An archive tile swiped
-either way comes back to the end of the queue («из архива»), a snooze is cancelled; «Вернуть» takes it back.
+either way comes back to the end of the queue («из архива»), a snooze is cancelled; «Вернуть» takes it back. Tiles
+have no buttons (owner, 2026-11-22): swipes do it; with a mouse the pointer near a tile's right edge slides it a
+little and shows the left-swipe action (⏱; on an archive tile ↩), near the left edge the right-swipe one (☑), a click
+on it runs it. The open conversation's head keeps ⏱ ↧ 🗄.
 
 **Queue home 2026-11-22** (owner; it overrides the redesign below where they differ): the centre opens on the
 conversation queue again — the longest waiting on top, the folded archive under it; a conversation opened from it goes
 back to the same tile. The left panel has two bodies: «Задачи» (first «▶ Сейчас» — the dashboard, then the filters,
 projects, tags) and «Контакты» (folded «Избранные», the address book; its search also finds conversations by name or
-number). A tile's actions: ⏱ «Отложить», 🗄 «В архив», ↧ «В конец очереди». 🗄 takes the conversation out until the
+number). A tile's actions (by swipes since the same day, below): «Отложить», «В архив», «В конец очереди». 🗄 takes the conversation out until the
 day of a task of mine in it (its planned start, due date or reminder) or a new incoming message, whichever comes
 first; with no such task — until a new incoming message. On the task day the tile says «сегодня: <задача>» (or
 «просрочено: …») until I deal with the conversation that day.

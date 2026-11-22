@@ -81,12 +81,12 @@ export function createConvQuick({ queue, notify, openTask, config = () => ({ que
     snooze: (until) => snooze(conversation, until), requeue: () => requeue(conversation), archive: () => archive(conversation) } });
 
   // Adds both swipes to a tile; the tiles that replace it do not swipe.
-  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'later', skip: (event) => Boolean(event.target.closest?.('.conv-choices')),
+  const decorate = (row, conversation) => swipe(row, { right: 'task', left: 'later', peek: true, skip: (event) => Boolean(event.target.closest?.('.conv-choices') || row.classList.contains('choosing')),
     labels: { right: { icon: '☑', text: 'Задача' }, left: { icon: '⏱', text: 'Отложить' } }, onRight: () => task(conversation), onLeft: () => choose(row, conversation) });
 
   // An archive tile: either swipe brings it back to the queue.
   const back = { icon: '↩', text: 'В очередь' };
-  const decorateArchived = (row, conversation) => swipe(row, { right: 'back', left: 'back', labels: { right: back, left: back },
+  const decorateArchived = (row, conversation) => swipe(row, { right: 'back', left: 'back', peek: true, labels: { right: back, left: back },
     onRight: () => reopen(conversation), onLeft: () => reopen(conversation) });
 
   return { decorate, decorateArchived, archive, snooze, requeue, newTask };

@@ -182,6 +182,10 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .swipe-under.right { background: var(--ok); }
 .swipe-under.left { background: var(--accent-strong); }
 .swipe-under.armed { opacity: 1; }
+/* A mouse at an item's edge (swipe.js `peek`): the action peeks out; it brightens under the pointer, a click runs it. */
+.swipe-under.peek { cursor: pointer; }
+.swipe-under.peek .swipe-text { display: none; }
+.swipe-under.peek:hover { opacity: 1; }
 .swipe-under .swipe-icon { font-size: 18px; transition: transform .12s ease-out; }
 .swipe-under.armed .swipe-icon { transform: scale(1.25); }
 @media (prefers-reduced-motion: reduce) { .swipe-under, .swipe-under .swipe-icon { transition: none; } }

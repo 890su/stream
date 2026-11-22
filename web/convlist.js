@@ -102,7 +102,7 @@ function element(tag, className, text) {
   return node;
 }
 
-// The tile. `on` — { open(key), task(id), newTask(title), snooze(anchor), archive(), requeue() }; `decorate` adds the swipes;
+// The tile. `on` — { open(key), task(id), newTask(title) }; `decorate` adds the swipes;
 // `archived` — a tile of the archive above the queue.
 export function convRow(conversation, { now = new Date(), hotHours, counterparties, on, decorate, archived = false }) {
   const facts = tileFacts(conversation, { now, hotHours, counterparties });
@@ -142,22 +142,10 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
   body.append(head, taskLine, text, meta);
   body.onclick = () => on.open(conversation.key);
   body.onkeydown = (event) => { if (event.key === 'Enter' && event.target === body) on.open(conversation.key); };
-  // Right: the time, then «⏱», «🗄» (to the archive until the task day or a new incoming, queue.js) and «↧».
+  // Right: the time. No buttons (owner, 2026-11-22): a swipe — or the mouse at an edge — puts it off, to the end of the
+  // queue or to the archive (convquick.js, snoozetiles.js); the conversation's head has ⏱ ↧ 🗄 too.
   const side = element('div', 'conv-side');
-  const snooze = element('button', 'conv-act', '⏱');
-  snooze.type = 'button';
-  snooze.setAttribute('aria-label', 'Отложить');
-  snooze.onclick = (event) => { event.stopPropagation(); on.snooze(snooze); };
-  const toArchive = element('button', 'conv-act', '🗄');
-  toArchive.type = 'button';
-  toArchive.setAttribute('aria-label', 'В архив');
-  toArchive.onclick = (event) => { event.stopPropagation(); on.archive?.(); };
-  const requeue = element('button', 'conv-act', '↧');
-  requeue.type = 'button';
-  requeue.setAttribute('aria-label', 'В конец очереди');
-  requeue.onclick = (event) => { event.stopPropagation(); on.requeue(); };
   side.append(element('span', 'conv-time', facts.when));
-  if (!archived) side.append(snooze, toArchive, requeue);
   row.append(body, side);
   decorate?.(row, conversation); // swipes: to the archive and the task (convquick.js)
   return row;

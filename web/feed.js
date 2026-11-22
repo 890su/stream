@@ -181,7 +181,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const filtered = Boolean((mode === 'feed' && sourceFilter) || tagFilter.size || conversationKey);
     if (atQueue()) {
       // The queue: the longest waiting on top, the archive under it (queuehome.js).
-      children.push(...home.nodes({ conversations: convList, tags: [...tagFilter], counterparties: counterpartyList, config: queueConfig(), now }));
+      children.push(...home.nodes({ conversations: convList, tags: [...tagFilter], counterparties: counterpartyList, now }));
     } else if (mode === 'now') {
       // The dashboard: in work on top, paused and next under it (dashboard.js).
       const viewsOf = (task) => task.messages.map((id) => views.get(id)).filter(Boolean);
