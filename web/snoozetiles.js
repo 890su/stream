@@ -3,8 +3,9 @@
 // the parts of the days ahead (📅 steps by days, a tap on it opens the calendar). Nothing dialled — the three icons;
 // a dialled wheel spreads over all three places, and turning it back past its start brings the icons back. A dial
 // turns by its ︿ ﹀, the mouse wheel, the arrow keys, or pressing it and moving the finger up or down: it keeps going
-// round while the finger moves and stays where it is let go. The row holds the finger, not the dial, so redrawing the
-// dials does not break the drag. Then «🗄» puts the conversation away until the dialled time, or with nothing dialled
+// round while the finger moves and stays where it is let go. The dials are built once and only change their text and
+// width — a phone keeps a touch on the element it started on, and a redrawn dial lost the drag; the row also blocks
+// scrolling and the long-press menu under the finger. Then «🗄» puts the conversation away until the dialled time, or with nothing dialled
 // into the archive until the task day or a new message; «↧» to the end of the queue; «✕» gives the tile back (a tap
 // outside or Escape too). Live redraws of the centre wait while it is open (holdrender.js).
 import { swipeChoices, timeSlots, turnIndex, turnDay } from './snooze.js';
@@ -43,16 +44,17 @@ function pickDay(now) {
   });
 }
 
-// A dial: ︿, its value (or icon), ﹀. `wheel` — 'minutes' | 'part' | 'day'; `wide` — spread over the three places.
-function dialNode(wheel, value, { set = false, wide = false, label }) {
-  const box = element('div', `dial${set ? ' set' : ''}${wide ? ' wide' : ''}`);
+const ICONS = { minutes: '⏱', part: '🌗', day: '📅' };
+
+// A dial: ︿, its value (or icon), ﹀. `wheel` — 'minutes' | 'part' | 'day'.
+function dialNode(wheel) {
+  const box = element('div', 'dial');
   box.dataset.wheel = wheel;
   box.tabIndex = 0;
   box.setAttribute('role', 'spinbutton');
   box.setAttribute('aria-label', NAMES[wheel]);
-  box.setAttribute('aria-valuetext', label);
   const arrow = (up) => { const node = element('span', 'dial-arrow'); node.dataset.step = up ? '1' : '-1'; node.innerHTML = CHEVRON(up); return node; };
-  box.append(arrow(true), element('span', 'dial-value', value), arrow(false));
+  box.append(arrow(true), element('span', 'dial-value', ICONS[wheel]), arrow(false));
   return box;
 }
 
@@ -64,10 +66,13 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
   let slots = timeSlots(now, choices);
   let minute = -1; // index into choices.minutes
   let slot = -1; // index into slots
+  let timeDial = 'part'; // which of 🌗 / 📅 shows the time wheel when it is dialled — the one turned last
   const box = element('div', 'conv-choices');
   box.setAttribute('role', 'group');
   box.setAttribute('aria-label', 'Отложить беседу');
   const dials = element('div', 'dials');
+  const nodes = { minutes: dialNode('minutes'), part: dialNode('part'), day: dialNode('day') };
+  dials.append(nodes.minutes, nodes.part, nodes.day);
   const archiveButton = element('button', 'choice-act choice-archive');
   const endButton = element('button', 'choice-act choice-end');
   const closeButton = element('button', 'choice-act choice-close');
@@ -89,7 +94,7 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
 
   function turn(wheel, step) {
     if (wheel === 'minutes') { minute = turnIndex(minute, step, choices.minutes.length); slot = -1; }
-    else { slot = wheel === 'day' ? turnDay(slot, step, slots) : turnIndex(slot, step, slots.length); minute = -1; }
+    else { slot = wheel === 'day' ? turnDay(slot, step, slots) : turnIndex(slot, step, slots.length); minute = -1; timeDial = wheel; }
     draw();
   }
 
@@ -99,19 +104,27 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
     slots = timeSlots(now, choices, Math.max(choices.days.length - 1, day));
     slot = slots.findIndex((item) => item.day === day);
     minute = -1;
+    timeDial = 'day';
     draw();
   }
 
+  // The dials change in place: their text, which one is wide, which are hidden.
   function draw() {
-    const focused = Boolean(document.activeElement?.closest?.('.dial') && box.contains(document.activeElement));
-    if (minute >= 0) dials.replaceChildren(dialNode('minutes', `${choices.minutes[minute]} мин`, { set: true, wide: true, label: `${choices.minutes[minute]} минут` }));
-    else if (slot >= 0) dials.replaceChildren(dialNode('part', `${slots[slot].label} 📅`, { set: true, wide: true, label: slots[slot].label }));
-    else dials.replaceChildren(dialNode('minutes', '⏱', { label: 'не выбрано' }), dialNode('part', '🌗', { label: 'не выбрано' }), dialNode('day', '📅', { label: 'не выбрано' }));
+    const shown = minute >= 0 ? 'minutes' : slot >= 0 ? timeDial : null;
+    for (const [wheel, node] of Object.entries(nodes)) {
+      const on = wheel === shown;
+      const text = !on ? ICONS[wheel] : wheel === 'minutes' ? `${choices.minutes[minute]} мин` : `${slots[slot].label} ${ICONS[wheel]}`;
+      node.classList.toggle('set', on);
+      node.classList.toggle('wide', on);
+      node.hidden = Boolean(shown) && !on;
+      const value = node.querySelector('.dial-value');
+      if (value.textContent !== text) value.textContent = text;
+      node.setAttribute('aria-valuetext', on ? text : 'не выбрано');
+    }
     const time = until();
     const when = time ? (new Date(time).toDateString() === now.toDateString() ? clock : short).format(new Date(time)) : '';
     archiveButton.replaceChildren(element('span', 'choice-icon', time ? '⏱' : '🗄'), element('span', 'choice-hint', time ? `до ${when}` : 'архив'));
     archiveButton.setAttribute('aria-label', time ? `Отложить до ${when}` : 'В архив');
-    if (focused) dials.querySelector('.dial')?.focus({ preventScroll: true });
   }
   endButton.append(element('span', 'choice-icon', '↧'), element('span', 'choice-hint', 'в конец'));
   endButton.setAttribute('aria-label', 'В конец очереди');
@@ -152,6 +165,9 @@ export function snoozeTiles(row, { now = new Date(), config, on }) {
   dials.addEventListener('pointerup', (event) => release(event, true));
   dials.addEventListener('pointercancel', (event) => release(event, false));
   dials.addEventListener('click', (event) => event.stopPropagation()); // a tap here never opens the conversation
+  // Under the finger: no scrolling of the list, no long-press menu or text selection to cancel the drag.
+  dials.addEventListener('touchmove', (event) => { if (event.cancelable) event.preventDefault(); }, { passive: false });
+  dials.addEventListener('contextmenu', (event) => event.preventDefault());
   dials.addEventListener('wheel', (event) => {
     const dial = event.target.closest('.dial');
     if (!dial) return;
