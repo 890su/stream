@@ -260,7 +260,23 @@ async function main() {
       const conversation = feed.mode() === 'conversations' ? feed.conversation() : null;
       return conversation ? topicOf(conversation) : null;
     },
+    conversation: () => !details?.taskOpen() && feed.mode() === 'conversations' && Boolean(feed.conversation()),
     on: {
+      // «Разобрать заново» (src/tasks/retriage.ts): the last session goes to the AI again, replacing its old decisions.
+      again: async () => {
+        const ids = (feed.conversation()?.views ?? []).filter((view) => !view.pending).map((view) => view.id);
+        if (!ids.length) return;
+        notify('Разбираю беседу заново…');
+        try {
+          const response = await fetch('/api/triage/again', { method: 'POST', body: JSON.stringify({ ids }),
+            headers: { Authorization: `Bearer ${await getSetting('ownerToken')}`, 'Content-Type': 'application/json' } });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) { notify(body.error ?? `Не удалось разобрать заново (${response.status})`); return; }
+          const replaced = (body.tasks ?? 0) + (body.proposals ?? 0);
+          notify(`Разобрано заново: ${body.messages} сообщ.${replaced ? ` · заменено решений ИИ: ${replaced}` : ''}`);
+          await feed.render();
+        } catch (error) { notify(error.message); }
+      },
       create: () => {
         const open = details?.taskOpen() ? feed.task(details.current()?.id ?? '') : null;
         if (open?.unconfirmed) quick.act(open, { unconfirmed: false }, `Задача подтверждена: «${open.title}»`); else chatView?.makeTask();

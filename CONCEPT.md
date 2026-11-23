@@ -351,7 +351,10 @@ Viber and WhatsApp, my notes. A session is its run of messages without a pause l
 4 h). The AI sees the whole session before the new messages, however long ago it began (up to
 `session_messages`, now 60). When that session does not say what the new messages are about, the AI answers
 `need_earlier` and is asked again with the session before it added, at most `earlier_max` (now 2) times; still
-unclear — the usual question or «Разобрать». Each step back is a run in the AI log. **A batch is a window, not one task:** each message goes to
+unclear — the usual question or «Разобрать». Each step back is a run in the AI log. **«✨ Разобрать заново»** on an open
+conversation sends its last session again; what the AI decided there and I have not answered (unconfirmed tasks,
+waiting proposals) is replaced, and the AI log marks it `replaced` — material for the weekly report and for scripts
+(§9, rule of three). **A batch is a window, not one task:** each message goes to
 zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
 two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
 script). Its outcome: leave it in the conversation, file material meant to be kept (e.g. wellbeing → diary),

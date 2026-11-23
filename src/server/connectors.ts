@@ -103,6 +103,7 @@ export function createConnections({ store, live, ownerToken, telegram, whatsapp,
 
   return {
     bots, whatsappClients, google: googleConnector, isOn,
+    triage: triageWorker, // «✨ Разобрать заново» (src/tasks/retriage.ts) runs it at once
     start(): void {
       listening = true;
       for (const bot of bots) void bot.start();

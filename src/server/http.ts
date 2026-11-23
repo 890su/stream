@@ -22,6 +22,7 @@ import { secretsRoute } from './secrets.ts';
 import { ConnectorSwitches } from '../switches.ts';
 import { OwnerSettings } from '../ownersettings.ts';
 import { createConnections, type TriageOptions } from './connectors.ts';
+import { retriage } from '../tasks/retriage.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
@@ -101,6 +102,17 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           if (!OwnerSettings.isMode(body.value)) throw new HttpError(400, 'Нужно value: unconfirmed или confirmed');
           settings.setTriageNewTasks(body.value);
           json(response, 200, { ok: true });
+          return;
+        }
+        // «✨ Разобрать заново» (src/tasks/retriage.ts): the open conversation's last session goes to the AI again.
+        if (url.pathname === '/api/triage/again' && request.method === 'POST') {
+          if (!connections.triage || !connections.isOn('ai_triage')) throw new HttpError(409, 'Разбор задач выключен на «Системе»');
+          if (!connections.triage.canRun) throw new HttpError(409, 'Нет ключа ИИ — введите его на «Системе» (Разбор задач)');
+          let body: { ids?: unknown };
+          try { body = JSON.parse((await readBody(request, 64 * 1024)).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'Некорректный JSON'); }
+          const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === 'string').slice(0, 2000) : [];
+          if (!ids.length) throw new HttpError(400, 'Нужны ids — сообщения беседы');
+          json(response, 200, await retriage({ store, live, triage: connections.triage, ids }));
           return;
         }
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);

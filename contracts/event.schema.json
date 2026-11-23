@@ -147,6 +147,9 @@
               "properties": {
                 "processor": { "type": "string", "pattern": "^\\S+$" },
                 "conversation_only": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+                "messages": { "type": "array", "items": { "type": "string", "format": "uuid" }, "description": "All messages of the batch: the newest result about a message decides (2026-11-23)." },
+                "again": { "type": "boolean", "description": "«✨ Разобрать заново»: the owner asked for a second look (src/tasks/retriage.ts)." },
+                "withdrawn": { "type": "array", "items": { "type": "string", "format": "uuid" }, "description": "Proposals of earlier results this one replaces." },
                 "last_message": { "type": "string", "format": "uuid", "description": "The batch's last message: the verdict below is about the conversation after it (triage-ai-v18)." },
                 "unfinished": { "type": ["string", "null"], "maxLength": 200, "description": "What the other side still waits for from the owner when no task covers it; null — the conversation is over (web/queue.js keeps it waiting)." },
                 "proposals": {

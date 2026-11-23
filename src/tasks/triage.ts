@@ -138,7 +138,9 @@ export class Triage {
       .map((events) => events.slice(0, tasksConfig.max_batch));
   }
 
-  async run(batch: JournalEvent[]): Promise<number> {
+  // `again` — «✨ Разобрать заново» (retriage.ts): a fresh key for the same messages, and the ids of the proposals it
+  // withdraws, listed in the new result (web/proposals.js).
+  async run(batch: JournalEvent[], { again, withdrawn = [] }: { again?: string; withdrawn?: string[] } = {}): Promise<number> {
     const tasks = foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) });
     const open = tasks.filter(isOpen).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
     // Finished cases may come back: the triage sees those closed in the last reopen_days (CONCEPT.md §2.8).
@@ -206,7 +208,7 @@ export class Triage {
       messages,
     };
     const batchIds = new Set(messages.map((message) => message.id));
-    const batchKey = createHash('sha256').update([...batchIds].sort().join(',')).digest('hex').slice(0, 16);
+    const batchKey = createHash('sha256').update([...batchIds].sort().join(',') + (again ? `|again|${again}` : '')).digest('hex').slice(0, 16);
     const price = tasksConfig.ai.price_per_mtok;
     const ask = async (input: PlanInput, id: string): Promise<{ output: PlanOutput; cost: number }> => {
       const output = await this.#planner!(input);
@@ -267,9 +269,11 @@ export class Triage {
     };
     let written = 0;
     outcomes.forEach((planned, index) => {
-      const add = planned.message_ids.filter((id) => batchIds.has(id) && !conversationOnly.has(id));
-      if (!add.length) return;
       const target = planned.task_id && known.has(planned.task_id) ? planned.task_id : null;
+      // Messages already in the task it names are not proposed into it again (a second look, «Разобрать заново»).
+      const inTarget = new Set(target ? taskById.get(target)?.messages ?? [] : []);
+      const add = planned.message_ids.filter((id) => batchIds.has(id) && !conversationOnly.has(id) && !inTarget.has(id));
+      if (!add.length) return;
       // A closed case the messages continue comes back to work; a filed one (diary, note) just gets the message —
       // but work asked about a filed note (a request, items) is a task of its own: the note stays as it was.
       const isFiled = (id: string) => closedById.has(id) && (filedTemplates.has(closedById.get(id)!.template ?? '') || Boolean(closedById.get(id)!.filed));
@@ -323,7 +327,8 @@ export class Triage {
       const unfinished = typeof output.unfinished === 'string' && output.unfinished.trim() ? output.unfinished.trim().slice(0, 200) : null;
       const result = this.#store.appendEvent({
         id: resultId, schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'triage_result',
-        payload: { data: { triage: { processor: tasksConfig.ai.processor, conversation_only: [...conversationOnly], last_message: lastMessage, unfinished, ...(proposals.length ? { proposals } : {}) } } },
+        payload: { data: { triage: { processor: tasksConfig.ai.processor, messages: [...batchIds], conversation_only: [...conversationOnly], last_message: lastMessage, unfinished,
+          ...(proposals.length ? { proposals } : {}), ...(again ? { again: true, withdrawn } : {}) } } },
       });
       if (result.created) { this.#live.publish(result.event); written += proposals.length; }
     }
@@ -348,6 +353,9 @@ export class Triage {
       this.#health('error', `разбор не удался: ${error instanceof Error ? error.message : error}`.slice(0, 300));
     } finally { this.#busy = false; }
   }
+
+  // Whether there is an AI to ask (a key): «Разобрать заново» needs one.
+  get canRun(): boolean { return Boolean(this.#planner); }
 
   // A new AI key entered on the System screen (src/server/connectors.ts): the next round uses it.
   use(planner: Planner | null, namer: Namer | null): void { this.#planner = planner; this.#namer = namer; }

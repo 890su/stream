@@ -1,8 +1,8 @@
 // The AI's proposals (docs/plans/2026-11-21-ai-proposals-design.md): the triage no longer changes an existing task —
 // it proposes, in a `triage_result`, to put messages into it (with its checklist items, «Готово?», project). Under each
 // message of a waiting proposal the owner sees the task, the reason and the choices (question.js). A proposal is
-// settled by the owner's `task_change` answering it (`proposal`), a `reject_proposal` correction, or a message put into
-// a task by hand. Pure — no DOM.
+// settled by the owner's `task_change` answering it (`proposal`), a `reject_proposal` correction, a message put into
+// a task by hand, or a later result that withdraws it («Разобрать заново»). Pure — no DOM.
 import { isOpen } from './taskfold.js';
 
 const order = (a, b) => String(a.ts).localeCompare(String(b.ts));
@@ -12,6 +12,8 @@ export function proposalsByMessage(events) {
   const answered = new Set();
   const linked = new Set(); // messages the owner put into a task himself
   for (const event of events) {
+    // «✨ Разобрать заново» withdraws the proposals it replaces (src/tasks/retriage.ts).
+    if (event.kind === 'triage_result') for (const id of event.payload?.data?.triage?.withdrawn ?? []) answered.add(id);
     if (event.author !== 'me') continue;
     const data = event.payload?.data ?? {};
     if (event.kind === 'correction' && data.op === 'reject_proposal' && data.proposal) answered.add(data.proposal);

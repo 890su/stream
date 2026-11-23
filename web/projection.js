@@ -62,6 +62,8 @@ export function project(events, pendingIds = new Set()) {
     if (event.kind === 'correction') { corrections.push(event); continue; }
     if (event.kind === 'triage_result') {
       const triage = event.payload?.data?.triage;
+      // The newest result about a message decides (`messages` — all it covered; «Разобрать заново» looks again).
+      for (const id of triage?.messages ?? []) conversationOnly.delete(id);
       for (const id of triage?.conversation_only ?? []) conversationOnly.add(id);
       if (triage?.last_message) verdicts.set(triage.last_message, { unfinished: triage.unfinished ?? null, ts: event.ts });
       continue;
