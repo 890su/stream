@@ -153,7 +153,8 @@ export class Triage {
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
     // Finished cases may come back: the triage sees those closed in the last reopen_days (CONCEPT.md §2.8).
     const closedSince = new Date(Date.now() - tasksConfig.reopen_days * 86_400_000).toISOString();
-    const closed = tasks.filter((task) => !isOpen(task) && task.updated_at >= closedSince)
+    // A closed topic is not revived: the owner took it out (×) or it ended (topics design 2026-11-23).
+    const closed = tasks.filter((task) => !isOpen(task) && !isTopic(task) && task.updated_at >= closedSince)
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.closed_tasks_in_context);
     const projects = foldProjects(this.#store.triage.projectEvents()).filter((project) => project.status === 'active');
     const directory = this.#store.triage.contactEvents();

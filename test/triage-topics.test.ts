@@ -149,3 +149,18 @@ test('v20: processor, schema requires work, instructions speak of topics', async
   assert.ok(item.required.includes('work'));
   for (const rule of ['тема', 'work', 'kind']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
 });
+
+test('a topic closed by × is not offered to the AI again', async () => {
+  const s = setup(() => []);
+  try {
+    const removed = randomUUID();
+    s.owner(removed, { op: 'create', title: 'Убранная тема', kind: 'topic' });
+    s.owner(removed, { op: 'update', status: 'cancelled', reason: 'Убрана из бесед' });
+    const doneTask = randomUUID();
+    s.owner(doneTask, { op: 'create', title: 'Сделанное дело', status: 'done' });
+    s.add(telegram('8109', 'привет'));
+    await s.run();
+    const closed = s.calls[0]!.closed_tasks.map((task) => task.title);
+    assert.deepEqual(closed, ['Сделанное дело']);
+  } finally { s.cleanup(); }
+});
