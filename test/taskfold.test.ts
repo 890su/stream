@@ -202,10 +202,10 @@ test('an AI-made task with unconfirmed stays so until the owner touches it', asy
   assert.equal(fold([made, change('u1', '2026-11-21T10:01:00Z', { op: 'update', note: 'разбор' })]).unconfirmed, true, 'the AI\'s own change does not confirm');
   assert.equal(fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', title: 'Сайт: правки меню' }, 'me')]).unconfirmed, false);
   assert.equal(fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', unconfirmed: false }, 'me'), change('u1', '2026-11-21T10:03:00Z', { op: 'update', unconfirmed: true }, 'me')]).unconfirmed, true);
-  assert.equal(fold([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]).unconfirmed, undefined);
+  assert.equal(fold([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]).unconfirmed, false);
   const { foldTasks: serverFold } = await import('../src/tasks/fold.ts');
   const server = (events: unknown[]) => serverFold(events as any)[0]!.unconfirmed;
   assert.equal(server([made]), true);
   assert.equal(server([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', due: '2026-11-22' }, 'me')]), false);
-  assert.equal(server([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]), undefined);
+  assert.equal(server([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]), false);
 });

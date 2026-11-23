@@ -521,8 +521,8 @@ test('triage v16 makes new tasks unconfirmed unless the owner chose otherwise; f
       const tasks = foldTasks(storage.store.triage.taskEvents());
       const router = tasks.find((task) => task.title === 'Настроить роутер')!;
       const diary = tasks.find((task) => task.title === 'Дневник')!;
-      assert.equal(router.unconfirmed, mode === 'unconfirmed' ? true : undefined, mode);
-      assert.equal(diary.unconfirmed, undefined, 'a filed note is not asked about');
+      assert.equal(router.unconfirmed, mode === 'unconfirmed', mode);
+      assert.equal(diary.unconfirmed, false, 'a filed note is not asked about');
     } finally { storage.cleanup(); }
   }
 });

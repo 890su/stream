@@ -40,11 +40,26 @@ export function foldItems(items, change) {
 // Checklist progress for rows and plaques: «2/5», or '' without items.
 export const itemsProgress = (task) => (task.items?.length ? `${task.items.filter((item) => item.done).length}/${task.items.length}` : '');
 
+// Topic or task (docs/plans/2026-11-23-topics-design.md): `kind` sets it; the legacy `unconfirmed` (design 2026-11-21)
+// reads as a topic with an offer (true) or a task (false); an owner change confirms a legacy unconfirmed record unless
+// its kind was given. The server folds the same way (src/tasks/fold.ts).
+export function foldKind(task, change, author, kindGiven) {
+  if (change.kind !== undefined) { task.kind = change.kind; kindGiven.add(task.id); }
+  if (change.offer !== undefined) task.offer = change.offer;
+  if (change.unconfirmed !== undefined) {
+    task.legacy = change.unconfirmed;
+    if (change.kind === undefined) { task.kind = change.unconfirmed ? 'topic' : 'task'; task.offer = change.unconfirmed; }
+  } else if (author === 'me' && task.legacy && !kindGiven.has(task.id)) {
+    task.legacy = false; task.kind = 'task'; task.offer = false;
+  }
+}
+
 // `filedTemplates` — names of templates marked `filed` in the config: such tasks are filed away, not worked on.
 export function foldTasks(events, { filedTemplates = [] } = {}) {
   const tasks = new Map();
   const hasRoles = new Set();
   const filedGiven = new Set();
+  const kindGiven = new Set(); // records whose kind came explicitly (topics design 2026-11-23)
   for (const event of events.filter((item) => item.kind === 'task_change').sort(order)) {
     const id = event.payload?.ref?.id;
     const change = event.payload?.data?.task ?? {};
@@ -75,9 +90,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     if (change.remove) task.messages = task.messages.filter((message) => !change.remove.includes(message));
     foldItems(task.items, change);
     if (change.op === 'update' && change.title !== undefined && event.author === 'me' && !change.proposal) task.ownerTitled = true; // an accepted AI rename stays the AI's
-    // Unconfirmed (design 2026-11-21): set by the AI's create or the topic switch; any other owner change confirms.
-    if (change.unconfirmed !== undefined) task.unconfirmed = change.unconfirmed;
-    else if (event.author === 'me' && task.unconfirmed) task.unconfirmed = false;
+    foldKind(task, change, event.author, kindGiven);
     task.history.push({ ts: event.ts, author: event.author, change });
     task.updatedAt = event.ts;
   }
@@ -86,6 +99,9 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     else if (!task.roles.author) task.roles.author = partyOf(task.createdBy);
     if (task.roles.executors.length) task.assignee = kindOf(task.roles.executors[0]);
     if (!filedGiven.has(task.id)) task.filed = !!task.template && filedTemplates.includes(task.template);
+    task.kind ??= 'task';
+    task.offer ??= false;
+    task.unconfirmed = task.kind === 'topic'; // legacy alias, read until every view asks isTopic (topics plan, Task 9)
   }
   return [...tasks.values()];
 }

@@ -733,6 +733,14 @@
                   "format": "uuid",
                   "description": "The triage proposal this owner change answers (triage_result proposals)."
                 },
+                "kind": {
+                  "enum": ["topic", "task"],
+                  "description": "A topic (out of task views) or a task; absent — a task, or the legacy unconfirmed (topics design 2026-11-23)."
+                },
+                "offer": {
+                  "type": "boolean",
+                  "description": "The AI offers to make this topic a task; false — the offer is answered or withdrawn."
+                },
                 "unconfirmed": {
                   "type": "boolean",
                   "description": "Made by the AI and waiting for the owner (true), or confirmed (false); absent — a real task (design 2026-11-21)."

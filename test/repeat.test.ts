@@ -10,7 +10,7 @@ import { foldTasks, type Task } from '../src/tasks/fold.ts';
 // and checklist (unticked), the dates moved by the step. Names are made up.
 const base: Task = { id: 't1', title: 'Обслуживание сервера', status: 'done', roles: { author: 'me', responsible: 'me', executors: ['me'], controller: null, watchers: [], counterparty: null, members: [] },
   project: 'p1', section: 's1', counterparty: 'c1', note: 'проверить бэкапы', items: [{ id: 'a', text: 'бэкап', done: true }],
-  assignee: 'me', filed: false, messages: [], owner_titled: true, created_by: 'me', created_at: '2026-11-10T10:00:00Z', updated_at: '2026-11-20T10:00:00Z' };
+  assignee: 'me', filed: false, messages: [], owner_titled: true, kind: 'task', offer: false, created_by: 'me', created_at: '2026-11-10T10:00:00Z', updated_at: '2026-11-20T10:00:00Z' };
 
 test('the next one: the due date moves by the step; the checklist comes back unticked; nothing without a repeat', () => {
   const weekly = nextOccurrence({ ...base, due: '2026-11-20', repeat: { every: 'week', n: 1 } } as any, new Date('2026-11-20T15:00:00Z'))!;
