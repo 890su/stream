@@ -204,6 +204,18 @@ request and the job given to a partner).
   conversation back from the archive by itself. Its tasks stay in «Задачи» as they are.
 - Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
   reply goes through the chosen channel (the input row, §2.9); each message shows to whom, where and when.
+- **Topics** (owner, 2026-11-23, `docs/plans/2026-11-23-topics-design.md`). A conversation is «with whom», a topic
+  is «about what»: one person — several topics, one topic — several conversations. A topic is the same record as a
+  task with `kind: 'topic'` (`task_change`; no `kind` — a task): becoming a task and back changes only `kind`, the
+  task's fields stay hidden, and a topic is out of every task view (lists, dashboard, plan, pulse). Every message —
+  notes, system and AI messages included — belongs to one or more topics (`add` / `remove`). The AI files messages
+  into topics and makes new ones itself; making a topic a task it only proposes (`offer`, ✓ makes it a task, ✕ keeps
+  it a topic); a change of an existing task stays a proposal (§2.8). A topic is live in a conversation while it had
+  a message within `topic_days`, the conversation waits or left the queue within `archive_days` (both on the System
+  screen) and the owner has not removed it there (× — its messages of this conversation leave it). In the card
+  head the line of topics: ▸ unfolds it, the chosen topic (📣) is first and takes the next message; with a topic
+  chosen the other messages fold, the filter shows all with them paler. Selected messages move to another topic or
+  get one more.
 - **Over the input of an open conversation** (owner, 2026-11-21): a line of interlocutors only — one tile per chat
   that can be answered (a person in Telegram BY or PL, Viber, WhatsApp; a group), no roles, no «Я», no «Система».
   As in the task card, the chosen one stands leftmost with 📣 and gets the reply; by default — the chat of the latest
