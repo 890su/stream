@@ -163,6 +163,10 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     for (const id of ['#chat-snooze', '#chat-requeue', '#chat-archive']) $(id).hidden = !inList || key === 'me' || key.startsWith('task:');
     $('#chat-person').hidden = !personFromConversation(conversation ?? { key });
     people.render(conversation);
+    // The chosen topic: the composer puts the next message into it, the card folds the rest (feed.js).
+    const chosen = topical ? chosenTopic(conversation) : null;
+    composer.setTopic(chosen);
+    feed.setTopic(chosen);
     steer();
   };
 
@@ -193,6 +197,8 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     people.render(null);
     composer.chat(null);
     if (composer.topic() === topic) composer.leaveTopic();
+    composer.setTopic(null);
+    await feed.setTopic(null);
     await feed.openConversation(null);
     onLeave();
   };

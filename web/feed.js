@@ -22,7 +22,7 @@ import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
 import { rowOnScreen, putBack } from './scrollpin.js';
-import { cutSegments } from './topic.js';
+import { cutSegments, topicCaption } from './topic.js';
 import { grow, shrink, reduced, play } from './motion.js';
 
 const NEAR_BOTTOM = 120;
@@ -48,6 +48,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let current = null; // that conversation as of the last render
   let openCuts = new Set(); // cuts of the open conversation the owner unfolded (topic.js keys)
   let allCuts = false; // «≡»: every cut unfolded
+  let focusTopic = null; // the topic chosen in the open conversation (chatview.js): its messages open, the rest fold
   let convList = []; // all conversations, each with its place in the queue (queue.js)
   let convKeys = new Map(); // message id -> conversation key (conversations.js)
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
@@ -174,7 +175,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         item.append(...group.map((view, index) => node(view, index === 0)));
       }
       item.classList.toggle('close', close && children.at(-1)?.className !== 'date-pill');
-      item.classList.remove('in-cut'); // bubbles are cached: a tint from an unfolded cut must not stay
+      item.classList.remove('in-cut', 'dim'); // bubbles are cached: a tint from an unfolded cut must not stay
       children.push(item);
     }
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };
@@ -199,12 +200,22 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     } else {
       // One conversation — its messages in segments: open ones and cuts by task (topic.js); the Лента — in a row.
       if (inside && current) {
-        for (const segment of cutSegments(visible, { tasksById, open: openCuts, all: allCuts, keep: new Set((current.queue?.pending ?? []).map((view) => view.id)) })) {
+        const focus = focusTopic && tasksById.has(focusTopic) ? focusTopic : null;
+        for (const segment of cutSegments(visible, { tasksById, focus, open: openCuts, all: allCuts, keep: new Set((current.queue?.pending ?? []).map((view) => view.id)) })) {
           if (segment.kind === 'cut') children.push(cutLine(segment));
           if (segment.kind === 'cut' && !segment.open) continue;
           const from = children.length;
           for (const group of bursts(segment.views)) renderGroup(group);
-          if (segment.kind === 'cut') for (const item of children.slice(from)) item.classList.add('in-cut');
+          const items = children.slice(from);
+          if (segment.kind === 'cut') for (const item of items) item.classList.add('in-cut');
+          if (segment.dim) for (const item of items) item.classList.add('dim');
+          // «≡» open: each bubble names the topic it went to (topics design 2026-11-23).
+          for (const view of segment.views) {
+            const bubble = bubbleIn(items, view.id);
+            if (!bubble) continue;
+            const caption = allCuts ? topicCaption(view, tasksById, focus) : null;
+            if (caption) bubble.dataset.topic = `◇ ${caption}`; else delete bubble.dataset.topic;
+          }
         }
       } else for (const group of bursts(visible)) renderGroup(group);
       // «Задача выполнена?» — after the conversation's messages (CONCEPT.md §2.9).
@@ -293,6 +304,16 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
 
   // Opens a conversation (with null it closes, and Беседы give the screen back to the queue, on the tile it was
   // opened from); in Задачи and Лента it filters.
+  // The bubble of a message among rendered items (a burst holds several).
+  function bubbleIn(items, id) {
+    const selector = `.bubble[data-id="${CSS.escape(id)}"]`;
+    for (const item of items) {
+      const found = item.matches?.(selector) ? item : item.querySelector?.(selector);
+      if (found) return found;
+    }
+    return null;
+  }
+
   async function openConversation(key) {
     const next = key || null;
     if (next === conversationKey) return;
@@ -349,6 +370,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,
     projects: () => projectList, project: currentProject, setProject, people: () => peopleList, counterparties: () => counterpartyList,
     setShowDone, showDone: () => showDone,
+    // The chosen topic of the open conversation (chatview.js): a change redraws quietly.
+    setTopic: (id) => { if ((id ?? null) === focusTopic) return Promise.resolve(); focusTopic = id ?? null; return render({ quiet: true, pin: pinRow() }); },
     allCuts: () => allCuts, setAllCuts: (value) => { allCuts = value; if (!value) openCuts = new Set(); return render({ quiet: true, pin: pinRow() }); },
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
     view: (id) => views.get(id), views: () => viewList,
