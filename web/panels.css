@@ -180,3 +180,15 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .topic-menu { position: fixed; z-index: 60; display: grid; min-width: 180px; padding: 4px; border-radius: 12px; background: var(--panel); box-shadow: var(--shadow); }
 .topic-menu-item { border: 0; background: transparent; color: inherit; font: inherit; text-align: start; padding: 10px 12px; border-radius: 8px; }
 .topic-menu-item:hover { background: var(--chip); }
+
+/* «Тема…» for selected messages (topicpicker.js): sections, search, a new topic, «Перенести» · «Добавить». */
+.topic-picker { width: min(440px, calc(100vw - 32px)); max-height: 80vh; padding: 12px; border: 0; border-radius: 16px; background: var(--panel); color: inherit; box-shadow: var(--shadow); }
+.topic-picker::backdrop { background: rgba(0, 0, 0, .35); }
+.topic-picker-head { margin: 0 0 8px; font-weight: 600; }
+.topic-picker-search, .topic-picker-new { width: 100%; box-sizing: border-box; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: inherit; font: inherit; }
+.topic-picker-new { margin-top: 8px; border-style: dashed; }
+.topic-picker-list { display: grid; gap: 2px; max-height: 45vh; overflow-y: auto; margin-top: 6px; }
+.topic-picker-item { border: 0; background: transparent; color: inherit; font: inherit; text-align: start; padding: 9px 10px; border-radius: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topic-picker-item.on { background: var(--chip); color: var(--chip-text); }
+.topic-picker-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.topic-picker-actions button:disabled { opacity: .45; }
