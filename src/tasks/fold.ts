@@ -20,7 +20,6 @@ export interface Task {
   report?: Record<string, unknown>; // the closing report or its draft from the conversation
   counterparty?: string | null; counterparty_options?: string[]; counterparty_hint?: string | null; // contacts design §6
   muted?: string[]; // participants switched off: answers from the task do not go to them (2026-11-19)
-  unconfirmed?: boolean; // legacy alias of kind 'topic', read until every reader asks isTopic (topics plan, Task 9)
   kind: 'topic' | 'task'; offer: boolean; // topics design 2026-11-23: a topic is out of task views; offer — the AI offers a task
   legacy?: boolean; // the record was made unconfirmed by the AI before topics (design 2026-11-21)
   repeat?: Repeat | null;
@@ -112,7 +111,6 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
     else if (!task.roles.author) task.roles.author = partyOf(task.created_by);
     if (task.roles.executors.length) task.assignee = kindOf(task.roles.executors[0]!);
     if (!filedGiven.has(task.id)) task.filed = !!task.template && filedTemplates.includes(task.template);
-    task.unconfirmed = task.kind === 'topic';
   }
   return [...tasks.values()];
 }

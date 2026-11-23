@@ -21,7 +21,8 @@ import { nameId } from '../ids.ts';
 // Google stops reading. Switching is written to the feed.
 
 export type TriageOptions = { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number; factory?: (key: string) => { planner: Planner; namer: Namer };
-  newTasks?: () => TriageNewTasks }; // how the AI makes new tasks (src/ownersettings.ts)
+  newTasks?: () => TriageNewTasks; // how the AI makes new tasks (src/ownersettings.ts)
+  topicDays?: () => number }; // a topic silent longer is no target for the triage (topics design 2026-11-23)
 
 export function createConnections({ store, live, ownerToken, telegram, whatsapp, triage, google, secrets, switches }: {
   store: JournalStore; live: LiveFeed; ownerToken: string;
@@ -60,7 +61,7 @@ export function createConnections({ store, live, ownerToken, telegram, whatsapp,
   // The triage: its AI key from the System screen or .env; paused while switched off.
   const aiKey = () => secrets?.get('ANTHROPIC_API_KEY');
   const made = aiKey() && triage?.factory ? triage.factory(aiKey()!) : null;
-  const triageWorker = triage ? new Triage({ store, live, planner: made?.planner ?? triage.planner, namer: made?.namer ?? triage.namer ?? null, reason: triage.reason, ...(triage.newTasks ? { newTasks: triage.newTasks } : {}) }) : null;
+  const triageWorker = triage ? new Triage({ store, live, planner: made?.planner ?? triage.planner, namer: made?.namer ?? triage.namer ?? null, reason: triage.reason, ...(triage.newTasks ? { newTasks: triage.newTasks } : {}), ...(triage.topicDays ? { topicDays: triage.topicDays } : {}) }) : null;
   let triaging = false;
   function syncTriage(): void {
     if (!triageWorker) return;

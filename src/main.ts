@@ -7,7 +7,7 @@ import { SecretStore } from './secrets.ts';
 import { ConnectorSwitches } from './switches.ts';
 import { OwnerSettings } from './ownersettings.ts';
 import { anthropicPlanner, anthropicNamer } from './tasks/anthropic.ts';
-import { captureConfig, telegramConfig, whatsappConfig } from './config.ts';
+import { captureConfig, telegramConfig, whatsappConfig, conversationsConfig } from './config.ts';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 const port = Number(process.env.PORT || 3790);
@@ -28,7 +28,7 @@ const tokens = Object.fromEntries(Object.keys(telegramConfig.accounts)
 const aiKey = process.env.ANTHROPIC_API_KEY || '';
 // The owner's settings from the System screen (src/ownersettings.ts): how the AI makes new tasks.
 const settings = new OwnerSettings(resolve(dataDir, 'settings.json'));
-const triage = { newTasks: () => settings.triageNewTasks(), planner: aiKey ? anthropicPlanner(aiKey) : null, namer: aiKey ? anthropicNamer(aiKey) : null, reason: 'нет ключа Anthropic — введите его на «Системе» (Разбор задач)',
+const triage = { newTasks: () => settings.triageNewTasks(), topicDays: () => settings.topics(conversationsConfig.topics).topic_days, planner: aiKey ? anthropicPlanner(aiKey) : null, namer: aiKey ? anthropicNamer(aiKey) : null, reason: 'нет ключа Anthropic — введите его на «Системе» (Разбор задач)',
   factory: (key: string) => ({ planner: anthropicPlanner(key), namer: anthropicNamer(key) }) };
 // WhatsApp linked devices (deploy/WHATSAPP.md): STREAM_WA_<ACCOUNT>_ENABLED=1; session keys in <DATA_DIR>/whatsapp/<account>.
 const whatsappAccounts = Object.keys(whatsappConfig.accounts).filter((account) => process.env[`STREAM_WA_${account.toUpperCase()}_ENABLED`] === '1');

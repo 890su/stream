@@ -50,6 +50,10 @@ export function aiStatsLines(decisions) {
   if (sum(link)) lines.push(`Предложил связать с задачей: ${sum(link)} — принято ${link.accepted ?? 0}, в другую задачу ${link.redirected ?? 0}, отклонено ${link.rejected ?? 0}, ждут ответа ${link.pending ?? 0}`);
   const made = { auto: (decisions.create?.auto ?? 0) + (decisions.unsorted?.auto ?? 0), undone: (decisions.create?.undone ?? 0) + (decisions.unsorted?.undone ?? 0) };
   if (made.auto + made.undone) lines.push(`Создал задач: ${made.auto + made.undone}, из них отменено или разобрано иначе ${made.undone}`);
+  const offer = decisions.propose_task ?? {};
+  if (sum(offer)) lines.push(`Предложил сделать тему задачей: ${sum(offer)} — сделано ${offer.accepted ?? 0}, оставлено темой ${offer.rejected ?? 0}, ждут ответа ${offer.pending ?? 0}`);
+  const topics = { made: sum(decisions.topic), linked: sum(decisions.topic_link), undone: (decisions.topic?.undone ?? 0) + (decisions.topic_link?.undone ?? 0) };
+  if (topics.made + topics.linked) lines.push(`Темы: новых ${topics.made}, сообщений в темы ${topics.linked}, из них убрано или перенесено ${topics.undone}`);
   const filed = sum(decisions.filed);
   const kept = sum(decisions.conversation_only);
   if (filed || kept) lines.push(`Подшил без дела: ${filed}; оставил в беседе: ${kept}`);

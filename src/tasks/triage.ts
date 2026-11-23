@@ -4,10 +4,10 @@ import type { JournalStore } from '../store/store.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import type { LiveFeed } from '../server/live.ts';
 import type { SourceState } from '../store/status.ts';
-import { tasksConfig } from '../config.ts';
+import { tasksConfig, conversationsConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { stateChanged } from '../server/system.ts';
-import { foldTasks, isOpen, type Task } from './fold.ts';
+import { foldTasks, isOpen, isTopic, type Task } from './fold.ts';
 import { describe, from, hasForwardOrigin, messageDirection } from './messages.ts';
 import { nameTasks, type Namer } from './namer.ts';
 import { counterpartyChange } from './counterparty.ts';
@@ -102,12 +102,16 @@ export class Triage {
   #timer?: ReturnType<typeof setInterval>;
   #busy = false;
   #newTasks: () => TriageNewTasks;
+  #topicDays: () => number;
 
   // `planner` null — triage is off (no AI key); `reason` says why on the System screen.
   // `namer` — titles of tasks the owner made by hand (namer.ts); none — they keep the text they were made from.
-  // `newTasks` — how new tasks are made (src/ownersettings.ts, v16): `unconfirmed` waits for the owner's ✓.
-  constructor({ store, live, planner, namer = null, reason = 'нет ключа ИИ', newTasks = () => 'confirmed' }: { store: JournalStore; live: LiveFeed; planner: Planner | null; namer?: Namer | null; reason?: string; newTasks?: () => TriageNewTasks }) {
+  // `newTasks` — how new tasks are made (src/ownersettings.ts, v16): `unconfirmed` — a topic with an offer (v20).
+  // `topicDays` — a topic silent longer than this is no target for new messages (topics design 2026-11-23).
+  constructor({ store, live, planner, namer = null, reason = 'нет ключа ИИ', newTasks = () => 'confirmed', topicDays = () => conversationsConfig.topics.topic_days }:
+    { store: JournalStore; live: LiveFeed; planner: Planner | null; namer?: Namer | null; reason?: string; newTasks?: () => TriageNewTasks; topicDays?: () => number }) {
     this.#newTasks = newTasks;
+    this.#topicDays = topicDays;
     this.#store = store;
     this.#live = live;
     this.#planner = planner;
@@ -142,7 +146,11 @@ export class Triage {
   // withdraws, listed in the new result (web/proposals.js).
   async run(batch: JournalEvent[], { again, withdrawn = [] }: { again?: string; withdrawn?: string[] } = {}): Promise<number> {
     const tasks = foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) });
-    const open = tasks.filter(isOpen).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
+    // Live topics only (topics design 2026-11-23): one silent past topic_days is no longer what a conversation is about.
+    const silentSince = new Date(Date.now() - this.#topicDays() * 86_400_000).toISOString();
+    const lastOf = (task: Task) => task.messages.map((id) => this.#store.getEvent(id)?.ts).filter((ts): ts is string => Boolean(ts)).sort().at(-1) ?? task.updated_at;
+    const open = tasks.filter((task) => isOpen(task) && (!isTopic(task) || lastOf(task) >= silentSince))
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
     // Finished cases may come back: the triage sees those closed in the last reopen_days (CONCEPT.md §2.8).
     const closedSince = new Date(Date.now() - tasksConfig.reopen_days * 86_400_000).toISOString();
     const closed = tasks.filter((task) => !isOpen(task) && task.updated_at >= closedSince)
@@ -155,7 +163,7 @@ export class Triage {
     const snippet = (id: string) => { const event = this.#store.getEvent(id); return event ? describe(event, this.#store).text.slice(0, 160) : ''; };
     const asContext = (task: (typeof tasks)[number]) => {
       const events = task.messages.slice(-5).map((id) => this.#store.getEvent(id)).filter((event): event is JournalEvent => Boolean(event));
-      return { id: task.id, title: task.title, assignee: task.assignee, roles: task.roles, status: task.status, recent: task.messages.slice(-3).map(snippet),
+      return { id: task.id, title: task.title, kind: task.kind, assignee: task.assignee, roles: task.roles, status: task.status, recent: task.messages.slice(-3).map(snippet),
         chats: [...new Set(events.map(streamOf))], last_at: events.at(-1)?.ts ?? task.updated_at, project: task.project ?? null,
         items: task.items.map((item) => ({ text: item.text, done: item.done })), owner_titled: task.owner_titled };
     };
@@ -268,6 +276,15 @@ export class Triage {
       return { ...(author ? { author } : {}), responsible, executors, ...(controller ? { controller } : {}) };
     };
     let written = 0;
+    const appendChange = (change: Record<string, unknown>, taskId: string, index: number) => {
+      try {
+        const result = this.#store.appendEvent({
+          id: nameId(`task-change|${batchKey}|${index}`), schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'task_change',
+          payload: { ref: { type: 'task', id: taskId }, data: { task: change } },
+        });
+        if (result.created) { this.#live.publish(result.event); written += 1; }
+      } catch (error) { console.error('Triage: task change rejected', error instanceof Error ? error.message : error); }
+    };
     outcomes.forEach((planned, index) => {
       const target = planned.task_id && known.has(planned.task_id) ? planned.task_id : null;
       // Messages already in the task it names are not proposed into it again (a second look, «Разобрать заново»).
@@ -290,6 +307,16 @@ export class Triage {
       const checklist = checklistChange(taskId, planned, existing ? taskById.get(existing) : undefined);
       const placed = { ...projectChange(planned, existing ? taskById.get(existing) : undefined, projects),
         ...counterpartyChange(planned, existing ? taskById.get(existing) : undefined, counterparties) };
+      const work = planned.work ?? true; // before v20 everything the planner returned was work
+      const unconfirmed = this.#newTasks() === 'unconfirmed';
+      // An existing topic (v20) takes the messages at once; work in it is offered as a task (or makes it one).
+      if (existing && isTopic(taskById.get(existing)!) && !planned.filed) {
+        const offer = work && !taskById.get(existing)!.offer ? (unconfirmed ? { offer: true } : { kind: 'task' }) : {};
+        decide(String(index), 'topic_link', existing, add, confidence, reason);
+        if ('offer' in offer) decide(`${index}|offer`, 'propose_task', existing, add, confidence, reason, 'pending');
+        appendChange({ op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...offer, ...(reason ? { reason: reason.slice(0, 500) } : {}) }, existing, index);
+        return;
+      }
       // An existing task — a proposal, applied when the owner accepts it; a filed note gets its filed message as before.
       if (existing && !(filedTask && planned.filed)) {
         const id = nameId(`proposal|${batchKey}|${index}`);
@@ -298,27 +325,22 @@ export class Triage {
         decide(String(index), 'link', existing, add, confidence, reason, 'pending', id);
         return;
       }
-      decide(String(index), existing || planned.filed ? 'filed' : planned === fallback ? 'unsorted' : 'create',
-        taskId, add, confidence, reason);
+      // A new record (v20): no work — a topic; work — a topic with an offer, or a task in mode «ИИ создаёт сразу».
+      const fresh = !existing && !planned.filed && planned !== fallback;
+      const kind = fresh ? (!work ? { kind: 'topic' } : unconfirmed ? { kind: 'topic', offer: true } : {}) : {};
+      decide(String(index), existing || planned.filed ? 'filed' : planned === fallback ? 'unsorted' : !fresh || !('kind' in kind) ? 'create' : work ? 'propose_task' : 'topic',
+        taskId, add, confidence, reason, fresh && 'offer' in kind ? 'pending' : 'auto');
       const change: Record<string, unknown> = existing
         ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked, ...checklist, ...placed, ...(reason ? { reason: reason.slice(0, 500) } : {}) }
         : {
           op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles: rolesOf(planned, add),
-          status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
+          status: confidence < tasksConfig.low_confidence && !('kind' in kind) ? 'inbox' : planned.filed ? 'done' : 'todo', ...kind,
           add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked, ...checklist, ...placed,
-          // v16: a new task waits for the owner unless he chose «ИИ создаёт сразу»; filed notes and «Разобрать» never wait.
-          ...(this.#newTasks() === 'unconfirmed' && !planned.filed && planned !== fallback ? { unconfirmed: true } : {}),
           ...(planned.template ? { template: planned.template } : {}),
           ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
           ...(reason ? { reason: reason.slice(0, 500) } : {}),
         };
-      try {
-        const result = this.#store.appendEvent({
-          id: nameId(`task-change|${batchKey}|${index}`), schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'task_change',
-          payload: { ref: { type: 'task', id: taskId }, data: { task: change } },
-        });
-        if (result.created) { this.#live.publish(result.event); written += 1; }
-      } catch (error) { console.error('Triage: task change rejected', error instanceof Error ? error.message : error); }
+      appendChange(change, taskId, index);
     });
     // What stays in the conversation, what is proposed and whether the conversation is over (on the batch's last
     // message — web/queue.js): one triage result per batch, written once, always.

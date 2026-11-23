@@ -10,7 +10,9 @@ import type { JournalEvent } from '../contracts/validate.ts';
 // The owner's answers are read from the journal as they are appended (`observe`), buttons or not.
 // Derived state: the journal holds the proposals and answers; this log adds what the journal does not keep.
 
-export type DecisionKind = 'link' | 'create' | 'filed' | 'conversation_only' | 'unsorted';
+// v20 (topics design 2026-11-23): `topic` — a new topic without work, `topic_link` — messages put into a live topic
+// (both auto), `propose_task` — the offer to make a topic a task: `accepted` (the owner made it a task), `rejected` (✕).
+export type DecisionKind = 'link' | 'create' | 'filed' | 'conversation_only' | 'unsorted' | 'topic' | 'topic_link' | 'propose_task';
 export interface AiRun { id: string; at: string; processor: string; model: string; stream: string; messages: number;
   input_tokens: number; output_tokens: number; cost_usd: number; input: unknown; output: unknown }
 export interface AiDecision { id: string; run_id: string; at: string; kind: DecisionKind; task_id: string | null; message_ids: string[];
@@ -53,7 +55,7 @@ export class AiLog {
       .run(status, at, task, id, ...from);
   }
 
-  #open(kind: 'link' | 'create', status: string): { id: string; task_id: string | null; message_ids: string[] }[] {
+  #open(kind: DecisionKind, status: string): { id: string; task_id: string | null; message_ids: string[] }[] {
     const rows = this.#db.prepare('SELECT id, task_id, message_ids FROM ai_decisions WHERE kind = ? AND status = ?').all(kind, status) as unknown as DecisionRow[];
     return rows.map((row) => ({ id: row.id, task_id: row.task_id, message_ids: JSON.parse(row.message_ids) as string[] }));
   }
@@ -61,7 +63,7 @@ export class AiLog {
   // A new journal event: the owner's answer to a proposal, a hand link of a waiting message, or an undo of what the AI made.
   observe(event: JournalEvent): void {
     if (event.author !== 'me') return;
-    const data = event.payload.data as { op?: string; proposal?: string; task?: { proposal?: string; add?: string[]; remove?: string[]; status?: string; unconfirmed?: boolean } } | undefined;
+    const data = event.payload.data as { op?: string; proposal?: string; task?: { proposal?: string; add?: string[]; remove?: string[]; status?: string; unconfirmed?: boolean; kind?: string; offer?: boolean } } | undefined;
     if (event.kind === 'correction' && data?.op === 'reject_proposal' && data.proposal) { this.#settle(data.proposal, 'rejected', event.ts, null, ['pending']); return; }
     if (event.kind !== 'task_change' || !data?.task) return;
     const task = event.payload.ref!.id;
@@ -75,10 +77,20 @@ export class AiLog {
       for (const decision of this.#open('link', 'pending')) if (decision.message_ids.some((id) => added.has(id))) answer(decision);
     }
     const removed = new Set(change.remove ?? []);
-    for (const decision of this.#open('create', 'auto')) {
+    const confirmed = (change.unconfirmed === false || change.kind === 'task') && change.status !== 'cancelled';
+    for (const kind of ['create', 'topic', 'topic_link'] as const) {
+      for (const decision of this.#open(kind, 'auto')) {
+        if (decision.task_id !== task) continue;
+        if (kind === 'create' && confirmed) { this.#settle(decision.id, 'accepted', event.ts, task, ['auto']); continue; } // confirmed (design 2026-11-21)
+        if (change.status === 'cancelled' || decision.message_ids.some((id) => removed.has(id))) this.#settle(decision.id, 'undone', event.ts, task, ['auto']);
+      }
+    }
+    // The offer to make a topic a task (v20): made a task — accepted; ✕ (offer: false) — rejected; closed — undone.
+    for (const decision of this.#open('propose_task', 'pending')) {
       if (decision.task_id !== task) continue;
-      if (change.unconfirmed === false && change.status !== 'cancelled') { this.#settle(decision.id, 'accepted', event.ts, task, ['auto']); continue; } // confirmed (design 2026-11-21)
-      if (change.status === 'cancelled' || decision.message_ids.some((id) => removed.has(id))) this.#settle(decision.id, 'undone', event.ts, task, ['auto']);
+      if (confirmed) this.#settle(decision.id, 'accepted', event.ts, task, ['pending']);
+      else if (change.offer === false) this.#settle(decision.id, 'rejected', event.ts, task, ['pending']);
+      else if (change.status === 'cancelled') this.#settle(decision.id, 'undone', event.ts, task, ['pending']);
     }
   }
 
@@ -87,7 +99,9 @@ export class AiLog {
   replace(proposals: string[], tasks: string[], at: string): void {
     for (const id of proposals) this.#settle(id, 'replaced', at, null, ['pending']);
     const withdrawn = new Set(tasks);
-    for (const decision of this.#open('create', 'auto')) if (decision.task_id && withdrawn.has(decision.task_id)) this.#settle(decision.id, 'replaced', at, decision.task_id, ['auto']);
+    for (const [kind, status] of [['create', 'auto'], ['topic', 'auto'], ['topic_link', 'auto'], ['propose_task', 'pending']] as const) {
+      for (const decision of this.#open(kind, status)) if (decision.task_id && withdrawn.has(decision.task_id)) this.#settle(decision.id, 'replaced', at, decision.task_id, [status]);
+    }
   }
 
   // { kind: { status: count } } of decisions made since `since`.

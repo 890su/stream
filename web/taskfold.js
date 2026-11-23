@@ -101,7 +101,6 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
     if (!filedGiven.has(task.id)) task.filed = !!task.template && filedTemplates.includes(task.template);
     task.kind ??= 'task';
     task.offer ??= false;
-    task.unconfirmed = task.kind === 'topic'; // legacy alias, read until every view asks isTopic (topics plan, Task 9)
   }
   return [...tasks.values()];
 }

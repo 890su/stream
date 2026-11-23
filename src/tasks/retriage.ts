@@ -1,6 +1,6 @@
 // «✨ Разобрать заново» (owner, 2026-11-23; CONCEPT.md §2.8): the last session of an open conversation goes to the
 // triage again, with the sessions before it as context. What the AI decided about those messages and the owner has
-// not answered is replaced: its unconfirmed tasks are cancelled by the system, its waiting proposals are listed as
+// not answered is replaced: the AI's topics the owner never touched are cancelled by the system, its waiting proposals are listed as
 // withdrawn in the new result; the AI log marks both `replaced`, so the weekly report sees where the first look failed.
 // The owner's own tasks and what he confirmed stay.
 import { randomUUID } from 'node:crypto';
@@ -8,7 +8,7 @@ import type { JournalStore } from '../store/store.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import type { LiveFeed } from '../server/live.ts';
 import { tasksConfig } from '../config.ts';
-import { foldTasks, isOpen } from './fold.ts';
+import { foldTasks, isOpen, isTopic } from './fold.ts';
 import { sessionsOf } from './sessions.ts';
 import type { Triage } from './triage.ts';
 import { HttpError } from '../server/errors.ts';
@@ -45,8 +45,11 @@ export async function retriage({ store, live, triage, ids }: { store: JournalSto
   if (!batch.length) return { messages: 0, tasks: 0, proposals: 0, written: 0 };
   const inBatch = new Set(batch.map((event) => event.id));
   const at = new Date().toISOString();
-  // The AI's tasks the owner has not confirmed yet, made from these messages.
-  const tasks = foldTasks(store.triage.taskEvents()).filter((task) => task.created_by === 'system' && task.unconfirmed && isOpen(task)
+  // The AI's topics the owner never touched (topics design 2026-11-23: no change of his — not chosen, written into,
+  // renamed or made a task), made from these messages.
+  const events = store.triage.taskEvents();
+  const touched = new Set(events.filter((event) => event.author === 'me').map((event) => event.payload.ref!.id));
+  const tasks = foldTasks(events).filter((task) => task.created_by === 'system' && isTopic(task) && isOpen(task) && !touched.has(task.id)
     && task.messages.some((id) => inBatch.has(id)));
   const proposals = [...waitingProposals([...store.triage.results(), ...store.triage.taskEvents(), ...correctionsOf(store, inBatch)])]
     .filter(([, messageIds]) => messageIds.some((id) => inBatch.has(id))).map(([id]) => id);

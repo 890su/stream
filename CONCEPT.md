@@ -366,7 +366,11 @@ Viber and WhatsApp, my notes. A session is its run of messages without a pause l
 unclear — the usual question or «Разобрать». Each step back is a run in the AI log. **«✨ Разобрать заново»** on an open
 conversation sends its last session again; what the AI decided there and I have not answered (unconfirmed tasks,
 waiting proposals) is replaced, and the AI log marks it `replaced` — material for the weekly report and for scripts
-(§9, rule of three). **A batch is a window, not one task:** each message goes to
+(§9, rule of three). **Topics first** (owner, 2026-11-23, `triage-ai-v20`, §2.5 «Topics»): every message goes into a
+topic — a live one of the conversation (put at once), an open task (only proposed, as above) or a new topic named by
+the title rule; a new one with work (`work`, the v17 rules) is a topic with an offer to make it a task (in mode «ИИ
+создаёт сразу» — a task); only greetings that belong to no topic stay out. The AI sees open tasks and topics with a
+message within `topic_days`; «✨ Разобрать заново» withdraws the AI's topics I never touched. **A batch is a window, not one task:** each message goes to
 zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
 two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
 script). Its outcome: leave it in the conversation, file material meant to be kept (e.g. wellbeing → diary),
