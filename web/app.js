@@ -152,7 +152,9 @@ function setupMessageActions(feed, composer, config) {
   chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id), openPerson: (id) => details.openPerson(id), openCounterparty: (id) => details.openCounterparty(id),
     convQuick: convActions, queueConfig: () => feed.queueConfig() });
   details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update(), openConversation: (key) => goView?.('conversations', key) });
-  system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
+  system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)),
+    // Topic lifetimes (topicsettings.js): the feed reads them from the same config object.
+    topics: { get: () => config.conversations?.topics, set: (values) => { if (config.conversations) config.conversations.topics = values; feedRef?.render().catch((error) => notify(error.message)); } } });
   drawer = setupDrawer({
     feed,
     onCreateProject: (project) => composer.queue(makeProjectChange(crypto.randomUUID(), { op: 'create', status: 'active', ...project })).catch((error) => notify(error.message)),

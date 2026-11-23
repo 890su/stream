@@ -164,3 +164,9 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .panel-modes button[aria-pressed="true"] { color: var(--accent-strong); }
 .panel-modes button:active { background: var(--press); }
 .contacts-search { margin: 8px 4px; }
+
+/* «Темы» on the System screen (topicsettings.js): two day fields and «Сохранить». */
+.topic-settings { display: grid; gap: 8px; padding: 4px 0 12px; }
+.topic-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.topic-setting input { width: 5em; text-align: right; }
+.topic-settings button { justify-self: start; }
