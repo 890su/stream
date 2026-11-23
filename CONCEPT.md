@@ -345,8 +345,13 @@ actions work as text or voice in «Я»: "move the call to Anna to Friday".
 
 **Batch triage.** After a message the triage waits for a quiet window (`registry/tasks.json`: `quiet_s`, now 60 s;
 `quiet_s_by_stream` for chats, now 180 s) counted from the last message of that conversation; each new message
-restarts it. Then everything new is triaged together, with up to `context_messages` (now 20) earlier messages of
-the same conversation from the last day as context. **A batch is a window, not one task:** each message goes to
+restarts it. Then everything new is triaged together. **Context is the last session** (owner, 2026-11-23,
+`triage-ai-v19`): a conversation is the queue's one (§2.5): a Telegram chat, one phone number with its calls, SMS,
+Viber and WhatsApp, my notes. A session is its run of messages without a pause longer than `session_gap_h` (now
+4 h). The AI sees the whole session before the new messages, however long ago it began (up to
+`session_messages`, now 60). When that session does not say what the new messages are about, the AI answers
+`need_earlier` and is asked again with the session before it added, at most `earlier_max` (now 2) times; still
+unclear — the usual question or «Разобрать». Each step back is a run in the AI log. **A batch is a window, not one task:** each message goes to
 zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
 two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
 script). Its outcome: leave it in the conversation, file material meant to be kept (e.g. wellbeing → diary),

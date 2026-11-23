@@ -52,7 +52,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `telegram.ts` | exclusions, forward origin, albums, 24 h window | `TelegramQueries` |
 | `connections.ts` | bot connections, owner trust, groups | `ConnectionStore` |
 | `recipients.ts` | address book of the «кому» row: chats, bot groups, pins, frequency, 24 h window (`/api/recipients`) | `RecipientQueries` |
-| `triage.ts` | pending messages, task events, context-only results, AI spending | `TriageStore` |
+| `triage.ts` | pending messages, all messages since a time (sessions), task events, context-only results, AI spending | `TriageStore` |
 | `ailog.ts` | the AI log: triage runs (input and output gzipped, wiped after `ai_log.keep_days`) and decisions with reasons; the owner's answers settle them as they are appended (`observe`); week numbers (`stats`) | `AiLog` |
 | **telegram/** (§8.2) | | |
 | `bot.ts` | one account bot: `getUpdates` loop, update handling, sending (personal chats via business connection, groups as the bot), health | `TelegramBot`, `sendError` |
@@ -69,7 +69,8 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `calendar.ts` | the poll: calendar lists and events of the visible calendars over `window_days`, a shared calendar once, shown/hidden kept in `settings.json`, last good events kept on errors | `CalendarPoller`, `normalizeEvent` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface and structured results: tasks and `conversation_only` ids | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | quiet window per stream (from its last message), batches with earlier messages of the conversation as context, open and recently closed cases (reopened when continued), changes of existing tasks only as proposals with a reason (v15), every run and decision into the AI log, alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
+| `triage.ts` | batches per conversation (`sessions.ts`) after the quiet window of its channel, the last session of the conversation as context and the one before on the AI's `need_earlier` (v19, at most `earlier_max`), open and recently closed cases (reopened when continued), changes of existing tasks only as proposals with a reason (v15), every run and decision into the AI log, alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
+| `sessions.ts` | pure: the triage's conversation of a message (as in the queue: a chat, one number across calls, SMS, Viber, WhatsApp, my notes), sessions split by `session_gap_h`, the last session and steps back (`contextSessions`) | `conversationOf`, `sessionsOf`, `contextSessions` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) and the namer of hand-made tasks | `anthropicPlanner`, `anthropicNamer` |
 | `namer.ts` | titles «Контрагент: суть» (`TITLE_RULE`, shared with the planner); tasks the owner made by hand are named once by AI after 10 s unless he named them | `nameTasks`, `unnamed`, `TITLE_RULE` |
 | `messages.ts` | planner message context: text after edits, sender, direction and forward metadata | `describe`, `from`, `messageDirection`, `hasForwardOrigin` |

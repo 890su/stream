@@ -15,7 +15,8 @@ import { foldPeople, foldCounterparties, personOf, peopleOf } from '../contacts/
 import { foldProjects, defaultProject, type Project } from './projects.ts';
 import { defaultController, isParty, partyOfEvent } from './parties.ts';
 import type { AiDecision } from '../store/ailog.ts';
-import type { PlanInput, PlanMessage, PlannedTask, Planner } from './planner.ts';
+import type { PlanInput, PlanMessage, PlanOutput, PlannedTask, Planner } from './planner.ts';
+import { conversationOf, contextSessions, before } from './sessions.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
 // notes), then go together to the planner, which splits them into new tasks and additions to open ones.
@@ -123,17 +124,17 @@ export class Triage {
     stateChanged(this.#store, this.#live, TRIAGE_SOURCE, state, previous, detail);
   }
 
-  // Groups whose newest message is older than the quiet window, each cut to max_batch.
+  // Groups of one conversation (v19: as in the queue — sessions.ts) whose newest message is older than the quiet
+  // window of its channel, each cut to max_batch.
   ready(now = Date.now()): JournalEvent[][] {
     const since = new Date(now - tasksConfig.lookback_h * 3_600_000).toISOString();
-    const streams = new Map<string, JournalEvent[]>();
+    const conversations = new Map<string, JournalEvent[]>();
     for (const event of this.#store.triage.pending(since)) {
-      const key = streamOf(event);
-      streams.set(key, [...(streams.get(key) ?? []), event]);
+      const key = conversationOf(event);
+      conversations.set(key, [...(conversations.get(key) ?? []), event]);
     }
-    return [...streams.entries()]
-      .filter(([stream, events]) => now - Date.parse(events.at(-1)!.received_at!) >= quietOf(stream) * 1000)
-      .map(([, events]) => events)
+    return [...conversations.values()]
+      .filter((events) => now - Date.parse(events.at(-1)!.received_at!) >= quietOf(streamOf(events.at(-1)!)) * 1000)
       .map((events) => events.slice(0, tasksConfig.max_batch));
   }
 
@@ -170,55 +171,71 @@ export class Triage {
     };
     const messages: PlanMessage[] = [];
     const skipped: string[] = [];
-    const first = batch[0]?.received_at;
-    if (!first) return 0;
-    const since = new Date(Date.parse(first) - tasksConfig.lookback_h * 3_600_000).toISOString();
+    if (!batch[0]?.received_at) return 0;
     for (const event of batch) {
       const view = describe(event, this.#store);
       if (view.deleted || !view.text.trim()) { skipped.push(event.id); continue; }
       messages.push(toMessage(event, view.text.slice(0, 2000), view.tags));
     }
-    // Earlier messages of this conversation: a talk with pauses longer than the quiet window is split into
-    // batches, and a batch alone may not say what it is about.
+    // Context (v19, sessions.ts): the conversation's messages before this batch, from the last session back as many
+    // sessions as the AI asks for; a batch alone may not say what it is about.
     const stream = streamOf(batch[0]!);
-    const context = this.#store.triage.triaged(since)
-      .filter((event) => event.received_at! < first && streamOf(event) === stream)
-      .map((event) => ({ event, view: describe(event, this.#store) }))
-      .filter(({ view }) => !view.deleted && view.text.trim())
-      .slice(-tasksConfig.context_messages)
-      .map(({ event, view }) => toMessage(event, view.text.slice(0, 500), view.tags));
+    const key = conversationOf(batch[0]!);
+    const inBatch = new Set(batch.map((event) => event.id));
+    const start = [...batch].sort((a, b) => (before(a, b) ? -1 : 1))[0]!;
+    const history = this.#store.triage.messages(new Date(Date.now() - tasksConfig.history_days * 86_400_000).toISOString())
+      .filter((event) => !inBatch.has(event.id) && conversationOf(event) === key && before(event, start));
+    const contextAt = (steps: number) => {
+      const { events, more } = contextSessions(history, { gapMs: tasksConfig.session_gap_h * 3_600_000, steps, limit: tasksConfig.session_messages });
+      const context = events.map((event) => ({ event, view: describe(event, this.#store) }))
+        .filter(({ view }) => !view.deleted && view.text.trim())
+        .map(({ event, view }) => toMessage(event, view.text.slice(0, 1000), view.tags));
+      return { context, more: more && steps < tasksConfig.earlier_max };
+    };
+    let steps = 0;
+    let { context, more } = contextAt(steps);
     const at = new Date().toISOString();
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
-    const input: PlanInput = {
+    const base: Omit<PlanInput, 'context' | 'earlier_available'> = {
       now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections, scope }) => ({ id, title, kind, scope, sections })),
       templates: tasksConfig.templates.filter((template) => !template.legacy),
       counterparties: counterparties.filter((item) => item.status === 'active').map(({ id, kind, title, address, side }) => ({ id, kind, title, address, side,
         people: peopleOf(id, people).map(({ person, title: job }) => (job ? `${person.name} (${job})` : person.name)) })),
       open_tasks: open.map(asContext),
       closed_tasks: closed.map(asContext),
-      context,
       messages,
     };
-    const output = await this.#planner!(input);
-    const price = tasksConfig.ai.price_per_mtok;
-    const cost = output.usage ? (output.usage.input_tokens * price.input + output.usage.output_tokens * price.output) / 1e6 : 0;
-    if (output.usage) this.#store.triage.addUsage(at.slice(0, 7), output.usage.input_tokens, output.usage.output_tokens, cost);
     const batchIds = new Set(messages.map((message) => message.id));
+    const batchKey = createHash('sha256').update([...batchIds].sort().join(',')).digest('hex').slice(0, 16);
+    const price = tasksConfig.ai.price_per_mtok;
+    const ask = async (input: PlanInput, id: string): Promise<{ output: PlanOutput; cost: number }> => {
+      const output = await this.#planner!(input);
+      const cost = output.usage ? (output.usage.input_tokens * price.input + output.usage.output_tokens * price.output) / 1e6 : 0;
+      if (output.usage) this.#store.triage.addUsage(at.slice(0, 7), output.usage.input_tokens, output.usage.output_tokens, cost);
+      // The AI log (src/store/ailog.ts): every run — what the AI was shown and answered, a step back included.
+      const { usage, ...answer } = output;
+      this.#store.ailog.run({ id, at, processor: tasksConfig.ai.processor, model: tasksConfig.ai.model, stream, messages: messages.length,
+        input_tokens: usage?.input_tokens ?? 0, output_tokens: usage?.output_tokens ?? 0, cost_usd: cost, input, output: answer });
+      return { output, cost };
+    };
+    let runId = nameId(`ai-run|${batchKey}`); // the run whose answer is used: decisions point to it
+    let { output } = await ask({ ...base, context, earlier_available: more }, runId);
+    // The last session did not say what the new messages are about: the session before it, at most earlier_max times.
+    while (output.need_earlier && more) {
+      steps += 1;
+      ({ context, more } = contextAt(steps));
+      runId = nameId(`ai-run|${batchKey}|${steps}`);
+      ({ output } = await ask({ ...base, context, earlier_available: more }, runId));
+    }
     const openIds = new Set(open.map((task) => task.id));
     const closedById = new Map(closed.map((task) => [task.id, task]));
     const known = new Set([...openIds, ...closedById.keys()]);
     const taskById = new Map(tasks.map((task) => [task.id, task]));
     const filedTemplates = new Set(tasksConfig.templates.filter((template) => template.filed).map((template) => template.name));
-    const batchKey = createHash('sha256').update([...batchIds].sort().join(',')).digest('hex').slice(0, 16);
     const resultId = nameId(`triage-result|${batchKey}`);
     const prior = this.#store.getEvent(resultId);
     const stored = prior?.payload.data?.triage as { conversation_only: string[] } | undefined;
     const conversationOnly = new Set((stored?.conversation_only ?? output.conversation_only).filter((id) => batchIds.has(id)));
-    // The AI log (src/store/ailog.ts): the run — what the AI was shown and answered — and each decision with its reason.
-    const runId = nameId(`ai-run|${batchKey}`);
-    const { usage, ...answer } = output;
-    this.#store.ailog.run({ id: runId, at, processor: tasksConfig.ai.processor, model: tasksConfig.ai.model, stream, messages: messages.length,
-      input_tokens: usage?.input_tokens ?? 0, output_tokens: usage?.output_tokens ?? 0, cost_usd: cost, input, output: answer });
     this.#store.ailog.prune(new Date(Date.parse(at) - tasksConfig.ai_log.keep_days * 86_400_000).toISOString());
     const decisions: AiDecision[] = [];
     const decide = (key: string, kind: AiDecision['kind'], taskId: string | null, ids: string[], confidence: number | null, reason: string | null, status: AiDecision['status'] = 'auto', id = nameId(`ai-decision|${batchKey}|${key}`)) =>

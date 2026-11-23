@@ -557,3 +557,56 @@ test('the instructions: an agreed visit or meeting is a task; «unfinished» whe
   for (const rule of ['Договорились о выезде', 'unfinished', 'ни одна задача']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   assert.ok((PLAN_SCHEMA.required as readonly string[]).includes('unfinished'));
 });
+
+// triage-ai-v19 (CONCEPT.md §2.8): conversations as in the queue, the last session as context, steps back on request.
+const phoneCall = (number: string, ts: string) => event({ source: 'android_phone', kind: 'call', ts, payload: { data: { call: { direction: 'in', number, duration_s: 40, started_at: ts } } } });
+const leave = (input: PlanInput): ScriptedPlan => ({ tasks: [], conversation_only: input.messages.map((message) => message.id) } as ScriptedPlan);
+
+test('v19: calls of two numbers are two batches, not one «phone» stream', async () => {
+  const s = setup(leave);
+  try {
+    s.add(phoneCall('+48600100200', '2026-11-20T10:00:00.000Z'));
+    s.add(phoneCall('+48600100300', '2026-11-20T10:01:00.000Z'));
+    assert.equal(s.triage.ready(Date.now() + QUIET + 1000).length, 2);
+  } finally { s.cleanup(); }
+});
+
+test('v19: context is the last session of the conversation, however old; other chats stay out', async () => {
+  const s = setup(leave);
+  try {
+    s.add({ ...telegram('7001', 'давно: про камеры'), ts: '2026-11-15T10:00:00.000Z' });
+    s.add({ ...telegram('7001', 'вечером: выезд в субботу?'), ts: '2026-11-19T20:00:00.000Z' });
+    s.add({ ...telegram('7001', 'да, в 14'), ts: '2026-11-19T20:05:00.000Z' }); s.add({ ...telegram('7002', 'другой клиент'), ts: '2026-11-19T20:06:00.000Z' });
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    s.calls.length = 0;
+    s.add({ ...telegram('7001', 'ок, тогда до субботы'), ts: '2026-11-20T09:00:00.000Z' });
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const call = s.calls.at(-1)!;
+    assert.deepEqual(call.context.map((message) => message.text), ['вечером: выезд в субботу?', 'да, в 14'], 'the session before, not the older one, not the other chat');
+    assert.equal(call.earlier_available, true);
+  } finally { s.cleanup(); }
+});
+
+test('v19: «need_earlier» brings the session before, at most twice', async () => {
+  const s = setup(() => ({ tasks: [], need_earlier: true, conversation_only: [] } as unknown as ScriptedPlan));
+  try {
+    for (const [ts, text] of [['2026-11-10T10:00:00.000Z', 'первая тема'], ['2026-11-12T10:00:00.000Z', 'вторая тема'], ['2026-11-14T10:00:00.000Z', 'третья тема']] as const) {
+      s.add({ ...telegram('7001', text), ts });
+    }
+    s.store.triage.mark(s.store.triage.messages(new Date(0).toISOString()).map((item) => item.id), 0, new Date().toISOString());
+    const fresh = s.add({ ...telegram('7001', 'сделал?'), ts: '2026-11-20T10:00:00.000Z' });
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.equal(s.calls.length, 3, 'the first look and two steps back');
+    assert.deepEqual(s.calls.map((call) => call.context.length), [1, 2, 3]);
+    assert.deepEqual(s.calls.map((call) => call.earlier_available), [true, true, false]);
+    const unsorted = s.tasks().find((task) => task.messages.includes(fresh.id))!;
+    assert.equal(unsorted.title, tasksConfig.unsorted.title, 'still unclear — «Разобрать»');
+  } finally { s.cleanup(); }
+});
+
+test('v19 instructions and schema: need_earlier only when the session does not say what the new messages are about', async () => {
+  const { PLAN_INSTRUCTIONS, PLAN_SCHEMA } = await import('../src/tasks/planner.ts');
+  for (const rule of ['need_earlier', 'earlier_available', 'сессия']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
+  assert.ok((PLAN_SCHEMA.required as readonly string[]).includes('need_earlier'));
+  assert.equal(tasksConfig.ai.processor, 'triage-ai-v19');
+});

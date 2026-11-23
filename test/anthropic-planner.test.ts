@@ -24,7 +24,7 @@ test('the planner sends one structured-output request and reads the tasks', asyn
   try {
     const plan = anthropicPlanner('test-key', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
     const message = { time: '2026-11-18T09:59:00Z', from: 'владелец', party: 'me', tags: [], in_tasks: [] };
-    const output = await plan({ now: '2026-11-18T10:00:00Z', job_days: 14, projects: [], counterparties: [], templates: [], open_tasks: [], closed_tasks: [], context: [], messages: [
+    const output = await plan({ now: '2026-11-18T10:00:00Z', job_days: 14, projects: [], counterparties: [], templates: [], open_tasks: [], closed_tasks: [], context: [], earlier_available: false, messages: [
       { ...message, id: 'm1', source: 'me', direction: 'note', text: 'перезвонить Марку' },
       { ...message, id: 'm2', source: 'tg|pl|22', direction: 'outgoing', forwarded: true, text: 'Встреча назначена на среду' },
     ] });

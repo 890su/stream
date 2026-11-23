@@ -16,10 +16,11 @@ export interface PlanCounterparty { id: string; kind: string; title: string; add
 // items — its checklist; owner_titled — the owner named it, so it is never renamed (CONCEPT.md §2.8).
 export interface PlanTask { id: string; title: string; project?: string | null; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string; items: { text: string; done: boolean }[]; owner_titled: boolean }
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
-// context — earlier messages of the same conversation, already triaged: to understand, not to assign.
+// context — the last session of the same conversation before the new messages (triage-ai-v19): to understand, not
+// to assign; earlier_available — the AI may answer need_earlier and get the session before it.
 // An active project: the triage may put tasks in it, in one of its sections.
 export interface PlanProject { id: string; title: string; kind: string; scope: string; sections: { id: string; title: string; role?: string }[] }
-export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; counterparties: PlanCounterparty[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; messages: PlanMessage[] }
+export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; counterparties: PlanCounterparty[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; earlier_available: boolean; messages: PlanMessage[] }
 
 export interface PlannedTask {
   task_id: string | null; // an open or recently closed task this continues, or null for a new one
@@ -54,6 +55,8 @@ export interface PlanOutput {
   // Whether the conversation is over after these messages (owner, 2026-11-21, triage-ai-v18): what the other side still
   // waits for from the owner when no task covers it, else null. Keeps the conversation in the queue (web/queue.js).
   unfinished?: string | null;
+  // The last session does not say what the new messages are about: ask again with the session before it (v19).
+  need_earlier?: boolean;
   usage?: { input_tokens: number; output_tokens: number };
 }
 
@@ -63,10 +66,11 @@ export type Planner = (input: PlanInput) => Promise<PlanOutput>;
 export const PLAN_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['tasks', 'conversation_only', 'unfinished'],
+  required: ['tasks', 'conversation_only', 'unfinished', 'need_earlier'],
   properties: {
     conversation_only: { type: 'array', items: { type: 'string' } },
     unfinished: { type: ['string', 'null'] },
+    need_earlier: { type: 'boolean' },
     tasks: {
       type: 'array',
       items: {
@@ -107,11 +111,16 @@ export const PLAN_SCHEMA = {
 } as const;
 
 export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сообщения личной ленты владельца в задачи.
-Вход: шаблоны задач, открытые задачи (open_tasks), недавно завершённые (closed_tasks), context — предыдущие сообщения этой же беседы (уже разобраны, in_tasks —
-их задачи) и messages — пачка новых сообщений (накопились, пока беседа не замолчала).
+Вход: шаблоны задач, открытые задачи (open_tasks), недавно завершённые (closed_tasks), context — последняя сессия этой же
+беседы перед новыми сообщениями (переписка без долгого перерыва; in_tasks — задачи её сообщений) и messages — пачка новых
+сообщений (накопились, пока беседа не замолчала).
 Правила:
 - context — только чтобы понять, о чём речь и к какой задаче относится новое; id из context в ответ не включай.
   Новое сообщение, продолжающее разговор из context, обычно относится к задаче этого разговора (in_tasks).
+- need_earlier — если по context непонятно, о чём новые сообщения (ответ на то, чего в context нет: «ок, тогда в
+  субботу», «а сколько?», «сделал», «как договаривались»), и earlier_available: true, верни need_earlier: true,
+  tasks: [], conversation_only: [], unfinished: null — тебе дадут ещё и предыдущую сессию. Иначе need_earlier: false
+  и обычный разбор. Не проси раньше, если и так понятно.
 - Пачка — не одна задача. У каждого нового сообщения должен быть итог: его id находится либо в conversation_only,
   либо в message_ids одной или нескольких задач. Не включай один id в оба результата.
 - В tasks включай работу или материал, который надо сохранить отдельно по шаблону. Сомневаешься, что есть дело —
