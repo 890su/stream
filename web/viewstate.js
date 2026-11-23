@@ -1,16 +1,17 @@
 // Filters tasks by time or state, responsibility, and location or participant. The left panel's filters
 // (docs/plans/2026-11-21-workspace-redesign-design.md): current, active, control, waiting, future, unconfirmed, done,
-// cancelled; the older ids stay for saved views. A task the AI made and the owner has not confirmed (`unconfirmed`)
-// shows only under «Неподтверждённые».
+// cancelled; the older ids stay for saved views. A topic (topickind.js) is in no task view; one the AI offers to make a
+// task shows only under «Предложения ИИ» (id `unconfirmed`, kept for saved views).
 import { dueState, involvesMe, isOpen } from './taskfold.js';
 import { isMineToDo, inWork } from './focus.js';
 import { projectScope } from './projects.js';
+import { hasOffer, isTopic } from './topickind.js';
 
 export const WHEN = [
   { id: 'current', title: 'Текущие', icon: '⏵' },
   { id: 'waiting', title: 'В ожидании', icon: '⌛' },
   { id: 'future', title: 'Будущие', icon: '⏭' },
-  { id: 'unconfirmed', title: 'Неподтверждённые', icon: '?' },
+  { id: 'unconfirmed', title: 'Предложения ИИ', icon: '?' },
   { id: 'today', title: 'До конца дня', icon: '☀' },
   { id: 'inbox', title: 'Входящие', icon: '📥' },
   { id: 'upcoming', title: 'Предстоящее', icon: '🗓' },
@@ -37,7 +38,7 @@ export const PANEL_FILTERS = [
   { title: 'На контроле', view: { when: 'all', whose: 'control', where: {} } },
   { title: 'В ожидании', view: { when: 'waiting', whose: 'all', where: {} } },
   { title: 'Будущие', view: { when: 'future', whose: 'all', where: {} } },
-  { title: 'Неподтверждённые', view: { when: 'unconfirmed', whose: 'all', where: {} } },
+  { title: 'Предложения ИИ', view: { when: 'unconfirmed', whose: 'all', where: {} } },
   { title: 'Законченные', view: { when: 'done', whose: 'all', where: {} } },
   { title: 'Отменённые', view: { when: 'cancelled', whose: 'all', where: {} } },
 ];
@@ -48,8 +49,8 @@ const dayEnd = (now) => new Date(now.getFullYear(), now.getMonth(), now.getDate(
 
 // `working` — ids of the task in work and the paused ones (focus.js inWork), for «Текущие».
 function whenMatch(task, when, now, working) {
-  if (when === 'unconfirmed') return isOpen(task) && (task.unconfirmed === true || task.status === 'inbox');
-  if (task.unconfirmed === true) return false;
+  if (when === 'unconfirmed') return hasOffer(task) || (!isTopic(task) && task.status === 'inbox');
+  if (isTopic(task)) return false;
   if (when === 'any') return true; // a project's own list: open and closed alike
   if (when === 'done') return task.status === 'done';
   if (when === 'cancelled') return task.status === 'cancelled';

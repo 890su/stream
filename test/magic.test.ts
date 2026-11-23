@@ -8,7 +8,7 @@ const task = { id: 't1', title: 'Роутер', status: 'todo' };
 test('✨ offers create on an empty or unconfirmed topic, finish on a task; the AI items are «скоро»', () => {
   const pick = (topic: unknown) => magicItems({ topic }).map((item: any) => `${item.id}:${item.enabled}`);
   assert.deepEqual(pick({ state: 'empty', tasks: [] }), ['create:true', 'finish:false', 'again:false', 'suggest:false', 'translate:false']);
-  assert.deepEqual(pick({ state: 'unconfirmed', tasks: [{ ...task, unconfirmed: true }] }), ['create:true', 'finish:false', 'again:false', 'suggest:false', 'translate:false']);
+  assert.deepEqual(pick({ state: 'unconfirmed', tasks: [{ ...task, kind: 'topic', offer: true }] }), ['create:true', 'finish:false', 'again:false', 'suggest:false', 'translate:false']);
   assert.deepEqual(pick({ state: 'task', tasks: [task] }), ['create:false', 'finish:true', 'again:false', 'suggest:false', 'translate:false']);
   assert.deepEqual(pick(null), ['create:false', 'finish:false', 'again:false', 'suggest:false', 'translate:false'], 'outside a conversation or a task');
   assert.deepEqual(magicItems({ topic: null }).map((item: any) => item.title), ['Создать задачу', 'Завершить задачу', 'Разобрать заново', 'Подсказать ответ · скоро', 'Перевести · скоро']);

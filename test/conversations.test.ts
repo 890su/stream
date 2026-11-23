@@ -194,7 +194,7 @@ test('a message split off its chat is a conversation of its own, with what conti
 test('a tile shows no unconfirmed task as its task', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   const { tileTask } = await import('../web/convlist.js');
-  const ai = { id: 'ai', title: 'От ИИ', status: 'todo', messages: ['m1'], unconfirmed: true, updatedAt: '2026-11-21T09:00:00Z' };
+  const ai = { id: 'ai', title: 'От ИИ', status: 'todo', messages: ['m1'], kind: 'topic', offer: true, updatedAt: '2026-11-21T09:00:00Z' };
   const real = { id: 'real', title: 'Настоящая', status: 'todo', messages: ['m0'], updatedAt: '2026-11-20T09:00:00Z' };
   assert.equal(tileTask({ tasks: [ai], queue: { pending: [{ id: 'm1' }] } }), null);
   assert.equal(tileTask({ tasks: [ai, real], queue: { pending: [{ id: 'm1' }] } })?.task.id, 'real');

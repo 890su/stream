@@ -71,7 +71,8 @@ const extra = [...tasks,
   t('пауза', { resumeNote: 'на шаге 2' }),
   t('план', { plan: { start: '2026-11-22T09:00:00' } }),
   t('отменено', { status: 'cancelled' }),
-  t('ии', { unconfirmed: true }),
+  t('ии', { kind: 'topic', offer: true }),
+  t('тема', { kind: 'topic', offer: false }),
 ];
 const idsOf = (view: object) => applyView(extra, { ...DEFAULT_VIEW, ...view }, { now, projects: [], people: [] }).map((task: any) => task.id).sort();
 
@@ -90,16 +91,18 @@ test('control: delegated and review, not waiting', () => {
   assert.deepEqual(idsOf({ when: 'all', whose: 'control' }), ['поручено', 'проверить'].sort());
 });
 
-test('an unconfirmed task shows only under «Неподтверждённые»', () => {
+test('a topic is in no task view; one with an offer only under «Предложения ИИ»', () => {
   for (const option of WHEN.filter((item: any) => item.id !== 'unconfirmed')) {
     assert.equal(idsOf({ when: option.id, whose: 'all' }).includes('ии'), false, option.id);
   }
+  for (const option of WHEN) assert.equal(idsOf({ when: option.id, whose: 'all' }).includes('тема'), false, option.id);
+  assert.equal(WHEN.find((item: any) => item.id === 'unconfirmed').title, 'Предложения ИИ');
 });
 
 test('eight shortcuts in the panel order; the default is my active tasks', () => {
   const entries = taskShortcuts(extra, { now, projects: [], people: [] });
   assert.deepEqual(entries.map((item: any) => item.title),
-    ['Текущие', 'Активные', 'На контроле', 'В ожидании', 'Будущие', 'Неподтверждённые', 'Законченные', 'Отменённые']);
+    ['Текущие', 'Активные', 'На контроле', 'В ожидании', 'Будущие', 'Предложения ИИ', 'Законченные', 'Отменённые']);
   assert.deepEqual(entries.map((item: any) => item.count), [2, 10, 2, 1, 3, 2, 1, 1]);
   assert.deepEqual(DEFAULT_VIEW, { when: 'all', whose: 'mine', where: {} });
   assert.equal(WHEN.some((item: any) => item.id === 'pulse'), false);

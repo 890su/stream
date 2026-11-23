@@ -32,6 +32,7 @@ import { setupSwipeZones } from './swipezones.js';
 import { setupMagic } from './magic.js';
 import { topicOf } from './topic.js';
 import { visibleTasks } from './filters.js';
+import { isTopic } from './topickind.js';
 
 let details; // right panel «Подробности» (CONCEPT.md §5)
 let doneCards;
@@ -256,7 +257,7 @@ async function main() {
   setupMagic({ button: $('#magic-button'),
     topic: () => {
       const open = details?.taskOpen() ? feed.task(details.current()?.id ?? '') ?? null : null;
-      if (open) return { state: open.unconfirmed ? 'unconfirmed' : 'task', tasks: [open] };
+      if (open) return { state: isTopic(open) ? 'unconfirmed' : 'task', tasks: [open] };
       const conversation = feed.mode() === 'conversations' ? feed.conversation() : null;
       return conversation ? topicOf(conversation) : null;
     },
@@ -279,7 +280,7 @@ async function main() {
       },
       create: () => {
         const open = details?.taskOpen() ? feed.task(details.current()?.id ?? '') : null;
-        if (open?.unconfirmed) quick.act(open, { unconfirmed: false }, `Задача подтверждена: «${open.title}»`); else chatView?.makeTask();
+        if (isTopic(open)) quick.act(open, { kind: 'task', offer: false }, `Задача: «${open.title}»`); else chatView?.makeTask();
       },
       finish: (task) => quick.done(task),
     } });

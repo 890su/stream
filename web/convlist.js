@@ -6,6 +6,7 @@
 // pickTask and tileFacts are pure (tested in node); convRow builds the DOM.
 import { snippet } from './projection.js';
 import { isOpen, dueState } from './taskfold.js';
+import { isTopic } from './topickind.js';
 
 const time = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
 const date = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
@@ -32,7 +33,7 @@ export function pickTask(conversation, now = new Date()) {
 // the conversation's most urgent open task, else null.
 export function tileTask(conversation, now = new Date()) {
   const pending = new Set((conversation.queue?.pending ?? []).map((view) => view.id));
-  const real = conversation.tasks.filter((task) => !task.unconfirmed); // the AI's unconfirmed task is the topic's offer, not its task
+  const real = conversation.tasks.filter((task) => !isTopic(task)); // a topic is not the tile's task (topickind.js)
   const holding = real.filter((task) => (task.messages ?? []).some((id) => pending.has(id)));
   const guessed = pickTask({ tasks: holding }, now);
   if (guessed) return { task: guessed, guessed: true };

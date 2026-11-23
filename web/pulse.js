@@ -4,6 +4,7 @@
 // Pure: no DOM — tested in node; dashboard.js draws the work, paused and next blocks.
 import { dueState, involvesMe, isOpen } from './taskfold.js';
 import { inWork, isMineToDo } from './focus.js';
+import { isTopic } from './topickind.js';
 
 // Used when the capture config has no `pulse` (an old cached config): the values of registry/pulse.json v1.
 export const PULSE_DEFAULTS = { rows: 4, hot_wait_hours: 2, watch_alert_days: 1, stale_days: 7, paused_remind_hours: 2, money_templates: ['lead', 'money'],
@@ -60,7 +61,7 @@ export function pulseBlocks({ tasks, projects = [], now = new Date(), config }) 
   const current = focus.current;
   const paused = focus.paused.filter((task) => !dueNow(task, now)); // a paused task with a deadline today goes to «До конца дня»
   const taken = new Set([current, ...paused].filter(Boolean).map((task) => task.id));
-  const eligible = tasks.filter((task) => !taken.has(task.id) && isOpen(task) && !task.filed && !task.idea && !task.unconfirmed
+  const eligible = tasks.filter((task) => !taken.has(task.id) && isOpen(task) && !task.filed && !task.idea && !isTopic(task)
     && !snoozed(task, now) && involvesMe(task));
   const today = [];
   const watch = [];

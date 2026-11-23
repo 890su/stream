@@ -1,6 +1,7 @@
 // Focus (task manager spec §5.4): one task of mine in work (`doing`); taking another pauses it — `todo` with a
 // `resume_note`, where I stopped — and «Вернуться» takes it back. Time in work comes from the status history, no
 // manual timer. Pure: no DOM — tested in node; the changes go through the usual queue (taskquick.js).
+import { isTopic } from './topickind.js';
 
 // I execute it, or nobody executes it and I answer for it.
 export function isMineToDo(task) {
@@ -13,7 +14,7 @@ const newestFirst = (a, b) => b.updatedAt.localeCompare(a.updatedAt);
 // { current, paused }: current — my newest `doing`; paused — my other `doing` and my open tasks with a resume note,
 // newest first (the last paused comes back first).
 export function inWork(all) {
-  const tasks = all.filter((task) => !task.unconfirmed); // the AI's unconfirmed tasks are not in work
+  const tasks = all.filter((task) => !isTopic(task)); // topics are not in work (topickind.js)
   const doing = tasks.filter((task) => task.status === 'doing' && isMineToDo(task)).sort(newestFirst);
   const current = doing[0] ?? null;
   // Only a plain paused task waits for return: deferred, waiting or filed ones live in their own places.
