@@ -200,6 +200,18 @@ test('a tile shows no unconfirmed task as its task', async () => {
   assert.equal(tileTask({ tasks: [ai, real], queue: { pending: [{ id: 'm1' }] } })?.task.id, 'real');
 });
 
+test('without a task the tile names the topic of the newest message and how many more are open', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { tileFacts } = await import('../web/convlist.js');
+  const topic = (id: string, title: string, extra = {}) => ({ id, title, kind: 'topic', offer: false, status: 'todo', filed: false, messages: [], updatedAt: '2026-11-21T09:00:00Z', ...extra });
+  const view = (id: string, ts: string, taskIds: string[]) => ({ id, taskIds, tags: [], event: { id, ts, kind: 'text', author: 'contact:tg:by:1', payload: { text: id } } });
+  const base = { key: 'tg:by:1', title: 'Анна', group: false, last: '2026-11-23T10:00:00Z', queue: { waiting: true, pending: [], moment: '2026-11-23T10:00:00Z' } };
+  const facts = tileFacts({ ...base, views: [view('m1', '2026-11-23T09:00:00Z', ['a']), view('m2', '2026-11-23T10:00:00Z', ['b']), view('m3', '2026-11-23T10:00:01Z', [])],
+    tasks: [topic('a', 'Анна: камеры'), topic('b', 'Анна: счёт'), topic('c', 'Закрыта', { status: 'cancelled' })] }, { now: new Date('2026-11-23T12:00:00Z') });
+  assert.deepEqual(facts.topic, { id: 'b', title: 'Анна: счёт', more: 1 });
+  assert.equal(facts.task, null);
+});
+
 test('a number conversation keeps the person\'s name when my own WhatsApp message from the phone comes last (it carries only the number)', () => {
   const wa = (author: string, ts: string, chat: string, out = false) => ({
     id: `m${++n}`, schema_version: 1, source: 'whatsapp', author, ts, kind: 'text',

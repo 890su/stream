@@ -121,6 +121,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `topiclive.js` | pure: which topics are live in a conversation (`liveTopics`: `topic_days`, `archive_days`), the default chosen one (`defaultTopic`), what a message may move to (`pickable`) |
 | `topicrow.js` | the line of topics in a conversation card: tiles ☑ / ◇ / ◇✨, the chosen one first with 📣, × takes a topic out of the conversation, the icon's menu, the AI's offer ✓ ✕, «+ тема…» (`topicRow`, `rowOrder`, `tileOf`, `removeChanges`, `reasonOf`) |
 | `topicpicker.js` | «Тема…» for selected messages: this conversation, other topics, tasks, search, «+ Новая тема»; «Перенести» / «Добавить» (`openTopicPicker`, `moveChanges`, `undoChanges`, `filterGroups`) |
+| `convlist.js` (topics) | a tile without a task names its newest topic «◇ … · +N» (`tileTopic`) |
 | `topicsettings.js` | the «Темы» section of the System screen: two day fields (`topicSettingsForm`, `parseTopicSettings`) |
 | `magic.js` | ✨ at the right of the tags row: «Создать задачу», «Завершить задачу», «Разобрать заново» (`POST /api/triage/again`); «Подсказать ответ», «Перевести» — «скоро» (`magicItems`, `setupMagic`) |
 | `taskchips.js` | editable planned start, duration, deadline and repeat beside project and counterparty (`taskChips`, `chipFacts`) |

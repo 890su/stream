@@ -1,6 +1,6 @@
 // A tile of the «Беседы» queue (CONCEPT.md §5, docs/plans/2026-11-20-queue-and-task-screen-design.md): line 1 —
 // the kind of chat, the channel and the contact, the time; line 2 — the conversation's task (with «?» when the AI
-// chose it) or «+ задача…» to type one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↧ В конец
+// chose it), else its newest topic «◇ …» (tileTopic, topics design 2026-11-23), else «+ задача…» to type one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↧ В конец
 // очереди»; a small line — how long it waits, how many messages, the counterparty, a tag or two. A tile of the archive
 // under the queue (`archived`) has no «⏱»/«↧» and says when it was handled or until when it is snoozed. tileTask,
 // pickTask and tileFacts are pure (tested in node); convRow builds the DOM.
@@ -65,6 +65,19 @@ const waitedLabel = (ms) => {
   return hours < 48 ? `${hours} ч` : `${Math.floor(hours / 24)} дн`;
 };
 
+// The topic a tile names when it has no task (topics design 2026-11-23): the open topic of the newest message that has
+// one, and how many other open topics the conversation has. → { id, title, more } or null.
+export function tileTopic(conversation) {
+  const open = (conversation.tasks ?? []).filter((task) => isTopic(task) && isOpen(task) && !task.filed);
+  const ids = new Set(open.map((task) => task.id));
+  const views = [...(conversation.views ?? [])].filter((view) => !view.deleted).sort((a, b) => Date.parse(b.event.ts) - Date.parse(a.event.ts));
+  for (const view of views) {
+    const id = view.taskIds?.find((item) => ids.has(item));
+    if (id) return { id, title: open.find((task) => task.id === id).title, more: open.length - 1 };
+  }
+  return null;
+}
+
 // What a tile says. `hotHours` — `hot_wait_hours` of the pulse; `counterparties` — the directory's.
 export function tileFacts(conversation, { now = new Date(), hotHours = 2, counterparties = [] } = {}) {
   const live = conversation.views.filter((view) => !view.deleted);
@@ -79,6 +92,7 @@ export function tileFacts(conversation, { now = new Date(), hotHours = 2, counte
     channel: channelOf((pending.at(-1) ?? last)?.event),
     title: conversation.title,
     task: chosen ? { id: chosen.task.id, title: chosen.task.title, guessed: chosen.guessed } : null,
+    topic: chosen ? null : tileTopic(conversation),
     snippet: last ? snippet(last) : '',
     mine: last?.event.author === 'me' && !['call', 'sms'].includes(last.event.kind),
     when: at.toDateString() === now.toDateString() ? time.format(at) : date.format(at),
@@ -120,7 +134,13 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
     element('span', 'conv-time', facts.when));
   // Line 2: the task (a tap opens it) or a field to make one from what waits.
   let taskLine;
-  if (facts.task) {
+  if (!facts.task && facts.topic) {
+    // A topic, no task (topics design 2026-11-23): a tap opens the conversation, where the topic is chosen.
+    taskLine = element('button', 'conv-task topic', `◇ ${facts.topic.title}${facts.topic.more ? ` · +${facts.topic.more}` : ''}`);
+    taskLine.type = 'button';
+    taskLine.setAttribute('aria-label', `Тема: ${facts.topic.title}${facts.topic.more ? `, ещё тем: ${facts.topic.more}` : ''}`);
+    taskLine.onclick = (event) => { event.stopPropagation(); on.open(conversation.key); };
+  } else if (facts.task) {
     taskLine = element('button', `conv-task${facts.task.guessed ? ' guessed' : ''}`, `▸ ${facts.task.title}${facts.task.guessed ? ' ?' : ''}`);
     taskLine.type = 'button';
     taskLine.setAttribute('aria-label', `Задача: ${facts.task.title}${facts.task.guessed ? ', выбрана разбором' : ''}`);
