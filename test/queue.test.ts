@@ -80,7 +80,7 @@ test('an owner link to a topic keeps the conversation waiting; to a task it clea
   const topic = change('t1', '2026-11-18T09:20:00', { op: 'create', title: 'Анна: принтер', kind: 'topic', add: [ask.id] }, 'me');
   assert.equal(queueOf([ask, topic]).waiting, true, 'a topic is not an answer');
   const task = change('t1', '2026-11-18T09:30:00', { op: 'update', kind: 'task' }, 'me');
-  assert.equal(queueOf([ask, topic, task]).waiting, true, 'the link was made while it was a topic');
+  assert.equal(queueOf([ask, topic, task]).waiting, false, '«Сделать задачей» takes its messages into my task');
   const moved = change('t2', '2026-11-18T09:40:00', { op: 'create', title: 'Анна: выезд', add: [ask.id] }, 'me');
   assert.equal(queueOf([ask, topic, moved]).waiting, false);
   assert.deepEqual([...ownerLinked(foldTasks([ask, topic], {}))], [], 'topic links are not owner task links');

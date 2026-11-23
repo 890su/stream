@@ -293,4 +293,4 @@ body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix
 /* Topics in the open conversation (topics design 2026-11-23): with «≡» the messages outside the chosen topic are
    paler, and each bubble names the topic it went to. */
 .dim { opacity: .55; }
-.bubble[data-topic]::after { content: attr(data-topic); display: block; margin-top: 2px; font-size: 11.5px; color: var(--bubble-meta, var(--muted)); }
+.bubble[data-topic]::after { content: attr(data-topic); display: block; clear: both; margin-top: 2px; font-size: 11.5px; color: var(--bubble-meta, var(--muted)); }
