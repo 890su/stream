@@ -63,6 +63,11 @@ export class TriageStore {
     return (this.#db.prepare("SELECT * FROM events WHERE kind = 'triage_result' ORDER BY received_at").all() as unknown as Row[]).map(fromRow);
   }
 
+  // Whether the triage has looked at this message (a directive tag added later runs its session again).
+  wasTriaged(id: string): boolean {
+    return Boolean(this.#db.prepare('SELECT 1 FROM triaged WHERE event_id = ?').get(id));
+  }
+
   mark(ids: string[], tasks: number, at: string): void {
     const insert = this.#db.prepare('INSERT OR IGNORE INTO triaged (event_id, run_at, tasks) VALUES (?, ?, ?)');
     for (const id of ids) insert.run(id, at, tasks);

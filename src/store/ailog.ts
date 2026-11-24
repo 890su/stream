@@ -4,13 +4,14 @@ import type { JournalEvent } from '../contracts/validate.ts';
 
 // The AI log (docs/plans/2026-11-21-ai-proposals-design.md): every triage run — what the AI was shown and answered,
 // gzipped — and every decision with its reason and what the owner made of it, so the triage can be measured and
-// improved (CONCEPT.md §9). A proposal (`link`) waits for the owner: `accepted`, `redirected` (another or a new task),
-// `rejected`; what the AI did by itself (`auto`) becomes `undone` when the owner cancels that task or takes its
-// messages out; both become `replaced` when the owner asks to triage the conversation again (`replace`).
+// improved (CONCEPT.md §9). A proposal (`update`; `link` before v21) or a question waits for the owner: `accepted`,
+// `redirected` (another or a new task), `rejected`; what the AI did by itself (`auto`: a new record, a v21 `link`)
+// becomes `undone` when the owner cancels that task or takes its messages out; all become `replaced` when the owner
+// asks to triage the conversation again (`replace`).
 // The owner's answers are read from the journal as they are appended (`observe`), buttons or not.
 // Derived state: the journal holds the proposals and answers; this log adds what the journal does not keep.
 
-export type DecisionKind = 'link' | 'create' | 'filed' | 'conversation_only' | 'unsorted';
+export type DecisionKind = 'link' | 'update' | 'question' | 'create' | 'filed' | 'conversation_only' | 'unsorted'; // unsorted: before v21
 export interface AiRun { id: string; at: string; processor: string; model: string; stream: string; messages: number;
   input_tokens: number; output_tokens: number; cost_usd: number; input: unknown; output: unknown }
 export interface AiDecision { id: string; run_id: string; at: string; kind: DecisionKind; task_id: string | null; message_ids: string[];
@@ -75,6 +76,8 @@ export class AiLog {
       for (const decision of this.#open('link', 'pending')) if (decision.message_ids.some((id) => added.has(id))) answer(decision);
     }
     const removed = new Set(change.remove ?? []);
+    // A system link (v21) the owner takes back «↩».
+    for (const decision of this.#open('link', 'auto')) if (decision.task_id === task && decision.message_ids.some((id) => removed.has(id))) this.#settle(decision.id, 'undone', event.ts, task, ['auto']);
     for (const decision of this.#open('create', 'auto')) {
       if (decision.task_id !== task) continue;
       if (change.unconfirmed === false && change.status !== 'cancelled') { this.#settle(decision.id, 'accepted', event.ts, task, ['auto']); continue; } // confirmed (design 2026-11-21)
@@ -84,10 +87,14 @@ export class AiLog {
 
   // «✨ Разобрать заново» (src/tasks/retriage.ts): the owner asked for a second look, so the waiting proposals and the
   // unconfirmed tasks it withdraws are `replaced` — a sign the first look was wrong, for the weekly report (§9).
-  replace(proposals: string[], tasks: string[], at: string): void {
+  // `proposals` — ids of waiting proposals and questions; `links` — system links taken back (v21).
+  replace(proposals: string[], tasks: string[], at: string, links: { task_id: string; message_ids: string[] }[] = []): void {
     for (const id of proposals) this.#settle(id, 'replaced', at, null, ['pending']);
     const withdrawn = new Set(tasks);
     for (const decision of this.#open('create', 'auto')) if (decision.task_id && withdrawn.has(decision.task_id)) this.#settle(decision.id, 'replaced', at, decision.task_id, ['auto']);
+    for (const decision of this.#open('link', 'auto')) {
+      if (links.some((link) => link.task_id === decision.task_id && link.message_ids.some((id) => decision.message_ids.includes(id)))) this.#settle(decision.id, 'replaced', at, decision.task_id, ['auto']);
+    }
   }
 
   // Decisions of kinds that no longer exist (topics were dropped 2026-11-24) that still wait → `replaced`. → how many.

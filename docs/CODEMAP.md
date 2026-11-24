@@ -31,7 +31,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `tagging.ts` / `phone.ts` / `telegram.ts` / `viber.ts` / `whatsapp.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry; Viber and WhatsApp: replies by phone only) | `check*`, `whatsappAccountOf` |
 | **server/** | | |
 | `http.ts` | auth, routing, starts bots, WhatsApp clients and triage | `createApp` |
-| `events.ts` | `/api/events` POST/GET | `events` |
+| `events.ts` | `/api/events` POST/GET; tells `http.ts` of each new event (a directive tag added after triage reruns its session) | `events` |
 | `media.ts` | `/api/media/<sha256>` | `media` |
 | `share.ts` | Android share target | `share` |
 | `phone.ts` | `/api/phone/*` calls, SMS, notes (§8.1) | `phone`, `phoneEventId` |
@@ -69,8 +69,10 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `calendar.ts` | the poll: calendar lists and events of the visible calendars over `window_days`, a shared calendar once, shown/hidden kept in `settings.json`, last good events kept on errors | `CalendarPoller`, `normalizeEvent` |
 | **tasks/** (§2.8) | | |
 | `planner.ts` | planner interface, structured results and the instruction (v21): tasks (a repeat of a closed record — `repeat_of`), optional `conversation_only` ids, `questions` when unsure where messages belong; directive tags on messages | `Planner`, `PLAN_SCHEMA` |
-| `triage.ts` | batches per conversation (`sessions.ts`) after the quiet window of its channel, the last session of the conversation as context and the one before on the AI's `need_earlier` (v19, at most `earlier_max`), open and recently closed cases (reopened when continued), changes of existing tasks only as proposals with a reason (v15), every run and decision into the AI log, alternatives when unsure, an outcome for every message (filed = done at once, missed → «Разобрать»), checklist items into a job and its general title (`checklistChange`), the project and section of a task (`projectChange`: the planner's, else the source default, else options), budget | `Triage`, `streamOf`, `checklistChange`, `projectChange` |
-| `retriage.ts` | «✨ Разобрать заново»: the open conversation's last session to the triage again; the AI's unconfirmed tasks and waiting proposals there are replaced (cancelled by the system / `withdrawn` in the new result, `replaced` in the AI log) after the new look succeeds | `retriage`, `waitingProposals` |
+| `triage.ts` | batches per conversation (`sessions.ts`) after the quiet window of its channel, the last session of the conversation as context and the one before on the AI's `need_earlier` (v19, at most `earlier_max`), the interlocutor's records (`triagecontext.ts`), directive tags on messages; writes what `triageapply.ts` decides (task changes, proposals, questions in the `triage_result`), every run and decision into the AI log, budget; `rerun` — a session again after a directive tag | `Triage`, `streamOf`, `quietOf` |
+| `triageapply.ts` | v21 rules per planned outcome: an open record — system `link` (not messages the owner took out) and a proposal of content only (items, title unless owner-named, due, «done» with report, project, counterparty); a closed one — a link, or a new record with `repeat_of`; done work — a done record with its report draft; unknown `task_id` — new; questions with known options only; roles of new records | `applyPlanned`, `questionsOf`, `ownerRemoved`, `rolesFor`, `checklistChange`, `projectChange`, `reportDraft` |
+| `directive.ts` | directive tags (`registry/tags.json` `directive`): which tags of a message order the triage; a correction that adds one to a triaged message | `directiveOf`, `directiveAdded` |
+| `retriage.ts` | «✨ Разобрать заново»: the open conversation's last session to the triage again; the AI's unconfirmed tasks, waiting proposals and questions there are replaced (cancelled by the system / `withdrawn` in the new result, `replaced` in the AI log) and its links the owner has not touched taken back, after the new look succeeds | `retriage`, `waitingProposals`, `systemLinks` |
 | `triagecontext.ts` | which records the triage shows the AI: all of the interlocutor's (by conversation, role party, counterparty), closed within `reopen_days`, plus `others_in_context` recent open ones of others | `interlocutorRecords`, `Interlocutor` |
 | `sessions.ts` | pure: the triage's conversation of a message (as in the queue: a chat, one number across calls, SMS, Viber, WhatsApp, my notes), sessions split by `session_gap_h`, the last session and steps back (`contextSessions`) | `conversationOf`, `sessionsOf`, `contextSessions` |
 | `anthropic.ts` | AI planner (Claude Haiku 5.5, structured output) and the namer of hand-made tasks | `anthropicPlanner`, `anthropicNamer` |
@@ -172,7 +174,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `contracts/event.schema.json` | Event v1 (kinds, payload.data: call, sms, telegram, outbound, action, system, task (+ proposed, report, alternatives), tagging, continuation) |
 | `contracts/*.schema.json` | Action, Task, Interpretation, Normalized, Intent |
 | `registry/capture.json` | input limits, MIME types, page sizes |
-| `registry/tags.json` | tag dictionary and suggestion threshold |
+| `registry/tags.json` | tag dictionary and suggestion threshold; `directive` tags order the triage (v21) |
 | `registry/telegram.json` | Telegram accounts, file limit, reply window, address book (frequency days, row size) |
 | `registry/whatsapp.json` | WhatsApp accounts (connector `whatsapp_<account>`), file limit, oldest live message written, history window at linking, reconnect ceiling, QR refresh, pulse |
 | `registry/tasks.json` | triage settings and rules on actions vs context, task templates, report fields, card settings |

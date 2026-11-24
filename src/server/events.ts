@@ -1,13 +1,14 @@
-// /api/events: append an event (POST) and page through the journal (GET).
+// /api/events: append an event (POST) and page through the journal (GET). `appended` — told of each new event
+// (a directive tag added after triage runs its session again, src/tasks/directive.ts).
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { JournalStore } from '../store/store.ts';
-import { validateEvent, isDateTime } from '../contracts/validate.ts';
+import { validateEvent, isDateTime, type JournalEvent } from '../contracts/validate.ts';
 import { captureConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json, readBody } from './body.ts';
 import type { LiveFeed } from './live.ts';
 
-export async function events(request: IncomingMessage, response: ServerResponse, url: URL, store: JournalStore, live: LiveFeed): Promise<void> {
+export async function events(request: IncomingMessage, response: ServerResponse, url: URL, store: JournalStore, live: LiveFeed, appended?: (event: JournalEvent) => void): Promise<void> {
   if (request.method === 'POST') {
     let input: unknown;
     try { input = JSON.parse((await readBody(request, captureConfig.max_event_bytes)).toString('utf8')); }
@@ -16,6 +17,7 @@ export async function events(request: IncomingMessage, response: ServerResponse,
     const result = store.appendEvent(input);
     if (result.created) live.publish(result.event);
     if (result.related) live.publish(result.related);
+    if (result.created) appended?.(result.event);
     json(response, result.created ? 201 : 200, result.event);
     return;
   }

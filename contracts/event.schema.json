@@ -152,6 +152,35 @@
                 "withdrawn": { "type": "array", "items": { "type": "string", "format": "uuid" }, "description": "Proposals of earlier results this one replaces." },
                 "last_message": { "type": "string", "format": "uuid", "description": "The batch's last message: the verdict below is about the conversation after it (triage-ai-v18)." },
                 "unfinished": { "type": ["string", "null"], "maxLength": 200, "description": "What the other side still waits for from the owner when no task covers it; null — the conversation is over (web/queue.js keeps it waiting)." },
+                "questions": {
+                  "type": "array",
+                  "description": "The AI is unsure where messages belong (triage-ai-v21 `ask`): the owner picks one of the options or answers in words.",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "message_ids", "text", "options"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": { "type": "string", "format": "uuid" },
+                      "message_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "format": "uuid" } },
+                      "text": { "type": "string", "minLength": 1, "maxLength": 300 },
+                      "options": {
+                        "type": "array", "minItems": 2, "maxItems": 3,
+                        "items": {
+                          "type": "object",
+                          "required": ["label", "task_id", "title", "template", "nothing"],
+                          "additionalProperties": false,
+                          "properties": {
+                            "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+                            "task_id": { "type": ["string", "null"], "description": "An existing record; null — a new one (title, template) or nothing." },
+                            "title": { "type": ["string", "null"], "maxLength": 200 },
+                            "template": { "type": ["string", "null"] },
+                            "nothing": { "type": "boolean" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
                 "proposals": {
                   "type": "array",
                   "description": "Changes of existing tasks the triage proposes; the owner accepts, moves or rejects each (docs/plans/2026-11-21-ai-proposals-design.md).",
@@ -732,6 +761,11 @@
                   "type": "string",
                   "format": "uuid",
                   "description": "The triage proposal this owner change answers (triage_result proposals)."
+                },
+                "repeat_of": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "A closed record this one repeats (triage-ai-v21): a new record with its own report, the old one is never reopened."
                 },
                 "kind": {
                   "enum": ["topic", "task"],

@@ -11,7 +11,7 @@ export const captureConfig = JSON.parse(readFileSync(new URL('../registry/captur
 // Tag dictionary (CONCEPT.md §2.2): suggestion hints, auto-activation threshold, engine version.
 export const tagConfig = JSON.parse(readFileSync(new URL('../registry/tags.json', import.meta.url), 'utf8')) as {
   version: number; engine: string; auto_threshold: number; suggest_limit: number;
-  tags: Array<{ tag: string; intent?: string; hints: string[] }>;
+  tags: Array<{ tag: string; intent?: string; hints: string[]; directive?: boolean }>; // directive — an order to the triage (v21)
 };
 
 // Telegram account bots (CONCEPT.md §8.2): accounts, file limit, reply window, silence threshold.
@@ -49,7 +49,6 @@ export const tasksConfig = JSON.parse(readFileSync(new URL('../registry/tasks.js
   card: { default_duration_min: number; durations_min: number[]; repeats: { every: 'day' | 'week' | 'month' | 'year' | null; label: string }[]; participant_suggestions: number };
   templates: Array<{ name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string; report?: string[]; legacy?: boolean }>;
   report_default: string[]; report_fields: Record<string, { title: string; type: 'datetime' | 'minutes' | 'money' | 'tags' | 'text' }>; currencies: string[];
-  unsorted: { title: string; note: string };
 };
 
 // Conversations (CONCEPT.md §2.5): the queue — how old a waiting message may be, the «⏱ Отложить» presets.

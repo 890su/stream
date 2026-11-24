@@ -41,13 +41,19 @@ export function cardFacts(item, now = Date.now()) {
 }
 
 // The AI triage card (docs/plans/2026-11-21-ai-proposals-design.md): what became of its decisions over 7 days —
-// `decisions` is { kind: { status: count } } of the AI log; undefined — not reported yet.
+// `decisions` is { kind: { status: count } } of the AI log; undefined — not reported yet. Since v21 a `link` is applied
+// by itself (`auto`, `undone` when taken back), changes are proposed as `update`, doubts asked as `question`.
 export function aiStatsLines(decisions) {
   if (!decisions) return [];
   const sum = (group) => Object.values(group ?? {}).reduce((a, b) => a + b, 0);
   const lines = [];
-  const link = decisions.link ?? {};
-  if (sum(link)) lines.push(`Предложил связать с задачей: ${sum(link)} — принято ${link.accepted ?? 0}, в другую задачу ${link.redirected ?? 0}, отклонено ${link.rejected ?? 0}, ждут ответа ${link.pending ?? 0}`);
+  const { auto: linked = 0, undone: unlinked = 0, replaced: relinked = 0, ...asked } = decisions.link ?? {};
+  if (sum(asked)) lines.push(`Предложил связать с задачей: ${sum(asked)} — принято ${asked.accepted ?? 0}, в другую задачу ${asked.redirected ?? 0}, отклонено ${asked.rejected ?? 0}, ждут ответа ${asked.pending ?? 0}`);
+  if (linked + unlinked + relinked) lines.push(`Связал с записями: ${linked + unlinked + relinked}, из них снято мной ${unlinked}`);
+  const update = decisions.update ?? {};
+  if (sum(update)) lines.push(`Предложил правку записи: ${sum(update)} — принято ${update.accepted ?? 0}, отклонено ${update.rejected ?? 0}, ждут ответа ${update.pending ?? 0}`);
+  const question = decisions.question ?? {};
+  if (sum(question)) lines.push(`Спросил: ${sum(question)}, ждут ответа ${question.pending ?? 0}`);
   const made = { auto: (decisions.create?.auto ?? 0) + (decisions.unsorted?.auto ?? 0), undone: (decisions.create?.undone ?? 0) + (decisions.unsorted?.undone ?? 0) };
   if (made.auto + made.undone) lines.push(`Создал задач: ${made.auto + made.undone}, из них отменено или разобрано иначе ${made.undone}`);
   const filed = sum(decisions.filed);

@@ -22,6 +22,7 @@ export interface Task {
   muted?: string[]; // participants switched off: answers from the task do not go to them (2026-11-19)
   unconfirmed?: boolean; // made by the AI, not yet confirmed by the owner (design 2026-11-21)
   repeat?: Repeat | null;
+  repeat_of?: string; // a closed record this one repeats (triage-ai-v21): never a reopen
   note?: string;
   items: ChecklistItem[]; owner_titled: boolean; // the checklist (CONCEPT.md §2.8); the owner gave the title
 }
@@ -73,7 +74,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], owner_titled: false, created_by: event.author, created_at: event.ts, updated_at: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat', 'note'] as const) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat', 'repeat_of', 'note'] as const) {
       if (change[key] !== undefined) (task as any)[key] = change[key];
     }
     if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }

@@ -17,6 +17,7 @@ export function checkTask(event: JournalEvent): void {
   const ref = event.payload.ref;
   if (ref?.type !== 'task' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref.id)) throw new HttpError(400, 'task_change ссылается на задачу: payload.ref {type: task, id}');
   if (task.op === 'create' && !task.title?.trim()) throw new HttpError(400, 'У новой задачи нет названия');
+  if ((task as { repeat_of?: string }).repeat_of === ref.id) throw new HttpError(400, 'Задача не может быть повтором самой себя');
   const report = (task as { report?: Record<string, unknown> }).report;
   if (report !== undefined) checkReport(report);
   const extra = task as { roles?: Record<string, unknown>; waiting_for?: { party: string } | null; promise?: { by: string } | null };

@@ -36,6 +36,11 @@ test('the AI triage card says what became of its proposals and tasks over the we
     'Создал задач: 8, из них отменено или разобрано иначе 1',
     'Подшил без дела: 4; оставил в беседе: 6',
   ]);
+  assert.deepEqual(aiStatsLines({ link: { auto: 5, undone: 1 }, update: { pending: 1, accepted: 2 }, question: { pending: 2, accepted: 1 } }), [
+    'Связал с записями: 6, из них снято мной 1',
+    'Предложил правку записи: 3 — принято 2, отклонено 0, ждут ответа 1',
+    'Спросил: 3, ждут ответа 2',
+  ], 'v21: links applied by themselves, changes proposed, questions asked');
   assert.deepEqual(aiStatsLines({}), ['За 7 дней решений ИИ не было']);
   assert.deepEqual(aiStatsLines(undefined), []);
 });

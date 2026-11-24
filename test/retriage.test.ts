@@ -40,7 +40,7 @@ test('again: unconfirmed AI tasks and waiting proposals of the session are withd
     s.own(mine, { op: 'create', title: 'Роутер у клиента', status: 'todo', add: [] });
     const a = s.add(chat('по роутеру: не включается', '2026-11-20T10:00:00.000Z'));
     const b = s.add(chat('и ещё камеры посмотри', '2026-11-20T10:05:00.000Z'));
-    s.set((input) => ({ tasks: [planned({ title: 'Камеры', message_ids: [b.id] }), planned({ task_id: mine, title: 'Роутер у клиента', message_ids: [a.id] })], conversation_only: [] }));
+    s.set((input) => ({ tasks: [planned({ title: 'Камеры', message_ids: [b.id] }), planned({ task_id: mine, title: 'Роутер у клиента', message_ids: [a.id], items: ['проверить блок питания'] })], conversation_only: [] }));
     for (const batch of s.triage.ready(Date.now() + 200_000)) await s.triage.run(batch);
     const wrong = s.tasks().find((task) => task.title === 'Камеры')!;
     assert.equal(wrong.unconfirmed, true);
@@ -59,7 +59,9 @@ test('again: unconfirmed AI tasks and waiting proposals of the session are withd
     assert.equal(proposalsByMessage(s.events()).get(a.id), undefined, 'the old proposal is withdrawn');
     const stats = s.store.ailog.stats(new Date(0).toISOString());
     assert.equal(stats.create?.replaced, 1, 'the AI log keeps what was replaced');
-    assert.equal(stats.link?.replaced, 1);
+    assert.equal(stats.update?.replaced, 1, 'the waiting proposal');
+    assert.equal(stats.link?.replaced, 1, 'the system link');
+    assert.equal(after.find((task) => task.id === mine)!.messages.includes(a.id), false, 'the link the AI made is withdrawn');
   } finally { s.cleanup(); }
 });
 
@@ -98,4 +100,35 @@ test('the newest triage result decides whether a message stays only in the conve
   const again = result('2026-11-20T11:00:00.000Z', { conversation_only: [], messages: [message.id], again: true });
   assert.equal(only([first]), true);
   assert.equal(only([first, again]), false);
+});
+
+test('«Разобрать заново» withdraws untouched system links and open questions', async () => {
+  const s = setup();
+  try {
+    const mine = randomUUID();
+    s.own(mine, { op: 'create', title: 'Клиент: роутер', status: 'todo', add: [] });
+    const a = s.add(chat('роутер опять мигает', '2026-11-20T10:00:00.000Z'));
+    const b = s.add(chat('и интернет пропал', '2026-11-20T10:01:00.000Z'));
+    const c = s.add(chat('а может это провайдер?', '2026-11-20T10:02:00.000Z'));
+    const d = s.add(chat('вот ещё по роутеру', '2026-11-20T10:03:00.000Z'));
+    s.set((input) => ({ tasks: [planned({ task_id: mine, title: 'Клиент: роутер', message_ids: [a.id, b.id, d.id] })], conversation_only: [],
+      questions: [{ message_ids: [c.id], text: 'О каком деле речь?', options: [
+        { label: 'Клиент: роутер', task_id: mine, title: null, template: null, nothing: false },
+        { label: 'Ничего', task_id: null, title: null, template: null, nothing: true }] }] }));
+    for (const batch of s.triage.ready(Date.now() + 200_000)) await s.triage.run(batch);
+    assert.deepEqual(s.tasks()[0]!.messages, [a.id, b.id, d.id], 'linked by the system');
+    const question = ((s.store.triage.results().at(-1)!.payload.data!.triage as { questions: { id: string }[] }).questions)[0]!.id;
+    // The owner touches one link (puts the message in by hand): it is his now.
+    s.own(mine, { op: 'update', add: [d.id] });
+
+    s.set((input) => ({ tasks: [planned({ task_id: mine, title: 'Клиент: роутер', message_ids: [a.id] })], conversation_only: [] }));
+    const result = await retriage({ store: s.store, live: new LiveFeed(), triage: s.triage, ids: [a.id, b.id, c.id, d.id] });
+    assert.deepEqual({ links: result.links, questions: result.questions }, { links: 1, questions: 1 });
+    assert.deepEqual(s.tasks()[0]!.messages, [a.id, d.id], 'b withdrawn; a linked again; d belongs to the owner');
+    const again = s.store.triage.results().at(-1)!.payload.data!.triage as { withdrawn: string[] };
+    assert.ok(again.withdrawn.includes(question), 'the open question is withdrawn');
+    assert.equal(s.store.ailog.decision(question)!.status, 'replaced');
+    const unlink = s.store.triage.taskEvents().at(-1)!;
+    assert.deepEqual([unlink.author, (unlink.payload.data!.task as { remove: string[] }).remove], ['system', [b.id]]);
+  } finally { s.cleanup(); }
 });

@@ -23,6 +23,7 @@ import { ConnectorSwitches } from '../switches.ts';
 import { OwnerSettings } from '../ownersettings.ts';
 import { createConnections, type TriageOptions } from './connectors.ts';
 import { retriage } from '../tasks/retriage.ts';
+import { directiveAdded } from '../tasks/directive.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
@@ -127,7 +128,11 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           if (url.pathname === '/api/google/connect') throw new HttpError(409, 'Google не настроен: нет STREAM_GOOGLE_CLIENT_ID и STREAM_GOOGLE_CLIENT_SECRET в /srv/stream/.env (deploy/GOOGLE.md)');
         }
         if (url.pathname === '/api/recipients' && request.method === 'GET') { json(response, 200, { recipients: store.recipients.list() }); return; }
-        if (url.pathname === '/api/events') return await events(request, response, url, store, live);
+        if (url.pathname === '/api/events') return await events(request, response, url, store, live, (event) => {
+          // A directive tag on a message already triaged: its session goes to the AI again, without the quiet window.
+          const message = connections.triage?.canRun && connections.isOn('ai_triage') ? directiveAdded(store, event) : null;
+          if (message) connections.triage!.rerun(message, event.id).catch((error) => console.error('Triage rerun failed', error instanceof Error ? error.message : error));
+        });
         // Long-lived records whole — people, counterparties, projects, task changes and triage results: a new device needs all of them,
         // not just the latest feed page (messages stay paged).
         if (url.pathname === '/api/directory' && request.method === 'GET') {

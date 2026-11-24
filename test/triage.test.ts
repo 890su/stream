@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { temporaryStore, event, fixture } from './helpers.ts';
+import { once } from 'node:events';
+import type { AddressInfo } from 'node:net';
+import { temporaryStore, event, fixture, token } from './helpers.ts';
+import { createApp } from '../src/server/http.ts';
 import { tasksConfig } from '../src/config.ts';
 import { LiveFeed } from '../src/server/live.ts';
 import { Triage, streamOf } from '../src/tasks/triage.ts';
@@ -18,10 +21,10 @@ const telegram = (chat: string, text: string, from = chat): JournalEvent => even
   source: 'telegram', author: `contact:tg:by:${from}`, payload: { text, data: { telegram: { account: 'by', chat_id: chat, chat_type: 'private', chat_title: 'Клиент', message_id: Math.floor(Math.random() * 1e6) + 1, sent_at: '2026-11-17T10:00:00.000Z' } } },
 });
 
-function setup(plan: (input: PlanInput) => ScriptedPlan) {
+function setup(plan: (input: PlanInput) => ScriptedPlan, { newTasks = 'confirmed' as 'confirmed' | 'unconfirmed' } = {}) {
   const storage = temporaryStore();
   const calls: PlanInput[] = [];
-  const triage = new Triage({ store: storage.store, live: new LiveFeed(), planner: async (input) => { calls.push(input); return { conversation_only: [], ...plan(input) }; } });
+  const triage = new Triage({ store: storage.store, live: new LiveFeed(), newTasks: () => newTasks, planner: async (input) => { calls.push(input); return { conversation_only: [], ...plan(input) }; } });
   const add = (item: JournalEvent) => storage.store.appendEvent(item).event;
   const tasks = () => foldTasks(storage.store.triage.taskEvents());
   // Changes of existing tasks come as proposals (docs/plans/2026-11-21-ai-proposals-design.md); `accept` answers
@@ -37,6 +40,10 @@ function setup(plan: (input: PlanInput) => ScriptedPlan) {
   };
   return { ...storage, triage, calls, add, tasks, proposals, accept };
 }
+
+const lastChange = (s: ReturnType<typeof setup>, title: string) => s.store.triage.taskEvents()
+  .map((item) => item.payload.data!.task as Record<string, any>).find((change) => change.title === title)!;
+const planned = (data: Partial<PlanOutput['tasks'][number]>): PlanOutput['tasks'][number] => ({ task_id: null, title: 'Дело', responsible: 'me', executors: [], author: null, template: null, due: null, message_ids: [], confidence: 0.9, note: null, filed: false, done: false, alternatives: [], ...data });
 
 test('a stream waits for its quiet window; streams are separate batches', async () => {
   const s = setup(() => ({ tasks: [] }));
@@ -81,7 +88,7 @@ test('one batch becomes several tasks; a message may belong to two; nothing is t
   } finally { s.cleanup(); }
 });
 
-test('a later message is added to an open task instead of a new one; «готово» asks instead of closing', async () => {
+test('a later message is linked to an open task instead of a new one; «готово» asks instead of closing', async () => {
   let round = 0;
   const s = setup((input) => {
     round += 1;
@@ -94,7 +101,8 @@ test('a later message is added to an open task instead of a new one; «гото�
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
     const second = s.add(event({ payload: { text: 'перезвонил, готово' }, ts: '2026-11-11T10:05:00.000Z' }));
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
-    assert.deepEqual(s.tasks()[0]!.messages, [first.id], 'the AI only proposes');
+    assert.deepEqual(s.tasks()[0]!.messages, [first.id, second.id], 'the link is applied at once (v21)');
+    assert.equal(s.tasks()[0]!.proposed, undefined, '«done» is only proposed');
     s.accept();
     const tasks = s.tasks();
     assert.equal(tasks.length, 1);
@@ -138,7 +146,7 @@ test('task changes from the owner go through /api/events with the task contract'
   } finally { await f.stop(); }
 });
 
-test('every message gets an outcome: filed ones are done at once, a missed one becomes «Разобрать» for me', async () => {
+test('filed ones are done at once; a message the AI left out gets no task (v21)', async () => {
   const s = setup((input) => {
     const [mood, job, , idea] = input.messages.map((message) => message.id);
     return {
@@ -160,11 +168,8 @@ test('every message gets an outcome: filed ones are done at once, a missed one b
     assert.equal(byTitle.get('Самочувствие')!.template, 'diary');
     assert.equal(byTitle.get('Поменять роутер у клиента')!.status, 'todo');
     assert.equal(byTitle.get('Идея для ленты')!.status, 'inbox', 'low confidence is not closed');
-    const unsorted = byTitle.get('Разобрать')!;
-    assert.deepEqual(unsorted.messages, [ok.id]);
-    assert.equal(unsorted.assignee, 'me');
-    assert.equal(unsorted.status, 'inbox');
-    assert.equal(s.tasks().filter((task) => task.processor === tasksConfig.ai.processor).length, 4);
+    assert.equal(s.tasks().some((task) => task.messages.includes(ok.id)), false, 'no «Разобрать»');
+    assert.equal(s.tasks().filter((task) => task.processor === tasksConfig.ai.processor).length, 3);
   } finally { s.cleanup(); }
 });
 
@@ -188,39 +193,29 @@ test('a later batch of a conversation sees its earlier messages as context, othe
   } finally { s.cleanup(); }
 });
 
-test('a closed case comes back when a message continues it; a doubtful message carries alternatives', async () => {
+test('a closed case is not reopened: a thank-you is linked to it, the record stays closed (v21)', async () => {
   let round = 0;
   const s = setup((input) => {
     round += 1;
     const m = input.messages[0]!.id;
-    const plan = (data: Partial<PlanOutput['tasks'][number]>) => ({ tasks: [{ task_id: null, title: 'Wi-Fi у клиента', responsible: 'me', executors: [], author: null, template: 'todo', due: null, message_ids: [m], confidence: 0.9, note: null, filed: false, done: false, alternatives: [], ...data }] });
-    if (round === 1) return plan({});
-    if (round === 2) return plan({ title: 'Камеры у соседа' });
+    if (round === 1) return { tasks: [planned({ title: 'Wi-Fi у клиента', template: 'todo', message_ids: [m] })] };
     assert.equal(input.closed_tasks.length, 1, 'recently closed cases are given');
-    assert.ok(input.open_tasks[0]!.chats.length && input.open_tasks[0]!.last_at, 'a task comes with its chats and last activity');
-    return plan({ task_id: input.closed_tasks[0]!.id, alternatives: [input.open_tasks[0]!.id, 'not-a-task'] });
+    return { tasks: [planned({ task_id: input.closed_tasks[0]!.id, title: 'Wi-Fi у клиента', message_ids: [m], alternatives: ['not-a-task'] })] };
   });
   try {
     s.add(event({ payload: { text: 'не работает Wi-Fi' } }));
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
     const wifi = s.tasks()[0]!;
     s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'task_change', payload: { ref: { type: 'task', id: wifi.id }, data: { task: { op: 'update', status: 'done' } } } });
-    s.add(event({ payload: { text: 'камеры у соседа' }, ts: '2026-11-11T10:05:00.000Z' }));
+    const later = s.add(event({ payload: { text: 'спасибо, всё работает' }, ts: '2026-11-11T10:10:00.000Z' }));
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
-    const later = s.add(event({ payload: { text: 'опять не работает Wi-Fi' }, ts: '2026-11-11T10:10:00.000Z' }));
-    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
-    const asked = s.proposals().at(-1)!;
-    assert.equal(asked.alternatives.length, 1, 'only known tasks, not the chosen one');
-    s.accept();
     const back = s.tasks().find((task) => task.id === wifi.id)!;
-    assert.equal(back.status, 'todo', 'the closed case is back at work');
-    assert.ok(back.messages.includes(later.id));
+    assert.equal(back.status, 'done', 'not back at work');
+    assert.ok(back.messages.includes(later.id), 'linked');
+    assert.equal(s.tasks().length, 1);
+    assert.deepEqual(s.proposals(), [], 'nothing to propose');
   } finally { s.cleanup(); }
 });
-
-const lastChange = (s: ReturnType<typeof setup>, title: string) => s.store.triage.taskEvents()
-  .map((item) => item.payload.data!.task as Record<string, any>).find((change) => change.title === title)!;
-const planned = (data: Partial<PlanOutput['tasks'][number]>): PlanOutput['tasks'][number] => ({ task_id: null, title: 'Дело', responsible: 'me', executors: [], author: null, template: null, due: null, message_ids: [], confidence: 0.9, note: null, filed: false, done: false, alternatives: [], ...data });
 
 test('triage writes roles: a client asks me, a partner asks a partner', async () => {
   const s = setup((input) => {
@@ -259,14 +254,13 @@ test('a party the planner made up is dropped; the owner controls what others do 
   } finally { s.cleanup(); }
 });
 
-test('a filed template gets its executor from the registry; the fallback task has no executors', async () => {
+test('a filed template gets its executor from the registry', async () => {
   const s = setup((input) => ({ tasks: [planned({ title: 'Самочувствие', template: 'diary', filed: true, executors: [], message_ids: [input.messages[0]!.id] })] }));
   try {
     s.add(event({ payload: { text: 'выспался' } }));
     s.add(event({ payload: { text: 'ок' } }));
     for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
     assert.deepEqual(lastChange(s, 'Самочувствие').roles, { author: 'me', responsible: 'me', executors: ['ai'], controller: 'me' });
-    assert.deepEqual(lastChange(s, 'Разобрать').roles, { author: 'me', responsible: 'me', executors: [] });
   } finally { s.cleanup(); }
 });
 
@@ -478,7 +472,7 @@ test('the triage keeps a question or consultation answered by message or call in
   }
 });
 
-test('an existing task is never changed by the AI: a proposal with its reason waits for the owner; the log keeps both', async () => {
+test('the content of an existing task is never changed by the AI: a proposal with its reason waits for the owner; the log keeps both', async () => {
   let round = 0;
   const s = setup((input) => {
     round += 1;
@@ -493,13 +487,13 @@ test('an existing task is never changed by the AI: a proposal with its reason wa
     const other = s.add(telegram('7302', 'сайт сделал', 'me'));
     for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
     const after = s.tasks().find((task) => task.id === site!.id)!;
-    assert.deepEqual([after.messages.length, after.proposed], [1, undefined], 'the task is untouched');
+    assert.deepEqual([after.messages.length, after.proposed], [2, undefined], 'linked at once (v21), «done» only proposed');
     const [proposal] = s.proposals();
     assert.deepEqual([proposal!.task_id, proposal!.message_ids, proposal!.reason, (proposal!.change as any).proposed], [site!.id, [other.id], 'упомянут тот же сайт', 'done']);
     assert.equal(s.store.ailog.decision(proposal!.id)!.status, 'pending');
     const created = s.store.triage.taskEvents().find((item) => (item.payload.data!.task as any).op === 'create')!;
     assert.equal((created.payload.data!.task as any).reason, 'просит поправить тексты', 'a created task carries its reason');
-    assert.deepEqual(s.store.ailog.stats('2000-01-01T00:00:00.000Z'), { create: { auto: 1 }, link: { pending: 1 } });
+    assert.deepEqual(s.store.ailog.stats('2000-01-01T00:00:00.000Z'), { create: { auto: 1 }, link: { auto: 1 }, update: { pending: 1 } });
     s.accept();
     assert.equal(s.store.ailog.decision(proposal!.id)!.status, 'accepted');
     assert.equal(s.tasks().find((task) => task.id === site!.id)!.proposed, 'done');
@@ -599,8 +593,7 @@ test('v19: «need_earlier» brings the session before, at most twice', async () 
     assert.equal(s.calls.length, 3, 'the first look and two steps back');
     assert.deepEqual(s.calls.map((call) => call.context.length), [1, 2, 3]);
     assert.deepEqual(s.calls.map((call) => call.earlier_available), [true, true, false]);
-    const unsorted = s.tasks().find((task) => task.messages.includes(fresh.id))!;
-    assert.equal(unsorted.title, tasksConfig.unsorted.title, 'still unclear — «Разобрать»');
+    assert.equal(s.tasks().some((task) => task.messages.includes(fresh.id)), false, 'still unclear — no «Разобрать» (v21)');
   } finally { s.cleanup(); }
 });
 
@@ -628,4 +621,159 @@ test('an open record of the interlocutor whose messages are older than history_d
     assert.ok(call.open_tasks.some((task) => task.title === 'Старое дело клиента'));
     assert.ok(call.open_tasks.length <= 11, 'others stay capped');
   } finally { tasksConfig.history_days = saved; s.cleanup(); }
+});
+
+// triage-ai-v21 (docs/plans/2026-11-23-conversation-records-design.md): links at once, content as proposals, repeats,
+// done work, questions, directive tags.
+test('a continuation is linked at once and its new item is only proposed', async () => {
+  let round = 0;
+  const s = setup((input) => {
+    round += 1;
+    const ids = [input.messages[0]!.id];
+    if (round === 1) return { tasks: [planned({ title: 'Клиент: компьютер', message_ids: ids })] };
+    return { tasks: [planned({ task_id: input.open_tasks[0]!.id, title: 'Клиент: компьютер', message_ids: ids, items: ['настроить почту'], reason: 'тот же компьютер' })] };
+  });
+  try {
+    const first = s.add(telegram('7401', 'поставьте программу'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const second = s.add(telegram('7401', 'и почту настройте'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const [job] = s.tasks();
+    assert.deepEqual(job!.messages, [first.id, second.id], 'linked by the system');
+    assert.deepEqual(job!.items, [], 'the item waits for the owner');
+    const link = s.store.triage.taskEvents().at(-1)!;
+    assert.equal(link.author, 'system');
+    assert.deepEqual(link.payload.data!.task, { op: 'update', add: [second.id], reason: 'тот же компьютер' });
+    const [proposal] = s.proposals();
+    assert.deepEqual([proposal!.task_id, proposal!.message_ids, Object.keys(proposal!.change).sort()], [job!.id, [second.id], ['items_add', 'op']]);
+    s.accept();
+    assert.deepEqual(s.tasks()[0]!.items.map((item) => item.text), ['настроить почту']);
+  } finally { s.cleanup(); }
+});
+
+test('a message the owner removed from a task is not linked back to it', async () => {
+  let round = 0;
+  const s = setup((input) => {
+    round += 1;
+    const ids = input.messages.map((message) => message.id);
+    if (round === 1) return { tasks: [planned({ title: 'Клиент: принтер', message_ids: ids })] };
+    return { tasks: [planned({ task_id: input.open_tasks[0]!.id, title: 'Клиент: принтер', message_ids: ids, due: '2026-11-30' })] };
+  });
+  try {
+    const a = s.add(telegram('7402', 'не печатает принтер'));
+    const b = s.add(telegram('7402', 'а в субботу у меня день рождения'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const [job] = s.tasks();
+    s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'task_change', payload: { ref: { type: 'task', id: job!.id }, data: { task: { op: 'update', remove: [b.id] } } } });
+    await s.triage.run([a, b], { again: 'second-look' });
+    assert.deepEqual(s.tasks()[0]!.messages, [a.id], 'not linked back');
+    assert.deepEqual(s.proposals().map((proposal) => proposal.message_ids), [[a.id]], 'nor proposed with it');
+  } finally { s.cleanup(); }
+});
+
+test('a closed task asked again → a new unconfirmed task with repeat_of', async () => {
+  let round = 0;
+  const s = setup((input) => {
+    round += 1;
+    const ids = [input.messages[0]!.id];
+    if (round === 1) return { tasks: [planned({ title: 'Клиент: Wi-Fi', message_ids: ids })] };
+    const old = input.closed_tasks[0]!;
+    return { tasks: [planned({ task_id: old.id, repeat_of: old.id, title: 'Клиент: Wi-Fi снова', message_ids: ids })] };
+  }, { newTasks: 'unconfirmed' });
+  try {
+    const first = s.add(telegram('7403', 'не работает Wi-Fi'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const [old] = s.tasks();
+    s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'task_change', payload: { ref: { type: 'task', id: old!.id }, data: { task: { op: 'update', status: 'done', unconfirmed: false } } } });
+    const again = s.add(telegram('7403', 'опять не работает Wi-Fi'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const before = s.tasks().find((task) => task.id === old!.id)!;
+    assert.deepEqual([before.status, before.messages], ['done', [first.id]], 'the closed record stays as it was');
+    const repeat = s.tasks().find((task) => task.id !== old!.id)!;
+    assert.deepEqual([repeat.title, repeat.status, repeat.unconfirmed, repeat.repeat_of, repeat.messages], ['Клиент: Wi-Fi снова', 'todo', true, old!.id, [again.id]]);
+  } finally { s.cleanup(); }
+});
+
+test('work done in the conversation → a done task with a report draft', async () => {
+  const s = setup((input) => ({ tasks: [planned({ title: 'Клиент: настройка почты', template: 'lead', done: true, message_ids: input.messages.map((message) => message.id),
+    report: { note: 'Настроил почту удалённо', duration_min: 30, cost: 80, expenses: null, currency: 'PLN' } })] }), { newTasks: 'unconfirmed' });
+  try {
+    s.add(telegram('7404', 'почта не приходит, подключитесь?'));
+    s.add(telegram('7404', 'готово, проверьте — полчаса, 80 злотых', 'me'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const [done] = s.tasks();
+    assert.deepEqual([done!.status, done!.template, done!.proposed, done!.messages.length], ['done', 'lead', undefined, 2]);
+    assert.deepEqual(done!.report, { note: 'Настроил почту удалённо', duration_min: 30, cost: 80, currency: 'PLN' });
+  } finally { s.cleanup(); }
+});
+
+test('messages the AI left out create no «Разобрать» task', async () => {
+  const s = setup(() => ({ tasks: [] }));
+  try {
+    const a = s.add(telegram('7405', 'как дела у вас?'));
+    s.add(telegram('7405', 'у нас всё по-старому'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.deepEqual(s.tasks(), []);
+    const result = s.store.triage.results().at(-1)!.payload.data!.triage as Record<string, unknown>;
+    assert.ok((result.messages as string[]).includes(a.id), 'the result still covers the batch');
+    assert.equal(s.triage.ready(Date.now() + CHAT_QUIET + 1000).length, 0, 'not triaged again');
+  } finally { s.cleanup(); }
+});
+
+test('questions are written in the triage result with ids', async () => {
+  let round = 0;
+  const s = setup((input) => {
+    round += 1;
+    if (round === 1) return { tasks: [planned({ title: 'Клиент: камеры', message_ids: [input.messages[0]!.id] })] };
+    const known = input.open_tasks[0]!.id;
+    return { tasks: [], questions: [{ message_ids: [input.messages[0]!.id], text: 'О каком деле речь?', options: [
+      { label: 'Клиент: камеры', task_id: known, title: null, template: null, nothing: false },
+      { label: 'Новое: роутер', task_id: null, title: 'Клиент: роутер', template: 'todo', nothing: false },
+      { label: 'Выдумка', task_id: randomUUID(), title: null, template: null, nothing: false },
+      { label: 'Ничего', task_id: null, title: null, template: null, nothing: true },
+    ] }] };
+  });
+  try {
+    s.add(telegram('7406', 'поставьте камеры'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const vague = s.add(telegram('7406', 'а там ещё вот это бы'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const result = s.store.triage.results().at(-1)!.payload.data!.triage as { questions: { id: string; message_ids: string[]; text: string; options: { label: string }[] }[] };
+    const [question] = result.questions;
+    assert.match(question!.id, /^[0-9a-f-]{36}$/);
+    assert.deepEqual([question!.message_ids, question!.text, question!.options.map((option) => option.label)], [[vague.id], 'О каком деле речь?', ['Клиент: камеры', 'Новое: роутер', 'Ничего']]);
+    assert.equal(s.store.ailog.decision(question!.id)!.status, 'pending');
+    assert.equal(s.store.ailog.decision(question!.id)!.kind, 'question');
+    assert.equal(s.tasks().length, 1, 'nothing chosen for the owner');
+  } finally { s.cleanup(); }
+});
+
+test('a directive tag added after triage reruns that session once', async () => {
+  const storage = temporaryStore();
+  const calls: PlanInput[] = [];
+  const server = createApp({ store: storage.store, ownerToken: token, triage: { planner: async (input) => { calls.push(input); return { tasks: [], conversation_only: [] }; }, everyMs: 3_600_000 } });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const post = (body: unknown) => fetch(`${base}/api/events`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const edit = (target: string, tags: string[]) => event({ kind: 'correction', payload: { ref: { type: 'event', id: target }, text: 'надо бы посылку отправить', tags, data: { op: 'edit' } } });
+  const settle = async (count: number) => { for (let i = 0; i < 100 && calls.length < count; i++) await new Promise((resolve) => setTimeout(resolve, 20)); };
+  try {
+    const before = storage.store.appendEvent(telegram('7407', 'привет')).event;
+    const message = storage.store.appendEvent(telegram('7407', 'надо бы посылку отправить')).event;
+    const fresh = storage.store.appendEvent(telegram('7408', 'другой чат, ещё не разобран')).event;
+    storage.store.triage.mark([before.id, message.id], 0, new Date().toISOString());
+    const tagged = edit(message.id, ['#задача']);
+    assert.equal((await post(tagged)).status, 201);
+    await settle(1);
+    assert.equal(calls.length, 1, 'the session went again at once');
+    assert.deepEqual(calls[0]!.messages.map((item) => item.id), [before.id, message.id]);
+    assert.deepEqual(calls[0]!.messages[1]!.directive, ['#задача']);
+    assert.equal(calls[0]!.messages[0]!.directive, undefined);
+    assert.equal((await post(tagged)).status, 200, 'the same correction again');
+    assert.equal((await post(edit(message.id, ['#задача', '#naserwis']))).status, 201, 'a plain tag added');
+    assert.equal((await post(edit(fresh.id, ['#задача']))).status, 201, 'a message not triaged yet waits for its window');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(calls.length, 1, 'run once');
+  } finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); storage.cleanup(); }
 });

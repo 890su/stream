@@ -7,21 +7,23 @@ import type { SourceState } from '../store/status.ts';
 import { tasksConfig } from '../config.ts';
 import { nameId } from '../ids.ts';
 import { stateChanged } from '../server/system.ts';
-import { foldTasks, isOpen, type Task } from './fold.ts';
+import { foldTasks } from './fold.ts';
 import { describe, from, hasForwardOrigin, messageDirection } from './messages.ts';
 import { nameTasks, type Namer } from './namer.ts';
-import { counterpartyChange } from './counterparty.ts';
 import { foldPeople, foldCounterparties, personOf, peopleOf } from '../contacts/fold.ts';
-import { foldProjects, defaultProject, type Project } from './projects.ts';
-import { defaultController, isParty, partyOfEvent } from './parties.ts';
+import { foldProjects, defaultProject } from './projects.ts';
+import { partyOfEvent } from './parties.ts';
 import type { AiDecision } from '../store/ailog.ts';
-import type { PlanInput, PlanMessage, PlanOutput, PlannedTask, Planner } from './planner.ts';
+import type { PlanInput, PlanMessage, PlanOutput, Planner } from './planner.ts';
 import { interlocutorRecords } from './triagecontext.ts';
-import { conversationOf, contextSessions, before } from './sessions.ts';
+import { conversationOf, contextSessions, before, sessionsOf } from './sessions.ts';
+import { applyPlanned, ownerRemoved, questionsOf, rolesFor } from './triageapply.ts';
+import { directiveOf } from './directive.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
-// notes), then go together to the planner, which splits them into new tasks and additions to open ones.
-// The outcome is work, material to file, or context kept in the conversation. Missing decisions go to «Разобрать».
+// notes), then go together to the planner with the interlocutor's records. Since v21 its outcomes are applied by
+// triageapply.ts: links to open records at once, content changes proposed, new records, done work and repeats;
+// questions when the AI is unsure where messages belong. Messages it leaves out are just conversation.
 
 export const TRIAGE_SOURCE = 'ai_triage';
 
@@ -42,56 +44,9 @@ export function streamOf(event: JournalEvent): string {
   return 'me';
 }
 
-// Checklist items and a new title from the planner (CONCEPT.md §2.8): one-line items not already in the task;
-// a rename only for an existing task the owner has not named.
-export function checklistChange(taskId: string, planned: PlannedTask, task?: Task): Record<string, unknown> {
-  const known = new Set((task?.items ?? []).map((item) => item.text.trim().toLowerCase()));
-  const items_add: { id: string; text: string }[] = [];
-  for (const raw of planned.items ?? []) {
-    const text = String(raw).replace(/\s+/g, ' ').trim().slice(0, 200);
-    if (!text || known.has(text.toLowerCase())) continue;
-    known.add(text.toLowerCase());
-    items_add.push({ id: nameId(`item|${taskId}|${text}`), text });
-  }
-  const rename = planned.rename?.trim().slice(0, 200);
-  const title = task && rename && !task.owner_titled && rename !== task.title ? { title: rename } : {};
-  return { ...(items_add.length ? { items_add } : {}), ...title };
-}
-
-// The project a planned task goes to (CONCEPT.md §2.11): the planner's project if it is active, else the source's
-// default; a section only of that project (an idea without one goes to its «ideas» section). A task that already has
-// a project keeps it; filed outcomes get none. When unsure — `project_options` for the owner to choose.
-export function projectChange(planned: PlannedTask, task: Task | undefined, projects: Project[]): Record<string, unknown> {
-  if (planned.filed || task?.project) return {};
-  const byId = new Map(projects.map((project) => [project.id, project]));
-  const options = [...new Set(planned.project_options ?? [])].filter((id) => byId.has(id)).slice(0, 3);
-  // Only the planner's choice by the project's scope: the source alone puts nothing into a project (owner, 2026-11-20).
-  const chosen = (planned.project && byId.get(planned.project)) || null;
-  if (!chosen) return options.length ? { project_options: options } : {};
-  const section = chosen.sections.find((item) => item.id === planned.section);
-  return { project: chosen.id, section: section?.id ?? null };
-}
-
 // Quiet window of a stream in seconds: by its kind (`tg`, `phone`, `me`), else the default.
 export function quietOf(stream: string): number {
   return tasksConfig.quiet_s_by_stream[stream.split('|')[0]!] ?? tasksConfig.quiet_s;
-}
-
-// A report draft from what the conversation says was done (task manager spec §11): only valid fields — a known
-// currency, sums and minutes not below zero, the result line up to 500 characters. A task the owner already
-// reported on keeps its report. Closing stays the owner's: «Задача выполнена?» → «Да» keeps these values.
-export function reportDraft(planned: PlannedTask, task?: Task): { report?: Record<string, unknown> } {
-  const draft = planned.report;
-  if (!draft || (task as { report?: unknown } | undefined)?.report) return {};
-  const report: Record<string, unknown> = {};
-  const note = draft.note?.trim();
-  if (note) report.note = note.slice(0, 500);
-  for (const key of ['duration_min', 'cost', 'expenses'] as const) {
-    const value = draft[key];
-    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) report[key] = key === 'duration_min' ? Math.round(value) : value;
-  }
-  if ((report.cost !== undefined || report.expenses !== undefined) && draft.currency && tasksConfig.currencies.includes(draft.currency)) report.currency = draft.currency;
-  return Object.keys(report).length ? { report } : {};
 }
 
 export class Triage {
@@ -139,9 +94,10 @@ export class Triage {
       .map((events) => events.slice(0, tasksConfig.max_batch));
   }
 
-  // `again` — «✨ Разобрать заново» (retriage.ts): a fresh key for the same messages, and the ids of the proposals it
-  // withdraws, listed in the new result (web/proposals.js).
-  async run(batch: JournalEvent[], { again, withdrawn = [] }: { again?: string; withdrawn?: string[] } = {}): Promise<number> {
+  // `again` — a second look (retriage.ts, rerun): a fresh key for the same messages, run once per key; `withdrawn` —
+  // the proposals and questions it replaces, listed in the new result (web/proposals.js); `unlink` — the system links
+  // it takes back, unless the new look links them again.
+  async run(batch: JournalEvent[], { again, withdrawn = [], unlink = [] }: { again?: string; withdrawn?: string[]; unlink?: { task_id: string; message_ids: string[] }[] } = {}): Promise<number> {
     const tasks = foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) });
     const projects = foldProjects(this.#store.triage.projectEvents()).filter((project) => project.status === 'active');
     const directory = this.#store.triage.contactEvents();
@@ -155,7 +111,7 @@ export class Triage {
         chats: [...new Set(events.map(streamOf))], last_at: events.at(-1)?.ts ?? task.updated_at, project: task.project ?? null,
         items: task.items.map((item) => ({ text: item.text, done: item.done })), owner_titled: task.owner_titled };
     };
-    const toMessage = (event: JournalEvent, text: string, tags: string[]): PlanMessage => {
+    const toMessage = (event: JournalEvent, text: string, tags: string[], directive: string[] = []): PlanMessage => {
       const continuation = event.payload.data?.continuation as { target: string; on: boolean } | undefined;
       const linked = [event.reply_to, continuation?.on ? continuation.target : undefined].filter(Boolean) as string[];
       return {
@@ -164,7 +120,7 @@ export class Triage {
         ...(event.reply_to ? { reply_to: event.reply_to } : {}), ...(continuation?.on ? { continues: continuation.target } : {}),
         in_tasks: [...new Set([event.id, ...linked].flatMap(taskOf))],
         default_project: defaultProject(projects, streamOf(event))?.id ?? null,
-        person: personOf(partyOfEvent(event), people)?.name ?? null,
+        person: personOf(partyOfEvent(event), people)?.name ?? null, ...(directive.length ? { directive } : {}),
       };
     };
     const messages: PlanMessage[] = [];
@@ -173,7 +129,7 @@ export class Triage {
     for (const event of batch) {
       const view = describe(event, this.#store);
       if (view.deleted || !view.text.trim()) { skipped.push(event.id); continue; }
-      messages.push(toMessage(event, view.text.slice(0, 2000), view.tags));
+      messages.push(toMessage(event, view.text.slice(0, 2000), view.tags, directiveOf(view.tags)));
     }
     // Context (v19, sessions.ts): the conversation's messages before this batch, from the last session back as many
     // sessions as the AI asks for; a batch alone may not say what it is about.
@@ -217,6 +173,8 @@ export class Triage {
     };
     const batchIds = new Set(messages.map((message) => message.id));
     const batchKey = createHash('sha256').update([...batchIds].sort().join(',') + (again ? `|again|${again}` : '')).digest('hex').slice(0, 16);
+    const resultId = nameId(`triage-result|${batchKey}`);
+    if (again && this.#store.getEvent(resultId)) return 0; // this second look ran already
     const price = tasksConfig.ai.price_per_mtok;
     const ask = async (input: PlanInput, id: string): Promise<{ output: PlanOutput; cost: number }> => {
       const output = await this.#planner!(input);
@@ -237,12 +195,7 @@ export class Triage {
       runId = nameId(`ai-run|${batchKey}|${steps}`);
       ({ output } = await ask({ ...base, context, earlier_available: more }, runId));
     }
-    const openIds = new Set(open.map((task) => task.id));
-    const closedById = new Map(closed.map((task) => [task.id, task]));
-    const known = new Set([...openIds, ...closedById.keys()]);
-    const taskById = new Map(tasks.map((task) => [task.id, task]));
     const filedTemplates = new Set(tasksConfig.templates.filter((template) => template.filed).map((template) => template.name));
-    const resultId = nameId(`triage-result|${batchKey}`);
     const prior = this.#store.getEvent(resultId);
     const stored = prior?.payload.data?.triage as { conversation_only: string[] } | undefined;
     const conversationOnly = new Set((stored?.conversation_only ?? output.conversation_only).filter((id) => batchIds.has(id)));
@@ -251,83 +204,42 @@ export class Triage {
     const decide = (key: string, kind: AiDecision['kind'], taskId: string | null, ids: string[], confidence: number | null, reason: string | null, status: AiDecision['status'] = 'auto', id = nameId(`ai-decision|${batchKey}|${key}`)) =>
       decisions.push({ id, run_id: runId, at, kind, task_id: taskId, message_ids: ids, confidence, reason: reason?.slice(0, 500) ?? null, status });
     if (conversationOnly.size) decide('conversation_only', 'conversation_only', null, [...conversationOnly], null, null);
-    // Changes of existing tasks are only proposed (docs/plans/2026-11-21-ai-proposals-design.md): the owner answers.
-    const proposals: Record<string, unknown>[] = [];
-    const covered = new Set(output.tasks.flatMap((planned) => planned.message_ids));
-    const missed = [...batchIds].filter((id) => !conversationOnly.has(id) && !covered.has(id));
-    const outcomes: PlannedTask[] = [...output.tasks];
-    let fallback: PlannedTask | null = null; // the «Разобрать» task for messages the AI left out
-    if (missed.length) {
-      outcomes.push(fallback = { task_id: null, title: tasksConfig.unsorted.title, responsible: 'me', executors: [], author: null, template: null, due: null,
-        message_ids: missed, confidence: 0, note: tasksConfig.unsorted.note, filed: false, done: false, alternatives: [] });
-    }
-    // Parties the planner may name: the owner, AI, the system and everyone who wrote in this batch or its context;
-    // a `name:` party is a person without an account and passes. Anything else is made up and dropped.
-    const allowed = new Set(['me', 'ai', 'system', ...messages.map((message) => message.party), ...context.map((message) => message.party)]);
-    const valid = (party: unknown): party is string => isParty(party) && (allowed.has(party) || party.startsWith('name:'));
-    const partyOfMessage = new Map([...messages, ...context].map((message) => [message.id, message.party]));
-    const rolesOf = (planned: PlannedTask, add: string[]) => {
-      const template = tasksConfig.templates.find((item) => item.name === planned.template);
-      const executors = template?.filed ? [template.assignee] : [...new Set(planned.executors.filter(valid))];
-      const responsible = template?.filed ? 'me' : valid(planned.responsible) ? planned.responsible : 'me';
-      const author = valid(planned.author) ? planned.author : partyOfMessage.get(add[0]!);
-      // Work I hand to others, or ask someone else to answer for, is under my control («На контроле»).
-      const controller = defaultController({ author, responsible, executors });
-      return { ...(author ? { author } : {}), responsible, executors, ...(controller ? { controller } : {}) };
-    };
+    const rolesOf = rolesFor([...messages, ...context]);
     let written = 0;
-    outcomes.forEach((planned, index) => {
-      const target = planned.task_id && known.has(planned.task_id) ? planned.task_id : null;
-      // Messages already in the task it names are not proposed into it again (a second look, «Разобрать заново»).
-      const inTarget = new Set(target ? taskById.get(target)?.messages ?? [] : []);
-      const add = planned.message_ids.filter((id) => batchIds.has(id) && !conversationOnly.has(id) && !inTarget.has(id));
-      if (!add.length) return;
-      // A closed case the messages continue comes back to work; a filed one (diary, note) just gets the message —
-      // but work asked about a filed note (a request, items) is a task of its own: the note stays as it was.
-      const isFiled = (id: string) => closedById.has(id) && (filedTemplates.has(closedById.get(id)!.template ?? '') || Boolean(closedById.get(id)!.filed));
-      const existing = target && isFiled(target) && !planned.filed ? null : target;
-      const filedTask = existing && isFiled(existing);
-      const reopened = existing && closedById.has(existing) && !planned.filed && !filedTask ? { status: 'todo' } : {};
-      const alternatives = [...new Set(planned.alternatives ?? [])].filter((id) => known.has(id) && id !== existing).slice(0, 3);
-      const asked = alternatives.length ? { alternatives } : {};
-      const taskId = existing ?? nameId(`task|${batchKey}|${index}`);
-      const confidence = Math.max(0, Math.min(1, planned.confidence));
-      const reason = planned.reason?.trim() || null;
-      // «Готово» does not close a task: the card «Задача выполнена?» asks the owner (CONCEPT.md §2.9).
-      const proposal = planned.done && !planned.filed ? { proposed: 'done', ...reportDraft(planned, existing ? taskById.get(existing) : undefined) } : {};
-      const checklist = checklistChange(taskId, planned, existing ? taskById.get(existing) : undefined);
-      const placed = { ...projectChange(planned, existing ? taskById.get(existing) : undefined, projects),
-        ...counterpartyChange(planned, existing ? taskById.get(existing) : undefined, counterparties) };
-      // An existing task — a proposal, applied when the owner accepts it; a filed note gets its filed message as before.
-      if (existing && !(filedTask && planned.filed)) {
-        const id = nameId(`proposal|${batchKey}|${index}`);
-        proposals.push({ id, task_id: existing, message_ids: add, reason: (reason ?? '').slice(0, 500), confidence, alternatives,
-          change: { op: 'update', add, ...reopened, ...proposal, ...checklist, ...placed } });
-        decide(String(index), 'link', existing, add, confidence, reason, 'pending', id);
-        return;
-      }
-      decide(String(index), existing || planned.filed ? 'filed' : planned === fallback ? 'unsorted' : 'create',
-        taskId, add, confidence, reason);
-      const change: Record<string, unknown> = existing
-        ? { op: 'update', add, confidence, processor: tasksConfig.ai.processor, ...reopened, ...proposal, ...asked, ...checklist, ...placed, ...(reason ? { reason: reason.slice(0, 500) } : {}) }
-        : {
-          op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles: rolesOf(planned, add),
-          status: confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed ? 'done' : 'todo',
-          add, confidence, processor: tasksConfig.ai.processor, ...proposal, ...asked, ...checklist, ...placed,
-          // v16: a new task waits for the owner unless he chose «ИИ создаёт сразу»; filed notes and «Разобрать» never wait.
-          ...(this.#newTasks() === 'unconfirmed' && !planned.filed && planned !== fallback ? { unconfirmed: true } : {}),
-          ...(planned.template ? { template: planned.template } : {}),
-          ...(planned.due ? { due: planned.due } : {}), ...(planned.note ? { note: planned.note } : {}),
-          ...(reason ? { reason: reason.slice(0, 500) } : {}),
-        };
+    const write = (id: string, taskId: string, change: Record<string, unknown>) => {
       try {
-        const result = this.#store.appendEvent({
-          id: nameId(`task-change|${batchKey}|${index}`), schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'task_change',
-          payload: { ref: { type: 'task', id: taskId }, data: { task: change } },
-        });
+        const result = this.#store.appendEvent({ id, schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'task_change', payload: { ref: { type: 'task', id: taskId }, data: { task: change } } });
         if (result.created) { this.#live.publish(result.event); written += 1; }
       } catch (error) { console.error('Triage: task change rejected', error instanceof Error ? error.message : error); }
+    };
+    // Links a second look takes back (retriage.ts): one it makes again stays as it is.
+    const unlinked = new Map(unlink.map((link) => [link.task_id, new Set(link.message_ids)]));
+    const proposals: Record<string, unknown>[] = [];
+    const ctx = { batchKey, batchIds, conversationOnly, open: new Map(open.map((task) => [task.id, task])), closed: new Map(closed.map((task) => [task.id, task])),
+      removed: ownerRemoved(this.#store.triage.taskEvents()), unlinked, projects, counterparties, filedTemplates, newTasks: this.#newTasks(), roles: rolesOf };
+    output.tasks.forEach((planned, index) => {
+      const confidence = Math.max(0, Math.min(1, planned.confidence));
+      const reason = planned.reason?.trim().slice(0, 500) || null;
+      for (const applied of applyPlanned(planned, { ...ctx, index })) {
+        if (applied.kind === 'proposal') {
+          // Content of an existing record is only proposed (v15): the owner answers ✓ ✕.
+          const id = nameId(`proposal|${batchKey}|${index}`);
+          proposals.push({ id, task_id: applied.task_id, message_ids: applied.message_ids, reason: reason ?? '', confidence, alternatives: [], change: { op: 'update', ...applied.change } });
+          decide(`${index}|update`, 'update', applied.task_id, applied.message_ids, confidence, reason, 'pending', id);
+        } else if (applied.kind === 'link') {
+          const taken = unlinked.get(applied.task_id);
+          const add = applied.add.filter((id) => !taken?.delete(id)); // a withdrawn link made again: still in the task
+          if (add.length) write(nameId(`task-change|${batchKey}|${index}`), applied.task_id, { op: 'update', add, ...(reason ? { reason } : {}) });
+          decide(String(index), planned.filed ? 'filed' : 'link', applied.task_id, applied.add, confidence, reason);
+        } else {
+          write(nameId(`task-change|${batchKey}|${index}`), applied.task_id, applied.change);
+          decide(String(index), planned.filed ? 'filed' : 'create', applied.task_id, applied.change.add as string[], confidence, reason);
+        }
+      }
     });
+    for (const [taskId, ids] of unlinked) if (ids.size) write(nameId(`unlink|${batchKey}|${taskId}`), taskId, { op: 'update', remove: [...ids], reason: 'Разобрано заново' });
+    const questions = questionsOf(output.questions, { batchKey, batchIds, known: new Set([...open, ...closed].map((task) => task.id)) });
+    for (const question of questions) decide(question.id, 'question', null, question.message_ids, null, question.text, 'pending', question.id);
     // What stays in the conversation, what is proposed and whether the conversation is over (on the batch's last
     // message — web/queue.js): one triage result per batch, written once, always.
     if (!prior) {
@@ -336,9 +248,9 @@ export class Triage {
       const result = this.#store.appendEvent({
         id: resultId, schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'triage_result',
         payload: { data: { triage: { processor: tasksConfig.ai.processor, messages: [...batchIds], conversation_only: [...conversationOnly], last_message: lastMessage, unfinished,
-          ...(proposals.length ? { proposals } : {}), ...(again ? { again: true, withdrawn } : {}) } } },
+          ...(proposals.length ? { proposals } : {}), ...(questions.length ? { questions } : {}), ...(again ? { again: true, withdrawn } : {}) } } },
       });
-      if (result.created) { this.#live.publish(result.event); written += proposals.length; }
+      if (result.created) { this.#live.publish(result.event); written += proposals.length + questions.length; }
     }
     this.#store.ailog.decide(decisions);
     this.#store.triage.mark([...batchIds, ...skipped], written, at);
@@ -360,6 +272,18 @@ export class Triage {
       console.error('Triage failed', error instanceof Error ? error.message : error);
       this.#health('error', `разбор не удался: ${error instanceof Error ? error.message : error}`.slice(0, 300));
     } finally { this.#busy = false; }
+  }
+
+  // A directive tag added to a message already triaged (directive.ts): its session goes to the AI again at once, once
+  // per `cause` (the tag correction). → task changes, proposals and questions written.
+  async rerun(messageId: string, cause = messageId): Promise<number> {
+    const message = this.#store.getEvent(messageId);
+    if (!message || !this.#planner || this.#store.triage.spent(new Date().toISOString().slice(0, 7)) >= tasksConfig.ai.monthly_budget_usd) return 0;
+    const key = conversationOf(message);
+    const conversation = this.#store.triage.messages(new Date(Date.now() - tasksConfig.history_days * 86_400_000).toISOString()).filter((event) => conversationOf(event) === key);
+    const session = sessionsOf(conversation, tasksConfig.session_gap_h * 3_600_000).find((events) => events.some((event) => event.id === messageId)) ?? [message];
+    const start = Math.max(0, Math.min(session.findIndex((event) => event.id === messageId), session.length - tasksConfig.max_batch));
+    return this.run(session.slice(start, start + tasksConfig.max_batch), { again: `rerun|${cause}` });
   }
 
   // Whether there is an AI to ask (a key): «Разобрать заново» needs one.
