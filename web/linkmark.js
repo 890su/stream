@@ -1,5 +1,6 @@
 // «→ «название» ↩» under a message (docs/plans/2026-11-23-conversation-records-design.md «Разбор беседы»): the
-// v21 triage put the message into an existing record by itself — a system `task_change` `update` adding it. The
+// v21 triage put the message into an existing record by itself — a system `task_change` `update` adding it, with no
+// `processor` (older triages added messages with their `processor` and confidence: those are not marks). The
 // title opens the record; «↩» takes the message out by my `task_change` `remove` (the triage never adds back a
 // message I took out). A link I touched myself (removed, or added again) is mine, not a mark. linkMarks and
 // unlinkEvent are pure; linkMarkBlock builds the DOM, setupLinkMarks handles «↩» anywhere.
@@ -17,7 +18,7 @@ export function linkMarks(view, tasksById) {
       const change = entry.change ?? {};
       const names = (change.add ?? []).includes(view.id) || (change.remove ?? []).includes(view.id);
       if (entry.author === 'me' && names) touched = true;
-      else if (entry.author === 'system' && change.op === 'update' && (change.add ?? []).includes(view.id)) linked = true;
+      else if (entry.author === 'system' && change.op === 'update' && !change.processor && (change.add ?? []).includes(view.id)) linked = true;
     }
     if (linked && !touched) marks.push({ taskId, title: task.title });
   }

@@ -26,6 +26,8 @@ test('only a system link to an existing record shows, with its title', () => {
   assert.deepEqual(marks([mine, link], 'm0'), [], 'my own message of the record is not a system link');
   const made = change('t2', { op: 'create', title: 'Анна: посылка', status: 'todo', add: ['m5'], unconfirmed: true });
   assert.deepEqual(marks([made], 'm5'), [], 'a record the AI made from the message is its offer, not a link');
+  const old = change('t1', { op: 'update', add: ['m7'], processor: 'triage-ai-v14', confidence: 0.8 });
+  assert.deepEqual(marks([mine, old], 'm7'), [], 'an older triage added it with its processor: not a v21 link');
 });
 
 test('a link I removed (↩) or touched myself is not a mark; a system link taken back neither', () => {

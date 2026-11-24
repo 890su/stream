@@ -69,9 +69,10 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     },
     // An answer to the AI's question (askline.js): the chosen change and the answer, in this order.
     async answer(question, choice) {
-      try { for (const entry of answerEvents(question, choice)) await composer.queue(entry); } catch (error) { notify(error.message); return; }
+      try { for (const entry of answerEvents(question, choice)) await composer.queue(entry); } catch (error) { notify(error.message); return false; }
       notify(choice.text !== undefined ? 'Ответ передан ИИ' : choice.kind === 'link' ? `Добавлено в «${feed.task(choice.taskId)?.title ?? 'запись'}»`
         : choice.kind === 'create' ? `Задача: «${choice.title}»` : 'Ответ: ничего не нужно');
+      return true;
     },
     // «Make a task» of the open conversation: confirms the AI's offer, else a task of the waiting messages.
     async makeTask() {
@@ -112,8 +113,10 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     // any conversation, «Я» included.
     const topical = conversation && key !== 'me' && !key.startsWith('task:');
     const questions = conversation ? conversationQuestions(conversation, feed.questions()) : [];
-    // A title being typed in «+ задача…» or an answer in «Своими словами…» survives live updates.
-    const typing = $('#chat-topic').contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
+    // A title being typed in «+ задача…» and an open «Своими словами…» field survive live updates (askline.js blurs it
+    // when the answer is sent).
+    const active = document.activeElement;
+    const typing = $('#chat-topic').contains(active) && Boolean(active.value || active.classList.contains('ask-input'));
     const tasksById = new Map(feed.tasks().map((task) => [task.id, task]));
     if (!typing) $('#chat-topic').replaceChildren(...(topical || questions.length ? [topicLine({ topic: topical ? topicOf(conversation) : null, on: topicActs, questions, tasksById })] : []));
     $('#chat-topic').hidden = !topical && !questions.length;

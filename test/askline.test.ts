@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { askChoices, answerEvents, conversationQuestions, shortAsk } from '../web/askline.js';
+import { askChoices, answerEvents, answerTaskId, conversationQuestions, shortAsk } from '../web/askline.js';
 
 // The AI's question in the head of a conversation (triage-ai-v21 `ask`, design 2026-11-23 «Очередь — всё
 // распределено»): options as buttons, «Своими словами…», an answer writes `answer_question` and the chosen change.
@@ -38,14 +38,26 @@ test('an answer by a link: my task change adding the messages, then the answer',
 });
 
 test('an answer by a new record: my task of its template with the messages; nothing — only the answer', () => {
-  const [made, answer] = answerEvents(question, askChoices(question, tasksById)[1], { taskId: 'new-1' }).map((entry: any) => entry.event);
-  assert.equal(made.payload.ref.id, 'new-1');
+  const [made, answer] = answerEvents(question, askChoices(question, tasksById)[1]).map((entry: any) => entry.event);
+  assert.equal(made.payload.ref.id, answerTaskId(question, 1));
+  assert.match(made.payload.ref.id, /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   const task = made.payload.data.task;
   assert.deepEqual([task.op, task.title, task.template, task.add, task.roles.responsible, task.unconfirmed], ['create', 'Анна: отправить посылку', 'callback', ['m1', 'm2'], 'me', undefined]);
   assert.equal(answer.payload.data.option, 1);
   const only = answerEvents(question, askChoices(question, tasksById)[2]).map((entry: any) => entry.event);
   assert.equal(only.length, 1);
   assert.deepEqual(only[0].payload.data, { op: 'answer_question', question: question.id, option: 2 });
+});
+
+test('answering twice writes the same events: a double tap or a retry is one answer in the journal', () => {
+  const now = new Date('2026-11-24T10:05:00Z');
+  for (const choice of [...askChoices(question, tasksById), { text: 'это подарок' }]) {
+    assert.deepEqual(answerEvents(question, choice, { now }), answerEvents(question, choice, { now }), JSON.stringify(choice));
+  }
+  const ids = (choice: any) => answerEvents(question, choice).map((entry: any) => entry.event.id);
+  const [create, nothing] = [ids(askChoices(question, tasksById)[1]), ids(askChoices(question, tasksById)[2])];
+  assert.equal(create.at(-1), nothing.at(-1), 'one answer per question, whatever the choice');
+  assert.notEqual(ids({ text: 'да' }).at(-1), answerEvents({ ...question, id: 'another' }, { text: 'да' })[0].event.id, 'another question — other ids');
 });
 
 test('an answer in words: only the answer with the text', () => {
@@ -79,11 +91,15 @@ test('the server accepts what an answer and «↩» write', async () => {
     const first = event({ payload: { text: 'посылку маме отправишь?' } });
     const second = event({ payload: { text: 'до пятницы' } });
     for (const message of [first, second]) assert.equal((await post(message)).status, 201);
-    const asked = { ...question, id: crypto.randomUUID(), messageIds: [first.id, second.id] };
-    const record = crypto.randomUUID();
-    for (const { event: written } of answerEvents(asked, askChoices(asked, tasksById)[1], { taskId: record })) assert.equal((await post(written)).status, 201, written.kind);
-    for (const { event: written } of answerEvents(asked, { text: 'это подарок' })) assert.equal((await post(written)).status, 201, 'words');
-    for (const { event: written } of answerEvents({ ...asked, options: [{ label: 'Продолжение', task_id: record }] }, { kind: 'link', taskId: record, index: 0 })) assert.equal((await post(written)).status, 201, 'link');
+    const asked = () => ({ ...question, id: crypto.randomUUID(), messageIds: [first.id, second.id] });
+    const made = asked();
+    const record = answerTaskId(made, 1);
+    const answer = answerEvents(made, askChoices(made, tasksById)[1]);
+    for (const { event: written } of answer) assert.equal((await post(written)).status, 201, written.kind);
+    for (const { event: written } of answer) assert.equal((await post(written)).status, 200, `${written.kind}: a retry is the same event`);
+    assert.equal((await post(answerEvents(made, { text: 'передумал' })[0].event)).status, 409, 'a second, different answer is refused');
+    for (const { event: written } of answerEvents(asked(), { text: 'это подарок' })) assert.equal((await post(written)).status, 201, 'words');
+    for (const { event: written } of answerEvents(asked(), { kind: 'link', taskId: record, index: 0 })) assert.equal((await post(written)).status, 201, 'link');
     assert.equal((await post(unlinkEvent(second.id, record).event)).status, 201, '↩');
   } finally { await f.stop(); }
 });

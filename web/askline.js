@@ -4,7 +4,7 @@
 // owner's `answer_question` correction (the AI log settles the question by it) and the chosen change: a link to the
 // record — my `task_change` adding the messages, so it is my action in the queue —, a new record of mine, or nothing.
 // askChoices, answerEvents, conversationQuestions and shortAsk are pure; askLine builds the DOM.
-import { makeCorrection, makeTaskChange } from './shared.js';
+import { makeCorrection, makeTaskChange, nameUuid } from './shared.js';
 
 const ASK_SHORT = 56; // characters of the question on a queue tile
 
@@ -22,20 +22,26 @@ export function askChoices(question, tasksById) {
   return choices;
 }
 
+// The id of the record an answer by option `index` makes: one per question and option, on every device.
+export const answerTaskId = (question, index) => nameUuid(`answer-task|${question.id}|${index}`);
+
 // The entries an answer writes, the change first, the answer last. `choice` — one of askChoices, or { text } — words.
-// `taskId` — the id of a new record (tests pass one). The answer names the latest message of the question: the
-// queue treats it as handled with everything before it (projection.js `decided`).
-export function answerEvents(question, choice, { taskId = crypto.randomUUID() } = {}) {
+// Event ids come from the question (one change and one answer per question), so a double tap or a retry is the same
+// event and the journal keeps one; a different second answer is refused. The answer names the latest message of the
+// question: the queue treats it as handled with everything before it (projection.js `decided`).
+export function answerEvents(question, choice, { now = new Date() } = {}) {
   const ids = question.messageIds ?? [];
   const anchor = ids.at(-1);
+  const stamp = { id: nameUuid(`answer-change|${question.id}`), ts: now.toISOString() };
   const entries = [];
-  if (choice.kind === 'link') entries.push(makeTaskChange(choice.taskId, { op: 'update', add: ids }));
+  if (choice.kind === 'link') entries.push(makeTaskChange(choice.taskId, { op: 'update', add: ids }, stamp));
   if (choice.kind === 'create') {
-    entries.push(makeTaskChange(taskId, { op: 'create', title: choice.title.slice(0, 200), roles: { author: 'me', responsible: 'me', executors: ['me'] },
-      status: 'todo', add: ids, ...(choice.template ? { template: choice.template } : {}) }));
+    entries.push(makeTaskChange(answerTaskId(question, choice.index), { op: 'create', title: choice.title.slice(0, 200), roles: { author: 'me', responsible: 'me', executors: ['me'] },
+      status: 'todo', add: ids, ...(choice.template ? { template: choice.template } : {}) }, stamp));
   }
   const words = choice.text?.trim();
-  entries.push(makeCorrection(anchor, 'answer_question', { question: question.id, ...(words ? { answer: words.slice(0, 500) } : { option: choice.index }) }));
+  entries.push(makeCorrection(anchor, 'answer_question', { question: question.id, ...(words ? { answer: words.slice(0, 500) } : { option: choice.index }),
+    id: nameUuid(`answer|${question.id}`), ts: stamp.ts }));
   return entries;
 }
 
@@ -64,17 +70,32 @@ function element(tag, className, text) {
   return node;
 }
 
+const sent = new Set(); // questions answered on this page: their line stays locked until the redraw drops it
+
+// Locks or unlocks a line: every button and field of it.
+function lock(box, locked) {
+  box.classList.toggle('answered', locked);
+  for (const control of box.querySelectorAll('button, input')) control.disabled = locked;
+}
+
 // One question: «❓ текст», a button per choice, «Своими словами…» (a field; Enter sends). `answer(question, choice)`
-// writes it (chatview.js).
+// writes it (chatview.js) and resolves to false when it failed — then the line unlocks for another try. The first
+// answer locks the line: a second tap does nothing.
 export function askLine({ question, tasksById, answer }) {
   const box = element('div', 'ask-line');
   box.dataset.question = question.id;
   box.append(element('span', 'ask-text', `❓ ${question.text}`));
+  const send = (choice) => {
+    if (sent.has(question.id)) return;
+    sent.add(question.id);
+    lock(box, true);
+    Promise.resolve(answer(question, choice)).then((ok) => { if (ok === false) { sent.delete(question.id); lock(box, false); } });
+  };
   const buttons = element('div', 'ask-options');
   for (const choice of askChoices(question, tasksById)) {
     const chip = element('button', `chip suggest ask-option${choice.kind === 'nothing' ? ' muted' : ''}`, choice.label);
     chip.type = 'button';
-    chip.onclick = () => answer(question, choice);
+    chip.onclick = () => send(choice);
     buttons.append(chip);
   }
   const own = element('button', 'chip suggest muted ask-own', 'Своими словами…');
@@ -89,12 +110,16 @@ export function askLine({ question, tasksById, answer }) {
       if (event.key === 'Escape') { input.replaceWith(own); return; }
       if (event.key !== 'Enter' || !input.value.trim()) return;
       event.preventDefault();
-      answer(question, { text: input.value });
+      const text = input.value;
+      input.value = '';
+      input.blur(); // the head redraws only when no field holds the focus (chatview.js)
+      send({ text });
     };
     own.replaceWith(input);
     input.focus();
   };
   buttons.append(own);
   box.append(buttons);
+  if (sent.has(question.id)) lock(box, true);
   return box;
 }

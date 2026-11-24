@@ -364,13 +364,24 @@ test('answering a question handles its incoming messages: no reply needed after 
   assert.equal(queueOf([ask, question, nothing, later]).waiting, true, 'a later incoming waits again');
 });
 
-test('handled today: archived conversations whose last handling was today', () => {
-  const today = new Date('2026-11-18T18:00:00');
-  const list = [
-    { key: 'tg:1', views: [], tasks: [], last: '2026-11-18T09:00:00', queue: { waiting: false } },
-    { key: 'tg:2', views: [], tasks: [], last: '2026-11-17T09:00:00', queue: { waiting: false } },
-    { key: 'tg:3', views: [], tasks: [], last: '2026-11-18T10:00:00', queue: { waiting: true } },
-    { key: 'me', views: [], tasks: [], last: '2026-11-18T10:00:00', queue: { waiting: false } },
-  ];
-  assert.equal(handledToday(list, today), 1, 'only tg:1: tg:2 was handled yesterday, tg:3 still waits, «Я» is not a conversation with anyone');
+test('handled today: conversations out of the queue that I acted on today', () => {
+  const yesterday = '2026-11-17T09:00:00';
+  const replied = [tg('991', yesterday, 'счёт пришлёте?'), mine('991', '2026-11-18T08:00:00', 'да, сегодня')];
+  const thanks = tg('992', yesterday, 'спасибо');
+  const quietToday = [thanks, mark(thanks.id, '2026-11-17T09:30:00', 'answered')];
+  const chatter = tg('992', '2026-11-18T09:00:00', 'хорошего дня');
+  const filed = change('th1', '2026-11-18T09:01:00', { op: 'create', title: 'болтовня', template: 'chatter', status: 'done', add: [chatter.id] });
+  const decided = tg('993', yesterday, 'посылку отправишь?');
+  const answer = mark(decided.id, '2026-11-18T08:30:00', 'answer_question', { question: 'qq9', option: 1 });
+  const snoozed = tg('994', yesterday, 'перезвоните');
+  const later = mark(snoozed.id, '2026-11-18T08:40:00', 'snooze', { until: '2026-11-19T09:00:00' });
+  const waiting = tg('995', '2026-11-18T10:00:00', 'когда приедете?');
+  const tasked = tg('996', yesterday, 'нужна настройка роутера');
+  const myTask = change('th2', '2026-11-18T09:30:00', { op: 'create', title: 'Роутер', status: 'todo', add: [tasked.id] }, 'me');
+  const note = { id: `q${++n}`, schema_version: 1, source: 'app', author: 'me', ts: '2026-11-18T07:00:00', kind: 'text', payload: { text: 'идея', data: {} } };
+  const events = [...replied, ...quietToday, chatter, filed, decided, answer, snoozed, later, waiting, tasked, myTask, note];
+  const list = run(events);
+  assert.equal(list.find((c: any) => c.key === 'tg:992').queue.waiting, false, 'the chatter today waits for nothing');
+  assert.equal(handledToday(list, now), 4, 'my reply, my answer, my snooze, my task; not another person message today, not what waits, not «Я»');
+  assert.equal(handledToday(list, new Date('2026-11-19T12:00:00')), 0, 'tomorrow nothing yet');
 });

@@ -26,11 +26,28 @@ export async function entryFromShare(form) {
   return makeEntry({ source: 'share', kind: files.length ? 'file' : url ? 'link' : 'text', text, url, files });
 }
 
-// A task change by the owner (CONCEPT.md §2.8): create (with the message it came from) or update.
-export function makeTaskChange(taskId, task) {
+// A UUID-shaped id from a stable key (version 5 layout over four FNV-1a hashes): the same act on this device always
+// gets the same event id, so a double tap or a retry is dropped by the journal (rule 8). Not the server's `nameId`
+// (src/ids.ts, sha256) — only stable per key, which is all an id needs.
+export function nameUuid(key) {
+  const words = [0x811c9dc5, 0x01000193, 0x9e3779b9, 0x85ebca6b].map((seed) => {
+    let hash = seed >>> 0;
+    for (const char of `${seed}|${key}`) { hash ^= char.codePointAt(0); hash = Math.imul(hash, 0x01000193) >>> 0; }
+    return hash.toString(16).padStart(8, '0');
+  });
+  const hex = words.join('').split('');
+  hex[12] = '5';
+  hex[16] = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  const text = hex.join('');
+  return `${text.slice(0, 8)}-${text.slice(8, 12)}-${text.slice(12, 16)}-${text.slice(16, 20)}-${text.slice(20)}`;
+}
+
+// A task change by the owner (CONCEPT.md §2.8): create (with the message it came from) or update. `id` / `ts` — a
+// stable event id and time (askline.js), else new ones.
+export function makeTaskChange(taskId, task, { id = crypto.randomUUID(), ts = new Date().toISOString() } = {}) {
   return {
     event: {
-      id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'task_change',
+      id, schema_version: 1, source: 'app', author: 'me', ts, kind: 'task_change',
       payload: { ref: { type: 'task', id: taskId }, data: { task } },
     },
     files: [],
@@ -65,10 +82,10 @@ export function ownTask(title, messageId) {
 
 // An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4). An answer to the AI's
 // question (`answer_question`, askline.js): `question` and an `option` index or the words in `answer`.
-export function makeCorrection(targetId, op, { text, tags = [], target, title, until, proposal, question, option, answer } = {}) {
+export function makeCorrection(targetId, op, { text, tags = [], target, title, until, proposal, question, option, answer, id = crypto.randomUUID(), ts = new Date().toISOString() } = {}) {
   return {
     event: {
-      id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'correction',
+      id, schema_version: 1, source: 'app', author: 'me', ts, kind: 'correction',
       payload: { ref: { type: 'event', id: targetId }, data: { op, ...(target ? { target } : {}), ...(title ? { title } : {}), ...(until ? { until } : {}), ...(proposal ? { proposal } : {}),
         ...(question ? { question } : {}), ...(option !== undefined ? { option } : {}), ...(answer ? { text: answer } : {}) }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
     },

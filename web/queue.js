@@ -176,11 +176,29 @@ export function handledAt(conversation) {
   return at;
 }
 
-// «Всё распределено ✓ · разобрано сегодня: N»: conversations with someone that wait for nothing and were last dealt
-// with today (handledAt — a reply, the archive mark, a snooze, a task of mine; a new incoming that was answered counts).
+// «Всё распределено ✓ · разобрано сегодня: N»: conversations with someone that wait for nothing and that I acted on
+// today — my outgoing message, the archive mark, a snooze, an answer to the AI's question, a task of mine taking its
+// messages. Someone else's message today is not my act.
 export function handledToday(list, now = new Date()) {
   const today = now.toDateString();
-  return archiveList(list).filter((item) => new Date(item.handledAt).toDateString() === today).length;
+  const onToday = (ts) => Boolean(ts) && new Date(ts).toDateString() === today;
+  return archiveList(list).filter((conversation) => myActs(conversation).some(onToday)).length;
+}
+
+// The times of my acts on a conversation (handledToday).
+function myActs(conversation) {
+  const ids = new Set(conversation.views.map((view) => view.id));
+  const acts = [];
+  for (const view of conversation.views) {
+    if (view.deleted) continue;
+    if (directionOf(view.event) === 'out' && conversationOf(view.event) !== 'me') acts.push(view.event.ts);
+    if (view.answered) acts.push(view.answeredAt);
+    acts.push(view.decidedAt, ...(view.snoozes ?? []).map((item) => item.at));
+  }
+  for (const task of conversation.tasks) {
+    for (const entry of task.history ?? []) if (entry.author === 'me' && (entry.change?.add ?? []).some((id) => ids.has(id))) acts.push(entry.ts);
+  }
+  return acts;
 }
 
 // The archive above the queue (owner, 2026-11-21): the conversations that wait for nothing (read, answered, archived,

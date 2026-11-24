@@ -137,6 +137,7 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .ask-options { display: flex; flex-wrap: wrap; gap: 6px; }
 .ask-option { max-width: 100%; white-space: normal; text-align: left; }
 .ask-input { flex: 1 1 100%; }
+.ask-line.answered { opacity: .55; } /* answered: locked until the redraw drops it */
 .contacts-me .drawer-title { font-weight: 600; }
 .bubble.system { align-self: center; max-width: 92%; background: var(--panel); color: var(--muted); font-size: 14px; box-shadow: none; border-radius: 12px; cursor: pointer; }
 .bubble.system .link-row, .bubble.system .more { display: none; }
