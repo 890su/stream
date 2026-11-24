@@ -1,7 +1,7 @@
 ---
 project_id: stream
 status: active
-updated: 2026-11-19
+updated: 2026-11-24
 ---
 
 # Stream — concept
@@ -397,12 +397,12 @@ due, items, status, merge a duplicate; nothing applies by itself and the owner's
 **«✨ Разобрать заново»** in a conversation runs v21 on its last session and replaces only the AI's own: waiting
 proposals, unconfirmed AI records, system links the owner did not touch. Before v21 ships, `pnpm golden` runs the
 real AI over `golden/` (fictional cases); the threshold: no more missed tasks than v19 and fewer duplicates.
-**A batch is a window, not one task:** each message goes to
-zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
-two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
-script). Its outcome: leave it in the conversation, file material meant to be kept (e.g. wellbeing → diary),
-attach to an open task, or create a task for me, the system or a person. A message without a triage outcome is
-untriaged. Owner corrections (move to another task, merge, cancel) are events and golden examples.
+**A batch is a window, not one task:** a message goes to zero, one or several records, including open ones (a
+clarification of an old record); two matters in one message give two records. There is no mandatory outcome per
+message and no default «разобрать» task: a message with no action is just talk. `conversation_only` stays an optional
+output meaning «не требует ответа» (e.g. «спасибо, работает» does not hold the queue). `#поручить` with a person is a
+task on that person plus a draft of the assignment in the input of their conversation; only the owner sends it
+(class B). Owner corrections (move to another record, merge, cancel) are events and golden examples.
 
 **Work changes when an obligation changes.** A request, acceptance, commitment, or material change to an existing
 task can start or advance work. An announcement, forward, or retelling of a plan already in place stays in the
@@ -424,12 +424,13 @@ a day or a time is work: a task due that day, even when the rest is picking the 
 - Several likely tasks: the message goes to the most likely one, and under it appears «О каком деле?» with the
   chosen one (✓), up to three alternatives and «Новое дело». A tap moves the message (a closed task reopens);
   tapping the chosen one confirms. The answer is a task event and a golden example.
-- **An existing task is only proposed** (owner, 2026-11-21, `triage-ai-v15`, docs/plans/2026-11-21-ai-proposals-design.md):
-  the triage never changes an existing task by itself. Messages it relates to one, with the checklist items, «Готово?»,
-  project and counterparty it would add, become a proposal in its `triage_result`; under the message — «ИИ предлагает в
-  задачу: …», the reason in one line, other likely tasks, «+ Новое дело», «✕ Ни с чем». ✓ applies the whole proposal;
-  until the owner answers, the messages are in no task and the conversation waits in the queue. New tasks are still
-  made by the triage itself; a «без дела» or diary message joining the same filed note is not asked about.
+- **An existing task is changed only by proposal** (owner, 2026-11-21, `triage-ai-v15`, narrowed by v21,
+  docs/plans/2026-11-21-ai-proposals-design.md): the triage never changes the content of an existing task by itself.
+  Title, due, checklist items, «Готово?», project and counterparty it would change become a proposal in its
+  `triage_result`; under the message — «ИИ предлагает в задачу: …», the reason in one line, «+ Новое дело», «✕ Ни с
+  чем». ✓ applies the whole proposal; a waiting proposal holds the conversation in the queue. Since v21 the link of
+  messages to an existing record (`link`) is applied by the system with «↩» to undo; new tasks are made by the triage
+  itself.
 - **Unconfirmed tasks** (owner, 2026-11-21, `triage-ai-v16`, docs/plans/2026-11-21-workspace-redesign-design.md): a
   conversation's record is empty, unconfirmed or real. The System screen chooses how the AI makes new tasks:
   «ИИ предлагает — я подтверждаю» (default: `task_change.unconfirmed: true`) or «ИИ создаёт сразу». An unconfirmed task
