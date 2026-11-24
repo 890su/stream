@@ -24,7 +24,7 @@ export interface PlanProject { id: string; title: string; kind: string; scope: s
 export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; counterparties: PlanCounterparty[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; earlier_available: boolean; messages: PlanMessage[] }
 
 export interface PlannedTask {
-  task_id: string | null; // an open or recently closed task this continues, or null for a new one
+  task_id: string | null; // an open record this continues, or a closed one only as a link (repeats use repeat_of); null for a new one
   title: string;
   responsible: string; // a party: who answers for the result
   executors: string[]; // parties: who does it (may be empty)
@@ -70,6 +70,27 @@ export interface PlanOutput {
 
 export type Planner = (input: PlanInput) => Promise<PlanOutput>;
 
+// The API allows at most 16 union-typed (nullable) parameters in a schema, nested ones counted. These string fields
+// are plain strings with '' for none (the instruction says so); `restoreNulls` maps '' back to null.
+export const EMPTY_AS_NULL = { task: ['task_id', 'author', 'template', 'due', 'reason', 'note', 'repeat_of', 'rename', 'project', 'section', 'counterparty', 'counterparty_hint'], option: ['task_id', 'title', 'template'] } as const;
+const orNull = (value: unknown) => (typeof value === 'string' && !value.trim() ? null : value ?? null);
+export function restoreNulls<T extends Pick<PlanOutput, 'tasks'> & { questions?: unknown }>(answer: T): T & { questions: PlannedQuestion[] } {
+  const tasks = answer.tasks.map((task) => {
+    const restored: Record<string, unknown> = { ...task };
+    for (const key of EMPTY_AS_NULL.task) if (key in restored) restored[key] = orNull(restored[key]);
+    return restored as unknown as PlannedTask;
+  });
+  const questions = (Array.isArray(answer.questions) ? answer.questions as PlannedQuestion[] : []).map((question) => ({
+    ...question,
+    options: (question.options ?? []).map((option) => {
+      const restored: Record<string, unknown> = { ...option };
+      for (const key of EMPTY_AS_NULL.option) restored[key] = orNull(restored[key]);
+      return restored as unknown as PlannedQuestion['options'][number];
+    }),
+  }));
+  return { ...answer, tasks, questions };
+}
+
 // JSON Schema of the planner's structured output.
 export const PLAN_SCHEMA = {
   type: 'object',
@@ -88,7 +109,7 @@ export const PLAN_SCHEMA = {
             type: 'array',
             items: {
               type: 'object', additionalProperties: false, required: ['label', 'task_id', 'title', 'template', 'nothing'],
-              properties: { label: { type: 'string' }, task_id: { type: ['string', 'null'] }, title: { type: ['string', 'null'] }, template: { type: ['string', 'null'] }, nothing: { type: 'boolean' } },
+              properties: { label: { type: 'string' }, task_id: { type: 'string' }, title: { type: 'string' }, template: { type: 'string' }, nothing: { type: 'boolean' } },
             },
           },
         },
@@ -104,7 +125,7 @@ export const PLAN_SCHEMA = {
         required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'reason', 'note', 'filed', 'done', 'repeat_of', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'],
         properties: {
           task_id: { type: ['string', 'null'] },
-          reason: { type: ['string', 'null'] },
+          reason: { type: 'string' },
           title: { type: 'string' },
           responsible: { type: 'string' },
           executors: { type: 'array', items: { type: 'string' } },
@@ -113,18 +134,18 @@ export const PLAN_SCHEMA = {
           due: { type: ['string', 'null'] },
           message_ids: { type: 'array', items: { type: 'string' } },
           confidence: { type: 'number' },
-          note: { type: ['string', 'null'] },
+          note: { type: 'string' },
           filed: { type: 'boolean' },
           done: { type: 'boolean' },
           repeat_of: { type: ['string', 'null'] },
           items: { type: 'array', items: { type: 'string' } },
-          rename: { type: ['string', 'null'] },
+          rename: { type: 'string' },
           project: { type: ['string', 'null'] },
-          section: { type: ['string', 'null'] },
+          section: { type: 'string' },
           project_options: { type: 'array', items: { type: 'string' } },
           counterparty: { type: ['string', 'null'] },
           counterparty_options: { type: 'array', items: { type: 'string' } },
-          counterparty_hint: { type: ['string', 'null'] },
+          counterparty_hint: { type: 'string' },
           report: {
             type: ['object', 'null'], additionalProperties: false, required: ['note', 'duration_min', 'cost', 'expenses', 'currency'],
             properties: { note: { type: ['string', 'null'] }, duration_min: { type: ['number', 'null'] }, cost: { type: ['number', 'null'] }, expenses: { type: ['number', 'null'] }, currency: { type: ['string', 'null'] } },
@@ -149,14 +170,15 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   субботу», «а сколько?», «сделал», «как договаривались»), и earlier_available: true, верни need_earlier: true,
   tasks: [], conversation_only: [], questions: [], unfinished: null — тебе дадут ещё и предыдущую сессию. Иначе
   need_earlier: false и обычный разбор. Не проси раньше, если и так понятно.
-- Продолжение разговора — продолжение записи. Сначала сверь новые сообщения с open_tasks и in_tasks из context:
-  уточнение, повтор просьбы, «ну что там?», ответ по делу, «готово» — это та же запись: её task_id, title — как у неё.
+- Продолжение разговора — продолжение записи. Сначала сверь новые сообщения с open_tasks и открытыми записями из
+  in_tasks: уточнение, повтор просьбы, «ну что там?», ответ по делу, «готово», «спасибо, работает» — это та же запись:
+  её task_id, title — как у неё.
   Новая запись — только если ни одна не подходит по сути (предмет, оборудование, заказ, адрес, выезд). Дело может длиться
   много дней: сверяй собеседника (chats — откуда сообщения записи), предмет и last_at. Сообщение из другого чата относи
   к записи, только если оно явно о том же деле; то же слово или сайт в разговоре о другом — не повод.
 - Новая просьба того же собеседника по открытому делу («а ещё…», «забыл…», «и вот это») — не новая задача: task_id
   дела, просьба — пунктом в items, новый срок — в due. Если дело было одним действием, а теперь их несколько, rename —
-  общее название «Собеседник: предмет», но только когда owner_titled: false; иначе rename: null. Изменения существующей
+  общее название «Собеседник: предмет», но только когда owner_titled: false; иначе rename: "". Изменения существующей
   записи (название, срок, пункты, «сделано») владелец подтверждает сам.
 - Задача — владельца просят что-то сделать, он обещает или берётся сделать, договорились о встрече или выезде. Кто
   просит — клиент, напарник, родные или друзья — неважно: «отправь», «позвони», «купи», «забери» от близких — такая же
@@ -174,14 +196,15 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   (как быть, что выбрать, сколько стоит, что значит ошибка, что нажать — и собеседник делает сам), бывает часто,
   в оплату не идёт. Задача — когда из разговора выросла работа (выезд, удалённое подключение, настройка, заказ, счёт,
   оферта) или владелец обещал сделать позже; подсказки собеседнику, что нажать, — не пункты этой задачи.
-- Закрытые записи (closed_tasks) в работу не возвращаются. Новая просьба по закрытому делу («опять не работает», «по
-  гарантии», «сделай ещё раз») — новая задача: task_id: null, repeat_of — id закрытой записи, у неё будет свой отчёт.
-  Благодарность или подтверждение по закрытой записи («спасибо, работает», «оплатил») — не повтор:
-  ничего. У остальных задач repeat_of: null.
-- Деньги — назван расход или приход (чек, оплата, перевод, наличка): задача с template money; note — сумма, валюта,
-  за что; counterparty — клиент, если он есть.
-- Заметка, идея, план, дневник — только из ввода владельца (source me, direction note) или по метке-указанию; из чужой
-  переписки их не заводи. Это задачи с filed: true — они сразу закрыты: diary (самочувствие, события дня), plan (идея,
+- Закрытые записи (closed_tasks) в работу не возвращаются. Отклик на закрытую запись без новой просьбы («спасибо,
+  работает», «всё заработало», «получил») — её task_id только как ссылка: done: false, items: [], rename: "", due: null;
+  это не повтор и не возврат в работу. Новая просьба по закрытому делу («опять не работает», «по гарантии», «сделай ещё
+  раз») — новая задача: task_id: null, repeat_of — id закрытой записи, у неё будет свой отчёт. У остальных задач
+  repeat_of: null.
+- Деньги — назван расход или приход (чек, оплата, «оплатил», перевод, наличка), в том числе по закрытой записи:
+  задача с template money; note — сумма, валюта, за что; counterparty — клиент, если он есть.
+- Заметка, идея, план, дневник — только из ввода владельца (source me, direction note) или когда владелец пометил
+  сообщение меткой этого вида (в tags или directive); иначе из чужой переписки их не заводи. Это задачи с filed: true — они сразу закрыты: diary (самочувствие, события дня), plan (идея,
   для которой нет подходящего проекта), note (справка, которую владелец хочет сохранить: адрес, код, договорённость).
   Несколько таких материалов одного вида — одна задача. Идея или мысль о доработке известного проекта — не filed:
   задача в этом проекте, section — раздел с role ideas; шаг, который прямо следующий («завтра сделаю…»), — раздел с
@@ -193,8 +216,8 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
 - Ничего — обсуждение работы и клиентов без просьбы, новости, мнения, рассказ о своих делах, передача сведений,
   приветствия, служебное. Итог у каждого сообщения не обязателен: просто разговор не попадает ни в tasks, ни в
   questions.
-- conversation_only — сообщения, которые не требуют от владельца ответа (спасибо, ок, приветствие, служебное,
-  «работает»); не обязательно, можно []. Один id не включай и в conversation_only, и в задачу.
+- conversation_only — сообщения вне записей, которые не требуют от владельца ответа (ок, приветствие, служебное);
+  не обязательно, можно []. Один id не включай и в conversation_only, и в задачу.
 - filed: false — настоящее дело, которое кто-то должен сделать. done: true — сообщения говорят, что дело сделано
   («готово», «сделал», «установил, работает»); у существующей записи это вопрос владельцу «сделано?» с отчётом. У
   filed-задач done всегда false.
@@ -206,11 +229,11 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   перечисляет несколько мелочей одного дела («купить кабель, коннекторы и стяжки») — одна задача, items — пункты.
   Отдельные дела владельца (из его заметок и личных просьб) — каждое своей задачей, в чеклист чужого дела не складывай.
 - items — короткие пункты по-русски, одна строка каждый; пункты, которые уже есть у задачи (items в open_tasks), не
-  повторяй. Новая задача из одного действия — items: []. rename — только для задачи с task_id, иначе null. Пункт — только
+  повторяй. Новая задача из одного действия — items: []. rename — только для задачи с task_id, иначе "". Пункт — только
   шаг, который исполнителю задачи ещё предстоит сделать. Не пункты: указания владельца собеседнику, действия
   собеседника, сделанное («отправлен», «исправлено»), факты и статусы, советы. Такое — в note задачи или ничего.
 - Проекты (projects — активные проекты с разделами; scope — что к проекту относится, словами владельца). У каждой
-  задачи project — id проекта, к которому она относится, и section — id его раздела, или null. В проект кладёшь только
+  задачи project — id проекта, к которому она относится, или null; section — id его раздела или "". В проект кладёшь только
   дело, которое подходит под его scope (по смыслу дела, а не по чату или стране): личные, семейные и бытовые дела, чужие
   для проекта работы — project: null, даже если сообщение пришло из рабочего чата. default_project — лишь подсказка:
   проект источника, если дело подходит под его scope. У проекта без scope — только явно его дела. Если уверенности нет —
@@ -220,8 +243,8 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   counterparty — id контрагента, о ком дело: организация автора (person сообщения и people контрагента), адрес из
   сообщений. Не уверен — counterparty: null, counterparty_options — до трёх вероятных id, и counterparty_hint — как
   назвать нового, если его нет в списке: название фирмы или адрес («ООО Ромашка», «ул. Dzika 11, Варшава»); иначе
-  counterparty_hint: null. Своё дело владельца без контрагента — counterparty: null, hint: null. Задача, у которой
-  контрагент уже есть, остаётся с ним. filed-задачам — null. Название задачи начинай с контрагента из списка.
+  counterparty_hint: "". Своё дело владельца без контрагента — counterparty: null, counterparty_hint: "". Задача, у которой
+  контрагент уже есть, остаётся с ним. filed-задачам — null и "". Название задачи начинай с контрагента из списка.
 - unfinished — закончена ли беседа после новых сообщений (смотри и context). Если собеседник ещё ждёт от владельца
   действия — выезда, звонка, ответа по существу, расчёта, присылки, — и ни одна задача это не покрывает (ни новая из
   tasks этого ответа, ни открытая из open_tasks этого собеседника), напиши коротко, чего ждут, со сроком, если он
@@ -238,6 +261,8 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   слова, люди, чат, адрес связывают их.
 - questions — когда не уверен, куда отнести сообщения: message_ids; text — короткий вопрос по-русски («О каком деле
   речь?»); options — 2–3 варианта, вероятный первым: существующая запись (task_id, label — её название, title и
-  template null, nothing false), новая запись (task_id null, title, template, label — коротко), ничего (nothing true,
-  task_id, title и template null, label «Ничего»).
+  template "", nothing false), новая запись (task_id "", title, template, label — коротко), ничего (nothing true,
+  task_id, title и template "", label «Ничего»).
+- Пустое значение — "" (не null) у reason, note, rename, section, counterparty_hint и у task_id, title, template в
+  вариантах вопроса; null — там, где правила выше говорят null.
 - Не придумывай фактов, которых нет в сообщениях.`;

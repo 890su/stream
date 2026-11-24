@@ -75,10 +75,35 @@ test('v21 instruction: continuation first, repeats of closed records, no outcome
   for (const rule of ['продолжение', 'repeat_of', 'не обязательно', 'questions', 'directive', 'money', 'need_earlier', 'unfinished']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   assert.ok(!PLAN_INSTRUCTIONS.includes('лишняя задача хуже пропущенной') && !PLAN_INSTRUCTIONS.includes('Лишняя задача хуже пропущенной'));
   assert.ok(!PLAN_INSTRUCTIONS.includes('личная и семейная переписка'), 'a family request is a task like any other');
-  assert.ok(!/тем[аыу]\b/.test(PLAN_INSTRUCTIONS), 'no topics left from the reverted v20');
+  assert.ok(!/(^|[^а-яё])тем[аыу]([^а-яё]|$)/i.test(PLAN_INSTRUCTIONS), 'no topics left from the reverted v20');
+  assert.ok(!PLAN_INSTRUCTIONS.includes('«оплатил») — не повтор'), 'a payment is a money record, not «nothing»');
 });
 
 test('v21 processor', async () => {
   const { tasksConfig } = await import('../src/config.ts');
   assert.equal(tasksConfig.ai.processor, 'triage-ai-v21');
+});
+
+// The API refuses a schema with more than 16 union-typed parameters (type arrays or anyOf), nested ones counted.
+test('the plan schema stays within the API limit of 16 union-typed parameters', async () => {
+  const { PLAN_SCHEMA } = await import('../src/tasks/planner.ts');
+  const unions = (node: unknown): number => {
+    if (!node || typeof node !== 'object') return 0;
+    const own = Array.isArray((node as any).type) || 'anyOf' in (node as object) ? 1 : 0;
+    return own + Object.values(node as object).reduce((sum: number, child) => sum + unions(child), 0);
+  };
+  const count = unions(PLAN_SCHEMA);
+  assert.ok(count <= 16, `${count} union-typed parameters`);
+});
+
+test('restoreNulls: empty-string sentinels come back as null; missing questions read as none', async () => {
+  const { restoreNulls } = await import('../src/tasks/planner.ts');
+  const task = { task_id: '', title: 'Анна: принтер', responsible: 'me', executors: [], author: null, template: 'todo', due: null, message_ids: ['m1'], confidence: 0.8,
+    reason: '', note: '', filed: false, done: false, repeat_of: 'r5', items: [], rename: '', project: null, section: '', counterparty: null, counterparty_hint: ' ' };
+  const restored = restoreNulls({ tasks: [task], conversation_only: [], questions: [{ message_ids: ['m1'], text: 'О каком деле?', options: [
+    { label: 'Принтер', task_id: 'r1', title: '', template: '', nothing: false }, { label: 'Ничего', task_id: '', title: '', template: '', nothing: true }] }] });
+  const out = restored.tasks[0]!;
+  assert.deepEqual([out.task_id, out.reason, out.note, out.rename, out.section, out.counterparty_hint, out.repeat_of, out.title], [null, null, null, null, null, null, 'r5', 'Анна: принтер']);
+  assert.deepEqual(restored.questions[0]!.options.map((option) => [option.task_id, option.title, option.template]), [['r1', null, null], [null, null, null]]);
+  assert.deepEqual(restoreNulls({ tasks: [], conversation_only: [] }).questions, []);
 });

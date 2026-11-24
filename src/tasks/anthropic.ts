@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { tasksConfig } from '../config.ts';
-import { PLAN_INSTRUCTIONS, PLAN_SCHEMA, type PlanInput, type PlanOutput, type Planner } from './planner.ts';
+import { PLAN_INSTRUCTIONS, PLAN_SCHEMA, restoreNulls, type PlanInput, type PlanOutput, type Planner } from './planner.ts';
 import { TITLE_RULE, type NameInput, type NameOutput, type Namer } from './namer.ts';
 
 // The AI planner for the task triage (CONCEPT.md §2.8, §6): one structured-output call per batch.
@@ -31,7 +31,7 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
     if (!text || text.type !== 'text') throw new Error('модель не вернула разбор');
     const parsed = JSON.parse(text.text) as Pick<PlanOutput, 'tasks' | 'conversation_only' | 'questions'>;
     if (!Array.isArray(parsed.tasks) || !Array.isArray(parsed.conversation_only)) throw new Error('модель вернула неполный разбор');
-    return { ...parsed, questions: Array.isArray(parsed.questions) ? parsed.questions : [], usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
+    return { ...restoreNulls(parsed), usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
   };
 }
 
