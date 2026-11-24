@@ -4,7 +4,7 @@
 // `recheck: <task id>`, listed in the card with ✓ ✕ (web/recheck.js). The server applies nothing. A merge's second
 // half (closing the duplicate) rides in the proposal's `also`. A new pass withdraws what the last one left waiting.
 import type { JournalStore } from '../store/store.ts';
-import type { JournalEvent } from '../contracts/validate.ts';
+import { isDateTime, type JournalEvent } from '../contracts/validate.ts';
 import type { LiveFeed } from '../server/live.ts';
 import type { AiDecision } from '../store/ailog.ts';
 import { tasksConfig } from '../config.ts';
@@ -56,7 +56,9 @@ export async function recheck({ store, live, rechecker, taskId }: { store: Journ
     }
     const others = neighbours(tasks, record, messages);
     const asPlan = planTask(store);
-    const output = await rechecker({ now: at, record: asPlan(record), others: others.map(asPlan), messages }).catch((error: unknown) => {
+    const earlier = earlierOf(store, taskId, record.messages);
+    const output = await rechecker({ now: at, record: asPlan(record), others: others.map(asPlan), messages,
+      ...(earlier.rejected.length ? { rejected: earlier.rejected } : {}) }).catch((error: unknown) => {
       throw new HttpError(502, `Сверка не удалась: ${error instanceof Error ? error.message : error}`.slice(0, 300));
     });
 
@@ -67,8 +69,8 @@ export async function recheck({ store, live, rechecker, taskId }: { store: Journ
     store.ailog.run({ id: runId, at, processor: tasksConfig.ai.recheck_processor, model: tasksConfig.ai.model, stream: `task:${taskId}`, messages: messages.length,
       input_tokens: output.usage?.input_tokens ?? 0, output_tokens: output.usage?.output_tokens ?? 0, cost_usd: cost, input: { record: record.id, messages: messages.length }, output: { proposals: output.proposals } });
 
-    const proposals = toProposals(output.proposals, { record, others, messages, removed: ownerRemoved(taskEvents).get(taskId) ?? new Set(), key: `${taskId}|${at}` });
-    const withdrawn = earlierWaiting(store, taskId, record.messages);
+    const proposals = toProposals(output.proposals, { record, others, messages, removed: ownerRemoved(taskEvents), key: `${taskId}|${at}` });
+    const withdrawn = earlier.waiting;
     const result = store.appendEvent({ id: nameId(`recheck-result|${taskId}|${at}`), schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'triage_result',
       payload: { data: { triage: { processor: tasksConfig.ai.recheck_processor, conversation_only: [], recheck: taskId,
         ...(proposals.length ? { proposals } : {}), ...(withdrawn.length ? { withdrawn } : {}) } } } });
@@ -81,7 +83,9 @@ export async function recheck({ store, live, rechecker, taskId }: { store: Journ
 }
 
 // The record's conversations from the session before its first message there to now, oldest first; at most
-// max_batch × 3 messages: the record's own always, then the newest of the rest.
+// max_batch × 3 messages. Over the bound: the record's own first (its newest, when they alone are too many), then each
+// conversation's session before the record's first message there (so one busy chat cannot crowd out another), then
+// the newest of the rest.
 function conversationsOf(store: JournalStore, own: JournalEvent[], inRecord: Set<string>): JournalEvent[] {
   const first = [...own].sort((a, b) => (before(a, b) ? -1 : 1))[0]!;
   const since = new Date(Date.parse(first.received_at ?? first.ts) - tasksConfig.history_days * 86_400_000).toISOString();
@@ -92,16 +96,21 @@ function conversationsOf(store: JournalStore, own: JournalEvent[], inRecord: Set
     if (keys.has(key)) byKey.set(key, [...(byKey.get(key) ?? []), event]);
   }
   const taken = new Map(own.map((event) => [event.id, event]));
+  const lead = new Set<string>(); // the session before the record's first one, per conversation
   for (const history of byKey.values()) {
     const sessions = sessionsOf(history, tasksConfig.session_gap_h * 3_600_000);
     const start = sessions.findIndex((session) => session.some((event) => inRecord.has(event.id)));
+    if (start > 0) for (const event of sessions[start - 1]!) if (!inRecord.has(event.id)) lead.add(event.id);
     for (const event of sessions.slice(Math.max(0, start - 1)).flat()) taken.set(event.id, event);
   }
-  const all = [...taken.values()].sort((a, b) => (before(a, b) ? -1 : 1));
+  const byTime = (a: JournalEvent, b: JournalEvent) => (before(a, b) ? -1 : 1);
+  const all = [...taken.values()].sort(byTime);
   const cap = tasksConfig.max_batch * 3;
   if (all.length <= cap) return all;
-  const rest = all.filter((event) => !inRecord.has(event.id)).slice(-Math.max(0, cap - own.length));
-  const keep = new Set([...own.map((event) => event.id), ...rest.map((event) => event.id)]);
+  const newest = (events: JournalEvent[], room: number) => (room > 0 ? events.slice(-room) : []);
+  const keep = new Set(newest([...own].sort(byTime), cap).map((event) => event.id));
+  for (const event of newest(all.filter((item) => lead.has(item.id)), cap - keep.size)) keep.add(event.id);
+  for (const event of newest(all.filter((item) => !keep.has(item.id) && !inRecord.has(item.id)), cap - keep.size)) keep.add(event.id);
   return all.filter((event) => keep.has(event.id));
 }
 
@@ -125,12 +134,19 @@ const planTask = (store: JournalStore) => (task: Task): PlanTask => {
     items: task.items.map((item) => ({ text: item.text, done: item.done })), owner_titled: task.owner_titled };
 };
 
+// A full date (a real day) or an ISO date-time, nothing after it.
+const isDue = (value: string) => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) { const day = new Date(`${value}T00:00:00Z`); return !Number.isNaN(day.getTime()) && day.toISOString().startsWith(value); }
+  return isDateTime(value);
+};
 const line = (value: string | null, max = 200) => (value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
 // The rechecker's answer → proposals the owner answers ✓ ✕. Ids only from the input; an unknown target drops the
 // proposal; a message the owner put elsewhere or took out of the record is never proposed for `add`.
-export function toProposals(answer: RecheckProposal[], { record, others, messages, removed, key }:
-  { record: Task; others: Task[]; messages: RecheckMessage[]; removed: Set<string>; key: string }): Written[] {
+// `removed` — task id → messages the owner took out of it (triageapply.ts `ownerRemoved`): never proposed back there.
+export function toProposals(answer: RecheckProposal[], { record, others, messages, removed: removedBy, key }:
+  { record: Task; others: Task[]; messages: RecheckMessage[]; removed: Map<string, Set<string>>; key: string }): Written[] {
+  const removed = removedBy.get(record.id) ?? new Set<string>();
   const shown = new Map(messages.map((message) => [message.id, message]));
   const known = new Map(others.map((task) => [task.id, task]));
   const inRecord = new Set(record.messages);
@@ -148,13 +164,14 @@ export function toProposals(answer: RecheckProposal[], { record, others, message
     } else if (item.kind === 'remove') {
       ids = cited.filter((id) => inRecord.has(id));
       if (ids.length) change = { remove: ids };
-      if (change && target) also = [{ task_id: target.id, change: { op: 'update', add: ids } }];
+      const moving = target ? ids.filter((id) => !removedBy.get(target.id)?.has(id) && !target.messages.includes(id)) : [];
+      if (change && moving.length) also = [{ task_id: target!.id, change: { op: 'update', add: moving } }];
     } else if (item.kind === 'rename') {
       const title = line(item.value);
       if (title && title !== record.title) change = { title };
     } else if (item.kind === 'due') {
       const due = item.value?.trim() ?? null;
-      if (due === null ? record.due : /^\d{4}-\d{2}-\d{2}/.test(due) && due !== record.due) change = { due };
+      if (due === null ? record.due : isDue(due) && due !== record.due) change = { due };
     } else if (item.kind === 'items') {
       const text = line(item.value);
       if (text && !record.items.some((known) => known.text.trim().toLowerCase() === text.toLowerCase())) change = { items_add: [{ id: nameId(`item|${record.id}|${text}`), text }] };
@@ -182,28 +199,43 @@ function mergeChange(record: Task, dup: Task, removed: Set<string>): { change: R
   return { ids, change: { ...(ids.length ? { add: ids } : {}), ...(moved.length ? { items_add: moved.map(({ id, text }) => ({ id, text })) } : {}), ...(done.length ? { items_set: done } : {}) } };
 }
 
-// Proposals of earlier rechecks of this record still waiting for the owner (no ✓ — an owner change naming it, no ✕ —
-// a `reject_proposal`, not withdrawn): the new pass replaces them. ✕ is a correction of one of the record's messages
-// or of the proposal's own (web/recheck.js).
-function earlierWaiting(store: JournalStore, taskId: string, recordMessages: string[]): string[] {
-  const results = store.triage.results();
-  const settled = new Set<string>();
-  const mine: { id: string; message_ids: string[] }[] = [];
-  for (const result of results) {
-    const triage = result.payload.data?.triage as { recheck?: string; withdrawn?: string[]; proposals?: { id: string; message_ids: string[] }[] } | undefined;
-    for (const id of triage?.withdrawn ?? []) settled.add(id);
+// Earlier rechecks of this record: proposals still waiting for the owner (no ✓ — an owner change naming it, no ✕ — a
+// `reject_proposal`, not withdrawn) — the new pass replaces them; and the ones he rejected — shown to the AI so it does
+// not offer them again. ✕ is a correction of the proposal's first message or of one of the record's (web/recheck.js).
+function earlierOf(store: JournalStore, taskId: string, recordMessages: string[]): { waiting: string[]; rejected: { kind: string; value: string }[] } {
+  const withdrawn = new Set<string>();
+  const mine: Written[] = [];
+  for (const result of store.triage.results()) {
+    const triage = result.payload.data?.triage as { recheck?: string; withdrawn?: string[]; proposals?: Written[] } | undefined;
+    for (const id of triage?.withdrawn ?? []) withdrawn.add(id);
     if (triage?.recheck === taskId) mine.push(...triage.proposals ?? []);
   }
-  if (!mine.length) return [];
+  if (!mine.length) return { waiting: [], rejected: [] };
+  const accepted = new Set<string>();
   for (const event of store.triage.taskEvents()) {
     const proposal = (event.payload.data?.task as { proposal?: string } | undefined)?.proposal;
-    if (event.author === 'me' && proposal) settled.add(proposal);
+    if (event.author === 'me' && proposal) accepted.add(proposal);
   }
+  const rejected = new Set<string>();
   for (const id of new Set([...recordMessages, ...mine.flatMap((item) => item.message_ids)])) {
     for (const correction of store.triage.corrections(id)) {
       const data = correction.payload.data as { op?: string; proposal?: string } | undefined;
-      if (correction.author === 'me' && data?.op === 'reject_proposal' && data.proposal) settled.add(data.proposal);
+      if (correction.author === 'me' && data?.op === 'reject_proposal' && data.proposal) rejected.add(data.proposal);
     }
   }
-  return mine.map((item) => item.id).filter((id) => !settled.has(id));
+  return {
+    waiting: mine.map((item) => item.id).filter((id) => !withdrawn.has(id) && !accepted.has(id) && !rejected.has(id)),
+    rejected: mine.filter((item) => rejected.has(item.id)).slice(-20).map((item) => ({ kind: item.kind, value: valueOf(item) })),
+  };
+}
+
+// What a written proposal said, in a few words (for the AI: «do not offer this again»).
+function valueOf(item: Written): string {
+  const change = item.change as { title?: string; due?: string | null; items_add?: { text: string }[]; report?: { note?: string }; add?: string[]; remove?: string[] };
+  if (item.kind === 'rename') return change.title ?? '';
+  if (item.kind === 'due') return change.due ?? '';
+  if (item.kind === 'items') return change.items_add?.map((entry) => entry.text).join('; ') ?? '';
+  if (item.kind === 'status') return change.report?.note ?? '';
+  if (item.kind === 'merge') return item.also?.[0]?.task_id ?? '';
+  return (change.add ?? change.remove ?? item.message_ids).join(',');
 }

@@ -7,7 +7,8 @@ import type { PlanMessage, PlanTask } from './planner.ts';
 // in_record — the message is in the record now; owner_linked_elsewhere — it is in another confirmed record (not by a
 // system link the owner left alone): context only, never proposed for `add`.
 export type RecheckMessage = PlanMessage & { in_record: boolean; owner_linked_elsewhere: boolean };
-export interface RecheckInput { now: string; record: PlanTask; others: PlanTask[]; messages: RecheckMessage[] }
+// rejected — what the owner already turned down ✕ in earlier rechecks of this record (kind + value): not offered again.
+export interface RecheckInput { now: string; record: PlanTask; others: PlanTask[]; messages: RecheckMessage[]; rejected?: { kind: string; value: string }[] }
 
 export const RECHECK_KINDS = ['add', 'remove', 'rename', 'due', 'items', 'status', 'merge'] as const;
 // value — the new title (rename), a date (due; null — no due), one checklist item (items), what was done in one line
@@ -49,7 +50,9 @@ export const RECHECK_INSTRUCTIONS = `Ты сверяешь одну запись
 Вход: record — запись (название, статус, роли, срок, пункты items, owner_titled — название дал владелец); others —
 другие записи этих собеседников и записи, в которых есть сообщения из этой переписки; messages — переписка записи
 от сессии перед её первым сообщением до сегодня, по времени: in_record — сообщение уже в записи, in_tasks — в каких
-записях оно сейчас, owner_linked_elsewhere — владелец сам отнёс его к другой записи (только контекст).
+записях оно сейчас, owner_linked_elsewhere — владелец сам отнёс его к другой записи (только контекст); rejected —
+то, что владелец уже отклонил в прошлых сверках этой записи (вид и значение; у add и remove — id сообщений, у merge —
+id дубля): не предлагай это снова.
 Виды предложений (kind):
 - add — подтянуть сообщения, которые относятся к этой записи по сути (тот же предмет, оборудование, заказ, адрес,
   выезд), а в записи их нет: уточнения, повтор просьбы, «ну что там?», «готово», ответы по делу. message_ids — эти
@@ -72,5 +75,5 @@ export const RECHECK_INSTRUCTIONS = `Ты сверяешь одну запись
 - Обсуждение работы, приветствия, служебное, просто разговор — не повод подтягивать сообщение.
 - Если запись и переписка сходятся — proposals: [].
 - id бери только из входа; target_task_id — только из others. Не придумывай фактов, которых нет в сообщениях.
-- Пустое значение — "" (у value и target_task_id), не null.
+- Пустое значение — "" (у value и target_task_id), не null. due — только дата ГГГГ-ММ-ДД, без текста после неё.
 - ${TITLE_RULE}`;

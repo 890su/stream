@@ -158,7 +158,10 @@ test('recheck: the AI log keeps the pass and each proposal; a second pass withdr
     s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'correction',
       payload: { ref: { type: 'event', id: c.id }, data: { op: 'reject_proposal', proposal: second!.id } } });
     assert.equal(s.store.ailog.decision(second!.id)!.status, 'rejected');
-    s.set(() => []);
+    s.set((input) => {
+      assert.deepEqual(input.rejected, [{ kind: 'rename', value: 'Клиент: роутер мигает' }], 'what I turned down is shown, not to be offered again');
+      return [];
+    });
     assert.deepEqual(await s.run(record), { proposals: 0 });
     const again = s.results().at(-1)!.payload.data!.triage as { withdrawn?: string[] };
     assert.deepEqual(again.withdrawn, [first!.id], 'the waiting one is withdrawn, the rejected one is not');
@@ -206,6 +209,66 @@ test('POST /api/tasks/:id/recheck: 200 with the count; 409 without a key or over
     assert.equal(over.status, 409);
     assert.match((await over.json()).error, /лимит/);
   } finally { await app.stop(); storage.cleanup(); }
+});
+
+const at = (base: string, minutes: number) => new Date(Date.parse(base) + minutes * 60_000).toISOString();
+
+test('recheck: a record with more messages than the bound gives the AI only its newest, up to max_batch × 3', async () => {
+  const s = setup();
+  try {
+    const cap = tasksConfig.max_batch * 3;
+    const record = randomUUID();
+    const own = Array.from({ length: cap + 5 }, (_, index) => s.add(chat('7301', `роутер, сообщение ${index}`, at('2026-11-20T08:00:00.000Z', index))));
+    s.add(chat('7301', 'не в записи', at('2026-11-20T08:00:00.000Z', cap + 10)));
+    s.own(record, { op: 'create', title: 'Клиент: роутер', status: 'todo', add: own.map((event) => event.id) });
+    s.set((input) => {
+      assert.equal(input.messages.length, cap);
+      assert.ok(input.messages.every((message) => message.in_record), 'its own first');
+      assert.equal(input.messages.at(-1)!.id, own.at(-1)!.id, 'the newest of them');
+      return [];
+    });
+    await s.run(record);
+    assert.equal(s.calls.length, 1);
+  } finally { s.cleanup(); }
+});
+
+test('recheck: over the bound, each conversation keeps the session before the record — a busy chat does not crowd out another', async () => {
+  const s = setup();
+  try {
+    const cap = tasksConfig.max_batch * 3;
+    const record = randomUUID();
+    const a0 = s.add(chat('7401', 'вчера про роутер', '2026-11-19T10:00:00.000Z'));
+    const a1 = s.add(chat('7401', 'роутер не включается', '2026-11-20T10:00:00.000Z'));
+    const busy = Array.from({ length: cap + 10 }, (_, index) => s.add(chat('7401', `болтовня ${index}`, at('2026-11-20T10:00:00.000Z', index + 1))));
+    const b0 = s.add(chat('7402', 'напарник: вчера смотрел роутер', '2026-11-19T12:00:00.000Z'));
+    const b1 = s.add(chat('7402', 'напарник: роутер — блок питания', '2026-11-20T09:00:00.000Z'));
+    s.own(record, { op: 'create', title: 'Клиент: роутер', status: 'todo', add: [a1.id, b1.id] });
+    s.set((input) => {
+      const ids = new Set(input.messages.map((message) => message.id));
+      assert.equal(input.messages.length, cap);
+      for (const kept of [a0, a1, b0, b1]) assert.ok(ids.has(kept.id), kept.payload.text);
+      assert.ok(ids.has(busy.at(-1)!.id) && !ids.has(busy[0]!.id), 'then the newest of the rest');
+      return [];
+    });
+    await s.run(record);
+    assert.equal(s.calls.length, 1);
+  } finally { s.cleanup(); }
+});
+
+test('recheck: a due must be a whole date or date-time; a removed message is not hinted back where I took it out', async () => {
+  const s = setup();
+  try {
+    const { record, b } = routerCase(s);
+    const cameras = randomUUID();
+    s.own(cameras, { op: 'create', title: 'Клиент: камеры', status: 'todo', add: [b.id], roles: { author: 'tg:7101', responsible: 'me', executors: ['me'] } });
+    s.own(cameras, { op: 'update', remove: [b.id] });
+    s.set(() => [proposal({ kind: 'due', value: '2026-11-25 вечером' }), proposal({ kind: 'due', value: '2026-02-30' }), proposal({ kind: 'due', value: '2026-11-25T14:00:00Z' }),
+      proposal({ kind: 'remove', message_ids: [b.id], target_task_id: cameras })]);
+    assert.deepEqual(await s.run(record), { proposals: 2 });
+    const [due, remove] = s.proposals();
+    assert.deepEqual(due!.change, { op: 'update', due: '2026-11-25T14:00:00Z' });
+    assert.deepEqual([remove!.change, remove!.also], [{ op: 'update', remove: [b.id] }, undefined], 'no move into the record I took it out of');
+  } finally { s.cleanup(); }
 });
 
 // The API refuses a schema with more than 16 union-typed parameters (type arrays or anyOf), nested ones counted.
