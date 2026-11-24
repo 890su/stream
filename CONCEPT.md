@@ -639,13 +639,18 @@ tile chooses whose conversation shows and gets the reply; a tap on the chosen on
 shows the task's comments (notes of mine, the AI's, the system's and the task's changes) and the input writes a
 comment there, later other executors too. A comment never joins someone's chat.
 
+**Task card head 2026-11-24** (owner: the conversation must have the room): under the title one quiet line of
+what is set — when, due, project, counterparty, repeat; nothing when nothing is (no «Когда?», «Срок?», «без проекта»,
+«Без повтора»). A tap opens «Подробности», which starts with the chips that set and change them; «✨ Сверить с
+перепиской» is there too, the tab title counts its waiting proposals («Подробности ✨2»).
+
 **Task card «по задаче» 2026-11-24** (owner): the task's discussion gathers itself — messages are linked to records
 selectively (§2.8), and the card shows them. With an interlocutor chosen, the card opens on «По задаче»: every message
 of the task from every person and channel in time order, each with a folded «контекст» — the neighbouring messages of
 its conversation that are not in the task; «Вся переписка с …» switches to that person's whole conversation and back.
 Whom the input writes to stays the chosen tile (by default the last one who wrote about the task); «Ответить» under
 someone's message chooses that person and that chat and quotes the message; the input names the recipient
-(«Сообщение → Анна · TG BY»), with no tile chosen it says «Комментарий к задаче». A long press on «Отправить» lists the
+(«→ Анна · TG BY»), with no tile chosen it says «Комментарий к задаче». A long press on «Отправить» lists the
 task's people with each of their chats and the comment: the choice sends there. Nothing goes to several at once.
 
 **Queue tile 2026-11-24** (owner): the line under the name shows the conversation's task only when it has one — no

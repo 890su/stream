@@ -11,7 +11,7 @@ import { taskParties, participantsBlock } from './participants.js';
 import { partyName, PARTY_LABELS } from './parties.js';
 import { STATUSES } from './taskfold.js';
 import { dueChips } from './taskactions.js';
-import { taskChips } from './taskchips.js';
+import { taskChips, filledFacts, factsLine } from './taskchips.js';
 import { recheckList } from './recheck.js';
 import { draftCard } from './taskdraft.js';
 import { taskThread, recipientHint } from './tasktalk.js';
@@ -165,24 +165,31 @@ export function taskDetails(original, ctx) {
   if (task.status !== 'todo') head.append(element('p', 'card-headline', STATUSES[task.status]));
   if (task.resumeNote && task.resumeNote !== 'в работе') head.append(element('p', 'card-next', `дальше: ${task.resumeNote}`));
 
-  // The line of dates and the counterparty: when, due, project, counterparty, repeat.
+  // One quiet line of what is set — when, due, project, counterparty, repeat; nothing when nothing is (owner,
+  // 2026-11-24: the conversation needs the room). A tap opens «Подробности», where the chips edit them.
   const counterparty = task.counterparty ? directory?.counterparties.find((item) => item.id === task.counterparty) : null;
   const counterpartyChip = counterparty ? button('chip suggest task-chip', `${counterparty.kind === 'address' ? '⌂' : '◆'} ${counterparty.title}`, () => directory?.onOpen?.(counterparty.id), 'Карточка контрагента') : null;
-  head.append(taskChips(task, { save, now, dueChips, settings: cardSettings, project: projectLine(task, { projects, save }), counterparty: counterpartyChip }));
+  const project = task.project ? projects.find((item) => item.id === task.project) : null;
+  const facts = factsLine(filledFacts(task, { now, repeats: cardSettings?.repeats ?? [], projectTitle: project?.title ?? null, counterpartyTitle: counterparty?.title ?? null }),
+    () => { if (fold !== 'more') onFold('more'); });
+  if (facts) head.append(facts);
   const card = doneCards.card(task);
   if (card) head.append(card);
   const draft = draftCard(task, { notify }); // #поручить: the text to the executor, to copy when there is no chat with them
   if (draft) head.append(draft);
-  // «✨ Сверить с перепиской» (recheck.js): the record against its conversations — only proposals, ✓ ✕ under the button.
-  if (ctx.recheck && task.messages?.length) {
+  // «✨ Сверить с перепиской» (recheck.js): the record against its conversations — only proposals, ✓ ✕ under the button;
+  // it lives in «Подробности», whose title counts the waiting proposals.
+  const recheckBlock = () => {
+    if (!ctx.recheck || !task.messages?.length) return null;
     const recheck = element('div', 'card-recheck');
     const run = button('link-button card-recheck-run', ctx.recheck.busy ? '✨ Сверяю…' : '✨ Сверить с перепиской', ctx.recheck.run);
     run.disabled = Boolean(ctx.recheck.busy);
     recheck.append(run);
     const list = recheckList(ctx.recheck);
     if (list) recheck.append(list);
-    head.append(recheck);
-  }
+    return recheck;
+  };
+  const waitingProposals = ctx.recheck?.proposals?.length ?? 0;
 
   // The cuts.
   const description = () => {
@@ -203,7 +210,11 @@ export function taskDetails(original, ctx) {
   };
   const checklist = () => [checklistBlock(task, { save, saveTo, notify }) ?? element('p', 'drawer-empty', 'Пунктов нет')];
   const more = () => {
-    const nodes = [internalPeople(task, ctx, groups)];
+    // The fields first: when, due, project, counterparty, repeat — each a tap to change.
+    const nodes = [taskChips(task, { save, now, dueChips, settings: cardSettings, project: projectLine(task, { projects, save }), counterparty: counterpartyChip })];
+    const recheck = recheckBlock();
+    if (recheck) nodes.push(recheck);
+    nodes.push(internalPeople(task, ctx, groups));
     if (directory && !task.filed) nodes.push(counterpartyLine(task, { ...directory, save }));
     const createdBy = { me: 'создано вами', system: 'создано автоматически' };
     const origin = createdBy[task.createdBy] ?? `создано разбором${task.confidence !== undefined ? ` · уверенность ${Math.round(task.confidence * 100)}%` : ''}`;
@@ -218,7 +229,7 @@ export function taskDetails(original, ctx) {
   const cuts = [
     { key: 'description', title: task.note ? 'Описание' : 'Описание +', nodes: description },
     { key: 'checklist', title: `Чеклист${items}`, nodes: checklist },
-    { key: 'more', title: 'Подробности', nodes: more },
+    { key: 'more', title: waitingProposals ? `Подробности ✨${waitingProposals}` : 'Подробности', nodes: more },
   ];
   head.append(cutsRow(cuts, fold, onFold, onShowTalk));
   const open = cuts.find((cut) => cut.key === fold);

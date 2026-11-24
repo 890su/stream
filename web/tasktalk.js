@@ -54,9 +54,10 @@ export function recipientOptions(parties, conversations, nameOf) {
   return options;
 }
 
-// The input's hint: whom a message goes to.
+// The input's hint: whom a message goes to, short enough for one line on a phone («→ Анна · TG BY»).
+const shortChannel = (account) => accountTitle(account).replace(/^Telegram\s*/, 'TG ').replace(/^WhatsApp\s*/, 'WA ');
 export function recipientHint(party, conversation, name) {
   if (!party) return COMMENT;
   const chat = replyChats(conversation)[0];
-  return chat ? `Сообщение → ${name} · ${accountTitle(chat.account)}` : `Сообщение → ${name} (нет чата: заметка в задаче)`;
+  return chat ? `→ ${name} · ${shortChannel(chat.account)}` : `→ ${name} (нет чата: заметка в задаче)`;
 }

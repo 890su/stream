@@ -28,3 +28,15 @@ test('the repeat in words; durations', () => {
   assert.deepEqual(repeats.map((item) => item.every), [null, 'day', 'week', 'month', 'year']);
   assert.deepEqual([durationLabel(15), durationLabel(60), durationLabel(240)], ['15 мин', '1 ч', '4 ч']);
 });
+
+test('the card head shows only what is set: nothing at all for a bare task (owner, 2026-11-24)', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { filledFacts } = await import('../web/taskchips.js');
+  const now = new Date(2026, 10, 24, 10, 0);
+  assert.deepEqual(filledFacts({}, { now }), []);
+  const set = filledFacts({ plan: { start: new Date(2026, 10, 25, 9, 0).toISOString() }, due: '2026-11-23', repeat: { every: 'week', n: 2 } },
+    { now, projectTitle: 'naserwis.pl', counterpartyTitle: 'Анна Пример' });
+  assert.deepEqual(set.map((item: { text: string }) => item.text), ['📅 завтра 09:00', '⏰ срок вчера', '▸ naserwis.pl', '◆ Анна Пример', '🔁 каждые 2 нед.']);
+  assert.equal(set[1].late, true);
+  assert.deepEqual(filledFacts({ project_options: ['p1'] }, { now }).map((item: { text: string }) => item.text), ['▸ В какой проект?']);
+});

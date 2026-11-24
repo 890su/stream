@@ -40,6 +40,32 @@ export function chipFacts(task, now = new Date(), repeats = []) {
   return { when, due, repeat, late };
 }
 
+// The card head's one line (owner, 2026-11-24: the conversation needs the room): only what is set — when, due,
+// project, counterparty, repeat — as [{ key, text, late }]; a bare task has none. The triage's «В какой проект?»
+// counts as set: it waits for an answer. The editors live in «Подробности» (taskChips).
+export function filledFacts(task, { now = new Date(), repeats = [], projectTitle = null, counterpartyTitle = null } = {}) {
+  const facts = chipFacts(task, now, repeats);
+  const items = [];
+  if (task.plan?.start) items.push({ key: 'when', text: `📅 ${facts.when}`, late: false });
+  if (task.due) items.push({ key: 'due', text: `⏰ ${facts.due}`, late: facts.late });
+  if (projectTitle) items.push({ key: 'project', text: `▸ ${projectTitle}`, late: false });
+  else if (!task.project && task.project_options?.length) items.push({ key: 'project', text: '▸ В какой проект?', late: false });
+  if (counterpartyTitle) items.push({ key: 'counterparty', text: `◆ ${counterpartyTitle}`, late: false });
+  if (task.repeat) items.push({ key: 'repeat', text: `🔁 ${facts.repeat}`, late: false });
+  return items;
+}
+
+// The head line: the set facts as quiet chips; a tap opens «Подробности» where they are edited. null — nothing set.
+export function factsLine(items, onOpen) {
+  if (!items.length) return null;
+  const line = element('div', 'chips task-facts');
+  for (const item of items) {
+    const chip = button(`chip ${item.late ? 'late' : 'on'} task-chip`, item.text, onOpen, `${item.text} — изменить в подробностях`);
+    line.append(chip);
+  }
+  return line;
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;

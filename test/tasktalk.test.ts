@@ -38,7 +38,7 @@ test('the long-press list: each person with each of their chats, the comment las
 });
 
 test('the input names the recipient, or says the comment', () => {
-  assert.equal(recipientHint('tg:501', conversations[0], 'Анна'), 'Сообщение → Анна · Telegram BY');
+  assert.equal(recipientHint('tg:501', conversations[0], 'Анна'), '→ Анна · TG BY');
   assert.equal(recipientHint(null, null, ''), 'Комментарий к задаче');
-  assert.equal(recipientHint('tel:+48600000001', { key: 'tel:+48600000001', views: [] }, 'Петр'), 'Сообщение → Петр (нет чата: заметка в задаче)');
+  assert.equal(recipientHint('tel:+48600000001', { key: 'tel:+48600000001', views: [] }, 'Петр'), '→ Петр (нет чата: заметка в задаче)');
 });

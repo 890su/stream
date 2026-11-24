@@ -426,3 +426,7 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 .recipient-sheet-title { margin: 4px 8px 8px; color: var(--muted); font-size: 13px; }
 .recipient-sheet-row { display: block; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; }
 .recipient-sheet-row:hover, .recipient-sheet-row:focus-visible { background: var(--chip); }
+
+/* The card head's one line of what is set (2026-11-24): quiet, one row, scrolls sideways; the editors are in «Подробности». */
+.task-facts { flex-wrap: nowrap; gap: 6px; margin: 2px 0 4px; overflow-x: auto; scrollbar-width: none; }
+.task-facts .task-chip { flex: none; padding: 2px 9px; font-size: 13px; white-space: nowrap; }
