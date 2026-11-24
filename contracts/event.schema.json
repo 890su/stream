@@ -787,6 +787,11 @@
                   "type": "boolean",
                   "description": "Legacy (topics were dropped 2026-11-24): accepted from old clients and ignored."
                 },
+                "draft": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "description": "#поручить (2026-11-24): the assignment text for the executor, written by the AI. Never sent by the server; shown in the input of the conversation with that person until the owner sends it or clears it (an owner update with draft: '')."
+                },
                 "unconfirmed": {
                   "type": "boolean",
                   "description": "Made by the AI and waiting for the owner (true), or confirmed (false); absent — a real task (design 2026-11-21)."

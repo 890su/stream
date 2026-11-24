@@ -307,6 +307,14 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     reply: (view) => { setMode({ type: 'reply', view }); const chat = chatOf(view.event); if (chat) recipients.choose(chat); },
     chat: (chat) => { chatDefault = chat; recipients.reset(chat); },
     recipient: () => recipients.selected(),
+    // A draft the AI wrote (taskdraft.js) waits in the input, never sent: only into an empty input, and taken out again
+    // when it is still as it was.
+    prefill: (value) => {
+      if (text.value.trim() || mode || draftFiles.list().length) return false;
+      text.value = value; autosize(); tagRow.update(text.value); updateAction();
+      return true;
+    },
+    unfill: (value) => { if (text.value === value) { text.value = ''; autosize(); tagRow.update(''); updateAction(); } },
     topic: () => topic,
     proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),

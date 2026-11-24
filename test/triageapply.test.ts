@@ -106,3 +106,37 @@ test('an unknown task_id becomes a new task; unknown options are dropped', () =>
   assert.deepEqual(questions[0]!.options.map((item) => item.label), ['job', 'Вариант', 'Ничего']);
   assert.match(questions[0]!.id, /^[0-9a-f-]{36}$/);
 });
+
+// «#поручить» (owner's directive tag, triage-ai-v21): a task on a known person with a draft for the conversation with
+// them; an unknown or unclear person is a question. Nothing here sends anything.
+const ALEX = 'tel:+48500100200';
+const directed = (over: Partial<ApplyContext> = {}) => context([], { directed: new Set([M1]), knownPerson: (party) => party === ALEX,
+  roles: (item) => ({ responsible: 'me', executors: item.executors }), ...over });
+
+test('#поручить with a known person: a task on that person with the draft text', () => {
+  const [made] = applyPlanned(planned({ executors: [ALEX], draft: '  Алекс, привези роутер завтра  ' }), directed());
+  assert.equal(made!.kind, 'create');
+  const change = (made as Extract<typeof made, { kind: 'create' }>).change;
+  assert.deepEqual((change.roles as { executors: string[] }).executors, [ALEX]);
+  assert.equal(change.draft, 'Алекс, привези роутер завтра');
+});
+
+test('a draft only for a directed message and one known person; none without text', () => {
+  const draft = 'Привези роутер';
+  const change = (list: ReturnType<typeof applyPlanned>) => (list[0] as { change: Record<string, unknown> }).change;
+  assert.equal('draft' in change(applyPlanned(planned({ executors: [ALEX], draft }), directed({ directed: new Set() }))), false, 'no directive on the messages');
+  assert.equal('draft' in change(applyPlanned(planned({ executors: [ALEX], draft: '' }), directed())), false);
+  assert.equal('draft' in change(applyPlanned(planned({ executors: [ALEX], draft: null }), directed())), false);
+  assert.equal(applyPlanned(planned({ executors: [ALEX], draft }), directed())[0]!.kind, 'create');
+});
+
+test('#поручить with an unknown, missing or ambiguous person: a question, no task', () => {
+  for (const executors of [['name:Алекс'], [], [ALEX, 'tel:+48500999999']]) {
+    const applied = applyPlanned(planned({ title: 'Роутер', executors, draft: 'Привези роутер' }), directed({ knownPerson: (party) => party === ALEX }));
+    assert.deepEqual(applied.map((item) => item.kind), ['question'], JSON.stringify(executors));
+    const { question } = applied[0] as Extract<(typeof applied)[number], { kind: 'question' }>;
+    assert.deepEqual(question.message_ids, [M1]);
+    assert.equal(question.options.length, 2);
+    assert.ok(question.options.some((option) => option.nothing));
+  }
+});

@@ -122,6 +122,12 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .card-details .link-button { min-height: 32px; font-size: 13.5px; color: var(--muted); padding: 0 5px; display: inline-flex; align-items: center; text-decoration: none; }
 /* The topic line (cardhead.js): the task, the AI's offer with ✓ ✕, «+ задача…». */
 .card-topic { padding: 0 6px; }
+/* The AI's draft of an assignment waiting in the input (taskdraft.js). */
+#chat-draft { padding: 0 6px; }
+.draft-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 2px 10px; border: 1px dashed var(--accent); border-radius: 18px; font-size: 13.5px; color: var(--muted); }
+.draft-line span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-line button { flex: none; min-width: 32px; min-height: 32px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+#chat-draft[hidden] { display: none; }
 .card-topic-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .card-topic-chips { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .card-topic-chips > * { flex: none; }

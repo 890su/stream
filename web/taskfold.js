@@ -22,7 +22,7 @@ function legacyRoles(task) {
 
 // The old display field, derived: the kind of the first executor.
 // Legacy topic keys (topics were dropped 2026-11-24): a change of only these does not confirm an AI task.
-const onlyLegacyKeys = (change) => Object.keys(change).every((key) => ['op', 'id', 'kind', 'offer', 'proposal'].includes(key));
+const onlyLegacyKeys = (change) => Object.keys(change).every((key) => ['op', 'id', 'kind', 'offer', 'proposal', 'draft'].includes(key));
 const kindOf = (party) => (party === 'me' || party === 'ai' || party === 'system' ? party : 'person');
 
 // I am in any role of the task.
@@ -56,7 +56,7 @@ export function foldTasks(events, { filedTemplates = [] } = {}) {
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], ownerTitled: false, history: [], createdBy: event.author, createdAt: event.ts, updatedAt: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat', 'repeat_of']) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'note', 'proposed', 'report', 'plan', 'promise', 'project', 'section', 'project_options', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat', 'repeat_of', 'draft']) {
       if (change[key] !== undefined) task[key] = change[key];
     }
     if (change.waiting_for !== undefined) task.waitingFor = change.waiting_for;

@@ -11,6 +11,7 @@ import { topicOf } from './topic.js';
 import { topicLine } from './cardhead.js';
 import { tileFacts } from './convlist.js';
 import { answerEvents, conversationQuestions } from './askline.js';
+import { pendingDraft, draftLine } from './taskdraft.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -44,6 +45,19 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     sync();
   } });
   const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
+  // The AI's draft of an assignment (taskdraft.js): into the input once per task and stay, until sent or cleared (✕).
+  const filled = new Map(); // task id → the text put into the input
+  const dropFilled = () => { for (const text of filled.values()) composer.unfill(text); filled.clear(); };
+  const showDraft = (conversation) => {
+    const pending = conversation ? pendingDraft(conversation, feed.tasks()) : null;
+    const box = $('#chat-draft');
+    box.hidden = !pending;
+    if (!pending) { box.replaceChildren(); return; }
+    box.replaceChildren(draftLine(pending, { onDismiss: async ({ task, text }) => {
+      if (await save(task.id, { op: 'update', draft: '' })) { composer.unfill(text); filled.delete(task.id); }
+    } }));
+    if (!filled.has(pending.task.id) && composer.prefill(pending.text)) filled.set(pending.task.id, pending.text);
+  };
   const detailsOpen = new Set(); // conversations whose details the owner unfolded (this session)
   // true when the change is queued; a failure is said and the act stops (no success toast after it).
   const save = (id, change) => composer.queue(makeTaskChange(id, change)).then(() => true, (error) => { notify(error.message); return false; });
@@ -136,6 +150,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     $('#chat-person').hidden = !personFromConversation(conversation ?? { key });
     people.render(conversation);
     steer();
+    showDraft(conversation);
   };
 
   // The drawer closes by going back in history; a new entry pushed before that back lands would be popped by it.
@@ -151,7 +166,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     await settled();
     // One history entry per stay in conversations: the system back returns to the list.
     if (!history.state?.conversation) history.pushState({ conversation: true }, '');
-    if (next !== key) { applied = null; composer.chat(null); }
+    if (next !== key) { applied = null; composer.chat(null); dropFilled(); }
     key = next;
     await feed.openConversation(next);
     reveal(bar, 'translateY(-8px)');
@@ -164,6 +179,8 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     conceal(bar, 'translateY(-8px)');
     people.render(null);
     composer.chat(null);
+    dropFilled();
+    $('#chat-draft').hidden = true;
     if (composer.topic() === topic) composer.leaveTopic();
     await feed.openConversation(null);
     onLeave();

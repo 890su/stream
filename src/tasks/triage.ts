@@ -14,7 +14,7 @@ import { foldPeople, foldCounterparties, personOf, peopleOf } from '../contacts/
 import { foldProjects, defaultProject } from './projects.ts';
 import { partyOfEvent } from './parties.ts';
 import type { AiDecision } from '../store/ailog.ts';
-import type { PlanInput, PlanMessage, PlanOutput, Planner } from './planner.ts';
+import type { PlanInput, PlanMessage, PlanOutput, PlannedQuestion, Planner } from './planner.ts';
 import { interlocutorRecords } from './triagecontext.ts';
 import { conversationOf, contextSessions, before, sessionsOf } from './sessions.ts';
 import { applyPlanned, ownerRemoved, questionsOf, rolesFor } from './triageapply.ts';
@@ -201,12 +201,15 @@ export class Triage {
     const unlinked = new Map(unlink.map((link) => [link.task_id, new Set(link.message_ids)]));
     const proposals: Record<string, unknown>[] = [];
     const ctx = { batchKey, batchIds, conversationOnly, open: new Map(open.map((task) => [task.id, task])), closed: new Map(closed.map((task) => [task.id, task])),
-      removed: ownerRemoved(this.#store.triage.taskEvents()), unlinked, projects, counterparties, filedTemplates, newTasks: this.#newTasks(), roles: rolesOf };
+      removed: ownerRemoved(this.#store.triage.taskEvents()), unlinked, projects, counterparties, filedTemplates, newTasks: this.#newTasks(), roles: rolesOf,
+      directed: new Set(messages.filter((message) => message.directive?.includes('#поручить')).map((message) => message.id)), knownPerson: (party: string) => Boolean(personOf(party, people)) };
+    const asked: PlannedQuestion[] = []; // questions the rules make themselves (#поручить without one known person)
     output.tasks.forEach((planned, index) => {
       const confidence = Math.max(0, Math.min(1, planned.confidence));
       const reason = planned.reason?.trim().slice(0, 500) || null;
       for (const applied of applyPlanned(planned, { ...ctx, index })) {
-        if (applied.kind === 'proposal') {
+        if (applied.kind === 'question') asked.push(applied.question);
+        else if (applied.kind === 'proposal') {
           // Content of an existing record is only proposed (v15): the owner answers ✓ ✕.
           const id = nameId(`proposal|${batchKey}|${index}`);
           proposals.push({ id, task_id: applied.task_id, message_ids: applied.message_ids, reason: reason ?? '', confidence, alternatives: [], change: { op: 'update', ...applied.change } });
@@ -225,7 +228,7 @@ export class Triage {
     for (const [taskId, ids] of unlinked) if (ids.size) write(nameId(`unlink|${batchKey}|${taskId}`), taskId, { op: 'update', remove: [...ids], reason: 'Разобрано заново' });
     for (const taskId of cancel) write(nameId(`withdraw|${batchKey}|${taskId}`), taskId, { op: 'update', status: 'cancelled', reason: 'Разобрано заново' });
     if (again) this.#store.ailog.replace(withdrawn, cancel, at, [...unlinked].filter(([, ids]) => ids.size).map(([task_id, ids]) => ({ task_id, message_ids: [...ids] })));
-    const questions = questionsOf(output.questions, { batchKey, batchIds, known: new Set([...open, ...closed].map((task) => task.id)) });
+    const questions = questionsOf([...(output.questions ?? []), ...asked], { batchKey, batchIds, known: new Set([...open, ...closed].map((task) => task.id)) });
     for (const question of questions) decide(question.id, 'question', null, question.message_ids, null, question.text, 'pending', question.id);
     // What stays in the conversation, what is proposed and whether the conversation is over (on the batch's last
     // message — web/queue.js): one triage result per batch, written once, always.

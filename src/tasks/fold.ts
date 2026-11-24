@@ -24,6 +24,7 @@ export interface Task {
   repeat?: Repeat | null;
   repeat_of?: string; // a closed record this one repeats (triage-ai-v21): never a reopen
   note?: string;
+  draft?: string; // #поручить: the assignment text for the executor, shown in the input of their conversation until sent or cleared (''), never sent by the server
   items: ChecklistItem[]; owner_titled: boolean; // the checklist (CONCEPT.md §2.8); the owner gave the title
 }
 
@@ -44,7 +45,7 @@ function legacyRoles(task: Task): Roles {
 
 // The old display field, derived: the kind of the first executor.
 // Legacy topic keys (topics were dropped 2026-11-24): a change of only these does not confirm an AI task.
-const onlyLegacyKeys = (change: Record<string, any>): boolean => Object.keys(change).every((key) => ['op', 'id', 'kind', 'offer', 'proposal'].includes(key));
+const onlyLegacyKeys = (change: Record<string, any>): boolean => Object.keys(change).every((key) => ['op', 'id', 'kind', 'offer', 'proposal', 'draft'].includes(key));
 const kindOf = (party: string) => (party === 'me' || party === 'ai' || party === 'system' ? party : 'person');
 
 // Checklist changes, in place: add (once per id), set (done, text), remove.
@@ -74,7 +75,7 @@ export function foldTasks(events: JournalEvent[], { filedTemplates = [] as strin
       task = { id, title: change.title, status: 'todo', assignee: 'me', roles: emptyRoles(), filed: false, messages: [], items: [], owner_titled: false, created_by: event.author, created_at: event.ts, updated_at: event.ts };
       tasks.set(id, task);
     }
-    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat', 'repeat_of', 'note'] as const) {
+    for (const key of ['title', 'status', 'assignee', 'person', 'template', 'due', 'confidence', 'processor', 'proposed', 'waiting_for', 'plan', 'remind_at', 'promise', 'project', 'section', 'project_options', 'resume_note', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'muted', 'repeat', 'repeat_of', 'note', 'draft'] as const) {
       if (change[key] !== undefined) (task as any)[key] = change[key];
     }
     if (change.filed !== undefined) { task.filed = change.filed; filedGiven.add(id); }

@@ -48,6 +48,7 @@ export interface PlannedTask {
   counterparty_options?: string[]; // when unsure: up to three candidate counterparties
   counterparty_hint?: string | null; // how to name a new counterparty: a firm or an address
   report?: PlannedReport | null; // with done: what the messages say was done — a draft of the closing report
+  draft?: string | null; // #поручить with a named person: the assignment text for them, never sent by the server (v21)
 }
 // A report draft from the conversation (task manager spec §11): the result in one line and the numbers named.
 export interface PlannedReport { note: string | null; duration_min: number | null; cost: number | null; expenses: number | null; currency: string | null }
@@ -72,7 +73,7 @@ export type Planner = (input: PlanInput) => Promise<PlanOutput>;
 
 // The API allows at most 16 union-typed (nullable) parameters in a schema, nested ones counted. These string fields
 // are plain strings with '' for none (the instruction says so); `restoreNulls` maps '' back to null.
-export const EMPTY_AS_NULL = { task: ['task_id', 'author', 'template', 'due', 'reason', 'note', 'repeat_of', 'rename', 'project', 'section', 'counterparty', 'counterparty_hint'], option: ['task_id', 'title', 'template'] } as const;
+export const EMPTY_AS_NULL = { task: ['task_id', 'author', 'template', 'due', 'reason', 'note', 'repeat_of', 'rename', 'project', 'section', 'counterparty', 'counterparty_hint', 'draft'], option: ['task_id', 'title', 'template'] } as const;
 const orNull = (value: unknown) => (typeof value === 'string' && !value.trim() ? null : value ?? null);
 export function restoreNulls<T extends Pick<PlanOutput, 'tasks'> & { questions?: unknown }>(answer: T): T & { questions: PlannedQuestion[] } {
   const tasks = answer.tasks.map((task) => {
@@ -122,10 +123,11 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'reason', 'note', 'filed', 'done', 'repeat_of', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'reason', 'note', 'filed', 'done', 'repeat_of', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint', 'draft'],
         properties: {
           task_id: { type: ['string', 'null'] },
           reason: { type: 'string' },
+          draft: { type: 'string' },
           title: { type: 'string' },
           responsible: { type: 'string' },
           executors: { type: 'array', items: { type: 'string' } },
@@ -213,7 +215,8 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   шаблонах) — дай по этому сообщению запись этого шаблона: найди, что сделать или что сохранить, title — суть. Не
   выходит — вопрос в questions с причиной в text. Обычная метка (tags) с шаблоном — сильный сигнал: template = name
   шаблона. #доход — запись template money о приходе; #поручить — задача, executors — тот, кому поручают (party или
-  name:Имя), responsible: me; не назван — вопрос в questions.
+  name:Имя), responsible: me; не назван — вопрос в questions. Назван известный человек — draft: короткий текст поручения ему
+  на языке его беседы, от лица владельца; в остальных задачах draft: "".
 - Ничего — обсуждение работы и клиентов без просьбы, новости, мнения, рассказ о своих делах, передача сведений,
   приветствия, служебное. Итог у каждого сообщения не обязателен: просто разговор не попадает ни в tasks, ни в
   questions.
@@ -264,6 +267,6 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   речь?»); options — 2–3 варианта, вероятный первым: существующая запись (task_id, label — её название, title и
   template "", nothing false), новая запись (task_id "", title, template, label — коротко), ничего (nothing true,
   task_id, title и template "", label «Ничего»).
-- Пустое значение — "" (не null) у reason, note, rename, section, counterparty_hint и у task_id, title, template в
+- Пустое значение — "" (не null) у reason, note, rename, section, counterparty_hint, draft и у task_id, title, template в
   вариантах вопроса; null — там, где правила выше говорят null.
 - Не придумывай фактов, которых нет в сообщениях.`;

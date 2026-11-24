@@ -9,6 +9,7 @@ import { tasksConfig } from '../src/config.ts';
 import { LiveFeed } from '../src/server/live.ts';
 import { Triage, streamOf } from '../src/tasks/triage.ts';
 import { foldTasks } from '../src/tasks/fold.ts';
+import { nameId as nameIdOf } from '../src/ids.ts';
 import type { PlanInput, PlanOutput } from '../src/tasks/planner.ts';
 import type { JournalEvent } from '../src/contracts/validate.ts';
 
@@ -852,5 +853,32 @@ test('a message tagged with a directive tag does not wait for the quiet window',
     s.add(telegram('7503', 'вопрос по роутеру', '7503'));
     s.add(telegram('7504', '#naserwis без указания'));
     assert.deepEqual(s.triage.ready(Date.now()).map((batch) => batch.map((item) => item.id)), [[tagged.id]]);
+  } finally { s.cleanup(); }
+});
+
+test('#поручить: a known person gets a task with a draft; an unknown one a question; nothing is ever sent', async () => {
+  const base = { responsible: 'me', author: null, template: null, due: null, confidence: 0.9, note: null, filed: false, done: false, alternatives: [], items: [], rename: null, project: null, section: null, project_options: [] };
+  let executors = ['tg:7410'];
+  const s = setup((input) => ({ tasks: [planned({ ...base, title: 'Привезти роутер', executors, draft: 'Алекс, привези роутер завтра к 10', message_ids: [input.messages.at(-1)!.id] })] }));
+  const tagged = (chat: string, text: string) => telegram(chat, text, chat);
+  try {
+    s.add({ ...event({ kind: 'contact_change', payload: { ref: { type: 'person', id: randomUUID() }, data: { contact: { op: 'create', name: 'Алекс', telegram: ['7410'] } } } }), source: 'app', author: 'me' } as JournalEvent);
+    const known = s.add({ ...tagged('7410', 'пусть Алекс привезёт роутер'), payload: { text: 'пусть Алекс привезёт роутер', tags: ['#поручить'], data: tagged('7410', 'x').payload.data } } as JournalEvent);
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.deepEqual(s.calls[0]!.messages[0]!.directive, ['#поручить']);
+    const [made] = s.tasks();
+    assert.deepEqual([made!.roles.executors, made!.draft, made!.messages], [['tg:7410'], 'Алекс, привези роутер завтра к 10', [known.id]]);
+    // An unknown person: a question and no task.
+    executors = ['tg:7411'];
+    s.add({ ...tagged('7411', 'пусть он привезёт'), payload: { text: 'пусть он привезёт', tags: ['#поручить'], data: tagged('7411', 'x').payload.data } } as JournalEvent);
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.equal(s.tasks().length, 1, 'no second task');
+    const result = s.store.triage.results().at(-1)!.payload.data!.triage as { questions: { text: string; options: { nothing: boolean }[] }[] };
+    assert.match(result.questions[0]!.text, /Кому поручить/);
+    // Nothing outbound: no event with an outbound mark, no action.
+    const all = s.store.listEvents({ limit: 500 }).events;
+    assert.equal(all.some((item) => item.payload.data?.outbound), false);
+    assert.equal(all.filter((item) => item.kind === 'task_change').every((item) => item.author === 'system' || item.author === 'me'), true);
+    assert.equal(s.store.actions.get(nameIdOf(`action|${known.id}`)), undefined);
   } finally { s.cleanup(); }
 });
