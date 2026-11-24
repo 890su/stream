@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { tasksConfig } from '../src/config.ts';
 import { SecretStore } from '../src/secrets.ts';
 import { anthropicPlanner } from '../src/tasks/anthropic.ts';
-import { parseCases, scoreCase, type GoldenScore } from '../src/tasks/goldenscore.ts';
+import { failedCaseMissed, parseCases, scoreCase, type GoldenScore } from '../src/tasks/goldenscore.ts';
 
 const OPEN = new Set(['inbox', 'todo', 'doing', 'waiting', 'review', 'deferred']);
 const here = (path: string) => new URL(path, import.meta.url);
@@ -26,8 +26,9 @@ const cases = ['../golden/conversations.jsonl', '../golden/conversations.local.j
 if (!cases.length) { console.error('Нет случаев для прогона.'); process.exit(1); }
 
 const planner = anthropicPlanner(key);
-const total: GoldenScore = { cases: 0, missed: 0, extra: 0, duplicates: 0, wrong_link: 0, asked: 0 };
-let inputTokens = 0, outputTokens = 0;
+const total: GoldenScore = { cases: 0, missed: 0, extra: 0, duplicates: 0, wrong_link: 0, asked: 0, linked_nothing: 0, wrong_done: 0 };
+let inputTokens = 0, outputTokens = 0, failed = 0;
+const names = ['missed', 'extra', 'duplicates', 'wrong_link', 'asked', 'linked_nothing', 'wrong_done'] as const;
 for (const item of cases) {
   const now = item.messages[item.messages.length - 1]?.time ?? new Date().toISOString();
   try {
@@ -38,15 +39,19 @@ for (const item of cases) {
     });
     const score = scoreCase(item.expect, output);
     total.cases++;
-    for (const name of ['missed', 'extra', 'duplicates', 'wrong_link', 'asked'] as const) total[name] += score[name];
+    for (const name of names) total[name] += score[name];
     inputTokens += output.usage?.input_tokens ?? 0;
     outputTokens += output.usage?.output_tokens ?? 0;
-    console.log(`${item.id}: missed ${score.missed}, extra ${score.extra}, duplicates ${score.duplicates}, wrong_link ${score.wrong_link}, asked ${score.asked}`);
+    console.log(`${item.id}: ${names.map((name) => `${name} ${score[name]}`).join(', ')}`);
   } catch (error) {
-    console.log(`${item.id}: ОШИБКА ${(error as Error).message}`);
+    failed++;
+    total.cases++;
+    total.missed += failedCaseMissed(item.expect);
+    console.log(`${item.id}: ОШИБКА ${(error as Error).message}; ожидаемое считается пропущенным`);
   }
 }
-const price = tasksConfig.ai.price_per_mtok;
-const cost = (inputTokens * price.input + outputTokens * price.output) / 1e6;
-console.log(`Итого (${total.cases} из ${cases.length}): пропущено ${total.missed}, лишних ${total.extra}, дублей ${total.duplicates}, не та задача ${total.wrong_link}, вопросов ${total.asked}`);
-console.log(`Токены: ${inputTokens} вход, ${outputTokens} выход; стоимость $${cost.toFixed(4)}`);
+console.log(`Итого (${total.cases}): пропущено ${total.missed}, дублей ${total.duplicates} | справочно: лишних ${total.extra}, не та задача ${total.wrong_link}, вопросов ${total.asked}, «ничего» в запись ${total.linked_nothing}, не тот done ${total.wrong_done}`);
+if (failed) { console.log(`НЕПОЛНЫЙ ПРОГОН: ${failed} случаев с ошибкой`); process.exitCode = 1; }
+const price = (tasksConfig.ai as { price_per_mtok?: { input: number; output: number } } | undefined)?.price_per_mtok;
+const cost = price ? (inputTokens * price.input + outputTokens * price.output) / 1e6 : null;
+console.log(`Токены: ${inputTokens} вход, ${outputTokens} выход${cost === null ? '' : `; стоимость $${cost.toFixed(4)}`}`);

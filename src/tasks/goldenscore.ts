@@ -9,7 +9,7 @@ export interface GoldenCase {
     nothing?: string[]; ask?: boolean;
   };
 }
-export interface GoldenScore { cases: number; missed: number; extra: number; duplicates: number; wrong_link: number; asked: number }
+export interface GoldenScore { cases: number; missed: number; extra: number; duplicates: number; wrong_link: number; asked: number; linked_nothing: number; wrong_done: number }
 
 // Parses JSON lines into cases; every id in `expect` must be a message of the case, every linked task a record.
 export function parseCases(text: string, file: string): GoldenCase[] {
@@ -50,6 +50,18 @@ export function scoreCase(expected: GoldenCase['expect'], output: PlanOutput): O
     if (task.task_id === null) continue;
     if (task.message_ids.some((id) => linkOf.has(id) && linkOf.get(id) !== task.task_id)) wrongLink++;
   }
+  // Informational: a record got only messages that should stay in the conversation; done differs from the expectation.
+  const linkedNothing = output.tasks.filter((task) => task.task_id !== null && task.message_ids.length > 0 && task.message_ids.every((id) => nothing.has(id))).length;
+  let wrongDone = 0;
+  for (const entry of expected.create ?? []) {
+    if (entry.done === undefined) continue;
+    if (output.tasks.some((task) => task.message_ids.some((id) => entry.message_ids.includes(id)) && Boolean(task.done) !== entry.done)) wrongDone++;
+  }
   const questions = (output as { questions?: unknown[] }).questions;
-  return { missed, extra, duplicates, wrong_link: wrongLink, asked: Array.isArray(questions) && questions.length > 0 ? 1 : 0 };
+  return { missed, extra, duplicates, wrong_link: wrongLink, asked: Array.isArray(questions) && questions.length > 0 ? 1 : 0, linked_nothing: linkedNothing, wrong_done: wrongDone };
+}
+
+// A case whose planner call failed: every expected create and link counts as missed, so a flaky run never looks better.
+export function failedCaseMissed(expected: GoldenCase['expect']): number {
+  return (expected.create?.length ?? 0) + (expected.link?.length ?? 0);
 }
