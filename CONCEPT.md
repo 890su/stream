@@ -25,8 +25,9 @@ updated: 2026-11-19
   conversation is always two: me and a person (or a group chat). «Задачи» — what to do (the pulse, saved lists); a
   task opens full-screen with its people and the conversation with each (2026-11-20). The message feed is a technical
   view from the menu. Input is one row at the bottom.
-- **How it works.** New messages are triaged in batches after a pause (AI now, scripts later): into a new task,
-  an open task or «без дела». Nothing goes out unless the owner sends it. Stream owns the tasks; Google, Planfix,
+- **How it works.** New messages are triaged in batches after a pause (AI now, scripts later), the conversation read
+  together with the interlocutor's records: link to a record (by the system), propose a change, make a record, ask,
+  or leave as talk. Nothing goes out unless the owner sends it. Stream owns the tasks; Google, Planfix,
   Todoist are mirrors.
 - **How it grows.** Four extension points — source, intent, connector, automation; rules are data in `registry/`,
   not conditions in code. Every step ends in something used tomorrow; the next one comes after a week of use.
@@ -204,18 +205,21 @@ request and the job given to a partner).
   conversation back from the archive by itself. Its tasks stay in «Задачи» as they are.
 - Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
   reply goes through the chosen channel (the input row, §2.9); each message shows to whom, where and when.
-- **Topics** (owner, 2026-11-23, `docs/plans/2026-11-23-topics-design.md`). A conversation is «with whom», a topic
-  is «about what»: one person — several topics, one topic — several conversations. A topic is the same record as a
-  task with `kind: 'topic'` (`task_change`; no `kind` — a task): becoming a task and back changes only `kind`, the
-  task's fields stay hidden, and a topic is out of every task view (lists, dashboard, plan, pulse). Every message —
-  notes, system and AI messages included — belongs to one or more topics (`add` / `remove`). The AI files messages
-  into topics and makes new ones itself; making a topic a task it only proposes (`offer`, ✓ makes it a task, ✕ keeps
-  it a topic); a change of an existing task stays a proposal (§2.8). A topic is live in a conversation while it had
-  a message within `topic_days`, the conversation waits or left the queue within `archive_days` (both on the System
-  screen) and the owner has not removed it there (× — its messages of this conversation leave it). In the card
-  head the line of topics: ▸ unfolds it, the chosen topic (📣) is first and takes the next message; with a topic
-  chosen the other messages fold, the filter shows all with them paler. Selected messages move to another topic or
-  get one more.
+- **Records of the interlocutor** (owner, 2026-11-23/24, `docs/plans/2026-11-23-conversation-records-design.md`;
+  replaces the topics idea, which was dropped). A conversation is «with whom» and has no inner division; a message
+  with no record is just talk. A **record** is what already exists — a task with a template (`registry/tasks.json`);
+  links «record ↔ messages» mean «where it came from», a message may be in several records or none. The **records of
+  an interlocutor** are the open ones and those closed within `reopen_days`, that have a message of this conversation,
+  or a party of this conversation as a role, or the interlocutor's counterparty — plus the 10 latest changed open
+  records of the owner from other conversations. The triage reads the conversation together with them (§2.8).
+- **«Всё распределено»** (owner, 2026-11-24). The archive means «read and sorted». A conversation stays in the queue
+  while any holds: an incoming message after my last action; the AI waits for my answer (an unconfirmed record, a
+  proposed update, a question, §2.8); the triage said «ждут от меня: …» and no record covers it. My reply removes only
+  the first; ⏱ hides until the due time; 🗄 removes all (waiting proposals and questions stay in the records and the AI
+  log but do not hold the conversation). A done-work record never holds it. An empty queue shows «Всё распределено ✓»
+  with the count sorted today; otherwise the head says «Ждут решения: N». My free input without an addressee is the
+  conversation «Я»: a tile «Я · мои записи» in the queue while it has a message with an unconfirmed record, and
+  always the first row of «Контакты».
 - **Over the input of an open conversation** (owner, 2026-11-21): a line of interlocutors only — one tile per chat
   that can be answered (a person in Telegram BY or PL, Viber, WhatsApp; a group), no roles, no «Я», no «Система».
   As in the task card, the chosen one stands leftmost with 📣 and gets the reply; by default — the chat of the latest
@@ -366,11 +370,34 @@ Viber and WhatsApp, my notes. A session is its run of messages without a pause l
 unclear — the usual question or «Разобрать». Each step back is a run in the AI log. **«✨ Разобрать заново»** on an open
 conversation sends its last session again; what the AI decided there and I have not answered (unconfirmed tasks,
 waiting proposals) is replaced, and the AI log marks it `replaced` — material for the weekly report and for scripts
-(§9, rule of three). **Topics first** (owner, 2026-11-23, `triage-ai-v20`, §2.5 «Topics»): every message goes into a
-topic — a live one of the conversation (put at once), an open task (only proposed, as above) or a new topic named by
-the title rule; a new one with work (`work`, the v17 rules) is a topic with an offer to make it a task (in mode «ИИ
-создаёт сразу» — a task); only greetings that belong to no topic stay out. The AI sees open tasks and topics with a
-message within `topic_days`; «✨ Разобрать заново» withdraws the AI's topics I never touched. **A batch is a window, not one task:** each message goes to
+(§9, rule of three). **Conversation to records** (owner, 2026-11-23/24, `triage-ai-v21`, replaces the topics-first scheme of v20):
+the triage reads the new stretch with the session before it and the records of the interlocutor (§2.5) — title, kind,
+status, roles, due, items, last 3 messages — and the owner's tags of those messages, and returns a list of actions,
+each with `message_ids`, a reason and a confidence: `link` (messages to an existing record; applied by the system at
+once, shown under the message as «→ «название» ↩»; the owner removes or moves it; the owner's own links are never
+touched), `update` (title, due, items, «looks done» with a report draft; only a proposal ✓ ✕), `create` (a new record;
+unconfirmed or at once, by the mode on the System screen), `create_done` (paid work that fitted in the talk — a done
+task with a report draft), `ask` (the AI doubts — a question with 2–3 answer buttons and a free answer, shown as
+«❓ …» on the queue tile and in the conversation head; the answer applies the choice and is the outcome in the AI log).
+Nothing is the default: a message with no action is just talk; there is no mandatory outcome per message. Rules: a
+**continuation of talk continues the record** (a repeat, a clarification, «ну что там?», «готово», «работает, спасибо»
+is `link`; a new record only when no record fits); a **task** is a request to me, my promise, an agreed visit or
+meeting — whoever asks, a client, a partner or family; in doubt between a task and nothing — an unconfirmed task, in
+doubt which record — `ask`; **done work** is a request and its execution that fitted in the talk; a free consultation
+solved by an answer or a call is nothing (v17); money named — a «деньги» record; a note — in my own input, in others'
+talk only when I tagged it; discussion of work, clients, news, greetings — nothing. **A tag is an order to the
+triage** (`#задача`, `#расход`, `#доход`, `#заметка`, `#идея`, `#поручить`, data in `registry/tags.json`): it triggers
+the triage of its session at once, also after an earlier triage, and weighs more than the AI's opinion; when it
+cannot comply, the AI log says why. **A closed record is not reopened:** a new request about it is a new unconfirmed
+record with `repeat_of` pointing to the old one and its own report (the sum may be empty). A new request to an open
+record is `link` plus a proposed `update`; the waiting proposal holds the conversation as an unconfirmed record does.
+**«✨ Сверить с перепиской»** on a record reads the conversations that have its messages (from the session before the
+first one to today) and gives only proposals ✓ ✕: pull in messages, take out messages (with a hint where), rename,
+due, items, status, merge a duplicate; nothing applies by itself and the owner's records are never reshaped.
+**«✨ Разобрать заново»** in a conversation runs v21 on its last session and replaces only the AI's own: waiting
+proposals, unconfirmed AI records, system links the owner did not touch. Before v21 ships, `pnpm golden` runs the
+real AI over `golden/` (fictional cases); the threshold: no more missed tasks than v19 and fewer duplicates.
+**A batch is a window, not one task:** each message goes to
 zero, one or several tasks, including open ones (a clarification of an old task); two matters in one message give
 two tasks. **Triage is a task too:** every new message has a default «разобрать» task (executor AI, later a
 script). Its outcome: leave it in the conversation, file material meant to be kept (e.g. wellbeing → diary),
@@ -403,11 +430,11 @@ a day or a time is work: a task due that day, even when the rest is picking the 
   задачу: …», the reason in one line, other likely tasks, «+ Новое дело», «✕ Ни с чем». ✓ applies the whole proposal;
   until the owner answers, the messages are in no task and the conversation waits in the queue. New tasks are still
   made by the triage itself; a «без дела» or diary message joining the same filed note is not asked about.
-- **Unconfirmed tasks** (owner, 2026-11-21, `triage-ai-v16`, docs/plans/2026-11-21-workspace-redesign-design.md): every
-  conversation is a topic; its task is empty, unconfirmed or real. The System screen chooses how the AI makes new tasks:
+- **Unconfirmed tasks** (owner, 2026-11-21, `triage-ai-v16`, docs/plans/2026-11-21-workspace-redesign-design.md): a
+  conversation's record is empty, unconfirmed or real. The System screen chooses how the AI makes new tasks:
   «ИИ предлагает — я подтверждаю» (default: `task_change.unconfirmed: true`) or «ИИ создаёт сразу». An unconfirmed task
   shows only in its conversation («ИИ: «…»» ✓ ✕ with the reason) and under «Неподтверждённые»; the owner's ✓ or any
-  edit confirms it, the «задача» switch turns a task back into a topic. Filed notes and «Разобрать» never wait.
+  edit confirms it (v21 drops the «задача» switch: it contradicted «✨ does not touch mine»). Filed notes and «Разобрать» never wait.
 - **The AI log** (same date): every run (what the AI was shown and answered, gzipped, wiped after
   `ai_log.keep_days`) and every decision with its reason and the owner's verdict — accepted, moved to another task,
   rejected; a task the AI made becomes «undone» when the owner cancels it or takes its messages out. The «Разбор
@@ -639,7 +666,7 @@ The centre opens on the dashboard, read top-down like the queue: the task in wor
 the next ones in the order of «До конца дня» under them. There is no view switch by the input; the dashboard is the
 root of the system back, a conversation opened over a list goes back to it, one opened from the queue on a phone goes
 back to the panel on the same tile. Deploy 2 (shipped the same day): a conversation and a task are one card. A conversation's head:
-who and the channel, the topic line («+ задача…», the AI's offer with ✓ ✕, the task, the «задача» switch), «ждёт …»
+who and the channel, the record line («+ задача…», the AI's offer or question with ✓ ✕), «ждёт …»
 with ⏱ ↥ 🗄 and «≡», folded details; its messages run in open stretches and cuts — a centred line with a task's title
 and count; in a conversation task runs fold and loose ones stay open, in a task its own stay open (messages waiting for
 an answer never fold); «≡» unfolds all. A task opens with its fields open; a tile folds them and shows that person's
