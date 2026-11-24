@@ -47,7 +47,7 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
   // The AI's draft of an assignment (taskdraft.js): into the input once per task and stay, until sent or cleared (✕).
   const filled = new Map(); // task id → the text put into the input
-  const dropFilled = () => { for (const text of filled.values()) composer.unfill(text, { edited: true }); // an edited draft must not reach another conversation filled.clear(); };
+  const dropFilled = () => { for (const text of filled.values()) composer.unfill(text); filled.clear(); }; // only an untouched prefill goes; text I edited is mine
   const showDraft = (conversation) => {
     const pending = conversation ? pendingDraft(conversation, feed.tasks(), feed.people()) : null;
     const box = $('#chat-draft');
