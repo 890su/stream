@@ -194,4 +194,5 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `test/participantpicker.test.ts` | picker suggestion ordering, search and supported task participant ids |
 | `golden/` | reference messages (real ones only in `*.local.*`, outside git) |
 | `golden/triage-information.jsonl` | synthetic task versus conversation-only triage cases |
+| `golden/conversations.jsonl` · `scripts/golden.ts` · `src/tasks/goldenscore.ts` | conversation-to-records golden cases (real ones in `conversations.local.jsonl`), the runner `pnpm golden` (real AI, prints misses / extras / duplicates / cost), pure parsing and scoring |
 | `docs/plans/` | active package plans; `archive/` (local, outside git) — done plans, superseded decisions, old Done items |

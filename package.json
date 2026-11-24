@@ -11,7 +11,8 @@
     "start": "node --disable-warning=ExperimentalWarning src/main.ts",
     "dev": "node --disable-warning=ExperimentalWarning --watch src/main.ts",
     "test": "node --disable-warning=ExperimentalWarning --test \"test/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "golden": "node --disable-warning=ExperimentalWarning scripts/golden.ts"
   },
   "devDependencies": {
     "@types/node": "^24",
