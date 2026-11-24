@@ -4,6 +4,7 @@ import { chatOf } from './projection.js';
 import { phoneLabel } from './phonebubble.js';
 import { phoneNumber } from './parties.js';
 import { ownerLinked, queueOf } from './queue.js';
+import { fromV21 } from './questions.js';
 
 // The conversation a message belongs to: one Telegram chat across both accounts, one phone number, own notes.
 // A Viber chat with a phone is that number's conversation (with its calls and SMS); without one — `viber:<name>`.
@@ -35,10 +36,11 @@ const channelOf = (event, key) => {
   return chatOf(event)?.account ?? null;
 };
 
-// A task that names a conversation: the first one of the message that is not filed away. A record the AI made and I
-// have not confirmed does not take my note out of «Я»: the note waits there for ✓ or ✕ (queue.js).
+// A task that names a conversation: the first one of the message that is not filed away. A record the v21 triage (or
+// later) made and I have not confirmed does not take my note out of «Я»: the note waits there for ✓ or ✕ (queue.js);
+// an older unconfirmed record keeps its note, as before.
 const workOf = (view, taskById, { confirmed = false } = {}) => (view?.taskIds ?? []).map((id) => taskById.get(id))
-  .find((task) => task && !task.filed && !(confirmed && task.unconfirmed)) ?? null;
+  .find((task) => task && !task.filed && !(confirmed && task.unconfirmed && fromV21(task.processor))) ?? null;
 const snippetOf = (view) => (view?.text ?? view?.event?.payload?.text ?? '').trim().split(/\r?\n/)[0].slice(0, 60) || 'Сообщение';
 
 // The name a call, an SMS or a messenger message by number gives its person (or the number itself).

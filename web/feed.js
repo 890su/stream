@@ -9,7 +9,7 @@ import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey } from './projection.js';
 import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } from './taskfold.js';
 import { questionOptions } from './question.js';
-import { questionsByMessage as aiQuestionsByMessage } from './questions.js';
+import { aiQuestionsByMessage } from './questions.js';
 import { proposalsByMessage, proposalOptions } from './proposals.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';

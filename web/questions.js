@@ -6,8 +6,15 @@
 
 const order = (a, b) => String(a.ts).localeCompare(String(b.ts));
 
-// message id -> { id, text, options, messageIds, ts } of the latest waiting question about it.
-export function questionsByMessage(events) {
+// Made by the v21 triage or later (`triage-ai-v21`+): only such questions, proposals and records hold a conversation
+// after my reply or keep my note in «Я» (queue.js, conversations.js); older ones keep the old rule. No processor — legacy.
+export function fromV21(processor) {
+  const match = /^triage-ai-v(\d+)$/.exec(processor ?? '');
+  return Boolean(match) && Number(match[1]) >= 21;
+}
+
+// message id -> { id, text, options, messageIds, ts, processor } of the latest waiting question about it.
+export function aiQuestionsByMessage(events) {
   const answered = new Set();
   for (const event of events) {
     if (event.kind === 'triage_result') for (const id of event.payload?.data?.triage?.withdrawn ?? []) answered.add(id);
@@ -18,7 +25,8 @@ export function questionsByMessage(events) {
   for (const event of events.filter((item) => item.kind === 'triage_result').sort(order)) {
     for (const question of event.payload?.data?.triage?.questions ?? []) {
       if (answered.has(question.id)) continue;
-      const item = { id: question.id, text: question.text, options: question.options ?? [], messageIds: question.message_ids, ts: event.ts };
+      const item = { id: question.id, text: question.text, options: question.options ?? [], messageIds: question.message_ids, ts: event.ts,
+        processor: event.payload.data.triage.processor ?? null };
       for (const message of question.message_ids) waiting.set(message, item);
     }
   }

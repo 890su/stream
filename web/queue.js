@@ -11,6 +11,7 @@
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe, isOpen } from './taskfold.js';
 import { whenOf } from './dayplan.js';
+import { fromV21 } from './questions.js';
 
 const time = (ts) => Date.parse(ts);
 const later = (a, b) => (time(b) > time(a) ? b : a);
@@ -71,7 +72,7 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   // Back from the archive: a requeue later than every way it was dealt with (a reply, the archive mark, a task of mine).
   const back = requeue && time(requeue) > clearedAt(conversation, views) ? requeue : null;
   const ai = { questions, proposals };
-  const open = pending.length ? null : own ? aiWaitOf(conversation, views, ai)
+  const open = pending.length ? null : own ? aiWaitOf(conversation, views, ai, undefined, true)
     : unfinishedOf(conversation, views, start, handled, now, ai) ?? (back ? { reason: 'из архива', moment: back } : null);
   if (!pending.length && !open) return NONE;
 
@@ -105,16 +106,19 @@ function unfinishedOf(conversation, views, start, handled, now, ai) {
 
 // The AI waits for my answer about this conversation's messages (design 2026-11-23): a question, an update proposal,
 // an unconfirmed record — each made after the conversation was last cleared (🗄, a task of mine); still answerable
-// after that, it no longer holds the conversation. Done work (a closed record) waits for nothing. → { reason, moment }.
-function aiWaitOf(conversation, views, { questions, proposals }, cleared = clearedAt(conversation, views)) {
+// after that, it no longer holds the conversation. Done work (a closed record) waits for nothing. Questions and
+// proposals hold only when made by v21 or later (`fromV21`): an old unanswered v15–v20 proposal keeps the old rule —
+// my reply takes the conversation out. An unconfirmed record held it before v21 too (v18), so in a chat any does; in
+// «Я» only a v21 one (older notes are in their task's conversation). → { reason, moment }.
+function aiWaitOf(conversation, views, { questions, proposals }, cleared = clearedAt(conversation, views), own = false) {
   const lastIn = views.filter((view) => directionOf(view.event) === 'in').at(-1);
   const at = (ts) => (lastIn ? lastIn.event.ts : ts);
-  const fresh = (map) => views.map((view) => map.get(view.id)).find((item) => item && time(item.ts) > cleared);
+  const fresh = (map) => views.map((view) => map.get(view.id)).find((item) => item && fromV21(item.processor) && time(item.ts) > cleared);
   const question = fresh(questions);
   if (question) return { reason: 'ИИ спрашивает', moment: at(question.ts) };
   const proposal = fresh(proposals);
   if (proposal) return { reason: 'ИИ предлагает правку', moment: at(proposal.ts) };
-  const offer = conversation.tasks.find((task) => task.unconfirmed && isOpen(task) && time(task.createdAt) > cleared);
+  const offer = conversation.tasks.find((task) => task.unconfirmed && isOpen(task) && time(task.createdAt) > cleared && (!own || fromV21(task.processor)));
   if (offer) return { reason: 'ИИ предлагает задачу', moment: at(offer.createdAt) };
   return null;
 }

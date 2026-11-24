@@ -9,7 +9,7 @@ import { project } from '../web/projection.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { foldTasks, tasksByMessage } from '../web/taskfold.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { questionsByMessage } from '../web/questions.js';
+import { aiQuestionsByMessage } from '../web/questions.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { proposalsByMessage } from '../web/proposals.js';
 
@@ -38,7 +38,7 @@ const run = (events: any[], at = now) => {
   const tasks = foldTasks(events, { filedTemplates: ['chatter'] });
   const byMessage = tasksByMessage(tasks);
   const views = project(events).map((view: any) => ({ ...view, taskIds: byMessage.get(view.id) ?? [] }));
-  return conversations(views, tasks, { now: at, config, questions: questionsByMessage(events), proposals: proposalsByMessage(events) });
+  return conversations(views, tasks, { now: at, config, questions: aiQuestionsByMessage(events), proposals: proposalsByMessage(events) });
 };
 const queueOf = (events: any[], at = now) => run(events, at)[0].queue;
 
@@ -295,6 +295,16 @@ test('a waiting update proposal holds the conversation', () => {
   assert.equal(queueOf([linked, ask, link, ok, proposal, change('tp1', '2026-11-18T09:20:00', { op: 'update', proposal: 'pp1', items_add: [{ id: 'i1', text: 'картридж' }] }, 'me')]).waiting, false, '✓');
 });
 
+test('an old (v20) unanswered proposal does not hold after my reply; a v21 one does', () => {
+  const ask = tg('985', '2026-11-18T09:00:00', 'это тот же сайт?');
+  const ok = mine('985', '2026-11-18T09:15:00', 'да');
+  const proposal = (id: string, processor: string) => result('2026-11-18T09:10:00', { processor, proposals: [{ id, task_id: 'tp9', message_ids: [ask.id],
+    reason: 'тот же сайт', confidence: 0.7, alternatives: [], change: { op: 'update', add: [ask.id] } }] });
+  assert.equal(queueOf([ask, ok, proposal('pp8', 'triage-ai-v20')]).waiting, false, 'v20: my reply takes it out, as before');
+  assert.equal(queueOf([ask, proposal('pp8', 'triage-ai-v20')]).waiting, true, 'v20: the incoming itself still waits');
+  assert.equal(queueOf([ask, ok, proposal('pp9', 'triage-ai-v21')]).open, 'ИИ предлагает правку', 'v21: holds after my reply');
+});
+
 test('a done-work record does not hold the conversation', () => {
   const ask = tg('982', '2026-11-18T09:00:00', 'подключитесь, не печатает');
   const ok = mine('982', '2026-11-18T09:30:00', 'готово');
@@ -313,12 +323,12 @@ test('a message linked to a closed record does not wait; linked to an open one i
   assert.equal(queueOf([made, thanks, link]).waiting, true, 'open record');
 });
 
-test('🗄 takes it out; the question stays in questionsByMessage', () => {
+test('🗄 takes it out; the question stays in aiQuestionsByMessage', () => {
   const ask = tg('984', '2026-11-18T09:00:00', 'позвони вечером');
   const question = asking('qq2', [ask.id], '2026-11-18T09:10:00');
   const archived = mark(ask.id, '2026-11-18T09:30:00', 'answered');
   assert.equal(queueOf([ask, question, archived]).waiting, false);
-  assert.equal(questionsByMessage([ask, question, archived]).get(ask.id)?.id, 'qq2', 'still answerable');
+  assert.equal(aiQuestionsByMessage([ask, question, archived]).get(ask.id)?.id, 'qq2', 'still answerable');
   const later = asking('qq3', [ask.id], '2026-11-18T10:00:00');
   assert.equal(queueOf([ask, question, archived, later]).open, 'ИИ спрашивает', 'a new question after 🗄 holds it again');
 });
@@ -328,10 +338,13 @@ test('the «Я» conversation waits while an AI record or question from it waits
   const idea = note('2026-11-18T08:00:00', 'идея: рассылка');
   const parcel = note('2026-11-18T09:00:00', 'отправить посылку');
   assert.equal(queueIn([idea, parcel], 'me').waiting, false, 'no incoming waits in my own notes');
-  const made = change('tm1', '2026-11-18T09:05:00', { op: 'create', title: 'Отправить посылку', status: 'todo', unconfirmed: true, add: [parcel.id] });
+  const made = change('tm1', '2026-11-18T09:05:00', { op: 'create', title: 'Отправить посылку', status: 'todo', unconfirmed: true, processor: 'triage-ai-v21', add: [parcel.id] });
   const queue = queueIn([idea, parcel, made], 'me');
   assert.deepEqual([queue.waiting, queue.open], [true, 'ИИ предлагает задачу'], 'the note stays in «Я» while the record waits');
   assert.equal(queueIn([idea, parcel, made, change('tm1', '2026-11-18T09:20:00', { unconfirmed: false }, 'me')], 'me').waiting, false, '✓');
+  const legacy = change('tm2', '2026-11-18T09:05:00', { op: 'create', title: 'Посылка', status: 'todo', unconfirmed: true, processor: 'triage-ai-v20', add: [parcel.id] });
+  assert.equal(queueIn([idea, parcel, legacy], 'me').waiting, false, 'an older unconfirmed record keeps its note in its task, «Я» does not wait');
+  assert.equal(run([idea, parcel, legacy]).some((c: any) => c.key === 'task:tm2'), true);
   const question = asking('qq4', [parcel.id], '2026-11-18T09:05:00');
   const asked = queueIn([idea, parcel, question], 'me');
   assert.deepEqual([asked.waiting, asked.open], [true, 'ИИ спрашивает']);
