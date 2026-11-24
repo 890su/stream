@@ -29,9 +29,9 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
     if (response.stop_reason === 'max_tokens') throw new Error('ответ модели не уместился в max_tokens');
     const text = response.content.find((block) => block.type === 'text');
     if (!text || text.type !== 'text') throw new Error('модель не вернула разбор');
-    const parsed = JSON.parse(text.text) as Pick<PlanOutput, 'tasks' | 'conversation_only'>;
+    const parsed = JSON.parse(text.text) as Pick<PlanOutput, 'tasks' | 'conversation_only' | 'questions'>;
     if (!Array.isArray(parsed.tasks) || !Array.isArray(parsed.conversation_only)) throw new Error('модель вернула неполный разбор');
-    return { ...parsed, usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
+    return { ...parsed, questions: Array.isArray(parsed.questions) ? parsed.questions : [], usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
   };
 }
 

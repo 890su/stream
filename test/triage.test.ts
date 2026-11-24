@@ -464,9 +464,9 @@ test('triage sets the counterparty of a task, or options and a hint; a set one s
   } finally { s.cleanup(); }
 });
 
-test('the triage keeps personal talk and consultations in the conversation; items are steps still to do', async () => {
+test('the triage treats a request of family like any other; consultations stay in the conversation; items are steps still to do', async () => {
   const { PLAN_INSTRUCTIONS } = await import('../src/tasks/planner.ts');
-  for (const rule of ['Остаётся в беседе', 'консультация', 'личная и семейная переписка', 'Пункт — только шаг', 'conversation_only']) {
+  for (const rule of ['родные или друзья', 'консультация', 'Пункт — только', 'conversation_only']) {
     assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   }
 });
@@ -608,7 +608,7 @@ test('v19 instructions and schema: need_earlier only when the session does not s
   const { PLAN_INSTRUCTIONS, PLAN_SCHEMA } = await import('../src/tasks/planner.ts');
   for (const rule of ['need_earlier', 'earlier_available', 'сессия']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   assert.ok((PLAN_SCHEMA.required as readonly string[]).includes('need_earlier'));
-  assert.equal(tasksConfig.ai.processor, 'triage-ai-v19');
+  assert.equal(tasksConfig.ai.processor, 'triage-ai-v21');
 });
 
 test('an open record of the interlocutor whose messages are older than history_days is still in context', async () => {

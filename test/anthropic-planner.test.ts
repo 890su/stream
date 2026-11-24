@@ -30,6 +30,7 @@ test('the planner sends one structured-output request and reads the tasks', asyn
     ] });
     assert.equal(output.tasks[0]!.title, 'Перезвонить Марку');
     assert.deepEqual(output.conversation_only, ['m2']);
+    assert.deepEqual(output.questions, [], 'an answer without questions (v19 shape) reads as none');
     assert.deepEqual(output.usage, { input_tokens: 1200, output_tokens: 80 });
     assert.equal(request.model, 'claude-haiku-5-5');
     assert.equal(request.output_config.effort, 'low');

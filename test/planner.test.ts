@@ -55,3 +55,30 @@ test('an unconfirmed task stays out of the day plan', () => {
   const tasks = [task('real', { due: '2026-11-20' }), task('ai', { due: '2026-11-20', unconfirmed: true })];
   assert.deepEqual(plannerDays(tasks, { now, days: 1 }).days[0].items.map((item: any) => item.task.id), ['real']);
 });
+
+// triage-ai-v21 (docs/plans/2026-11-23-conversation-records-design.md): records from the conversation, questions when unsure.
+test('v21 schema: questions are required — message ids, a text and options pointing at a record, a new one or nothing', async () => {
+  const { PLAN_SCHEMA } = await import('../src/tasks/planner.ts');
+  const schema = PLAN_SCHEMA as any;
+  assert.ok(schema.required.includes('questions'));
+  assert.equal(schema.properties.questions.type, 'array');
+  const question = schema.properties.questions.items;
+  assert.deepEqual([...question.required].sort(), ['message_ids', 'options', 'text']);
+  const option = question.properties.options.items;
+  assert.deepEqual([...option.required].sort(), ['label', 'nothing', 'task_id', 'template', 'title']);
+  assert.equal(option.additionalProperties, false);
+  assert.ok(schema.properties.tasks.items.required.includes('repeat_of'), 'a repeat of a closed record is a new one');
+});
+
+test('v21 instruction: continuation first, repeats of closed records, no outcome required; the v12 «extra task is worse» rule is gone', async () => {
+  const { PLAN_INSTRUCTIONS } = await import('../src/tasks/planner.ts');
+  for (const rule of ['продолжение', 'repeat_of', 'не обязательно', 'questions', 'directive', 'money', 'need_earlier', 'unfinished']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
+  assert.ok(!PLAN_INSTRUCTIONS.includes('лишняя задача хуже пропущенной') && !PLAN_INSTRUCTIONS.includes('Лишняя задача хуже пропущенной'));
+  assert.ok(!PLAN_INSTRUCTIONS.includes('личная и семейная переписка'), 'a family request is a task like any other');
+  assert.ok(!/тем[аыу]\b/.test(PLAN_INSTRUCTIONS), 'no topics left from the reverted v20');
+});
+
+test('v21 processor', async () => {
+  const { tasksConfig } = await import('../src/config.ts');
+  assert.equal(tasksConfig.ai.processor, 'triage-ai-v21');
+});
