@@ -190,14 +190,30 @@ export function bursts(views) {
 }
 
 // For every message in a chain of two or more (replies and continuations): the chain, its title and the message's position in it.
+// One pass, the same chains as related() gives for each message: every view's root is found once and views are
+// grouped by it (related() per view rebuilt the index and walked all views — quadratic, seconds on a phone).
 export function chains(views) {
-  const result = new Map();
+  const byId = new Map(views.map((view) => [view.id, view]));
+  const parentOf = (view) => [view.event.reply_to, view.continues].find((target) => target && byId.has(target) && target !== view.id);
+  const rootOf = (view) => {
+    const seen = new Set();
+    let parent;
+    while ((parent = parentOf(view)) && !seen.has(view.id)) { seen.add(view.id); view = byId.get(parent); }
+    return view.id;
+  };
+  const groups = new Map();
   for (const view of views) {
-    if (result.has(view.id) || view.deleted) continue;
-    const chain = related(views, view.id);
+    if (view.deleted) continue;
+    const root = rootOf(view);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(view);
+  }
+  const result = new Map();
+  for (const chain of groups.values()) {
     if (chain.length < 2) continue;
     const root = chain[0];
-    chain.forEach((item, index) => result.set(item.id, { ids: chain.map((entry) => entry.id), index, root: root.id, title: root.topicTitle || snippet(root), named: Boolean(root.topicTitle), archived: Boolean(root.topicArchived) }));
+    const ids = chain.map((entry) => entry.id);
+    chain.forEach((item, index) => result.set(item.id, { ids, index, root: root.id, title: root.topicTitle || snippet(root), named: Boolean(root.topicTitle), archived: Boolean(root.topicArchived) }));
   }
   return result;
 }

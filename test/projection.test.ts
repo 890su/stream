@@ -106,6 +106,31 @@ test('a topic is archived and restored on its first message; the whole chain rep
   assert.equal(chains(project([a, b, archive, fix(a.id, 'topic_unarchive', { data: { op: 'topic_unarchive' } })])).get(b.id).archived, false);
 });
 
+test('chains are the same as related() gives, a deleted message out, and stay fast on a big journal', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { chains, related } = await import('../web/projection.js');
+  const cont = (target: string) => ({ data: { continuation: { target, on: true } } });
+  const a = message('раз'), b = message('два', { payload: { text: 'два', ...cont(a.id) } });
+  const c = message('три', { payload: { text: 'три', ...cont(b.id) } }), lone = message('отдельно');
+  const d = message('ответ', { reply_to: c.id }), gone = message('удалено', { payload: { text: 'удалено', ...cont(a.id) } });
+  const views = project([a, b, c, lone, d, gone, fix(gone.id, 'delete', { data: { op: 'delete' } })]);
+  const result = chains(views);
+  for (const view of views.filter((item: { deleted: boolean }) => !item.deleted)) {
+    const expected = related(views, view.id).map((item: { id: string }) => item.id);
+    assert.deepEqual(result.get(view.id)?.ids, expected.length < 2 ? undefined : expected, view.text);
+  }
+  assert.deepEqual(result.get(d.id).ids, [a.id, b.id, c.id, d.id]);
+  assert.equal(result.get(d.id).index, 3);
+  assert.equal(result.has(lone.id), false);
+
+  // Every redraw of the queue and of a conversation runs chains over the whole journal (feed.js): it must be linear.
+  const many = Array.from({ length: 4000 }, (_, index) => message(`сообщение ${index}`));
+  const big = project(many);
+  const started = performance.now();
+  chains(big);
+  assert.ok(performance.now() - started < 150, `chains over 4000 messages took ${Math.round(performance.now() - started)} ms`);
+});
+
 test('calls and SMS get a header from their data; hidden numbers are named', async () => {
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   const { phoneLabel } = await import('../web/phonebubble.js');
