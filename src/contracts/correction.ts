@@ -2,7 +2,7 @@ import { HttpError } from '../server/errors.ts';
 import type { JournalEvent } from './validate.ts';
 
 // Owner actions on a message are new journal events (CONCEPT.md §2.4); the original never changes.
-export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive', 'untrack', 'track', 'remote_delete', 'pin', 'unpin', 'answered', 'unanswered', 'split', 'unsplit', 'snooze', 'unsnooze', 'requeue', 'unrequeue', 'reject_proposal'] as const;
+export const CORRECTION_OPS = ['edit', 'archive', 'unarchive', 'delete', 'restore', 'link', 'unlink', 'topic', 'topic_archive', 'topic_unarchive', 'untrack', 'track', 'remote_delete', 'pin', 'unpin', 'answered', 'unanswered', 'split', 'unsplit', 'snooze', 'unsnooze', 'requeue', 'unrequeue', 'reject_proposal', 'answer_question'] as const;
 
 // Shape rules that need no database. `target` is checked separately, inside the write transaction.
 export function checkCorrectionShape(event: JournalEvent): void {
@@ -28,6 +28,14 @@ export function checkCorrectionShape(event: JournalEvent): void {
   if (op === 'reject_proposal') {
     const proposal = event.payload.data?.proposal;
     if (typeof proposal !== 'string' || !/^[0-9a-f-]{36}$/i.test(proposal)) throw new HttpError(400, 'Отказ от предложения ИИ должен указывать proposal — id предложения');
+  }
+  // The owner's answer to an AI question (triage-ai-v21 `ask`, design 2026-11-23): one of its options by index, or words.
+  if (op === 'answer_question') {
+    const { question, option, text } = event.payload.data ?? {};
+    if (typeof question !== 'string' || !/^[0-9a-f-]{36}$/i.test(question)) throw new HttpError(400, 'Ответ на вопрос ИИ должен указывать question — id вопроса');
+    if ((option === undefined) === (text === undefined)) throw new HttpError(400, 'Ответ на вопрос ИИ — либо вариант (option), либо слова (text)');
+    if (option !== undefined && !(Number.isInteger(option) && (option as number) >= 0 && (option as number) <= 2)) throw new HttpError(400, 'Ответ на вопрос ИИ: option — номер варианта от 0 до 2');
+    if (text !== undefined && (typeof text !== 'string' || !text.trim() || text.length > 500)) throw new HttpError(400, 'Ответ на вопрос ИИ словами — от 1 до 500 знаков');
   }
   if (op === 'link') {
     const target = event.payload.data?.target;

@@ -9,6 +9,7 @@ import { createBubble, bubbleSignature } from './bubble.js';
 import { project, bursts, chains, sourceKey } from './projection.js';
 import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } from './taskfold.js';
 import { questionOptions } from './question.js';
+import { questionsByMessage as aiQuestionsByMessage } from './questions.js';
 import { proposalsByMessage, proposalOptions } from './proposals.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
@@ -103,6 +104,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const now = new Date();
     const questions = questionsByMessage([...events.values()]);
     const proposals = proposalsByMessage([...events.values()]); // the AI's proposals wait for the owner (proposals.js)
+    const asked = aiQuestionsByMessage([...events.values()]); // the AI's questions (v21 `ask`) hold their conversations in the queue
     for (const view of projected) {
       view.taskIds = byMessage.get(view.id) ?? [];
       view.question = proposalOptions(view, proposals.get(view.id), tasksById) ?? questionOptions(view, questions.get(view.id), tasksById);
@@ -120,7 +122,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const inConversation = (view) => !conversationKey || convKeys.get(view.id) === conversationKey;
     // Лента: context-only messages and all-finished tasks show with «Завершённые».
     const finished = (view) => view.taskIds.length ? view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' })) : view.conversationOnly;
-    convList = conversations(kept, taskList, { now, config: queueConfig(), keys: convKeys });
+    convList = conversations(kept, taskList, { now, config: queueConfig(), keys: convKeys, questions: asked, proposals });
     current = conversationKey ? convList.find((item) => item.key === conversationKey) ?? null : null;
     const inside = mode === 'conversations' && Boolean(conversationKey);
     const visible = inside ? kept.filter(inConversation)

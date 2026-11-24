@@ -8,6 +8,10 @@ import { queueList, ownerLinked, archiveList } from '../web/queue.js';
 import { project } from '../web/projection.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { foldTasks, tasksByMessage } from '../web/taskfold.js';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
+import { questionsByMessage } from '../web/questions.js';
+// @ts-expect-error Browser modules are deliberately buildless JavaScript.
+import { proposalsByMessage } from '../web/proposals.js';
 
 // The queue of conversations (CONCEPT.md §2.5, design 2026-11-20). Names and texts are made up.
 const config = { queue: { since: '2026-11-10T00:00:00' } };
@@ -34,7 +38,7 @@ const run = (events: any[], at = now) => {
   const tasks = foldTasks(events, { filedTemplates: ['chatter'] });
   const byMessage = tasksByMessage(tasks);
   const views = project(events).map((view: any) => ({ ...view, taskIds: byMessage.get(view.id) ?? [] }));
-  return conversations(views, tasks, { now: at, config });
+  return conversations(views, tasks, { now: at, config, questions: questionsByMessage(events), proposals: proposalsByMessage(events) });
 };
 const queueOf = (events: any[], at = now) => run(events, at)[0].queue;
 
@@ -250,4 +254,87 @@ test('back from the archive: the archive mark is lifted and a snooze is cancelle
   const snoozed = mark(ask.id, '2026-11-18T10:00:00', 'snooze', { until: '2026-11-19T09:00:00' });
   assert.equal(queueOf([ask, snoozed]).waiting, false);
   assert.equal(queueOf([ask, snoozed, mark(ask.id, '2026-11-18T11:00:00', 'requeue')]).waiting, true, 'the snooze is cancelled');
+});
+
+// «Всё распределено» (design 2026-11-23, «Очередь — всё распределено»): the archive means read and sorted out. A
+// conversation stays while the AI waits for me — a question, an update proposal, an unconfirmed record; my reply to
+// the other side takes out only the waiting incoming. Ids and texts are made up.
+const result = (ts: string, triage: Record<string, unknown>) => ({
+  id: `q${++n}`, schema_version: 1, source: 'system', author: 'system', ts, kind: 'triage_result',
+  payload: { data: { triage: { processor: 'triage-ai-v21', conversation_only: [], ...triage } } },
+});
+const options = [
+  { label: 'Задача: отправить посылку', task_id: null, title: 'Отправить посылку', template: null, nothing: false },
+  { label: 'Ничего', task_id: null, title: null, template: null, nothing: true },
+];
+const asking = (id: string, messages: string[], ts: string) => result(ts, { questions: [{ id, message_ids: messages, text: 'Это задача?', options }] });
+const queueIn = (events: any[], key: string, at = now) => run(events, at).find((c: any) => c.key === key)?.queue;
+
+test('my reply does not take a conversation out while a question waits', () => {
+  const ask = tg('980', '2026-11-18T09:00:00', 'отправь посылку маме');
+  const ok = mine('980', '2026-11-18T09:05:00', 'ок');
+  assert.equal(queueOf([ask, ok]).waiting, false, 'no question: my reply takes it out');
+  const question = asking('qq1', [ask.id], '2026-11-18T09:10:00');
+  const queue = queueOf([ask, ok, question]);
+  assert.deepEqual([queue.waiting, queue.open, queue.moment], [true, 'ИИ спрашивает', ask.ts]);
+  assert.equal(queueOf([ask, ok, question, mark(ask.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq1', option: 0 })]).waiting, false, 'answered');
+  assert.equal(queueOf([ask, ok, question, result('2026-11-18T09:20:00', { again: true, withdrawn: ['qq1'] })]).waiting, false, 'withdrawn');
+});
+
+test('a waiting update proposal holds the conversation', () => {
+  const linked = change('tp1', '2026-11-18T08:00:00', { op: 'create', title: 'Принтер', status: 'todo', add: [] }, 'me');
+  const ask = tg('981', '2026-11-18T09:00:00', 'и ещё картридж поменяйте');
+  const link = change('tp1', '2026-11-18T09:10:00', { op: 'update', add: [ask.id] });
+  const ok = mine('981', '2026-11-18T09:15:00', 'хорошо');
+  const proposal = result('2026-11-18T09:10:00', { proposals: [{ id: 'pp1', task_id: 'tp1', message_ids: [ask.id], reason: 'новый пункт', confidence: 0.8,
+    alternatives: [], change: { items_add: [{ id: 'i1', text: 'картридж' }] } }] });
+  assert.equal(queueOf([linked, ask, link, ok]).waiting, false, 'linked to an open record and answered');
+  const queue = queueOf([linked, ask, link, ok, proposal]);
+  assert.deepEqual([queue.waiting, queue.open], [true, 'ИИ предлагает правку']);
+  assert.equal(queueOf([linked, ask, link, ok, proposal, mark(ask.id, '2026-11-18T09:20:00', 'reject_proposal', { proposal: 'pp1' })]).waiting, false, '✕');
+  assert.equal(queueOf([linked, ask, link, ok, proposal, change('tp1', '2026-11-18T09:20:00', { op: 'update', proposal: 'pp1', items_add: [{ id: 'i1', text: 'картридж' }] }, 'me')]).waiting, false, '✓');
+});
+
+test('a done-work record does not hold the conversation', () => {
+  const ask = tg('982', '2026-11-18T09:00:00', 'подключитесь, не печатает');
+  const ok = mine('982', '2026-11-18T09:30:00', 'готово');
+  const thanks = tg('982', '2026-11-18T09:35:00', 'спасибо, работает');
+  const done = change('td1', '2026-11-18T09:40:00', { op: 'create', title: 'Анна: настройка печати', status: 'done', unconfirmed: true,
+    report: { text: 'настроил печать' }, add: [ask.id, ok.id, thanks.id] });
+  assert.equal(queueOf([ask, ok, thanks, done]).waiting, false);
+});
+
+test('a message linked to a closed record does not wait; linked to an open one it does', () => {
+  const made = change('tc1', '2026-11-17T09:00:00', { op: 'create', title: 'Анна: принтер', status: 'todo', add: [] }, 'me');
+  const closed = change('tc1', '2026-11-17T18:00:00', { op: 'update', status: 'done' }, 'me');
+  const thanks = tg('983', '2026-11-18T09:00:00', 'спасибо, работает');
+  const link = change('tc1', '2026-11-18T09:05:00', { op: 'update', add: [thanks.id] });
+  assert.equal(queueOf([made, closed, thanks, link]).waiting, false, 'closed record');
+  assert.equal(queueOf([made, thanks, link]).waiting, true, 'open record');
+});
+
+test('🗄 takes it out; the question stays in questionsByMessage', () => {
+  const ask = tg('984', '2026-11-18T09:00:00', 'позвони вечером');
+  const question = asking('qq2', [ask.id], '2026-11-18T09:10:00');
+  const archived = mark(ask.id, '2026-11-18T09:30:00', 'answered');
+  assert.equal(queueOf([ask, question, archived]).waiting, false);
+  assert.equal(questionsByMessage([ask, question, archived]).get(ask.id)?.id, 'qq2', 'still answerable');
+  const later = asking('qq3', [ask.id], '2026-11-18T10:00:00');
+  assert.equal(queueOf([ask, question, archived, later]).open, 'ИИ спрашивает', 'a new question after 🗄 holds it again');
+});
+
+test('the «Я» conversation waits while an AI record or question from it waits, else not', () => {
+  const note = (ts: string, text: string) => ({ id: `q${++n}`, schema_version: 1, source: 'app', author: 'me', ts, kind: 'text', payload: { text, data: {} } });
+  const idea = note('2026-11-18T08:00:00', 'идея: рассылка');
+  const parcel = note('2026-11-18T09:00:00', 'отправить посылку');
+  assert.equal(queueIn([idea, parcel], 'me').waiting, false, 'no incoming waits in my own notes');
+  const made = change('tm1', '2026-11-18T09:05:00', { op: 'create', title: 'Отправить посылку', status: 'todo', unconfirmed: true, add: [parcel.id] });
+  const queue = queueIn([idea, parcel, made], 'me');
+  assert.deepEqual([queue.waiting, queue.open], [true, 'ИИ предлагает задачу'], 'the note stays in «Я» while the record waits');
+  assert.equal(queueIn([idea, parcel, made, change('tm1', '2026-11-18T09:20:00', { unconfirmed: false }, 'me')], 'me').waiting, false, '✓');
+  const question = asking('qq4', [parcel.id], '2026-11-18T09:05:00');
+  const asked = queueIn([idea, parcel, question], 'me');
+  assert.deepEqual([asked.waiting, asked.open], [true, 'ИИ спрашивает']);
+  assert.equal(queueIn([idea, parcel, question, mark(parcel.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq4', text: 'ничего' })], 'me').waiting, false);
+  assert.equal(queueIn([idea, parcel, question, mark(parcel.id, '2026-11-18T09:20:00', 'answered')], 'me').waiting, false, '🗄');
 });

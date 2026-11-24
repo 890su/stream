@@ -35,8 +35,10 @@ const channelOf = (event, key) => {
   return chatOf(event)?.account ?? null;
 };
 
-// A task that names a conversation: the first one of the message that is not filed away.
-const workOf = (view, taskById) => (view?.taskIds ?? []).map((id) => taskById.get(id)).find((task) => task && !task.filed) ?? null;
+// A task that names a conversation: the first one of the message that is not filed away. A record the AI made and I
+// have not confirmed does not take my note out of «Я»: the note waits there for ✓ or ✕ (queue.js).
+const workOf = (view, taskById, { confirmed = false } = {}) => (view?.taskIds ?? []).map((id) => taskById.get(id))
+  .find((task) => task && !task.filed && !(confirmed && task.unconfirmed)) ?? null;
 const snippetOf = (view) => (view?.text ?? view?.event?.payload?.text ?? '').trim().split(/\r?\n/)[0].slice(0, 60) || 'Сообщение';
 
 // The name a call, an SMS or a messenger message by number gives its person (or the number itself).
@@ -122,7 +124,7 @@ export function conversationKeys(views, { tasksById = new Map() } = {}) {
       current = parent;
     }
     if (key === 'me') {
-      const work = workOf(view, tasksById) ?? workOf(current, tasksById);
+      const work = workOf(view, tasksById, { confirmed: true }) ?? workOf(current, tasksById, { confirmed: true });
       if (work) key = `task:${work.id}`;
     }
     keys.set(view.id, key);
@@ -134,8 +136,10 @@ export function conversationKeys(views, { tasksById = new Map() } = {}) {
 
 // All conversations, the latest message first, each with `queue` (queue.js; the list's order is queueList's job).
 // `keys` — conversationKeys of a wider
-// set of views (the feed passes all live ones, so a note keeps its conversation when its parent is archived).
-export function conversations(views, tasks, { now = new Date(), config, keys = conversationKeys(views, { tasksById: new Map(tasks.map((task) => [task.id, task])) }) }) {
+// set of views (the feed passes all live ones, so a note keeps its conversation when its parent is archived);
+// `questions` / `proposals` — the AI's waiting questions and proposals by message (questions.js, proposals.js).
+export function conversations(views, tasks, { now = new Date(), config, questions = new Map(), proposals = new Map(),
+  keys = conversationKeys(views, { tasksById: new Map(tasks.map((task) => [task.id, task])) }) }) {
   const groups = new Map();
   for (const view of views) {
     if (view.deleted) continue;
@@ -159,7 +163,7 @@ export function conversations(views, tasks, { now = new Date(), config, keys = c
       views: sorted, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
       reply: incoming ? chatOf(incoming.event) : null,
     };
-    list.push({ ...conversation, queue: queueOf(conversation, { now, config, owner }), archived: isArchived(conversation) });
+    list.push({ ...conversation, queue: queueOf(conversation, { now, config, owner, questions, proposals }), archived: isArchived(conversation) });
   }
   return list.sort((a, b) => Date.parse(b.last) - Date.parse(a.last));
 }

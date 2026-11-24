@@ -1255,3 +1255,16 @@ WhatsApp, Google останавливаются, разбор ставится �
 метка весит больше мнения ИИ.
 **Affected:** `src/tasks/{triage,triageapply,directive,retriage}.ts`, `src/store/{ailog,triage}.ts`,
 `src/server/{events,http}.ts`, `registry/{tags,tasks}.json`, `web/systemcards.js`
+
+## 2026-11-24 — Контракт: правка `answer_question` — ответ на вопрос ИИ
+**What:** Новое действие правки `answer_question` (`src/contracts/correction.ts`): `question` — id вопроса из
+`triage_result.questions`, и ровно одно из двух — `option` (номер варианта 0–2) или `text` (свой ответ словами, 1–500
+знаков). Вопрос ждёт, пока на него нет такой правки от владельца и его не отозвал более поздний итог (`withdrawn`);
+🗄 вопрос не снимает — только отпускает беседу из очереди. В журнале ИИ вопрос с ответом-вариантом — `accepted`,
+словами — `redirected`. В `contracts/event.schema.json` описаны необязательные `question` и `option`; изменение не
+ломающее, версия схемы не меняется. Сообщение, связанное только с закрытой записью («спасибо, работает», сделанная
+работа), беседу не держит; моя заметка с неподтверждённой записью ИИ остаётся в «Я» до ✓ ✕, и «Я» ждёт в очереди.
+**Why:** Замысел 2026-11-23, «Очередь — всё распределено» и «Мой ввод — беседа «Я»»: ответ на вопрос — действие
+владельца в журнале, а не состояние интерфейса.
+**Affected:** `contracts/event.schema.json`, `src/contracts/correction.ts`, `src/store/ailog.ts`, `web/questions.js`,
+`web/queue.js`, `web/conversations.js`, `web/proposals.js`, `web/feed.js`

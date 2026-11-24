@@ -139,6 +139,8 @@
         "data": {
           "type": "object",
           "properties": {
+            "question": { "type": "string", "format": "uuid", "description": "On correction answer_question: the AI question (triage_result questions) the owner answers, with `option` or `text`." },
+            "option": { "type": "integer", "minimum": 0, "maximum": 2, "description": "On correction answer_question: the chosen option's index; the answer in words goes to `text` instead." },
             "triage": {
               "type": "object",
               "description": "On kind: triage_result. Messages handled as context without a task.",

@@ -7,7 +7,7 @@ import { isOpen } from './taskfold.js';
 
 const order = (a, b) => String(a.ts).localeCompare(String(b.ts));
 
-// message id -> { id, task, alternatives, reason, messageIds, change } of the latest waiting proposal for it.
+// message id -> { id, task, alternatives, reason, messageIds, change, ts } of the latest waiting proposal for it.
 export function proposalsByMessage(events) {
   const answered = new Set();
   const linked = new Set(); // messages the owner put into a task himself
@@ -27,7 +27,7 @@ export function proposalsByMessage(events) {
     for (const proposal of event.payload?.data?.triage?.proposals ?? []) {
       if (answered.has(proposal.id) || proposal.message_ids.some((message) => linked.has(message))) continue;
       const item = { id: proposal.id, task: proposal.task_id, alternatives: proposal.alternatives ?? [], reason: proposal.reason ?? '',
-        messageIds: proposal.message_ids, change: proposal.change };
+        messageIds: proposal.message_ids, change: proposal.change, ts: event.ts };
       for (const message of proposal.message_ids) waiting.set(message, item);
     }
   }

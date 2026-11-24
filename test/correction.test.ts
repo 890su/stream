@@ -65,3 +65,23 @@ test('«✕» on an AI proposal names the proposal it rejects', async () => {
     await f.stop();
   }
 });
+
+test('answer_question validates option index or text', async () => {
+  const f = await fixture();
+  const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const original = event({ payload: { text: 'отправь посылку' } });
+    assert.equal((await post(original)).status, 201);
+    const question = '00000000-0000-4000-8000-000000000888';
+    for (const data of [{}, { question: 'не id', option: 0 }, { question }, { question, option: 0, text: 'и то и другое' }, { question, option: -1 },
+      { question, option: 1.5 }, { question, option: 3 }, { question, option: '0' }, { question, text: '  ' }, { question, text: 'я'.repeat(501) }]) {
+      const response = await post(correction(original.id, { op: 'answer_question', ...data }));
+      assert.equal(response.status, 400, JSON.stringify(data));
+      assert.match((await response.json()).error, /Ответ на вопрос ИИ|data\.(question|option)/, 'the schema or the shape check names the field');
+    }
+    assert.equal((await post(correction(original.id, { op: 'answer_question', question, option: 2 }))).status, 201);
+    assert.equal((await post(correction(original.id, { op: 'answer_question', question, text: 'это подарок, ничего не нужно' }))).status, 201);
+  } finally {
+    await f.stop();
+  }
+});

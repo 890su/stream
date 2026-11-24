@@ -62,8 +62,10 @@ export class AiLog {
   // A new journal event: the owner's answer to a proposal, a hand link of a waiting message, or an undo of what the AI made.
   observe(event: JournalEvent): void {
     if (event.author !== 'me') return;
-    const data = event.payload.data as { op?: string; proposal?: string; task?: { proposal?: string; add?: string[]; remove?: string[]; status?: string; unconfirmed?: boolean } } | undefined;
+    const data = event.payload.data as { op?: string; proposal?: string; question?: string; option?: number; task?: { proposal?: string; add?: string[]; remove?: string[]; status?: string; unconfirmed?: boolean } } | undefined;
     if (event.kind === 'correction' && data?.op === 'reject_proposal' && data.proposal) { this.#settle(data.proposal, 'rejected', event.ts, null, ['pending']); return; }
+    // A question (v21 `ask`) answered: one of the AI's options — `accepted`, the owner's own words — `redirected`.
+    if (event.kind === 'correction' && data?.op === 'answer_question' && data.question) { this.#settle(data.question, data.option !== undefined ? 'accepted' : 'redirected', event.ts, null, ['pending']); return; }
     if (event.kind !== 'task_change' || !data?.task) return;
     const task = event.payload.ref!.id;
     const change = data.task;

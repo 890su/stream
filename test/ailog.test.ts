@@ -87,3 +87,16 @@ test('the owner confirming an AI task settles its create as accepted', () => {
     assert.deepEqual(['c1', 'c2'].map((id) => store.ailog.decision(id)?.status), ['accepted', 'auto']);
   } finally { store.close(); done(); }
 });
+
+test('the owner\'s answer to an AI question settles it: an option — accepted, words — redirected', () => {
+  const { store, done } = fresh();
+  try {
+    store.appendEvent(message(1));
+    store.ailog.decide([decision(uuid(801), 'question', null, [uuid(1)], 'pending'), decision(uuid(802), 'question', null, [uuid(1)], 'pending')]);
+    const answer = (n: number, data: Record<string, unknown>) => store.appendEvent({ id: uuid(920 + n), schema_version: 1, source: 'app', author: 'me',
+      ts: `2026-11-21T11:1${n}:00.000Z`, kind: 'correction', payload: { ref: { type: 'event', id: uuid(1) }, data: { op: 'answer_question', ...data } } });
+    answer(1, { question: uuid(801), option: 1 });
+    answer(2, { question: uuid(802), text: 'это подарок' });
+    assert.deepEqual([uuid(801), uuid(802)].map((id) => store.ailog.decision(id)?.status), ['accepted', 'redirected']);
+  } finally { store.close(); done(); }
+});

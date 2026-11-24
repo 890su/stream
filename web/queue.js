@@ -4,7 +4,10 @@
 // (`snooze`). A conversation with a day task of mine comes back on that day (owner, 2026-11-22: the archive hides
 // it until the task day or a new incoming). «↧» after it was dealt with — a swipe on an archive tile — brings it back
 // to the end of the queue and cancels a snooze (owner, 2026-11-22). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
-// snooze; a new message in a queued conversation does not move it. Pure — no DOM.
+// snooze; a new message in a queued conversation does not move it. The archive means «read and sorted out»
+// (design 2026-11-23, «Очередь — всё распределено»): while the AI waits for me — a question, an update proposal, an
+// unconfirmed record — my reply does not take the conversation out; 🗄 does. My own notes («Я») wait only for the AI.
+// Pure — no DOM.
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe, isOpen } from './taskfold.js';
 import { whenOf } from './dayplan.js';
@@ -28,20 +31,24 @@ export function ownerLinked(tasks) {
   return ids;
 }
 
-// { waiting, moment, since (the first waiting message), pending (waiting messages), snoozedUntil }.
-// `conversation` needs key, views (with taskIds), tasks and group; `owner` — ownerLinked of all tasks.
-export function queueOf(conversation, { now = new Date(), config, owner = new Set() }) {
-  if (conversation.key === 'me' || conversation.key.startsWith('task:')) return NONE;
+// { waiting, moment, since (the first waiting message), pending (waiting messages), snoozedUntil, open (why it waits
+// with no message waiting) }. `conversation` needs key, views (with taskIds), tasks and group; `owner` — ownerLinked
+// of all tasks; `questions` / `proposals` — the AI's waiting questions and proposals by message (questions.js,
+// proposals.js).
+export function queueOf(conversation, { now = new Date(), config, owner = new Set(), questions = new Map(), proposals = new Map() }) {
+  if (conversation.key.startsWith('task:')) return NONE;
+  const own = conversation.key === 'me'; // my notes: nobody to answer, only the AI may wait for me
   const views = conversation.views.filter((view) => !view.deleted).sort((a, b) => time(a.event.ts) - time(b.event.ts));
   const byId = new Map(views.map((view) => [view.id, view]));
   const taskOf = new Map(conversation.tasks.map((task) => [task.id, task]));
   // An own note pulled into a chat or a number (a call description, a reply not sent) is neither an answer nor waiting.
   const note = (view) => conversationOf(view.event) === 'me';
   const answeredCall = (view) => view.event.kind === 'call' && view.event.payload?.data?.call?.direction === 'in';
-  // Context-only messages and messages belonging only to filed tasks do not wait for an answer.
+  // Context-only messages and messages belonging only to filed or closed records («спасибо, работает» linked to a
+  // finished job, done work) do not wait for an answer: only an open record that is not filed away makes them wait.
   const meaningful = (view) => {
     const tasks = (view.taskIds ?? []).map((id) => taskOf.get(id)).filter(Boolean);
-    return tasks.length ? tasks.some((task) => !task.filed) : !view.conversationOnly;
+    return tasks.length ? tasks.some((task) => !task.filed && isOpen(task)) : !view.conversationOnly;
   };
   // In a group, someone else's message matters to me only when it answers mine or is in a task where I have a role.
   const matters = (view) => {
@@ -58,12 +65,14 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   }
   // Messages from before the queue started (`queue.since`) wait for nobody: the history imported with the channels.
   const start = time(config.queue.since);
-  const pending = views.filter((view) => time(view.event.ts) > handled && time(view.event.ts) >= start && directionOf(view.event) === 'in'
+  const pending = own ? [] : views.filter((view) => time(view.event.ts) > handled && time(view.event.ts) >= start && directionOf(view.event) === 'in'
     && !answeredCall(view) && !note(view) && meaningful(view) && matters(view));
   const requeue = views.flatMap((view) => view.requeues ?? []).filter((ts) => time(ts) > handled).sort((a, b) => time(a) - time(b)).at(-1);
   // Back from the archive: a requeue later than every way it was dealt with (a reply, the archive mark, a task of mine).
   const back = requeue && time(requeue) > clearedAt(conversation, views) ? requeue : null;
-  const open = pending.length ? null : unfinishedOf(conversation, views, start, handled, now) ?? (back ? { reason: 'из архива', moment: back } : null);
+  const ai = { questions, proposals };
+  const open = pending.length ? null : own ? aiWaitOf(conversation, views, ai)
+    : unfinishedOf(conversation, views, start, handled, now, ai) ?? (back ? { reason: 'из архива', moment: back } : null);
   if (!pending.length && !open) return NONE;
 
   let moment = pending[0]?.event.ts ?? open.moment;
@@ -79,20 +88,35 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   return { waiting: true, moment, since: pending[0]?.event.ts ?? open.moment, pending, snoozedUntil: null, open: open?.reason ?? null };
 }
 
-// No message waits, yet the conversation is not over (owner, 2026-11-21): the latest triage verdict says the other side
-// still waits for me and no task covers it, or an AI task waits for ✓ or ✕. My reply does not end it; the archive mark,
-// a task of mine for its messages or a later verdict «finished» does. Or the day of a task of mine has come (its
-// planned start, due date or reminder) and nothing was done in the conversation since that day began.
+// No message waits, yet the conversation is not over (owner, 2026-11-21): the AI waits for me (aiWaitOf), or the
+// latest triage verdict says the other side still waits for me and no task covers it. My reply does not end it; the
+// archive mark, a task of mine for its messages or a later verdict «finished» does. Or the day of a task of mine has
+// come (its planned start, due date or reminder) and nothing was done in the conversation since that day began.
 // → { reason, moment } or null.
-function unfinishedOf(conversation, views, start, handled, now) {
+function unfinishedOf(conversation, views, start, handled, now, ai) {
   const cleared = clearedAt(conversation, views);
+  const waits = aiWaitOf(conversation, views, ai, cleared);
+  if (waits) return waits;
+  const lastIn = views.filter((view) => directionOf(view.event) === 'in').at(-1);
+  const verdict = views.filter((view) => view.verdict).at(-1)?.verdict;
+  if (verdict?.unfinished && time(verdict.ts) > cleared && time(verdict.ts) >= start) return { reason: verdict.unfinished, moment: lastIn?.event.ts ?? verdict.ts };
+  return taskDayOf(conversation, Math.max(cleared, handled), now);
+}
+
+// The AI waits for my answer about this conversation's messages (design 2026-11-23): a question, an update proposal,
+// an unconfirmed record — each made after the conversation was last cleared (🗄, a task of mine); still answerable
+// after that, it no longer holds the conversation. Done work (a closed record) waits for nothing. → { reason, moment }.
+function aiWaitOf(conversation, views, { questions, proposals }, cleared = clearedAt(conversation, views)) {
   const lastIn = views.filter((view) => directionOf(view.event) === 'in').at(-1);
   const at = (ts) => (lastIn ? lastIn.event.ts : ts);
+  const fresh = (map) => views.map((view) => map.get(view.id)).find((item) => item && time(item.ts) > cleared);
+  const question = fresh(questions);
+  if (question) return { reason: 'ИИ спрашивает', moment: at(question.ts) };
+  const proposal = fresh(proposals);
+  if (proposal) return { reason: 'ИИ предлагает правку', moment: at(proposal.ts) };
   const offer = conversation.tasks.find((task) => task.unconfirmed && isOpen(task) && time(task.createdAt) > cleared);
   if (offer) return { reason: 'ИИ предлагает задачу', moment: at(offer.createdAt) };
-  const verdict = views.filter((view) => view.verdict).at(-1)?.verdict;
-  if (verdict?.unfinished && time(verdict.ts) > cleared && time(verdict.ts) >= start) return { reason: verdict.unfinished, moment: at(verdict.ts) };
-  return taskDayOf(conversation, Math.max(cleared, handled), now);
+  return null;
 }
 
 // When the owner last took the conversation out by a mark: the archive mark, a task of mine taking its messages.
