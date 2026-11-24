@@ -1,7 +1,7 @@
 // How the triage applies one planned outcome (triage-ai-v21, docs/plans/2026-11-23-conversation-records-design.md):
 // messages that continue an open record are linked to it at once by the system; what would change its content (items,
 // title, due, «done» with a report, project, counterparty) is only proposed. A closed record is never reopened: a
-// thank-you is only linked, a new request is a new record with `repeat_of`. Work requested and done inside the
+// thank-you is only linked, a new request (the AI's `repeat_of`) is a new record that points to it. Work requested and done inside the
 // conversation is a done record with its report draft. Pure — the caller writes the events.
 import type { TriageNewTasks } from '../ownersettings.ts';
 import type { Counterparty } from '../contacts/fold.ts';
@@ -119,9 +119,9 @@ export function applyPlanned(planned: PlannedTask, ctx: ApplyContext): Applied[]
     return planned.filed ? linkOnly(closed, ids, ctx) : create(planned, ids, null, ctx);
   }
   if (closed) {
-    // «спасибо, работает» — only a link; a new request (repeat_of, «done» again, items, a due) — a new record.
-    const askedAgain = planned.repeat_of === closed.id || planned.done || Boolean(planned.items?.some((item) => String(item).trim())) || Boolean(planned.due);
-    return askedAgain ? create(planned, ids, closed.id, ctx) : linkOnly(closed, ids, ctx);
+    // A new request about it is a new record only when the AI says so (`repeat_of`); anything else — «спасибо,
+    // работает», even with «done», items or a due — is only a link: a closed record gets no content changes.
+    return planned.repeat_of === closed.id ? create(planned, ids, closed.id, ctx) : linkOnly(closed, ids, ctx);
   }
   const repeated = planned.repeat_of ? ctx.closed.get(planned.repeat_of) : undefined;
   return create(planned, ids, repeated && !isFiledRecord(repeated, ctx.filedTemplates) ? repeated.id : null, ctx);

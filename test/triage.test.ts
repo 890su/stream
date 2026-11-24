@@ -777,3 +777,80 @@ test('a directive tag added after triage reruns that session once', async () => 
     assert.equal(calls.length, 1, 'run once');
   } finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); storage.cleanup(); }
 });
+
+test('a rerun withdraws its session\'s waiting questions, proposals, links and unconfirmed AI records', async () => {
+  let round = 0;
+  const mine = randomUUID();
+  const s = setup((input) => {
+    round += 1;
+    const [a, b, c] = input.messages.map((message) => message.id);
+    if (round === 1) return { tasks: [planned({ title: 'Клиент: камеры', message_ids: [a!] }), planned({ task_id: mine, title: 'Клиент: роутер', message_ids: [b!], items: ['проверить блок'] })],
+      questions: [{ message_ids: [c!], text: 'О каком деле речь?', options: [{ label: 'Клиент: роутер', task_id: mine, title: null, template: null, nothing: false }, { label: 'Ничего', task_id: null, title: null, template: null, nothing: true }] }] };
+    assert.equal(input.open_tasks.some((task) => task.title === 'Клиент: камеры'), false, 'the record it replaces is not shown');
+    return { tasks: [planned({ title: 'Клиент: посылка', message_ids: [c!] })] };
+  }, { newTasks: 'unconfirmed' });
+  try {
+    s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: '2026-11-10T10:00:00.000Z', kind: 'task_change', payload: { ref: { type: 'task', id: mine }, data: { task: { op: 'create', title: 'Клиент: роутер' } } } });
+    s.add(telegram('7501', 'камеры бы поставить'));
+    s.add(telegram('7501', 'роутер мигает'));
+    const c = s.add(telegram('7501', 'и посылку отправь'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const first = s.store.triage.results().at(-1)!.payload.data!.triage as { proposals: { id: string }[]; questions: { id: string }[] };
+    const cameras = s.tasks().find((task) => task.title === 'Клиент: камеры')!;
+    await s.triage.rerun(c.id, 'tag-1');
+    const again = s.store.triage.results().at(-1)!.payload.data!.triage as { withdrawn: string[] };
+    assert.deepEqual([...again.withdrawn].sort(), [first.proposals[0]!.id, first.questions[0]!.id].sort());
+    assert.equal(s.tasks().find((task) => task.id === cameras.id)!.status, 'cancelled');
+    assert.deepEqual(s.tasks().find((task) => task.id === mine)!.messages, [], 'the untouched system link is taken back');
+    assert.ok(s.tasks().some((task) => task.title === 'Клиент: посылка' && task.unconfirmed));
+    assert.equal(s.store.ailog.decision(first.questions[0]!.id)!.status, 'replaced');
+  } finally { s.cleanup(); }
+});
+
+test('a rerun and a round take turns: the round does not triage the session\'s messages under another key', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const s = setup(() => ({ tasks: [] }));
+  const plan = s.calls; // filled by the scripted planner below
+  const slow = new Triage({ store: s.store, live: new LiveFeed(), planner: async (input) => { plan.push(input); await gate; return { tasks: [], conversation_only: [] }; } });
+  try {
+    const old = s.add(telegram('7502', 'посылку отправь'));
+    s.store.triage.mark([old.id], 0, new Date().toISOString());
+    const fresh = s.add(telegram('7502', 'и коробку возьми побольше'));
+    const rerun = slow.rerun(old.id, 'tag-2');
+    for (let i = 0; i < 20 && !plan.length; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(plan.length, 1, 'the rerun asks the AI');
+    const round = slow.tick(Date.now() + CHAT_QUIET + 1000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(plan.length, 1, 'the round waits for the rerun');
+    release();
+    await Promise.all([rerun, round]);
+    assert.deepEqual(plan.map((input) => input.messages.map((message) => message.id)), [[old.id, fresh.id]], 'the round found nothing left: one look');
+  } finally { s.cleanup(); }
+});
+
+test('removing all tags is seen; adding a directive tag again reruns', async () => {
+  const s = setup(() => ({ tasks: [] }));
+  const { directiveAdded } = await import('../src/tasks/directive.ts');
+  const edit = (target: string, tags?: string[]) => s.add(event({ kind: 'correction', ts: new Date().toISOString(), payload: { ref: { type: 'event', id: target }, text: 'посылку отправить', ...(tags ? { tags } : {}), data: { op: 'edit' } } }));
+  try {
+    const message = s.add(event({ payload: { text: 'посылку отправить', tags: ['#задача'] } }));
+    s.store.triage.mark([message.id], 0, new Date().toISOString());
+    const removed = edit(message.id);
+    assert.equal(directiveAdded(s.store, removed), null);
+    await s.triage.rerun(message.id, 'removed');
+    assert.equal(s.calls.at(-1)!.messages[0]!.directive, undefined, 'no tags left, no directive');
+    assert.deepEqual(s.calls.at(-1)!.messages[0]!.tags, []);
+    assert.equal(directiveAdded(s.store, edit(message.id, ['#задача'])), message.id, 'added again: a rerun');
+  } finally { s.cleanup(); }
+});
+
+test('a message tagged with a directive tag does not wait for the quiet window', () => {
+  const s = setup(() => ({ tasks: [] }));
+  try {
+    const tagged = s.add(event({ payload: { text: 'отправить посылку маме', tags: ['#задача'] } }));
+    s.add(telegram('7503', 'вопрос по роутеру', '7503'));
+    s.add(telegram('7504', '#naserwis без указания'));
+    assert.deepEqual(s.triage.ready(Date.now()).map((batch) => batch.map((item) => item.id)), [[tagged.id]]);
+  } finally { s.cleanup(); }
+});

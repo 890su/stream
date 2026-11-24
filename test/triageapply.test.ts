@@ -61,7 +61,7 @@ test('a proposal carries only content: items, due, «done» with a report draft'
 test('a closed record: a thank-you only links, a new request is a new record with repeat_of', () => {
   const closed = task('old', { status: 'done', title: 'Клиент: Wi-Fi' });
   assert.deepEqual(applyPlanned(planned({ task_id: 'old' }), context([closed])), [{ kind: 'link', task_id: 'old', add: [M1] }], 'not reopened');
-  for (const again of [planned({ task_id: 'old', repeat_of: 'old', title: 'Клиент: Wi-Fi снова' }), planned({ task_id: null, repeat_of: 'old', title: 'Клиент: Wi-Fi снова' }), planned({ task_id: 'old', items: ['проверить роутер'] })]) {
+  for (const again of [planned({ task_id: 'old', repeat_of: 'old', title: 'Клиент: Wi-Fi снова' }), planned({ task_id: null, repeat_of: 'old', title: 'Клиент: Wi-Fi снова' })]) {
     const [created] = applyPlanned(again, context([closed]));
     assert.equal(created!.kind, 'create');
     const change = (created as { change: Record<string, unknown> }).change;
@@ -69,6 +69,10 @@ test('a closed record: a thank-you only links, a new request is a new record wit
     assert.notEqual(created!.task_id, 'old');
   }
   assert.equal('repeat_of' in (applyPlanned(planned({ repeat_of: 'unknown' }), context([closed]))[0] as { change: Record<string, unknown> }).change, false, 'an unknown repeat_of is dropped');
+  // «работает» with done, items or a due but no repeat_of: only a link, no new record and no proposal.
+  for (const thanks of [planned({ task_id: 'old', done: true, report: { note: 'Работает', duration_min: null, cost: null, expenses: null, currency: null } }), planned({ task_id: 'old', items: ['проверить роутер'], due: '2026-11-30' })]) {
+    assert.deepEqual(applyPlanned(thanks, context([closed])), [{ kind: 'link', task_id: 'old', add: [M1] }]);
+  }
 });
 
 test('a closed filed note: a filed message is linked, a request about it is a record of its own', () => {

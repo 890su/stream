@@ -18,7 +18,7 @@ export function directiveAdded(store: JournalStore, event: JournalEvent): string
   let tags = message.payload.tags ?? []; // the tags before this edit, as describe() reads them
   for (const correction of store.triage.corrections(id)) {
     if (correction.id === event.id) break;
-    if (correction.payload.data?.op === 'edit') tags = correction.payload.tags ?? tags;
+    if (correction.payload.data?.op === 'edit') tags = correction.payload.tags ?? []; // an edit without tags removed them all
   }
   const before = new Set(tags);
   return directiveOf(event.payload.tags ?? []).some((tag) => !before.has(tag)) ? id : null;

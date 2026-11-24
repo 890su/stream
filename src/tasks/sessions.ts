@@ -4,7 +4,7 @@
 // messages and may ask for the one before it. Pure — no store, no AI.
 import type { JournalEvent } from '../contracts/validate.ts';
 import { phoneNumber } from './parties.ts';
-import { streamOf } from './triage.ts';
+import { streamOf } from './streams.ts';
 
 export function conversationOf(event: JournalEvent): string {
   const data = (event.payload.data ?? {}) as Record<string, any>;

@@ -4,7 +4,6 @@
 // listed as withdrawn in the new result, its links (v21) the owner has not touched are taken back unless the new look
 // makes them again; the AI log marks them `replaced`, so the weekly report sees where the first look failed.
 // The owner's own tasks, his links and what he confirmed stay.
-import { randomUUID } from 'node:crypto';
 import type { JournalStore } from '../store/store.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
 import type { LiveFeed } from '../server/live.ts';
@@ -58,38 +57,35 @@ export function systemLinks(events: JournalEvent[], ids: Set<string>): { task_id
     .filter((link) => link.message_ids.length);
 }
 
+// What a second look at `batch` replaces (the owner has not answered it): the AI's unconfirmed open records made
+// from these messages, waiting proposals and questions about them, system links of them he has not touched.
+export interface SecondLook { cancel?: string[]; withdrawn?: string[]; unlink?: { task_id: string; message_ids: string[] }[] }
+export function secondLookOf(store: JournalStore, batch: JournalEvent[]): Required<SecondLook> {
+  const inBatch = new Set(batch.map((event) => event.id));
+  const cancel = foldTasks(store.triage.taskEvents()).filter((task) => task.created_by === 'system' && task.unconfirmed && isOpen(task)
+    && task.messages.some((id) => inBatch.has(id))).map((task) => task.id);
+  const withdrawn = [...waitingProposals([...store.triage.results(), ...store.triage.taskEvents(), ...correctionsOf(store, inBatch)])]
+    .filter(([, messageIds]) => messageIds.some((id) => inBatch.has(id))).map(([id]) => id);
+  return { cancel, withdrawn, unlink: systemLinks(store.triage.taskEvents(), inBatch) };
+}
+
 // `ids` — the open conversation's messages as the card shows them. → what went again and what was replaced.
-export async function retriage({ store, live, triage, ids }: { store: JournalStore; live: LiveFeed; triage: Triage; ids: string[] }):
+export async function retriage({ store, triage, ids }: { store: JournalStore; live?: LiveFeed; triage: Triage; ids: string[] }):
   Promise<{ messages: number; tasks: number; proposals: number; questions: number; links: number; written: number }> {
   const messages = ids.map((id) => store.getEvent(id)).filter((event): event is JournalEvent => Boolean(event) && MESSAGE_KINDS.has(event!.kind) && event!.author !== 'system');
   const batch = (sessionsOf(messages, tasksConfig.session_gap_h * 3_600_000).at(-1) ?? []).slice(-tasksConfig.max_batch);
   if (!batch.length) return { messages: 0, tasks: 0, proposals: 0, questions: 0, links: 0, written: 0 };
-  const inBatch = new Set(batch.map((event) => event.id));
-  const at = new Date().toISOString();
-  // The AI's tasks the owner has not confirmed yet, made from these messages.
-  const tasks = foldTasks(store.triage.taskEvents()).filter((task) => task.created_by === 'system' && task.unconfirmed && isOpen(task)
-    && task.messages.some((id) => inBatch.has(id)));
-  const results = store.triage.results();
-  const questionIds = new Set(results.flatMap((result) => ((result.payload.data?.triage ?? {}) as { questions?: { id: string }[] }).questions ?? []).map((question) => question.id));
-  const waiting = [...waitingProposals([...results, ...store.triage.taskEvents(), ...correctionsOf(store, inBatch)])]
-    .filter(([, messageIds]) => messageIds.some((id) => inBatch.has(id))).map(([id]) => id);
-  const links = systemLinks(store.triage.taskEvents(), inBatch);
-  // The new look first: if the AI fails, nothing is withdrawn.
   const budget = tasksConfig.ai.monthly_budget_usd;
-  if (store.triage.spent(at.slice(0, 7)) >= budget) throw new HttpError(409, `Исчерпан лимит трат на ИИ за месяц (${budget} $)`);
-  const written = await triage.run(batch, { again: at, withdrawn: waiting, unlink: links });
-  for (const task of tasks) {
-    const result = store.appendEvent({ id: randomUUID(), schema_version: 1, source: 'system', author: 'system', ts: at, kind: 'task_change',
-      payload: { ref: { type: 'task', id: task.id }, data: { task: { op: 'update', status: 'cancelled', reason: 'Разобрано заново' } } } });
-    if (result.created) live.publish(result.event);
-  }
+  if (store.triage.spent(new Date().toISOString().slice(0, 7)) >= budget) throw new HttpError(409, `Исчерпан лимит трат на ИИ за месяц (${budget} $)`);
+  // The new look first (Triage.run withdraws only after the AI answered): if the AI fails, nothing is withdrawn.
+  const look = secondLookOf(store, batch); // the same as the second look takes under its lock, for the counts
+  const written = await triage.secondLook(batch, new Date().toISOString());
+  const questionIds = new Set(store.triage.results().flatMap((result) => ((result.payload.data?.triage ?? {}) as { questions?: { id: string }[] }).questions ?? []).map((question) => question.id));
   // The links taken back are those no longer in their task: the new look may have made some again.
   const after = new Map(foldTasks(store.triage.taskEvents()).map((task) => [task.id, new Set(task.messages)]));
-  const taken = links.map((link) => ({ ...link, message_ids: link.message_ids.filter((id) => !after.get(link.task_id)?.has(id)) })).filter((link) => link.message_ids.length);
-  store.ailog.replace(waiting, tasks.map((task) => task.id), at, taken);
-  const questions = waiting.filter((id) => questionIds.has(id)).length;
-  return { messages: batch.length, tasks: tasks.length, proposals: waiting.length - questions, questions,
-    links: taken.reduce((sum, link) => sum + link.message_ids.length, 0), written };
+  const questions = look.withdrawn.filter((id) => questionIds.has(id)).length;
+  return { messages: batch.length, tasks: look.cancel.length, proposals: look.withdrawn.length - questions, questions,
+    links: look.unlink.reduce((sum, link) => sum + link.message_ids.filter((id) => !after.get(link.task_id)?.has(id)).length, 0), written };
 }
 
 // «✕» under a proposal is a correction of the message it is shown under.

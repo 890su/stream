@@ -24,7 +24,8 @@ export function describe(event: JournalEvent, store: JournalStore): { text: stri
   let deleted = false;
   for (const correction of store.triage.corrections(event.id)) {
     const op = correction.payload.data?.op;
-    if (op === 'edit') { text = correction.payload.text ?? text; tags = correction.payload.tags ?? tags; }
+    // An edit carries the whole new tag list; none means all were removed (web/shared.js makeCorrection, projection.js).
+    if (op === 'edit') { text = correction.payload.text ?? text; tags = correction.payload.tags ?? []; }
     if (op === 'delete') deleted = true;
     if (op === 'restore') deleted = false;
   }

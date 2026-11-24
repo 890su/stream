@@ -19,6 +19,10 @@ import { interlocutorRecords } from './triagecontext.ts';
 import { conversationOf, contextSessions, before, sessionsOf } from './sessions.ts';
 import { applyPlanned, ownerRemoved, questionsOf, rolesFor } from './triageapply.ts';
 import { directiveOf } from './directive.ts';
+import { secondLookOf, type SecondLook } from './retriage.ts';
+import { streamOf, quietOf } from './streams.ts';
+
+export { streamOf, quietOf }; // where callers have always found them
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
 // notes), then go together to the planner with the interlocutor's records. Since v21 its outcomes are applied by
@@ -26,28 +30,6 @@ import { directiveOf } from './directive.ts';
 // questions when the AI is unsure where messages belong. Messages it leaves out are just conversation.
 
 export const TRIAGE_SOURCE = 'ai_triage';
-
-// Which stream a message belongs to: messages of one stream share a quiet window.
-export function streamOf(event: JournalEvent): string {
-  const data = event.payload.data ?? {};
-  const telegram = data.telegram as { account: string; chat_id: string } | undefined;
-  if (telegram) return `tg|${telegram.account}|${telegram.chat_id}`;
-  const outbound = data.outbound as { connector: string; chat_id: string } | undefined;
-  const viber = data.viber as { chat: string; phone?: string } | undefined;
-  if (viber) return `viber|${viber.phone ?? viber.chat}`;
-  if (outbound?.connector === 'viber') return `viber|${outbound.chat_id}`;
-  const whatsapp = data.whatsapp as { jid: string; phone?: string } | undefined;
-  if (whatsapp) return `whatsapp|${whatsapp.phone ?? whatsapp.jid}`;
-  if (outbound?.connector.startsWith('whatsapp_')) return `whatsapp|${outbound.chat_id}`;
-  if (outbound) return `tg|${outbound.connector.replace(/^telegram_/, '')}|${outbound.chat_id}`;
-  if (event.source === 'android_phone') return 'phone';
-  return 'me';
-}
-
-// Quiet window of a stream in seconds: by its kind (`tg`, `phone`, `me`), else the default.
-export function quietOf(stream: string): number {
-  return tasksConfig.quiet_s_by_stream[stream.split('|')[0]!] ?? tasksConfig.quiet_s;
-}
 
 export class Triage {
   #store: JournalStore;
@@ -57,6 +39,7 @@ export class Triage {
   #reason: string;
   #timer?: ReturnType<typeof setInterval>;
   #busy = false;
+  #chain: Promise<unknown> = Promise.resolve();
   #newTasks: () => TriageNewTasks;
 
   // `planner` null — triage is off (no AI key); `reason` says why on the System screen.
@@ -90,14 +73,16 @@ export class Triage {
       conversations.set(key, [...(conversations.get(key) ?? []), event]);
     }
     return [...conversations.values()]
-      .filter((events) => now - Date.parse(events.at(-1)!.received_at!) >= quietOf(streamOf(events.at(-1)!)) * 1000)
+      // A message the owner tagged with a directive tag (directive.ts) does not wait for the quiet window (v21).
+      .filter((events) => now - Date.parse(events.at(-1)!.received_at!) >= quietOf(streamOf(events.at(-1)!)) * 1000
+        || events.some((event) => directiveOf(describe(event, this.#store).tags).length))
       .map((events) => events.slice(0, tasksConfig.max_batch));
   }
 
-  // `again` — a second look (retriage.ts, rerun): a fresh key for the same messages, run once per key; `withdrawn` —
-  // the proposals and questions it replaces, listed in the new result (web/proposals.js); `unlink` — the system links
-  // it takes back, unless the new look links them again.
-  async run(batch: JournalEvent[], { again, withdrawn = [], unlink = [] }: { again?: string; withdrawn?: string[]; unlink?: { task_id: string; message_ids: string[] }[] } = {}): Promise<number> {
+  // `again` — a second look (`secondLook`): a fresh key for the same messages, run once per key; `withdrawn` — the
+  // proposals and questions it replaces, listed in the new result (web/proposals.js); `unlink` — the system links it
+  // takes back, unless the new look links them again; `cancel` — the AI's unconfirmed records it replaces (not shown).
+  async run(batch: JournalEvent[], { again, withdrawn = [], unlink = [], cancel = [] }: SecondLook & { again?: string } = {}): Promise<number> {
     const tasks = foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) });
     const projects = foldProjects(this.#store.triage.projectEvents()).filter((project) => project.status === 'active');
     const directory = this.#store.triage.contactEvents();
@@ -159,7 +144,7 @@ export class Triage {
     // The interlocutor's records (triagecontext.ts): the parties of the batch and its context, their counterparties.
     const parties = new Set([...messages, ...context].map((message) => message.party).filter((party) => party !== 'me'));
     const theirCounterparties = new Set([...parties].flatMap((party) => personOf(party, people)?.roles.map((role) => role.counterparty) ?? []));
-    const { open, closed } = interlocutorRecords(tasks, { key, parties, counterparties: theirCounterparties },
+    const { open, closed } = interlocutorRecords(tasks.filter((task) => !cancel.includes(task.id)), { key, parties, counterparties: theirCounterparties },
       (task) => new Set(task.messages.map(keyOf).filter((item): item is string => Boolean(item))),
       { now: Date.now(), reopenDays: tasksConfig.reopen_days, others: tasksConfig.others_in_context });
     const base: Omit<PlanInput, 'context' | 'earlier_available'> = {
@@ -238,6 +223,8 @@ export class Triage {
       }
     });
     for (const [taskId, ids] of unlinked) if (ids.size) write(nameId(`unlink|${batchKey}|${taskId}`), taskId, { op: 'update', remove: [...ids], reason: 'Разобрано заново' });
+    for (const taskId of cancel) write(nameId(`withdraw|${batchKey}|${taskId}`), taskId, { op: 'update', status: 'cancelled', reason: 'Разобрано заново' });
+    if (again) this.#store.ailog.replace(withdrawn, cancel, at, [...unlinked].filter(([, ids]) => ids.size).map(([task_id, ids]) => ({ task_id, message_ids: [...ids] })));
     const questions = questionsOf(output.questions, { batchKey, batchIds, known: new Set([...open, ...closed].map((task) => task.id)) });
     for (const question of questions) decide(question.id, 'question', null, question.message_ids, null, question.text, 'pending', question.id);
     // What stays in the conversation, what is proposed and whether the conversation is over (on the batch's last
@@ -260,6 +247,10 @@ export class Triage {
   async tick(now = Date.now()): Promise<void> {
     if (this.#busy) return;
     this.#busy = true;
+    await this.locked(() => this.#round(now)).finally(() => { this.#busy = false; });
+  }
+
+  async #round(now: number): Promise<void> {
     try {
       if (!this.#planner) { this.#health('login_required', this.#reason); return; }
       const month = new Date(now).toISOString().slice(0, 7);
@@ -271,7 +262,7 @@ export class Triage {
     } catch (error) {
       console.error('Triage failed', error instanceof Error ? error.message : error);
       this.#health('error', `разбор не удался: ${error instanceof Error ? error.message : error}`.slice(0, 300));
-    } finally { this.#busy = false; }
+    }
   }
 
   // A directive tag added to a message already triaged (directive.ts): its session goes to the AI again at once, once
@@ -283,7 +274,20 @@ export class Triage {
     const conversation = this.#store.triage.messages(new Date(Date.now() - tasksConfig.history_days * 86_400_000).toISOString()).filter((event) => conversationOf(event) === key);
     const session = sessionsOf(conversation, tasksConfig.session_gap_h * 3_600_000).find((events) => events.some((event) => event.id === messageId)) ?? [message];
     const start = Math.max(0, Math.min(session.findIndex((event) => event.id === messageId), session.length - tasksConfig.max_batch));
-    return this.run(session.slice(start, start + tasksConfig.max_batch), { again: `rerun|${cause}` });
+    return this.secondLook(session.slice(start, start + tasksConfig.max_batch), `rerun|${cause}`);
+  }
+
+  // A second look at a batch (rerun, «✨ Разобрать заново»): what the AI decided about it and the owner has not answered
+  // is replaced (retriage.ts `secondLookOf`). Under the lock, so a round cannot take the same messages meanwhile.
+  secondLook(batch: JournalEvent[], again: string): Promise<number> {
+    return this.locked(async () => this.run(batch, { again, ...secondLookOf(this.#store, batch) }));
+  }
+
+  // One look at a time — a round, a rerun, a second look: two at once could make records for the same messages twice.
+  locked<T>(work: () => Promise<T>): Promise<T> {
+    const next = this.#chain.then(work);
+    this.#chain = next.catch(() => undefined);
+    return next;
   }
 
   // Whether there is an AI to ask (a key): «Разобрать заново» needs one.
