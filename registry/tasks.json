@@ -14,6 +14,7 @@
   "history_days": 30,
   "open_tasks_in_context": 40,
   "closed_tasks_in_context": 30,
+  "others_in_context": 10,
   "reopen_days": 30,
   "job_days": 14,
   "low_confidence": 0.6,

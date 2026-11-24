@@ -16,6 +16,7 @@ import { foldProjects, defaultProject, type Project } from './projects.ts';
 import { defaultController, isParty, partyOfEvent } from './parties.ts';
 import type { AiDecision } from '../store/ailog.ts';
 import type { PlanInput, PlanMessage, PlanOutput, PlannedTask, Planner } from './planner.ts';
+import { interlocutorRecords } from './triagecontext.ts';
 import { conversationOf, contextSessions, before } from './sessions.ts';
 
 // Task triage (CONCEPT.md §2.8): new messages wait for a quiet window per stream (a chat, the phone, my own
@@ -142,11 +143,6 @@ export class Triage {
   // withdraws, listed in the new result (web/proposals.js).
   async run(batch: JournalEvent[], { again, withdrawn = [] }: { again?: string; withdrawn?: string[] } = {}): Promise<number> {
     const tasks = foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) });
-    const open = tasks.filter(isOpen).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.open_tasks_in_context);
-    // Finished cases may come back: the triage sees those closed in the last reopen_days (CONCEPT.md §2.8).
-    const closedSince = new Date(Date.now() - tasksConfig.reopen_days * 86_400_000).toISOString();
-    const closed = tasks.filter((task) => !isOpen(task) && task.updated_at >= closedSince)
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, tasksConfig.closed_tasks_in_context);
     const projects = foldProjects(this.#store.triage.projectEvents()).filter((project) => project.status === 'active');
     const directory = this.#store.triage.contactEvents();
     const people = foldPeople(directory);
@@ -185,8 +181,9 @@ export class Triage {
     const key = conversationOf(batch[0]!);
     const inBatch = new Set(batch.map((event) => event.id));
     const start = [...batch].sort((a, b) => (before(a, b) ? -1 : 1))[0]!;
-    const history = this.#store.triage.messages(new Date(Date.now() - tasksConfig.history_days * 86_400_000).toISOString())
-      .filter((event) => !inBatch.has(event.id) && conversationOf(event) === key && before(event, start));
+    const recent = this.#store.triage.messages(new Date(Date.now() - tasksConfig.history_days * 86_400_000).toISOString());
+    const history = recent.filter((event) => !inBatch.has(event.id) && conversationOf(event) === key && before(event, start));
+    const keyOf = new Map([...recent, ...batch].map((event) => [event.id, conversationOf(event)] as const)); // once per run
     const contextAt = (steps: number) => {
       const { events, more } = contextSessions(history, { gapMs: tasksConfig.session_gap_h * 3_600_000, steps, limit: tasksConfig.session_messages });
       const context = events.map((event) => ({ event, view: describe(event, this.#store) }))
@@ -198,6 +195,12 @@ export class Triage {
     let { context, more } = contextAt(steps);
     const at = new Date().toISOString();
     if (!messages.length) { this.#store.triage.mark(skipped, 0, at); return 0; }
+    // The interlocutor's records (triagecontext.ts): the parties of the batch and its context, their counterparties.
+    const parties = new Set([...messages, ...context].map((message) => message.party).filter((party) => party !== 'me'));
+    const theirCounterparties = new Set([...parties].flatMap((party) => personOf(party, people)?.roles.map((role) => role.counterparty) ?? []));
+    const { open, closed } = interlocutorRecords(tasks, { key, parties, counterparties: theirCounterparties },
+      (task) => new Set(task.messages.map((id) => keyOf.get(id)).filter((item): item is string => Boolean(item))),
+      { now: Date.now(), reopenDays: tasksConfig.reopen_days, others: tasksConfig.others_in_context });
     const base: Omit<PlanInput, 'context' | 'earlier_available'> = {
       now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections, scope }) => ({ id, title, kind, scope, sections })),
       templates: tasksConfig.templates.filter((template) => !template.legacy),
