@@ -194,18 +194,30 @@ test('plain participants (members) and switched-off ones (muted) fold on the cli
 });
 
 // Unconfirmed tasks (design 2026-11-21): an AI-made task waits for the owner; any owner change confirms it, except
-// the topic switch's own `unconfirmed: true`. Without the field a task is real.
+// a change of only the legacy kind/offer/proposal keys (topics were dropped 2026-11-24). Without the field a task is real.
 test('an AI-made task with unconfirmed stays so until the owner touches it', async () => {
   const fold = (events: unknown[]) => foldTasks(events)[0];
   const made = change('u1', '2026-11-21T10:00:00Z', { op: 'create', title: 'Сайт: правки', status: 'todo', unconfirmed: true });
-  assert.equal((fold([made]).kind === 'topic'), true);
-  assert.equal((fold([made, change('u1', '2026-11-21T10:01:00Z', { op: 'update', note: 'разбор' })]).kind === 'topic'), true, 'the AI\'s own change does not confirm');
-  assert.equal((fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', title: 'Сайт: правки меню' }, 'me')]).kind === 'topic'), false);
-  assert.equal((fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', unconfirmed: false }, 'me'), change('u1', '2026-11-21T10:03:00Z', { op: 'update', unconfirmed: true }, 'me')]).kind === 'topic'), true);
-  assert.equal((fold([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]).kind === 'topic'), false);
+  assert.equal(fold([made]).unconfirmed, true);
+  assert.equal(fold([made, change('u1', '2026-11-21T10:01:00Z', { op: 'update', note: 'разбор' })]).unconfirmed, true, 'the AI\'s own change does not confirm');
+  assert.equal(fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', title: 'Сайт: правки меню' }, 'me')]).unconfirmed, false);
+  assert.equal(fold([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', unconfirmed: false }, 'me'), change('u1', '2026-11-21T10:03:00Z', { op: 'update', unconfirmed: true }, 'me')]).unconfirmed, true);
+  assert.equal(fold([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]).unconfirmed, undefined);
   const { foldTasks: serverFold } = await import('../src/tasks/fold.ts');
-  const server = (events: unknown[]) => serverFold(events as any)[0]!.kind === 'topic';
+  const server = (events: unknown[]) => serverFold(events as any)[0]!.unconfirmed;
   assert.equal(server([made]), true);
   assert.equal(server([made, change('u1', '2026-11-21T10:02:00Z', { op: 'update', due: '2026-11-22' }, 'me')]), false);
-  assert.equal(server([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]), false);
+  assert.equal(server([change('u2', '2026-11-21T10:00:00Z', { op: 'create', title: 'Старое' })]), undefined);
+});
+
+test('an owner change of only kind/offer/proposal does not confirm an AI task', async () => {
+  const made = change('u3', '2026-11-21T10:00:00Z', { op: 'create', title: 'Сайт: правки', status: 'todo', unconfirmed: true });
+  const { foldTasks: serverFold } = await import('../src/tasks/fold.ts');
+  for (const data of [{ op: 'update', kind: 'task' }, { op: 'update', kind: 'topic', offer: false }, { op: 'update', offer: true, proposal: crypto.randomUUID() }]) {
+    const events = [made, change('u3', '2026-11-21T10:05:00Z', data, 'me')];
+    assert.equal(foldTasks(events)[0].unconfirmed, true, JSON.stringify(data));
+    assert.equal(serverFold(events as any)[0]!.unconfirmed, true, JSON.stringify(data));
+  }
+  const touched = [made, change('u3', '2026-11-21T10:05:00Z', { op: 'update', kind: 'task', note: 'x' }, 'me')];
+  assert.equal(foldTasks(touched)[0].unconfirmed, false, 'any other key confirms');
 });

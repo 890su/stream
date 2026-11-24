@@ -36,3 +36,11 @@ test('a task change may carry where the owner stopped (resume_note, up to 200 ch
   validateEvent(taskEvent({ op: 'update', resume_note: '' }));
   assert.throws(() => validateEvent(taskEvent({ op: 'update', resume_note: 'x'.repeat(201) })), /400/);
 });
+
+// Topics were dropped on 2026-11-24; a phone's offline queue may still replay task changes with `kind` and `offer`.
+test('old task_change events with kind and offer still validate', () => {
+  const taskEvent = (task: Record<string, unknown>) => event({ kind: 'task_change', source: 'app', author: 'me', payload: { ref: { type: 'task', id: 't1' }, data: { task } } });
+  validateEvent(taskEvent({ op: 'update', kind: 'topic', offer: true }));
+  validateEvent(taskEvent({ op: 'update', kind: 'task', offer: false }));
+  assert.throws(() => validateEvent(taskEvent({ op: 'update', kind: 'folder' })), /400/);
+});

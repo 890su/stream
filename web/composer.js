@@ -33,7 +33,6 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
   const recorder = createRecorder(config);
   // While a case is open in the details panel, every new message continues its latest message (details.js).
   let topic = null; // { last: () => view | null, task (an open task card's id) }
-  let topicId = null; // the topic chosen in an open conversation's line (chatview.js): the next message goes into it
   // While messages are selected (select.js) the tag row acts on the selection: link, unlink, tags.
   let selection = null; // { link(), unlink(), toggleTag(tag), stateOf(tag) }
   // Chips before the tags: link / unlink for a selection; else the conversation or task chosen in «связь» and the
@@ -45,13 +44,9 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     : link.continuation() ?? (topic?.last() ? { target: topic.last().id, on: true } : undefined));
   // After a message is queued: into the task chosen in «связь»; in an open task card a message that continues nothing
   // of it (the first comment) is added to the task itself. `continued` — the continuation the entry was made with.
-  // In an open conversation with a topic chosen, the message goes into that topic (an owner link), unless «связь» put
-  // it into a task.
   async function sent(entry, continued) {
-    const intoTask = link.attached()?.type === 'task';
     await link.sent(entry);
     if (topic?.task && !continued) await queue(makeTaskChange(topic.task, { op: 'update', add: [entry.event.id] }));
-    else if (topicId && !intoTask) await queue(makeTaskChange(topicId, { op: 'update', add: [entry.event.id] }));
   }
   let linkWindow = null;
   const rowChanged = () => { tagRow.render(); updateAction(); linkWindow?.refresh(); };
@@ -302,7 +297,6 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
 
   resetTags();
   return {
-    setTopic: (id) => { topicId = id ?? null; },
     refreshTags: () => tagRow.update(text.value),
     selectionTags: (state) => { selection = state; tagRow.update(selection ? '' : text.value); },
     busy: () => recorder.active() || Boolean(pendingVoice) || hasDraft() || Boolean(mode),

@@ -32,7 +32,6 @@ import { setupSwipeZones } from './swipezones.js';
 import { setupMagic } from './magic.js';
 import { topicOf } from './topic.js';
 import { visibleTasks } from './filters.js';
-import { isTopic } from './topickind.js';
 
 let details; // right panel «Подробности» (CONCEPT.md §5)
 let doneCards;
@@ -152,9 +151,7 @@ function setupMessageActions(feed, composer, config) {
   chatView = setupChatView({ feed, composer, correct, notify, openTask: (id) => details.openTask(id), openPerson: (id) => details.openPerson(id), openCounterparty: (id) => details.openCounterparty(id),
     convQuick: convActions, queueConfig: () => feed.queueConfig() });
   details = setupDetails({ feed, composer, notify, doneCards, config, quick: taskQuick, onRender: () => viewSwitch?.update(), openConversation: (key) => goView?.('conversations', key) });
-  system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)),
-    // Topic lifetimes (topicsettings.js): the feed reads them from the same config object.
-    topics: { get: () => config.conversations?.topics, set: (values) => { if (config.conversations) config.conversations.topics = values; feedRef?.render().catch((error) => notify(error.message)); } } });
+  system = setupSystem({ notify, onTrack: (messageId) => composer.queue(makeCorrection(messageId, 'track')).catch((error) => notify(error.message)) });
   drawer = setupDrawer({
     feed,
     onCreateProject: (project) => composer.queue(makeProjectChange(crypto.randomUUID(), { op: 'create', status: 'active', ...project })).catch((error) => notify(error.message)),
@@ -259,7 +256,7 @@ async function main() {
   setupMagic({ button: $('#magic-button'),
     topic: () => {
       const open = details?.taskOpen() ? feed.task(details.current()?.id ?? '') ?? null : null;
-      if (open) return { state: isTopic(open) ? 'unconfirmed' : 'task', tasks: [open] };
+      if (open) return { state: open.unconfirmed ? 'unconfirmed' : 'task', tasks: [open] };
       const conversation = feed.mode() === 'conversations' ? feed.conversation() : null;
       return conversation ? topicOf(conversation) : null;
     },
@@ -282,7 +279,7 @@ async function main() {
       },
       create: () => {
         const open = details?.taskOpen() ? feed.task(details.current()?.id ?? '') : null;
-        if (isTopic(open)) quick.act(open, { kind: 'task', offer: false }, `Задача: «${open.title}»`); else chatView?.makeTask();
+        if (open?.unconfirmed) quick.act(open, { unconfirmed: false }, `Задача подтверждена: «${open.title}»`); else chatView?.makeTask();
       },
       finish: (task) => quick.done(task),
     } });

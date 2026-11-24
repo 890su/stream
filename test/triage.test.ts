@@ -466,7 +466,7 @@ test('triage sets the counterparty of a task, or options and a hint; a set one s
 
 test('the triage keeps personal talk and consultations in the conversation; items are steps still to do', async () => {
   const { PLAN_INSTRUCTIONS } = await import('../src/tasks/planner.ts');
-  for (const rule of ['Тема без дела', 'консультация', 'личная и семейная переписка', 'Пункт — только шаг', 'conversation_only']) {
+  for (const rule of ['Остаётся в беседе', 'консультация', 'личная и семейная переписка', 'Пункт — только шаг', 'conversation_only']) {
     assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   }
 });
@@ -521,8 +521,8 @@ test('triage v16 makes new tasks unconfirmed unless the owner chose otherwise; f
       const tasks = foldTasks(storage.store.triage.taskEvents());
       const router = tasks.find((task) => task.title === 'Настроить роутер')!;
       const diary = tasks.find((task) => task.title === 'Дневник')!;
-      assert.deepEqual([router.kind, router.offer], mode === 'unconfirmed' ? ['topic', true] : ['task', false], mode);
-      assert.deepEqual([diary.kind, diary.offer], ['task', false], 'a filed note is not asked about');
+      assert.equal(router.unconfirmed, mode === 'unconfirmed' ? true : undefined, mode);
+      assert.equal(diary.unconfirmed, undefined, 'a filed note is not asked about');
     } finally { storage.cleanup(); }
   }
 });
@@ -608,4 +608,5 @@ test('v19 instructions and schema: need_earlier only when the session does not s
   const { PLAN_INSTRUCTIONS, PLAN_SCHEMA } = await import('../src/tasks/planner.ts');
   for (const rule of ['need_earlier', 'earlier_available', 'сессия']) assert.ok(PLAN_INSTRUCTIONS.includes(rule), rule);
   assert.ok((PLAN_SCHEMA.required as readonly string[]).includes('need_earlier'));
+  assert.equal(tasksConfig.ai.processor, 'triage-ai-v19');
 });

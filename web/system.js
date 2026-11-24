@@ -1,13 +1,12 @@
 // The System screen (CONCEPT.md §5; by cards since 2026-11-21): every connection as a card — channels and services,
 // what needs attention on top — with its state, an on/off switch and, opened, what belongs to it: keys (keysbox.js),
 // the WhatsApp linking QR, the accounts connected to a Telegram bot, Google's accounts and calendars (googlebox.js),
-// its failed sends. Then «Темы» — how long topics stay live (topicsettings.js). Below — the journal: all sends outside and the chats switched off with «Не отслеживать».
+// its failed sends. Below — the journal: all sends outside and the chats switched off with «Не отслеживать».
 import { getSetting } from './db.js';
 import { accountTitle } from './tgbubble.js';
 import { googleBox } from './googlebox.js';
 import { keyRows } from './keysbox.js';
 import { systemGroups, card, aiStatsLines, triageModeChoice } from './systemcards.js';
-import { topicSettingsForm } from './topicsettings.js';
 
 const ACTION = { proposed: 'ждёт', approved: 'в очереди', running: 'отправляется', done: 'отправлено', failed: 'не отправлено', rejected: 'отменено' };
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -41,8 +40,7 @@ export function ago(iso, now = Date.now()) {
   return clock.format(new Date(iso));
 }
 
-// `topics` — { get(), set(values) }: the topic lifetimes the app runs with (config.conversations.topics).
-export function setupSystem({ notify, onTrack, topics = null }) {
+export function setupSystem({ notify, onTrack }) {
   const dialog = document.querySelector('#system');
   const body = document.querySelector('#system-body');
   const opened = new Set(); // cards the owner opened, kept across redraws
@@ -207,12 +205,6 @@ export function setupSystem({ notify, onTrack, topics = null }) {
       } else nodes.push(element('p', 'system-all-ok', '✓ Всё подключённое работает'));
       const cards = (list) => list.map((item) => { const node = cardOf(item, data); node.dataset.card = item.source; return node; });
       nodes.push(...section('Каналы', cards(groups.channels)), ...section('Сервисы', cards(groups.services)));
-      if (topics?.get()) {
-        nodes.push(...section('Темы', [topicSettingsForm(topics.get(), async (values) => {
-          try { await call('/api/settings/topics', { method: 'POST', body: JSON.stringify(values) }); topics.set(values); notify(`Темы: ${values.topic_days} дн. без сообщений, ${values.archive_days} дн. после очереди`); }
-          catch (error) { notify(error.message); }
-        }, notify)]));
-      }
       nodes.push(element('p', 'picker-section', 'Журнал'),
         fold(`Отправки наружу${data.actions.some((action) => action.status === 'failed') ? ` · не отправлено: ${data.actions.filter((action) => action.status === 'failed').length}` : ''}`, data.actions.map(actionRow), 'Ответов наружу ещё не было'),
         fold(`Неотслеживаемые чаты · ${data.exclusions.length}`, data.exclusions.map(exclusionRow), 'Все чаты отслеживаются'));

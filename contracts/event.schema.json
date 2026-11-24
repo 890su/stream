@@ -735,11 +735,11 @@
                 },
                 "kind": {
                   "enum": ["topic", "task"],
-                  "description": "A topic (out of task views) or a task; absent — a task, or the legacy unconfirmed (topics design 2026-11-23)."
+                  "description": "Legacy (topics were dropped 2026-11-24): accepted from old clients and ignored."
                 },
                 "offer": {
                   "type": "boolean",
-                  "description": "The AI offers to make this topic a task; false — the offer is answered or withdrawn."
+                  "description": "Legacy (topics were dropped 2026-11-24): accepted from old clients and ignored."
                 },
                 "unconfirmed": {
                   "type": "boolean",

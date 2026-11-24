@@ -8,18 +8,23 @@
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe, isOpen } from './taskfold.js';
 import { whenOf } from './dayplan.js';
-import { hasOffer, isTopic, ownerTaskAdds } from './topickind.js';
 
 const time = (ts) => Date.parse(ts);
 const later = (a, b) => (time(b) > time(a) ? b : a);
 const NONE = { waiting: false, moment: null, since: null, pending: [], snoozedUntil: null };
 
-// Message ids the owner put into a task (a change authored `me` that adds them while it is a task, not a topic) and
-// that are still there: those messages are handled. A later `remove` (as «Вернуть» on a task made from a tile does)
-// undoes it.
+// Message ids the owner put into a task (a change authored `me` that adds them) and that are still there: those
+// messages are handled. A later `remove` (as «Вернуть» on a task made from a tile does) undoes it.
 export function ownerLinked(tasks) {
   const ids = new Set();
-  for (const task of tasks) for (const id of ownerTaskAdds(task).owned) ids.add(id);
+  for (const task of tasks) {
+    const owned = new Set();
+    for (const entry of task.history ?? []) {
+      if (entry.author === 'me') for (const id of entry.change?.add ?? []) owned.add(id);
+      for (const id of entry.change?.remove ?? []) owned.delete(id);
+    }
+    for (const id of owned) ids.add(id);
+  }
   return ids;
 }
 
@@ -83,7 +88,7 @@ function unfinishedOf(conversation, views, start, handled, now) {
   const cleared = clearedAt(conversation, views);
   const lastIn = views.filter((view) => directionOf(view.event) === 'in').at(-1);
   const at = (ts) => (lastIn ? lastIn.event.ts : ts);
-  const offer = conversation.tasks.find((task) => hasOffer(task) && time(task.createdAt) > cleared);
+  const offer = conversation.tasks.find((task) => task.unconfirmed && isOpen(task) && time(task.createdAt) > cleared);
   if (offer) return { reason: 'ИИ предлагает задачу', moment: at(offer.createdAt) };
   const verdict = views.filter((view) => view.verdict).at(-1)?.verdict;
   if (verdict?.unfinished && time(verdict.ts) > cleared && time(verdict.ts) >= start) return { reason: verdict.unfinished, moment: at(verdict.ts) };
@@ -96,7 +101,7 @@ function clearedAt(conversation, views) {
   let cleared = -Infinity;
   for (const view of views) if (view.answered && view.answeredAt) cleared = Math.max(cleared, time(view.answeredAt));
   for (const task of conversation.tasks) {
-    for (const entry of ownerTaskAdds(task).adds) if (entry.ids.some((id) => ids.has(id))) cleared = Math.max(cleared, time(entry.ts));
+    for (const entry of task.history ?? []) if (entry.author === 'me' && (entry.change?.add ?? []).some((id) => ids.has(id))) cleared = Math.max(cleared, time(entry.ts));
   }
   return cleared;
 }
@@ -106,7 +111,7 @@ function taskDayOf(conversation, since, now) {
   const today = dayStart(now);
   let found = null;
   for (const task of conversation.tasks) {
-    if (!isOpen(task) || task.filed || isTopic(task) || !involvesMe(task)) continue;
+    if (!isOpen(task) || task.filed || task.unconfirmed || !involvesMe(task)) continue;
     const key = whenOf(task)?.key;
     if (!key) continue;
     const [year, month, day] = key.split('-').map(Number);
@@ -136,7 +141,7 @@ export function handledAt(conversation) {
     for (const item of view.snoozes ?? []) at = later(at, item.at);
   }
   for (const task of conversation.tasks) {
-    for (const entry of ownerTaskAdds(task).adds) if (entry.ids.some((id) => ids.has(id))) at = later(at, entry.ts);
+    for (const entry of task.history ?? []) if (entry.author === 'me' && (entry.change?.add ?? []).some((id) => ids.has(id))) at = later(at, entry.ts);
   }
   return at;
 }

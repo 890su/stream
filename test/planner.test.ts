@@ -52,6 +52,6 @@ test('calendar events land on their local days among the tasks: all-day on every
 });
 
 test('an unconfirmed task stays out of the day plan', () => {
-  const tasks = [task('real', { due: '2026-11-20' }), task('ai', { due: '2026-11-20', kind: 'topic', offer: true })];
+  const tasks = [task('real', { due: '2026-11-20' }), task('ai', { due: '2026-11-20', unconfirmed: true })];
   assert.deepEqual(plannerDays(tasks, { now, days: 1 }).days[0].items.map((item: any) => item.task.id), ['real']);
 });

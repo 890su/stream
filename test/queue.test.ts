@@ -75,17 +75,6 @@ test('an AI link does not take a conversation out of the queue; owner links are 
   assert.deepEqual([...ownerLinked(foldTasks([ask, ai], {}))], []);
 });
 
-test('an owner link to a topic keeps the conversation waiting; to a task it clears it', () => {
-  const ask = tg('501', '2026-11-18T09:00:00', 'а принтер можно по сети?');
-  const topic = change('t1', '2026-11-18T09:20:00', { op: 'create', title: 'Анна: принтер', kind: 'topic', add: [ask.id] }, 'me');
-  assert.equal(queueOf([ask, topic]).waiting, true, 'a topic is not an answer');
-  const task = change('t1', '2026-11-18T09:30:00', { op: 'update', kind: 'task' }, 'me');
-  assert.equal(queueOf([ask, topic, task]).waiting, false, '«Сделать задачей» takes its messages into my task');
-  const moved = change('t2', '2026-11-18T09:40:00', { op: 'create', title: 'Анна: выезд', add: [ask.id] }, 'me');
-  assert.equal(queueOf([ask, topic, moved]).waiting, false);
-  assert.deepEqual([...ownerLinked(foldTasks([ask, topic], {}))], [], 'topic links are not owner task links');
-});
-
 test('calls: missed waits, answered does not, my outgoing call or SMS answers', () => {
   assert.equal(queueOf([phone('call', 'missed', '2026-11-18T09:00:00')]).waiting, true);
   assert.equal(queueOf([phone('call', 'rejected', '2026-11-18T09:00:00')]).waiting, true);

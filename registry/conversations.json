@@ -1,6 +1,5 @@
 {
   "version": 3,
-  "topics": { "topic_days": 14, "archive_days": 3 },
   "queue": {
     "since": "2026-11-13T00:00:00Z",
     "snooze": {

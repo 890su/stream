@@ -31,31 +31,3 @@ test('the System screen sets the mode; a bad value or no owner token is refused'
     assert.equal((await set({ value: 'unconfirmed' }, false)).status, 401);
   } finally { await f.stop(); }
 });
-
-// Topic lifetimes (topics design 2026-11-23): the registry defaults until the owner sets them on the System screen.
-test('topics fall back to the registry defaults; setTopics keeps integers 1–365', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'settings-'));
-  try {
-    const settings = new OwnerSettings(join(dir, 'settings.json'));
-    const defaults = { topic_days: 14, archive_days: 3 };
-    assert.deepEqual(settings.topics(defaults), defaults);
-    settings.setTopics({ topic_days: 30, archive_days: 5 });
-    assert.deepEqual(new OwnerSettings(join(dir, 'settings.json')).topics(defaults), { topic_days: 30, archive_days: 5 });
-    for (const bad of [{ topic_days: 0, archive_days: 3 }, { topic_days: 14, archive_days: 400 }, { topic_days: 1.5, archive_days: 3 }]) {
-      assert.throws(() => settings.setTopics(bad), /целые от 1 до 365/);
-    }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('POST /api/settings/topics saves them and the client config serves them', async () => {
-  const f = await fixture({ secrets: true });
-  try {
-    const set = (body: unknown) => f.request('/api/settings/topics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    assert.equal((await set({ topic_days: 21, archive_days: 2 })).status, 200);
-    const config = (await (await fetch(`${f.base}/capture-config.json`)).json()) as { conversations: { topics: unknown } };
-    assert.deepEqual(config.conversations.topics, { topic_days: 21, archive_days: 2 });
-    const bad = await set({ topic_days: 0, archive_days: 2 });
-    assert.equal(bad.status, 400);
-    assert.match(((await bad.json()) as { error: string }).error, /целые от 1 до 365/);
-  } finally { await f.stop(); }
-});

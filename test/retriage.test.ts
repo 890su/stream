@@ -43,7 +43,7 @@ test('again: unconfirmed AI tasks and waiting proposals of the session are withd
     s.set((input) => ({ tasks: [planned({ title: 'Камеры', message_ids: [b.id] }), planned({ task_id: mine, title: 'Роутер у клиента', message_ids: [a.id] })], conversation_only: [] }));
     for (const batch of s.triage.ready(Date.now() + 200_000)) await s.triage.run(batch);
     const wrong = s.tasks().find((task) => task.title === 'Камеры')!;
-    assert.equal(wrong.kind, 'topic');
+    assert.equal(wrong.unconfirmed, true);
     assert.equal(proposalsByMessage(s.events()).get(a.id)?.task, mine, 'a waiting proposal before');
 
     s.set((input) => {
@@ -55,10 +55,10 @@ test('again: unconfirmed AI tasks and waiting proposals of the session are withd
     const after = s.tasks();
     assert.equal(after.find((task) => task.id === wrong.id)!.status, 'cancelled', 'the old AI task is withdrawn');
     assert.equal(after.find((task) => task.id === mine)!.status, 'todo', 'my task stays');
-    assert.ok(after.some((task) => task.title === 'Клиент: роутер и камеры' && task.kind === 'topic' && task.offer));
+    assert.ok(after.some((task) => task.title === 'Клиент: роутер и камеры' && task.unconfirmed));
     assert.equal(proposalsByMessage(s.events()).get(a.id), undefined, 'the old proposal is withdrawn');
     const stats = s.store.ailog.stats(new Date(0).toISOString());
-    assert.equal(stats.propose_task?.replaced, 1, 'the AI log keeps what was replaced');
+    assert.equal(stats.create?.replaced, 1, 'the AI log keeps what was replaced');
     assert.equal(stats.link?.replaced, 1);
   } finally { s.cleanup(); }
 });

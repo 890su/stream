@@ -289,9 +289,3 @@ body.picking #feed-list .burst > .bubble { box-shadow: inset 0 0 0 2px color-mix
 /* ✨ at the right of the tags row (magic.js) and its menu; «скоро» items are greyed. */
 .tag-row .magic-button { font-size: 16px; }
 .magic-menu button:disabled { opacity: .5; }
-
-/* Topics in the open conversation (topics design 2026-11-23): with «≡» the messages outside the chosen topic are
-   paler, and each bubble names the topic it went to. */
-.dim { opacity: .55; }
-.bubble[data-topic]::after { content: attr(data-topic); display: block; clear: both; margin-top: 2px; font-size: 11.5px; color: var(--bubble-meta, var(--muted)); }
-.conv-task.topic { color: var(--muted); }

@@ -35,7 +35,7 @@ test('a task\'s conversation: its own messages open, the rest under cuts by task
   const tasksById = new Map([['t1', { id: 't1', title: 'Роутер', status: 'todo' }], ['t2', { id: 't2', title: 'Счёт', status: 'todo' }]]);
   const views = [v('a', ['t1']), v('b', ['t2']), v('c', []), v('d', ['t1', 't2']), v('e', ['t2'])];
   const shape = (keep: Set<string>) => cutSegments(views, { focus: 't1', tasksById, keep }).map((item: any) => (item.kind === 'open' ? item.views.map((x: any) => x.id).join('') : `[${item.title}:${item.views.map((x: any) => x.id).join('')}]`));
-  assert.deepEqual(shape(new Set()), ['a', '[Счёт:b]', '[Без темы:c]', 'd', '[Счёт:e]']);
+  assert.deepEqual(shape(new Set()), ['a', '[Счёт:b]', '[Без задачи:c]', 'd', '[Счёт:e]']);
   assert.deepEqual(shape(new Set(['c'])), ['a', '[Счёт:b]', 'cd', '[Счёт:e]'], 'a continuation in the task is open');
 });
 

@@ -7,17 +7,15 @@ import { reveal, conceal } from './motion.js';
 import { setupPeopleRow, conversationTask } from './peoplerow.js';
 import { answerable } from './participants.js';
 import { snoozeMenu } from './snooze.js';
-import { topicRow, removeChanges } from './topicrow.js';
-import { liveTopics, defaultTopic } from './topiclive.js';
-import { isTopic } from './topickind.js';
-import { isOpen } from './taskfold.js';
+import { topicOf } from './topic.js';
+import { topicLine } from './cardhead.js';
 import { tileFacts } from './convlist.js';
 
 const $ = (selector) => document.querySelector(selector);
 
 // One conversation (CONCEPT.md §2.5, §5): the head of its card on top (design 2026-11-21) — who and which channel
-// (a tap — the person's card), the line of topics (topicrow.js: the chosen one with 📣 takes the next message, ×
-// takes one out of the conversation, the AI's offer with ✓ ✕), how long it waits with ⏱ ↧ 🗄, «≡» unfolds every cut, the folded details. In Беседы it is the
+// (a tap — the person's card), the topic line (cardhead.js: «+ задача…», the AI's offer with ✓ ✕, the task, the
+// «задача» switch), how long it waits with ⏱ ↧ 🗄, «≡» unfolds every cut, the folded details. In Беседы it is the
 // conversation screen («назад» or the system back); in Задачи and Лента it is the contact filter (× removes it).
 // The composer's recipient is the chat chosen in the line of interlocutors over the input (peoplerow.js): by default
 // the chat of the latest incoming message. With none chosen (switched off, a phone number, a chat with only my
@@ -48,73 +46,34 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   const detailsOpen = new Set(); // conversations whose details the owner unfolded (this session)
   // true when the change is queued; a failure is said and the act stops (no success toast after it).
   const save = (id, change) => composer.queue(makeTaskChange(id, change)).then(() => true, (error) => { notify(error.message); return false; });
-  // The line of topics (topicrow.js, topics design 2026-11-23): the chosen record per conversation — an id, or null
-  // switched off; not chosen yet — the live record of the newest message (topiclive.js). Each act with «Вернуть».
-  const chosenTopics = new Map();
-  let topicsOpen = false; // the line unfolded into a column (this session)
-  const topicDays = () => queueConfig?.()?.topics ?? { topic_days: 14, archive_days: 3 };
-  const lastAt = (task) => (task.messages ?? []).map((id) => feed.view(id)?.event.ts).filter(Boolean).sort().at(-1) ?? null;
-  const liveOf = (conversation) => {
-    const live = liveTopics(conversation, { now: new Date(), topics: topicDays(), lastAt });
-    // A chosen record that has no message here yet (a new topic) still shows while chosen.
-    const picked = chosenTopics.get(conversation.key);
-    const extra = picked && !live.some((task) => task.id === picked) ? feed.task(picked) : null;
-    return extra && isOpen(extra) ? [extra, ...live] : live;
-  };
-  const chosenTopic = (conversation) => {
-    if (!conversation) return null;
-    if (chosenTopics.has(conversation.key)) return chosenTopics.get(conversation.key);
-    return defaultTopic(conversation, liveOf(conversation));
-  };
-  const change = (task, data, text, back) => save(task.id, { op: 'update', ...data }).then((ok) => { if (ok) notify(text, { label: 'Вернуть', run: () => save(task.id, { op: 'update', ...back }).then(() => {}) }); });
+  // The topic line's acts (cardhead.js); each with «Вернуть».
   const topicActs = {
-    choose(id) {
-      const conversation = feed.conversation();
-      if (!conversation) return;
-      chosenTopics.set(conversation.key, id);
-      sync();
-    },
-    expand(open) { topicsOpen = open; sync(); },
-    open: (task) => openTask(task.id),
-    async remove(task) {
-      const conversation = feed.conversation();
-      if (!conversation) return;
-      for (const { id, change: data } of removeChanges(task, conversation)) {
-        if (!await save(id, data)) return;
-        notify(`«${task.title}» убрана из беседы`, { label: 'Вернуть', run: () => save(id, { op: 'update', add: data.remove, ...(data.status ? { status: task.status } : {}) }).then(() => {}) });
-      }
-    },
-    toTask: (task) => change(task, { kind: 'task', offer: false }, `Задача: «${task.title}»`, { kind: 'topic', offer: task.offer }),
-    toTopic: (task) => change(task, { kind: 'topic' }, `«${task.title}» — снова тема, не задача`, { kind: 'task' }),
-    rename: (task, title) => change(task, { title }, `Тема: «${title}»`, { title: task.title }),
-    confirm: (task) => topicActs.toTask(task),
-    reject: (task) => change(task, { offer: false }, `«${task.title}» остаётся темой`, { offer: true }),
+    openTask: (id) => openTask(id),
     async create(title) {
       const conversation = feed.conversation();
-      if (!conversation) return;
-      const waiting = (conversation.queue?.pending ?? []).map((view) => view.id);
+      const waiting = (conversation?.queue?.pending ?? []).map((view) => view.id);
+      const ids = waiting.length ? waiting : [topic.last()?.id].filter(Boolean);
+      if (!ids.length) return;
       const id = crypto.randomUUID();
-      if (!await save(id, { ...ownTask(title, waiting[0]), kind: 'topic', add: waiting })) return;
-      chosenTopics.set(conversation.key, id);
-      notify(`Тема: «${title}»`, { label: 'Вернуть', run: () => save(id, { op: 'update', status: 'cancelled', remove: waiting }).then(() => {}) });
-      sync();
+      if (!await save(id, { ...ownTask(title, ids[0]), add: ids })) return;
+      notify(`Задача: «${title}»`, { label: 'Вернуть', run: () => save(id, { op: 'update', status: 'cancelled', remove: ids }).then(() => {}) });
     },
-    // ✨ «Создать задачу» (magic.js): the chosen topic becomes a task; with none chosen, a task from the last message.
+    async confirm(task) {
+      if (!await save(task.id, { op: 'update', unconfirmed: false })) return;
+      notify(`Задача подтверждена: «${task.title}»`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', unconfirmed: true }).then(() => {}) });
+    },
+    async reject(task) {
+      if (!await save(task.id, { op: 'update', status: 'cancelled' })) return;
+      notify(`Без задачи: «${task.title}» отклонена`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', status: task.status, unconfirmed: true }).then(() => {}) });
+    },
+    // «Make a task» of the open conversation: confirms the AI's offer, else a task of the waiting messages.
     async makeTask() {
       const conversation = feed.conversation();
       if (!conversation) return;
-      const picked = chosenTopic(conversation);
-      const task = picked ? feed.task(picked) : null;
-      if (task && isTopic(task)) { await topicActs.toTask(task); return; }
+      const offered = topicOf(conversation).tasks.find((item) => item.unconfirmed);
+      if (offered) { await topicActs.confirm(offered); return; }
       const source = topic.last();
-      if (!source) return;
-      const title = `${conversation.title}: ${snippet(source)}`.slice(0, 120);
-      const waiting = (conversation.queue?.pending ?? []).map((view) => view.id);
-      const ids = waiting.length ? waiting : [source.id];
-      const id = crypto.randomUUID();
-      if (!await save(id, { ...ownTask(title, ids[0]), add: ids })) return;
-      chosenTopics.set(conversation.key, id);
-      notify(`Задача: «${title}»`, { label: 'Вернуть', run: () => save(id, { op: 'update', status: 'cancelled', remove: ids }).then(() => {}) });
+      if (source) await topicActs.create(`${conversation.title}: ${snippet(source)}`.slice(0, 120));
     },
   };
 
@@ -142,11 +101,11 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     const chat = conversation?.reply ?? null;
     const channels = (conversation?.channels ?? []).filter((channel) => channel === 'by' || channel === 'pl').map(accountTitle);
     $('#chat-title').textContent = [channels.join(', '), conversation?.title ?? 'Беседа'].filter(Boolean).join(' · ');
-    // The line of topics and the facts: own notes and task notes have no topics of their own.
+    // The topic line and the facts: own notes and task notes have no topic of their own.
     const topical = conversation && key !== 'me' && !key.startsWith('task:');
-    // A title being typed («+ тема…», a rename) survives live updates.
-    const typing = $('#chat-topic').contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
-    if (!typing) $('#chat-topic').replaceChildren(...(topical ? topicRow({ live: liveOf(conversation), chosen: chosenTopic(conversation), expanded: topicsOpen, on: topicActs }) : []));
+    // A title being typed in «+ задача…» survives live updates.
+    const typing = $('#chat-topic').contains(document.activeElement) && document.activeElement.value;
+    if (!typing) $('#chat-topic').replaceChildren(...(topical ? [topicLine({ topic: topicOf(conversation), on: topicActs })] : []));
     $('#chat-topic').hidden = !topical;
     const facts = conversation?.queue?.waiting ? tileFacts(conversation, { now: new Date(), hotHours: 2, counterparties: feed.counterparties() }) : null;
     $('#chat-facts').textContent = facts ? facts.state : conversation?.queue?.snoozedUntil ? 'отложена' : '';
@@ -163,10 +122,6 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     for (const id of ['#chat-snooze', '#chat-requeue', '#chat-archive']) $(id).hidden = !inList || key === 'me' || key.startsWith('task:');
     $('#chat-person').hidden = !personFromConversation(conversation ?? { key });
     people.render(conversation);
-    // The chosen topic: the composer puts the next message into it, the card folds the rest (feed.js).
-    const chosen = topical ? chosenTopic(conversation) : null;
-    composer.setTopic(chosen);
-    feed.setTopic(chosen);
     steer();
   };
 
@@ -197,8 +152,6 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     people.render(null);
     composer.chat(null);
     if (composer.topic() === topic) composer.leaveTopic();
-    composer.setTopic(null);
-    await feed.setTopic(null);
     await feed.openConversation(null);
     onLeave();
   };
@@ -253,7 +206,6 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     leave();
     notify(`«${conversation.title}» больше не отслеживается`, { label: 'Отменить', run: () => Promise.all(anchors.map((anchor) => correct(anchor, 'track'))) });
   });
-  // ✨ «Создать задачу» (magic.js); the chosen topic — where the composer puts the next message (topics design).
-  return { open, close, leave, sync, key: () => key, makeTask: () => topicActs.makeTask(),
-    topic: () => { const conversation = feed.conversation(); return conversation && key && key !== 'me' && !key.startsWith('task:') ? chosenTopic(conversation) : null; } };
+  // ✨ «Создать задачу» (magic.js): the topic switch on.
+  return { open, close, leave, sync, key: () => key, makeTask: () => topicActs.makeTask() };
 }

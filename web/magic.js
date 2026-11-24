@@ -1,12 +1,11 @@
 // ✨ at the right of the tags row (docs/plans/2026-11-21-workspace-redesign-design.md): requests to the AI about
 // what is open. «Создать задачу» (the topic switch on) and «Завершить задачу» (the «Готово» mark) work without AI;
 // «Разобрать заново» triages the open conversation again (2026-11-23); «Подсказать ответ» and «Перевести» — «скоро». magicItems is pure; setupMagic draws the menu.
-import { isTopic } from './topickind.js';
 
 // `topic` — topicOf(conversation) (topic.js), or { state: 'task', tasks: [task] } for an open task; null — nothing open.
 // `conversation` — an open conversation (not a task card): «Разобрать заново» sends its last session to the AI again.
 export function magicItems({ topic, conversation = false }) {
-  const real = topic?.tasks?.find((task) => !isTopic(task)) ?? null;
+  const real = topic?.tasks?.find((task) => !task.unconfirmed) ?? null;
   return [
     { id: 'create', title: 'Создать задачу', icon: '☑', enabled: Boolean(topic) && topic.state !== 'task' },
     { id: 'finish', title: 'Завершить задачу', icon: '✓', enabled: Boolean(real), task: real },

@@ -3,7 +3,6 @@
 // time), else their due date, a deferred one on its reminder; overdue ones first. plannerDays is pure (tested in
 // node); dayPlan builds the panel's content.
 import { isOpen, involvesMe } from './taskfold.js';
-import { isTopic } from './topickind.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const dayKey = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -48,7 +47,7 @@ export function plannerDays(tasks, { now = new Date(), days = 4, events = [] } =
   const byKey = new Map(list.map((day) => [day.key, day]));
   const overdue = [];
   for (const task of tasks) {
-    if (!isOpen(task) || task.filed || isTopic(task) || !involvesMe(task)) continue; // a topic is no task (topickind.js)
+    if (!isOpen(task) || task.filed || task.unconfirmed || !involvesMe(task)) continue; // unconfirmed: the AI's, not yet mine
     const when = whenOf(task);
     if (!when) continue;
     if (when.key < today) overdue.push({ task, time: when.time, key: when.key });

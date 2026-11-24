@@ -14,8 +14,7 @@ export interface PlanMessage {
 export interface PlanCounterparty { id: string; kind: string; title: string; address: string; side: string | null; people: string[] }
 // A task given as context: its last messages, the conversations (sources) they came from, its last activity.
 // items — its checklist; owner_titled — the owner named it, so it is never renamed (CONCEPT.md §2.8).
-// kind — a topic (what a conversation is about, no work) or a task (topics design 2026-11-23, triage-ai-v20).
-export interface PlanTask { id: string; title: string; kind: 'topic' | 'task'; project?: string | null; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string; items: { text: string; done: boolean }[]; owner_titled: boolean }
+export interface PlanTask { id: string; title: string; project?: string | null; assignee: string; roles: object; status: string; recent: string[]; chats: string[]; last_at: string; items: { text: string; done: boolean }[]; owner_titled: boolean }
 export interface PlanTemplate { name: string; tag: string | null; title: string; assignee: string; filed: boolean; instruction: string }
 // context — the last session of the same conversation before the new messages (triage-ai-v19): to understand, not
 // to assign; earlier_available — the AI may answer need_earlier and get the session before it.
@@ -33,7 +32,6 @@ export interface PlannedTask {
   due: string | null;
   message_ids: string[];
   confidence: number;
-  work?: boolean; // v20: there is work in it — a new record is offered as a task (or made one, in mode «ИИ создаёт сразу»); absent — true (before v20)
   reason?: string | null; // why these messages go to this task (or a new one), one line — the AI log (triage-ai-v15)
   note: string | null;
   filed: boolean; // nothing to do but file it: the task is created already done
@@ -78,10 +76,9 @@ export const PLAN_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'work', 'reason', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'],
+        required: ['task_id', 'title', 'responsible', 'executors', 'author', 'template', 'due', 'message_ids', 'confidence', 'reason', 'note', 'filed', 'done', 'alternatives', 'items', 'rename', 'project', 'section', 'project_options', 'report', 'counterparty', 'counterparty_options', 'counterparty_hint'],
         properties: {
           task_id: { type: ['string', 'null'] },
-          work: { type: 'boolean' },
           reason: { type: ['string', 'null'] },
           title: { type: 'string' },
           responsible: { type: 'string' },
@@ -113,12 +110,8 @@ export const PLAN_SCHEMA = {
   },
 } as const;
 
-export const PLAN_INSTRUCTIONS = `Ты раскладываешь новые сообщения личной ленты владельца по темам и задачам.
-Тема — о чём говорят (вопрос о роутере, выбор камер, счёт за ноябрь); у одного собеседника несколько тем, одна тема
-может идти в нескольких беседах. Задача — тема, по которой есть работа. В open_tasks у каждой записи kind: topic или task.
-В ответе tasks — и темы, и задачи: новая запись — task_id: null, work: true, если по ней есть работа (её предложат
-владельцу сделать задачей), иначе work: false — просто тема.
-Вход: шаблоны задач, открытые темы и задачи (open_tasks), недавно завершённые (closed_tasks), context — последняя сессия этой же
+export const PLAN_INSTRUCTIONS = `Ты разбираешь новые сообщения личной ленты владельца в задачи.
+Вход: шаблоны задач, открытые задачи (open_tasks), недавно завершённые (closed_tasks), context — последняя сессия этой же
 беседы перед новыми сообщениями (переписка без долгого перерыва; in_tasks — задачи её сообщений) и messages — пачка новых
 сообщений (накопились, пока беседа не замолчала).
 Правила:
@@ -128,15 +121,11 @@ export const PLAN_INSTRUCTIONS = `Ты раскладываешь новые с�
   субботу», «а сколько?», «сделал», «как договаривались»), и earlier_available: true, верни need_earlier: true,
   tasks: [], conversation_only: [], unfinished: null — тебе дадут ещё и предыдущую сессию. Иначе need_earlier: false
   и обычный разбор. Не проси раньше, если и так понятно.
-- Пачка — не одна тема. У каждого нового сообщения должен быть итог: его id находится либо в conversation_only,
-  либо в message_ids одной или нескольких записей. Не включай один id в оба результата.
-- Каждое сообщение о чём-то — в тему. Продолжает тему или задачу из open_tasks (тот же собеседник или то же дело, тот же
-  предмет) — верни её task_id и title как у неё. Новый предмет разговора — новая запись с task_id: null. Короткие ответы
-  («ок», «спасибо», «заработало», «jasne») — в тему, которую они продолжают. В conversation_only — только приветствия и
-  служебное, что не относится ни к какой теме.
-- work: true — только когда по теме есть дело (см. ниже, что дело, а что нет) или материал по шаблону. Сомневаешься —
-  work: false: лишняя задача хуже пропущенной, а тема ничего не стоит — владелец видит её и сам сделает задачей.
-- Тема без дела (work: false):
+- Пачка — не одна задача. У каждого нового сообщения должен быть итог: его id находится либо в conversation_only,
+  либо в message_ids одной или нескольких задач. Не включай один id в оба результата.
+- В tasks включай работу или материал, который надо сохранить отдельно по шаблону. Сомневаешься, что есть дело —
+  добавь id в conversation_only. Лишняя задача хуже пропущенной: владелец видит всю беседу сам.
+- Остаётся в беседе (conversation_only):
   * личная и семейная переписка о текущем: где ты, когда будешь, кто с детьми, кто заболел, поел ли, советы,
     лекарства, просьбы, которые выполняются тут же в переписке. В личной переписке задача появляется при явной
     просьбе или новом обязательстве выполнить действие вне разговора («купи завтра молоко»);
@@ -149,7 +138,7 @@ export const PLAN_INSTRUCTIONS = `Ты раскладываешь новые с�
     выезд, удалённое подключение, настройка, заказ, счёт, оферта, или владелец обещал что-то сделать позже;
   * рассказ о себе и своих делах, мнения, новости, обсуждение без поручения;
 - Договорились о выезде, встрече, звонке или приезде к владельцу на день или время («в субботу в 14», «завтра
-  после обеда») — это дело, а не согласование: work: true (выезд, встреча) с due на этот день, даже если остальная
+  после обеда») — это дело, а не согласование: задача (выезд, встреча) с due на этот день, даже если остальная
   переписка — просто подбор времени. «Ок», «принято», «до встречи» в такой переписке подтверждают договорённость.
   * то, что уже сделано в этой же переписке, без отчёта о работе для клиента (пароль отправлен, ссылку скинул).
 - Если материал нужно сохранить отдельно, верни задачу с filed: true — она сразу закрыта. Для этого
@@ -202,10 +191,10 @@ export const PLAN_INSTRUCTIONS = `Ты раскладываешь новые с�
   Пункт — только шаг, который исполнителю задачи ещё предстоит сделать. Не пункты: указания владельца собеседнику,
   действия собеседника, сделанное («отправлен», «исправлено»), факты и статусы («офис закажет в понедельник»),
   советы, просьбы к владельцу внутри личной переписки. Такое — в note задачи или ничего. Сомневаешься — items: [].
-- Приветствия, «ок» без принятия дела и служебный обмен — в тему, которую продолжают; без темы — в conversation_only.
+- Приветствия, «ок» без принятия дела и служебный обмен остаются в conversation_only.
 - unfinished — закончена ли беседа после новых сообщений (смотри и context). Если собеседник ещё ждёт от владельца
-  действия — выезда, звонка, ответа по существу, расчёта, присылки, — и ни одна задача это не покрывает (ни новая с
-  work: true из tasks этого ответа, ни открытая с kind: task из open_tasks этого собеседника), напиши коротко, чего ждут, со сроком, если он
+  действия — выезда, звонка, ответа по существу, расчёта, присылки, — и ни одна задача это не покрывает (ни новая из
+  tasks этого ответа, ни открытая из open_tasks этого собеседника), напиши коротко, чего ждут, со сроком, если он
   назван: «ждёт выезд в субботу в 14:00», «ждёт цену на камеры». Иначе null: разговор исчерпан, ответ дан, договорённость
   уже в задаче, ждёт сам владелец или это личная переписка без обязательства.
 - Метка сообщения с шаблоном — сильный сигнал: template = name шаблона, executors — из шаблона.
@@ -217,8 +206,7 @@ export const PLAN_INSTRUCTIONS = `Ты раскладываешь новые с�
 - due — дата ISO, только если она прямо следует из текста; иначе null.
 - confidence от 0 до 1 — насколько ты уверен в задаче и её составе.
 - reason — одна строка: почему эти сообщения относятся к этой задаче или почему нужна новая — какие слова, люди, чат,
-  адрес связывают их. Привязка к существующей задаче (kind: task) — только предложение владельцу: он видит reason и
-  решает; к теме (kind: topic) сообщение кладётся сразу. Сообщение из другого чата, чем у задачи, относи к ней, только
-  если оно явно о том же деле; упоминание той же
+  адрес связывают их. Привязка к существующей задаче (task_id) — только предложение владельцу: он видит reason и
+  решает. Сообщение из другого чата, чем у задачи, относи к ней, только если оно явно о том же деле; упоминание той же
   темы или того же сайта в разговоре о другом — не повод.
 - Не придумывай фактов, которых нет в сообщениях.`;

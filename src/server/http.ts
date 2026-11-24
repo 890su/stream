@@ -20,7 +20,7 @@ import type { GoogleOptions } from './google.ts';
 import type { SecretStore } from '../secrets.ts';
 import { secretsRoute } from './secrets.ts';
 import { ConnectorSwitches } from '../switches.ts';
-import { OwnerSettings, TOPIC_DAYS_ERROR } from '../ownersettings.ts';
+import { OwnerSettings } from '../ownersettings.ts';
 import { createConnections, type TriageOptions } from './connectors.ts';
 import { retriage } from '../tasks/retriage.ts';
 
@@ -36,13 +36,14 @@ const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`)
 // secrets (optional) — keys entered on the System screen (src/secrets.ts): the Google client, the bot tokens, the AI
 // key, used over .env and applied at once. switches (optional) — connections switched off there (src/switches.ts).
 // The connections themselves run in src/server/connectors.ts.
-export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google, secrets, switches, settings }: {
+export function createApp({ store, ownerToken, phoneToken, viberToken, telegram, triage, whatsapp, google, secrets, switches, settings, live: liveFeed }: {
   store: JournalStore; ownerToken: string; phoneToken?: string; viberToken?: string; telegram?: { tokens: Record<string, string>; apiBase?: string };
   triage?: TriageOptions;
   whatsapp?: { accounts: string[]; authRoot: string; factory?: SocketFactory; retryMs?: number };
   google?: GoogleOptions;
   secrets?: SecretStore;
   switches?: ConnectorSwitches;
+  live?: LiveFeed; // shared with the start-up migration (src/tasks/topicsgone.ts); one is made when absent
   settings?: OwnerSettings; // the owner's settings from the System screen (src/ownersettings.ts)
 }) {
   if (!ownerToken || ownerToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_OWNER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
@@ -51,7 +52,7 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
   if (viberToken !== undefined && viberToken.length < captureConfig.min_owner_token_length) throw new Error(`STREAM_VIBER_TOKEN должен содержать минимум ${captureConfig.min_owner_token_length} символа`);
   const expectedPhone = phoneToken === undefined ? undefined : bearer(phoneToken);
   const expectedViber = viberToken === undefined ? undefined : bearer(viberToken);
-  const live = new LiveFeed();
+  const live = liveFeed ?? new LiveFeed();
   const connections = createConnections({ store, live, ownerToken, telegram, whatsapp, triage, google, secrets, switches });
   const { bots, whatsappClients, google: googleConnector } = connections;
   // A channel that sends from a device (the phone, the Viber bridge) switched off answers 503: the device keeps its
@@ -104,16 +105,6 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           json(response, 200, { ok: true });
           return;
         }
-        // How long topics stay live (topics design 2026-11-23): days without messages, days after the queue.
-        if (url.pathname === '/api/settings/topics' && request.method === 'POST') {
-          if (!settings) throw new HttpError(404, 'Настройки недоступны');
-          let body: unknown;
-          try { body = JSON.parse((await readBody(request, 1024)).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'Некорректный JSON'); }
-          if (!OwnerSettings.isTopics(body)) throw new HttpError(400, TOPIC_DAYS_ERROR);
-          settings.setTopics(body);
-          json(response, 200, { ok: true });
-          return;
-        }
         // «✨ Разобрать заново» (src/tasks/retriage.ts): the open conversation's last session goes to the AI again.
         if (url.pathname === '/api/triage/again' && request.method === 'POST') {
           if (!connections.triage || !connections.isOn('ai_triage')) throw new HttpError(409, 'Разбор задач выключен на «Системе»');
@@ -152,7 +143,7 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
       if (url.pathname === '/healthz') { json(response, 200, { ok: true }); return; }
       if (url.pathname === '/capture-config.json') {
         const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])), address_book: telegramConfig.address_book };
-        json(response, 200, { ...captureConfig, tagging: tagConfig, conversations: { ...conversationsConfig, topics: settings ? settings.topics(conversationsConfig.topics) : conversationsConfig.topics }, filters: filtersConfig.filters, pulse: pulseConfig, telegram, tasks: { filed_templates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name),
+        json(response, 200, { ...captureConfig, tagging: tagConfig, conversations: conversationsConfig, filters: filtersConfig.filters, pulse: pulseConfig, telegram, tasks: { filed_templates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name),
           card: tasksConfig.card, report_fields: tasksConfig.report_fields, report_default: tasksConfig.report_default, currencies: tasksConfig.currencies,
           reports: Object.fromEntries(tasksConfig.templates.filter((template) => template.report).map((template) => [template.name, template.report])) } }); return;
       }
