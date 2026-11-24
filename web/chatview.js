@@ -47,12 +47,12 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   const topic = { last: () => feed.conversation()?.views.filter((view) => !view.deleted).at(-1) };
   // The AI's draft of an assignment (taskdraft.js): into the input once per task and stay, until sent or cleared (✕).
   const filled = new Map(); // task id → the text put into the input
-  const dropFilled = () => { for (const text of filled.values()) composer.unfill(text); filled.clear(); };
+  const dropFilled = () => { for (const text of filled.values()) composer.unfill(text, { edited: true }); // an edited draft must not reach another conversation filled.clear(); };
   const showDraft = (conversation) => {
-    const pending = conversation ? pendingDraft(conversation, feed.tasks()) : null;
+    const pending = conversation ? pendingDraft(conversation, feed.tasks(), feed.people()) : null;
     const box = $('#chat-draft');
     box.hidden = !pending;
-    if (!pending) { box.replaceChildren(); return; }
+    if (!pending) { box.replaceChildren(); filled.clear(); return; }
     box.replaceChildren(draftLine(pending, { onDismiss: async ({ task, text }) => {
       if (await save(task.id, { op: 'update', draft: '' })) { composer.unfill(text); filled.delete(task.id); }
     } }));

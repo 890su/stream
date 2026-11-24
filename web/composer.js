@@ -314,7 +314,7 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
       text.value = value; autosize(); tagRow.update(text.value); updateAction();
       return true;
     },
-    unfill: (value) => { if (text.value === value) { text.value = ''; autosize(); tagRow.update(''); updateAction(); } },
+    unfill: (value, { edited = false } = {}) => { if (edited || text.value === value) { text.value = ''; autosize(); tagRow.update(''); updateAction(); } },
     topic: () => topic,
     proceed: (view) => setMode({ type: 'continue', view }),
     edit: (view) => setMode({ type: 'edit', view }),
