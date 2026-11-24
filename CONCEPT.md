@@ -163,7 +163,8 @@ request and the job given to a partner).
 **Conversation** — a projection of the journal with no events of its own.
 - Key — the channel: a personal chat or group in Telegram (per account), a phone number (calls and SMS), the
   task-bot chat, the owner's own «Я» (notes, AI commands). **Own notes by task** (2026-11-19): a note in a task that is
-  not filed away is the conversation of that task, named by it; filed and untriaged notes stay in «Заметки».
+  not filed away is the conversation of that task, named by it; filed notes and notes the triage put in no record stay
+  in «Заметки» (v21: a note with nothing to record is just a note, there is no «untriaged» record).
   **Split** (2026-11-19): «Отдельно» on a chat message (correction `split`, back — `unsplit`) makes it and what
   continues or answers it a conversation of its own, named by its task (else by its text); answers still go to the
   chat. «В задачу» on a chat message splits it off at once; «+ Задача» in the conversation bar makes a task for the
@@ -367,7 +368,7 @@ Viber and WhatsApp, my notes. A session is its run of messages without a pause l
 4 h). The AI sees the whole session before the new messages, however long ago it began (up to
 `session_messages`, now 60). When that session does not say what the new messages are about, the AI answers
 `need_earlier` and is asked again with the session before it added, at most `earlier_max` (now 2) times; still
-unclear — the usual question or «Разобрать». Each step back is a run in the AI log. **«✨ Разобрать заново»** on an open
+unclear — a question `ask` (v21), or nothing: a message no record fits stays just conversation. Each step back is a run in the AI log. **«✨ Разобрать заново»** on an open
 conversation sends its last session again; what the AI decided there and I have not answered (unconfirmed tasks,
 waiting proposals) is replaced, and the AI log marks it `replaced` — material for the weekly report and for scripts
 (§9, rule of three). **Conversation to records** (owner, 2026-11-23/24, `triage-ai-v21`, replaces the topics-first scheme of v20):
@@ -435,7 +436,10 @@ of others (`others_in_context`) with their last messages, chats and last activit
   conversation's record is empty, unconfirmed or real. The System screen chooses how the AI makes new tasks:
   «ИИ предлагает — я подтверждаю» (default: `task_change.unconfirmed: true`) or «ИИ создаёт сразу». An unconfirmed task
   shows only in its conversation («ИИ: «…»» ✓ ✕ with the reason) and under «Неподтверждённые»; the owner's ✓ or any
-  edit confirms it (v21 drops the «задача» switch: it contradicted «✨ does not touch mine»). Filed notes and «Разобрать» never wait.
+  edit confirms it (v21 drops the «задача» switch: it contradicted «✨ does not touch mine»). Filed notes and done work
+  (`create_done`) never wait: they are written confirmed in either mode, and a closed record is never hidden as unconfirmed.
+  Since v21 there is no default «Разобрать» task for messages the AI left out; the «Разобрать» filter
+  (`registry/filters.json`) now shows open tasks with status `inbox` — the AI's records made with low confidence.
 - **The AI log** (same date): every run (what the AI was shown and answered, gzipped, wiped after
   `ai_log.keep_days`) and every decision with its reason and the owner's verdict — accepted, moved to another task,
   rejected; a task the AI made becomes «undone» when the owner cancels it or takes its messages out. The «Разбор
