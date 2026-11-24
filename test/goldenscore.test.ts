@@ -56,6 +56,13 @@ test('golden/conversations.jsonl parses into consistent cases', () => {
   const cases = parseCases(readFileSync(new URL('../golden/conversations.jsonl', import.meta.url), 'utf8'), 'conversations.jsonl');
   assert.ok(cases.length >= 8);
   assert.equal(new Set(cases.map((item) => item.id)).size, cases.length);
+  for (const item of cases) {
+    for (const message of [...item.context, ...item.messages]) {
+      assert.ok(!Number.isNaN(Date.parse(message.time)) && /T\d\d:\d\d/.test(message.time), `${item.id}/${message.id}: bad time ${message.time}`);
+      assert.match(message.source, /^(tg\|\w+\|\d+|phone|me|viber\|.+|whatsapp\|.+)$/, `${item.id}/${message.id}: bad source`);
+    }
+    for (const record of item.records) assert.ok(!Number.isNaN(Date.parse(record.last_at)), `${item.id}/${record.id}: bad last_at`);
+  }
 });
 test('parseCases rejects an expectation naming an unknown message', () => {
   const bad = JSON.stringify({ id: 'x', records: [], context: [], messages: [], expect: { nothing: ['zz'] } });
