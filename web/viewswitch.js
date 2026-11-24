@@ -18,8 +18,10 @@ export function backTarget(mode, state) {
 // left for the system back to step through at the root; else switch in place ('stay').
 export const toHome = (state) => (state?.view || state?.conversation ? 'back' : 'stay');
 
-// The view's name in the top bar.
+// The view's name in the top bar; the queue says how many conversations wait for a decision (design 2026-11-23).
+export const viewTitle = (mode, waiting = 0) => (mode === 'home' && waiting ? `Ждут решения: ${waiting}` : TITLES[mode] ?? '');
+
 export function setupViewTitle({ feed }) {
   const title = document.querySelector('#view-title');
-  return { update() { title.textContent = TITLES[feed.mode()] ?? ''; } };
+  return { update() { title.textContent = viewTitle(feed.mode(), feed.waitingCount?.() ?? 0); } };
 }

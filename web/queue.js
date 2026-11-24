@@ -5,8 +5,9 @@
 // it until the task day or a new incoming). «↧» after it was dealt with — a swipe on an archive tile — brings it back
 // to the end of the queue and cancels a snooze (owner, 2026-11-22). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
 // snooze; a new message in a queued conversation does not move it. The archive means «read and sorted out»
-// (design 2026-11-23, «Очередь — всё распределено»): while the AI waits for me — a question, an update proposal, an
-// unconfirmed record — my reply does not take the conversation out; 🗄 does. My own notes («Я») wait only for the AI.
+// (design 2026-11-23, «Очередь — всё распределено»): while the AI waits for me — a question or an update proposal made
+// by v21 or later (older ones keep the old rule), an unconfirmed record — my reply does not take the conversation out;
+// 🗄 does, and my answer to the question handles the messages it asks about. My own notes («Я») wait only for the AI.
 // Pure — no DOM.
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe, isOpen } from './taskfold.js';
@@ -62,7 +63,7 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   let handled = -Infinity;
   for (const view of views) {
     const mine = directionOf(view.event) === 'out' && !note(view);
-    if (mine || view.answered || owner.has(view.id) || answeredCall(view)) handled = Math.max(handled, time(view.event.ts));
+    if (mine || view.answered || view.decided || owner.has(view.id) || answeredCall(view)) handled = Math.max(handled, time(view.event.ts));
   }
   // Messages from before the queue started (`queue.since`) wait for nobody: the history imported with the channels.
   const start = time(config.queue.since);
@@ -159,13 +160,14 @@ export function queueList(list) {
   return list.filter((item) => item.queue?.waiting).sort((a, b) => time(a.queue.moment) - time(b.queue.moment) || a.key.localeCompare(b.key));
 }
 
-// When the owner last dealt with a conversation: its latest message (a reply is one), the archive mark, a snooze, a
-// task of theirs taking its messages — whichever is latest.
+// When the owner last dealt with a conversation: its latest message (a reply is one), the archive mark, a snooze, an
+// answer to the AI's question, a task of theirs taking its messages — whichever is latest.
 export function handledAt(conversation) {
   const ids = new Set(conversation.views.map((view) => view.id));
   let at = conversation.last;
   for (const view of conversation.views) {
     if (view.answered && view.answeredAt) at = later(at, view.answeredAt);
+    if (view.decidedAt) at = later(at, view.decidedAt);
     for (const item of view.snoozes ?? []) at = later(at, item.at);
   }
   for (const task of conversation.tasks) {
@@ -174,9 +176,16 @@ export function handledAt(conversation) {
   return at;
 }
 
+// «Всё распределено ✓ · разобрано сегодня: N»: conversations with someone that wait for nothing and were last dealt
+// with today (handledAt — a reply, the archive mark, a snooze, a task of mine; a new incoming that was answered counts).
+export function handledToday(list, now = new Date()) {
+  const today = now.toDateString();
+  return archiveList(list).filter((item) => new Date(item.handledAt).toDateString() === today).length;
+}
+
 // The archive above the queue (owner, 2026-11-21): the conversations that wait for nothing (read, answered, archived,
 // snoozed), each with `handledAt`, the last handled first — the screen shows it nearest the «Архив» divider. Own
-// notes («Заметки», a task's notes) are not conversations with anyone and stay out.
+// notes («Я · мои записи», a task's notes) are not conversations with anyone and stay out.
 export function archiveList(list) {
   return list.filter((item) => !item.queue?.waiting && item.key !== 'me' && !item.key.startsWith('task:'))
     .map((item) => ({ ...item, handledAt: handledAt(item) }))

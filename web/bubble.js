@@ -1,5 +1,6 @@
 import { formatDuration } from './voice.js';
 import { questionBlock } from './question.js';
+import { linkMarkBlock } from './linkmark.js';
 import { play } from './motion.js';
 import { snippet } from './projection.js';
 import { phoneBlock, isPhoneEvent } from './phonebubble.js';
@@ -36,7 +37,7 @@ function sizeLabel(bytes) {
 
 export function bubbleSignature(view, queued, chain) {
   const reply = view.replyTo && [view.replyTo.id, snippet(view.replyTo)];
-  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply, view.delivery, view.remoteDeleted, view.taskIds, view.question,
+  return JSON.stringify([view.event.payload.media, view.event.ts, view.text, view.tags, view.edited, view.archived, view.pending, view.replies, reply, view.delivery, view.remoteDeleted, view.taskIds, view.question, view.links,
     chain && [chain.index, chain.ids.length, chain.title],
     queued ? queued.error || 'queued' : 'accepted']);
 }
@@ -280,6 +281,7 @@ export function createBubble(view, queued, { load, notify, jump, chain, limits, 
   const onlyPhoto = photos.length && !view.text && !payload.url && !view.tags.length && !view.replyTo && !chain;
   if (view.delivery) bubble.append(deliveryLine(view));
   if (view.question) bubble.append(questionBlock(view));
+  if (view.links?.length) bubble.append(linkMarkBlock(view)); // «→ «…» ↩» — the triage's links (linkmark.js)
   bubble.append(linkRow(next));
   bubble.append(meta(view, queued, onlyPhoto ? 'photo-meta' : '', Boolean(view.edited || view.replyTo || view.replies || chain)));
   if (queued?.error) bubble.append(element('div', 'error-text', queued.error));

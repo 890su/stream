@@ -22,6 +22,8 @@ import { foldProjects, markNext } from './projects.js';
 import { holdRender } from './holdrender.js';
 import { dayKey, dayLabel } from './days.js';
 import { conversations, conversationKeys } from './conversations.js';
+import { queueList } from './queue.js';
+import { linkMarks } from './linkmark.js';
 import { rowOnScreen, putBack } from './scrollpin.js';
 import { cutSegments } from './topic.js';
 import { grow, shrink, reduced, play } from './motion.js';
@@ -50,6 +52,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let openCuts = new Set(); // cuts of the open conversation the owner unfolded (topic.js keys)
   let allCuts = false; // «≡»: every cut unfolded
   let convList = []; // all conversations, each with its place in the queue (queue.js)
+  let asked = new Map(); // the AI's waiting questions (v21 `ask`) by message (questions.js)
   let convKeys = new Map(); // message id -> conversation key (conversations.js)
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   let projectList = []; // all projects (CONCEPT.md §2.11)
@@ -104,9 +107,10 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const now = new Date();
     const questions = questionsByMessage([...events.values()]);
     const proposals = proposalsByMessage([...events.values()]); // the AI's proposals wait for the owner (proposals.js)
-    const asked = aiQuestionsByMessage([...events.values()]); // the AI's questions (v21 `ask`) hold their conversations in the queue
+    asked = aiQuestionsByMessage([...events.values()]); // the AI's questions (v21 `ask`) hold their conversations in the queue
     for (const view of projected) {
       view.taskIds = byMessage.get(view.id) ?? [];
+      view.links = linkMarks(view, tasksById); // «→ «…» ↩»: the triage's system links (linkmark.js)
       view.question = proposalOptions(view, proposals.get(view.id), tasksById) ?? questionOptions(view, questions.get(view.id), tasksById);
     }
     views = new Map(projected.map((view) => [view.id, view]));
@@ -183,7 +187,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const filtered = Boolean((mode === 'feed' && sourceFilter) || tagFilter.size || conversationKey);
     if (atQueue()) {
       // The queue: the longest waiting on top, the archive under it (queuehome.js).
-      children.push(...home.nodes({ conversations: convList, tags: [...tagFilter], counterparties: counterpartyList, now }));
+      children.push(...home.nodes({ conversations: convList, tags: [...tagFilter], counterparties: counterpartyList, questions: asked, now }));
     } else if (mode === 'now') {
       // The dashboard: in work on top, paused and next under it (dashboard.js).
       const viewsOf = (task) => task.messages.map((id) => views.get(id)).filter(Boolean);
@@ -348,6 +352,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   return { pulseCount: pulseTotal, refresh, loadOlder, hasOlder, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),
     openConversation, conversation: () => current, queueConfig, conversationKey: () => conversationKey, conversations: () => convList,
+    questions: () => asked, waitingCount: () => queueList(convList).length,
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,
     projects: () => projectList, project: currentProject, setProject, people: () => peopleList, counterparties: () => counterpartyList,
     setShowDone, showDone: () => showDone,

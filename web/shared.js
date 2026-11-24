@@ -63,12 +63,14 @@ export function ownTask(title, messageId) {
   return { op: 'create', title, roles: { author: 'me', responsible: 'me', executors: ['me'] }, status: 'todo', add: [messageId] };
 }
 
-// An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4).
-export function makeCorrection(targetId, op, { text, tags = [], target, title, until, proposal } = {}) {
+// An owner action on a message: edit, archive, unarchive, delete, restore (CONCEPT.md §2.4). An answer to the AI's
+// question (`answer_question`, askline.js): `question` and an `option` index or the words in `answer`.
+export function makeCorrection(targetId, op, { text, tags = [], target, title, until, proposal, question, option, answer } = {}) {
   return {
     event: {
       id: crypto.randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: new Date().toISOString(), kind: 'correction',
-      payload: { ref: { type: 'event', id: targetId }, data: { op, ...(target ? { target } : {}), ...(title ? { title } : {}), ...(until ? { until } : {}), ...(proposal ? { proposal } : {}) }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
+      payload: { ref: { type: 'event', id: targetId }, data: { op, ...(target ? { target } : {}), ...(title ? { title } : {}), ...(until ? { until } : {}), ...(proposal ? { proposal } : {}),
+        ...(question ? { question } : {}), ...(option !== undefined ? { option } : {}), ...(answer ? { text: answer } : {}) }, ...(op === 'edit' ? { text: text ?? '', ...(tags.length ? { tags } : {}) } : {}) },
     },
     files: [],
   };

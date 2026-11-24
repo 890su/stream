@@ -1,4 +1,5 @@
-// The address book in the left panel (docs/plans/2026-11-21-workspace-redesign-design.md): pinned chats
+// The address book in the left panel (docs/plans/2026-11-21-workspace-redesign-design.md): first, always, «Я · мои
+// записи» — my own notes without an addressee (design 2026-11-23 «Мой ввод — беседа «Я»»); pinned chats
 // («Избранные», folded), the directory's people in alphabetical order with a search by name or number; each knows its
 // latest conversation over any of its points. A search also finds conversations by name or number (since 2026-11-22,
 // when the queue left the panel). A tap opens that conversation in the centre and the person's card on the right
@@ -55,6 +56,9 @@ function conversationRow({ title, last }, onClick) {
 // The search field and the rows; `onOpen(contact)` on a tap. `state` keeps the query between redraws. `pinned` —
 // [{ key, title, last }]; `search(query)` — conversations by name or number; `onConversation(key)` opens one.
 export function contactsNodes({ people, conversations, state, onOpen, pinned = [], search: findConversations = () => [], onConversation = () => {} }) {
+  const own = conversations.find((item) => item.key === 'me');
+  const me = conversationRow({ title: 'Я · мои записи', last: own?.last ?? null }, () => onConversation('me'));
+  me.classList.add('contacts-me');
   const favourites = element('details', 'drawer-disclosure');
   favourites.open = state.favouritesOpen ?? false;
   favourites.addEventListener('toggle', () => { state.favouritesOpen = favourites.open; });
@@ -83,5 +87,5 @@ export function contactsNodes({ people, conversations, state, onOpen, pinned = [
   };
   search.oninput = () => { state.query = search.value; draw(); };
   draw();
-  return [favourites, search, rows];
+  return [me, favourites, search, rows];
 }

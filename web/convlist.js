@@ -1,11 +1,13 @@
 // A tile of the «Беседы» queue (CONCEPT.md §5, docs/plans/2026-11-20-queue-and-task-screen-design.md): line 1 —
 // the kind of chat, the channel and the contact, the time; line 2 — the conversation's task (with «?» when the AI
 // chose it) or «+ задача…» to type one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↧ В конец
-// очереди»; a small line — how long it waits, how many messages, the counterparty, a tag or two. A tile of the archive
+// очереди»; a small line — how long it waits (or «❓ …» — the AI's newest waiting question, v21), how many messages,
+// the counterparty, a tag or two. A tile of the archive
 // under the queue (`archived`) has no «⏱»/«↧» and says when it was handled or until when it is snoozed. tileTask,
 // pickTask and tileFacts are pure (tested in node); convRow builds the DOM.
 import { snippet } from './projection.js';
 import { isOpen, dueState } from './taskfold.js';
+import { conversationQuestions, shortAsk } from './askline.js';
 
 const time = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
 const date = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short' });
@@ -64,14 +66,17 @@ const waitedLabel = (ms) => {
   return hours < 48 ? `${hours} ч` : `${Math.floor(hours / 24)} дн`;
 };
 
-// What a tile says. `hotHours` — `hot_wait_hours` of the pulse; `counterparties` — the directory's.
-export function tileFacts(conversation, { now = new Date(), hotHours = 2, counterparties = [] } = {}) {
+// What a tile says. `hotHours` — `hot_wait_hours` of the pulse; `counterparties` — the directory's; `questions` — the
+// AI's waiting questions by message (questions.js): read directly, since `queue.open` is null while incoming waits.
+export function tileFacts(conversation, { now = new Date(), hotHours = 2, counterparties = [], questions = new Map() } = {}) {
   const live = conversation.views.filter((view) => !view.deleted);
   const last = live.at(-1);
   const pending = conversation.queue?.pending ?? [];
   const at = new Date(conversation.last);
   const chosen = tileTask(conversation, now);
   const waitedMs = conversation.queue?.moment ? now.getTime() - Date.parse(conversation.queue.moment) : 0;
+  const question = conversationQuestions(conversation, questions)[0];
+  const ask = question ? shortAsk(question.text) : null;
   const counterparty = chosen?.task.counterparty ? counterparties.find((item) => item.id === chosen.task.counterparty)?.title ?? null : null;
   return {
     kind: conversation.key === 'me' || conversation.key.startsWith('task:') ? 'me' : conversation.group ? 'group' : conversation.key.startsWith('tel:') && ['call', 'sms'].includes(last?.event.kind) ? 'phone' : 'chat',
@@ -84,7 +89,8 @@ export function tileFacts(conversation, { now = new Date(), hotHours = 2, counte
     waited: waitedLabel(waitedMs),
     // Unfinished (queue.js): what the other side still waits for; the state line says it instead of «ждёт».
     open: conversation.queue?.open ?? null,
-    state: conversation.queue?.open ? `${conversation.queue.open} · ${waitedLabel(waitedMs)}` : `ждёт ${waitedLabel(waitedMs)}`,
+    ask,
+    state: ask ? `${ask} · ${waitedLabel(waitedMs)}` : conversation.queue?.open ? `${conversation.queue.open} · ${waitedLabel(waitedMs)}` : `ждёт ${waitedLabel(waitedMs)}`,
     hot: waitedMs >= hotHours * 3_600_000,
     count: pending.length,
     counterparty,
@@ -104,8 +110,8 @@ function element(tag, className, text) {
 
 // The tile. `on` — { open(key), task(id), newTask(title) }; `decorate` adds the swipes;
 // `archived` — a tile of the archive above the queue.
-export function convRow(conversation, { now = new Date(), hotHours, counterparties, on, decorate, archived = false }) {
-  const facts = tileFacts(conversation, { now, hotHours, counterparties });
+export function convRow(conversation, { now = new Date(), hotHours, counterparties, questions, on, decorate, archived = false }) {
+  const facts = tileFacts(conversation, { now, hotHours, counterparties, questions });
   const row = element('div', `conv-tile${archived ? ' archived' : facts.hot ? ' hot' : ''}`);
   row.dataset.conversation = conversation.key;
   const body = element('div', 'conv-body');
@@ -140,7 +146,7 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
     };
   }
   const text = element('div', 'conv-snippet', `${facts.mine ? 'Вы: ' : ''}${facts.snippet}`);
-  const meta = element('div', 'conv-meta', [state, !archived && facts.count > 1 ? `${facts.count} новых` : '', facts.counterparty ?? '', ...facts.tags].filter(Boolean).join(' · '));
+  const meta = element('div', `conv-meta${facts.ask && !archived ? ' asks' : ''}`, [state, !archived && facts.count > 1 ? `${facts.count} новых` : '', facts.counterparty ?? '', ...facts.tags].filter(Boolean).join(' · '));
   body.append(head, taskLine, text, meta);
   body.onclick = () => on.open(conversation.key);
   body.onkeydown = (event) => { if (event.key === 'Enter' && event.target === body) on.open(conversation.key); };

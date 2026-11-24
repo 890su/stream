@@ -10,6 +10,7 @@ import { snoozeMenu } from './snooze.js';
 import { topicOf } from './topic.js';
 import { topicLine } from './cardhead.js';
 import { tileFacts } from './convlist.js';
+import { answerEvents, conversationQuestions } from './askline.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -66,6 +67,12 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
       if (!await save(task.id, { op: 'update', status: 'cancelled' })) return;
       notify(`Без задачи: «${task.title}» отклонена`, { label: 'Вернуть', run: () => save(task.id, { op: 'update', status: task.status, unconfirmed: true }).then(() => {}) });
     },
+    // An answer to the AI's question (askline.js): the chosen change and the answer, in this order.
+    async answer(question, choice) {
+      try { for (const entry of answerEvents(question, choice)) await composer.queue(entry); } catch (error) { notify(error.message); return; }
+      notify(choice.text !== undefined ? 'Ответ передан ИИ' : choice.kind === 'link' ? `Добавлено в «${feed.task(choice.taskId)?.title ?? 'запись'}»`
+        : choice.kind === 'create' ? `Задача: «${choice.title}»` : 'Ответ: ничего не нужно');
+    },
     // «Make a task» of the open conversation: confirms the AI's offer, else a task of the waiting messages.
     async makeTask() {
       const conversation = feed.conversation();
@@ -101,12 +108,15 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     const chat = conversation?.reply ?? null;
     const channels = (conversation?.channels ?? []).filter((channel) => channel === 'by' || channel === 'pl').map(accountTitle);
     $('#chat-title').textContent = [channels.join(', '), conversation?.title ?? 'Беседа'].filter(Boolean).join(' · ');
-    // The topic line and the facts: own notes and task notes have no topic of their own.
+    // The topic line and the facts: own notes and task notes have no topic of their own; the AI's questions show in
+    // any conversation, «Я» included.
     const topical = conversation && key !== 'me' && !key.startsWith('task:');
-    // A title being typed in «+ задача…» survives live updates.
-    const typing = $('#chat-topic').contains(document.activeElement) && document.activeElement.value;
-    if (!typing) $('#chat-topic').replaceChildren(...(topical ? [topicLine({ topic: topicOf(conversation), on: topicActs })] : []));
-    $('#chat-topic').hidden = !topical;
+    const questions = conversation ? conversationQuestions(conversation, feed.questions()) : [];
+    // A title being typed in «+ задача…» or an answer in «Своими словами…» survives live updates.
+    const typing = $('#chat-topic').contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
+    const tasksById = new Map(feed.tasks().map((task) => [task.id, task]));
+    if (!typing) $('#chat-topic').replaceChildren(...(topical || questions.length ? [topicLine({ topic: topical ? topicOf(conversation) : null, on: topicActs, questions, tasksById })] : []));
+    $('#chat-topic').hidden = !topical && !questions.length;
     const facts = conversation?.queue?.waiting ? tileFacts(conversation, { now: new Date(), hotHours: 2, counterparties: feed.counterparties() }) : null;
     $('#chat-facts').textContent = facts ? facts.state : conversation?.queue?.snoozedUntil ? 'отложена' : '';
     const unfolded = detailsOpen.has(key);

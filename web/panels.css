@@ -131,6 +131,13 @@ body.selecting .composer-area > :not(#select-bar):not(#tag-row), body.selecting 
 .card-topic-offer-title { font: inherit; font-size: 14px; max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-topic-yes, .card-topic-no { min-width: 32px; min-height: 30px; padding: 0 8px; }
 .card-topic-reason { flex-basis: 100%; font-size: 12.5px; color: var(--muted); }
+/* The AI's question (askline.js): «❓ …» on its own line, options wrap under it. */
+.ask-line { flex-basis: 100%; display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px dashed var(--accent); border-radius: 14px; }
+.ask-text { font-size: 14px; line-height: 1.35; }
+.ask-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.ask-option { max-width: 100%; white-space: normal; text-align: left; }
+.ask-input { flex: 1 1 100%; }
+.contacts-me .drawer-title { font-weight: 600; }
 .bubble.system { align-self: center; max-width: 92%; background: var(--panel); color: var(--muted); font-size: 14px; box-shadow: none; border-radius: 12px; cursor: pointer; }
 .bubble.system .link-row, .bubble.system .more { display: none; }
 /* «Беседы» on top of the left panel (drawer.js): back to the queue, the main screen. */

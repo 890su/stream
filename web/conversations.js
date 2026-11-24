@@ -54,7 +54,7 @@ const phoneName = (event) => {
 };
 
 const titleOf = (view, key, taskById = new Map(), views = []) => {
-  if (key === 'me') return 'Заметки';
+  if (key === 'me') return 'Я · мои записи';
   if (key.startsWith('task:')) return taskById.get(key.slice(5))?.title ?? 'Заметка';
   if (key.startsWith('split:')) {
     const anchor = views.find((item) => item.id === key.slice(6)) ?? view;
@@ -98,7 +98,7 @@ export function isArchived(conversation) {
 // conversation (a call description, a reply written without a recipient), through chains of such notes.
 // A message split off its chat (and what continues or answers it) is its own conversation `split:<id>`; an own
 // note in a task that is not filed away is the conversation of that task `task:<id>` (task manager spec, 2026-11-19).
-// `tasksById` — folded tasks by id; without it notes stay in «Заметки».
+// `tasksById` — folded tasks by id; without it notes stay in «Я · мои записи» (`me`).
 export function conversationKeys(views, { tasksById = new Map() } = {}) {
   const byId = new Map(views.map((view) => [view.id, view]));
   const keys = new Map();

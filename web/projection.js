@@ -117,6 +117,8 @@ export function project(events, pendingIds = new Set()) {
       case 'unsnooze': view.snoozes.pop(); break;
       case 'requeue': view.requeues.push(correction.ts); break;
       case 'unrequeue': view.requeues.pop(); break;
+      // My answer to the AI's question (askline.js) names its latest message: it and what came before are dealt with.
+      case 'answer_question': view.decided = true; view.decidedAt = correction.ts; break;
       default: break;
     }
   }

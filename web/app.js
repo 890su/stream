@@ -25,6 +25,7 @@ import { createDoneCards } from './donecard.js';
 import { createTaskQuick } from './taskquick.js';
 import { createConvQuick } from './convquick.js';
 import { setupQuestions } from './question.js';
+import { setupLinkMarks } from './linkmark.js';
 import { setupViewTitle, backTarget, toHome } from './viewswitch.js';
 import { googleNotice } from './googlebox.js';
 import { isWide } from './layout.js';
@@ -251,6 +252,7 @@ async function main() {
   doneCards = createDoneCards({ config, queue: composer.queue, notify, onChange: () => { details?.render(); feed.render(); }, close: (task) => quick.done(task), drop: (task) => quick.act(task, { proposed: null }, `Ещё не готово: «${task.title}»`) });
   setupViews(feed);
   setupQuestions({ getView: (id) => feed.view(id), getTask: (id) => feed.task(id), queue: composer.queue, notify });
+  setupLinkMarks({ getTask: (id) => feed.task(id), queue: composer.queue, notify }); // «↩» under a message (linkmark.js)
   setupMessageActions(feed, composer, config);
   // ✨ in the tags row (magic.js): about the open task card, else the open conversation.
   setupMagic({ button: $('#magic-button'),

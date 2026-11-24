@@ -1,7 +1,9 @@
 // The topic line of a card (docs/plans/2026-11-21-workspace-redesign-design.md): every conversation is a topic, and
 // its task is empty («+ задача…» to type one), unconfirmed («ИИ: «…»» with ✓ ✕ and why) or real (its title — a tap
-// opens the task).
+// opens the task). Above them, in the same place, the AI's waiting questions (v21 `ask`, askline.js): «❓ …» with its
+// options and «Своими словами…».
 // topicOf (topic.js) decides the state; this file only draws it.
+import { askLine } from './askline.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -21,9 +23,13 @@ function button(className, text, onClick, label) {
 // Why the AI made it: the reason of its first change (the AI log), else its note.
 export const reasonOf = (task) => task.history?.find((entry) => entry.change?.reason)?.change.reason ?? task.note ?? '';
 
-// `topic` — topicOf(conversation); `on`: { openTask(id), create(title), confirm(task), reject(task) }.
-export function topicLine({ topic, on }) {
+// `topic` — topicOf(conversation), or null (my own notes «Я»: only the questions); `on`: { openTask(id),
+// create(title), confirm(task), reject(task), answer(question, choice) }; `questions` — conversationQuestions
+// (askline.js), the newest first; `tasksById` — for the options that name a record.
+export function topicLine({ topic, on, questions = [], tasksById = new Map() }) {
   const box = element('div', 'card-topic-line');
+  for (const question of questions) box.append(askLine({ question, tasksById, answer: on.answer }));
+  if (!topic) return box;
   const chips = element('div', 'card-topic-chips');
   if (topic.state === 'empty') {
     const input = element('input', 'card-topic-input');

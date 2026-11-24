@@ -92,6 +92,11 @@ test('a queue tile: channel, task (guessed when the AI linked it), two lines of 
   const open = tileFacts({ ...person, queue: { ...person.queue, pending: [], open: 'ждёт выезд в субботу' } }, { now });
   assert.deepEqual([open.open, open.state], ['ждёт выезд в субботу', 'ждёт выезд в субботу · 3 ч']);
   assert.equal(facts.state, 'ждёт 3 ч');
+  // The AI asks (v21 `ask`): the newest waiting question about the conversation, short, instead of the reason —
+  // also while incoming messages wait (then `open` is null).
+  const question = { id: 'qa', text: 'Это задача?', options: [], messageIds: [more.id], ts: '2026-11-18T09:10:00', processor: 'triage-ai-v21' };
+  const asked = tileFacts(person, { now, questions: new Map([[more.id, question]]) });
+  assert.deepEqual([asked.ask, asked.state], ['❓ Это задача?', '❓ Это задача? · 3 ч']);
 });
 
 test('task plaques: open tasks only, executor in words, due date', async () => {
@@ -172,7 +177,7 @@ test('an own note in a task of its own is a conversation named by the task; file
   assert.equal(byKey.get('task:t-cable').title, 'Купить кабель и коннекторы');
   assert.deepEqual(byKey.get('task:t-order').views.map((view: any) => view.id), [c.id]);
   assert.deepEqual(byKey.get('me').views.map((view: any) => view.id), [mood.id, loose.id]);
-  assert.equal(byKey.get('me').title, 'Заметки');
+  assert.equal(byKey.get('me').title, 'Я · мои записи');
 });
 
 test('a message split off its chat is a conversation of its own, with what continues it; the chat keeps the rest', () => {

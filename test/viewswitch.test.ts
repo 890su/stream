@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { backTarget } from '../web/viewswitch.js';
+import { backTarget, viewTitle } from '../web/viewswitch.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { likelyConversations, likelyTasks } from '../web/linkwindow.js';
 
@@ -67,4 +67,10 @@ test('back from a task card stays where the card was opened: its entry is the ca
   // @ts-expect-error Browser modules are deliberately buildless JavaScript.
   const { backTarget } = await import('../web/viewswitch.js');
   assert.equal(backTarget('tasks', { task: true }), null);
+});
+
+test('the title of the queue says how many wait for a decision', () => {
+  assert.equal(viewTitle('home', 3), 'Ждут решения: 3');
+  assert.equal(viewTitle('home', 0), 'Беседы', 'empty — the screen says «Всё распределено ✓»');
+  assert.equal(viewTitle('tasks', 3), 'Задачи');
 });

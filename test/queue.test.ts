@@ -3,7 +3,7 @@ import { test } from 'node:test';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { conversations } from '../web/conversations.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-import { queueList, ownerLinked, archiveList } from '../web/queue.js';
+import { queueList, ownerLinked, archiveList, handledToday } from '../web/queue.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
 import { project } from '../web/projection.js';
 // @ts-expect-error Browser modules are deliberately buildless JavaScript.
@@ -350,4 +350,27 @@ test('the «Я» conversation waits while an AI record or question from it waits
   assert.deepEqual([asked.waiting, asked.open], [true, 'ИИ спрашивает']);
   assert.equal(queueIn([idea, parcel, question, mark(parcel.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq4', text: 'ничего' })], 'me').waiting, false);
   assert.equal(queueIn([idea, parcel, question, mark(parcel.id, '2026-11-18T09:20:00', 'answered')], 'me').waiting, false, '🗄');
+});
+
+test('answering a question handles its incoming messages: no reply needed after «Ничего» or words', () => {
+  const ask = tg('986', '2026-11-18T09:00:00', 'посылку маме отправишь?');
+  const question = asking('qq5', [ask.id], '2026-11-18T09:10:00');
+  assert.deepEqual([queueOf([ask, question]).waiting, queueOf([ask, question]).pending.length], [true, 1], 'the incoming waits too');
+  const nothing = mark(ask.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq5', option: 1 });
+  assert.equal(queueOf([ask, question, nothing]).waiting, false);
+  const words = mark(ask.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq5', text: 'это подарок' });
+  assert.equal(queueOf([ask, question, words]).waiting, false);
+  const later = tg('986', '2026-11-18T10:00:00', 'и ещё одно');
+  assert.equal(queueOf([ask, question, nothing, later]).waiting, true, 'a later incoming waits again');
+});
+
+test('handled today: archived conversations whose last handling was today', () => {
+  const today = new Date('2026-11-18T18:00:00');
+  const list = [
+    { key: 'tg:1', views: [], tasks: [], last: '2026-11-18T09:00:00', queue: { waiting: false } },
+    { key: 'tg:2', views: [], tasks: [], last: '2026-11-17T09:00:00', queue: { waiting: false } },
+    { key: 'tg:3', views: [], tasks: [], last: '2026-11-18T10:00:00', queue: { waiting: true } },
+    { key: 'me', views: [], tasks: [], last: '2026-11-18T10:00:00', queue: { waiting: false } },
+  ];
+  assert.equal(handledToday(list, today), 1, 'only tg:1: tg:2 was handled yesterday, tg:3 still waits, «Я» is not a conversation with anyone');
 });
