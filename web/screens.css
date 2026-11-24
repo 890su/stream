@@ -412,3 +412,17 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 /* The dashboard's group labels (dashboard.js): small, above the paused and the next tasks. */
 .dash-label { margin: 10px 12px 2px; font-size: 12px; color: var(--muted); }
 /* «≡» in the head of a task's conversation (cardtalk.js): unfolds every cut. */
+
+/* The task card «По задаче» (2026-11-24): the scope switch, the folded context of a message, «Ответить» under someone's. */
+.card-talk-scope { flex: none; margin-left: auto; font-size: 13px; }
+.talk-context { align-self: center; padding: 2px 10px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; }
+.talk-context.open { color: var(--accent-strong); }
+.talk-context-message { opacity: .72; }
+.talk-reply { align-self: flex-start; padding: 0 6px; font-size: 12.5px; }
+
+/* The long-press list of recipients on «Отправить». */
+.recipient-sheet-layer { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; background: rgb(0 0 0 / .35); }
+.recipient-sheet { width: min(420px, 100%); max-height: 60vh; overflow: auto; margin-bottom: 64px; padding: 8px; border-radius: 14px 14px 10px 10px; background: var(--panel); box-shadow: var(--shadow); }
+.recipient-sheet-title { margin: 4px 8px 8px; color: var(--muted); font-size: 13px; }
+.recipient-sheet-row { display: block; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; }
+.recipient-sheet-row:hover, .recipient-sheet-row:focus-visible { background: var(--chip); }

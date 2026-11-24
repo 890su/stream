@@ -120,6 +120,16 @@ export function taskActivity(task) {
   });
 }
 
+// Someone else's message in a chat — the one «Ответить» answers (not mine, not a note, the AI's or the system's).
+const isOther = (view) => !['me', 'ai', 'system'].includes(view.event.author) && Boolean(chatOf(view.event));
+const contextItem = (item) => { item.classList.add('talk-context-message'); return item; };
+function scopeButton(text, onClick) {
+  const node = element('button', 'link-button card-talk-scope', text);
+  node.type = 'button';
+  node.onclick = onClick;
+  return node;
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -127,28 +137,43 @@ function element(tag, className, text) {
   return node;
 }
 
+// Message ids whose «контекст» is unfolded in «По задаче», for this session.
+const openContext = new Set();
+
 // One conversation of the task. ctx: { task, party (null — the task's comments), conversation (or null), taskViews,
-// bubble(view), unlink(id), name, log ([{ ts, text }] — the task's changes, shown in
-// the comments) }. The whole conversation runs in a row, nothing folded (owner, 2026-11-24); the task's own messages
-// are marked.
-export function talkPane({ task, party, conversation, taskViews, bubble, unlink, name, log = [] }) {
+// bubble(view), unlink(id), name, log ([{ ts, text }] — the task's changes, shown in the comments), scope ('task' —
+// «По задаче»: `thread` (tasktalk.js taskThread) — the task's messages of every conversation with folded context;
+// 'chat' — the chosen person's whole conversation), onScope(next), onReply(view) — «Ответить» under someone's message,
+// onMode() — a redraw }. Nothing is folded by task (owner, 2026-11-24); the task's own messages are marked.
+export function talkPane({ task, party, conversation, taskViews, bubble, unlink, name, log = [], scope = 'chat', thread = [], onScope = () => {}, onReply = () => {}, onMode = () => {} }) {
   const box = element('div', 'card-talk');
   const comments = party === null;
   const internal = comments || Object.hasOwn(PARTY_LABELS, party);
   const views = comments ? commentViews(taskViews) : party === 'me' ? taskViews : internal ? taskViews.filter((view) => partyOfEvent(view.event) === party)
     : (conversation?.views ?? []).filter((view) => !view.deleted);
+  const byTask = !internal && scope === 'task';
   const head = element('div', 'card-talk-head');
-  if (internal || !conversation) head.append(element('span', 'card-talk-title', comments ? 'Комментарии задачи' : internal ? (party === 'me' ? 'Лента задачи' : name) : `${name}: переписки нет`));
-  if (!internal && conversation) {
+  if (byTask) head.append(element('span', 'card-talk-title', 'По задаче'));
+  else if (internal || !conversation) head.append(element('span', 'card-talk-title', comments ? 'Комментарии задачи' : internal ? (party === 'me' ? 'Лента задачи' : name) : `${name}: переписки нет`));
+  else head.append(element('span', 'card-talk-title', name));
+  if (!internal) {
     box.setAttribute('role', 'region');
-    box.setAttribute('aria-label', `Переписка: ${name}`);
-    head.append(element('span', 'card-talk-title', name));
+    box.setAttribute('aria-label', byTask ? 'Переписка по задаче' : `Переписка: ${name}`);
+    if (byTask && conversation) head.append(scopeButton(`Вся переписка с ${name}`, () => onScope('chat')));
+    if (!byTask) head.append(scopeButton('По задаче', () => onScope('task')));
   }
   box.append(head);
   const list = element('div', 'details-talk');
   const message = (view) => {
     const item = element('div', `details-message${!internal && task.messages.includes(view.id) ? ' task-linked' : ''}`);
     item.append(bubble(view));
+    if (!internal && isOther(view)) {
+      const reply = element('button', 'link-button talk-reply', 'Ответить');
+      reply.type = 'button';
+      reply.setAttribute('aria-label', 'Ответить на это сообщение');
+      reply.onclick = (event) => { event.stopPropagation(); onReply(view); };
+      item.append(reply);
+    }
     if (task.messages.includes(view.id)) {
       const remove = element('button', 'icon-button details-unlink', '×');
       remove.type = 'button';
@@ -174,8 +199,26 @@ export function talkPane({ task, party, conversation, taskViews, bubble, unlink,
     box.append(list);
     return box;
   }
-  for (const view of views) list.append(message(view));
-  if (!views.length) list.append(element('p', 'drawer-empty', 'Сообщений с этим участником пока нет'));
+  if (byTask) {
+    for (const { view, before, after } of thread) {
+      const around = before.length + after.length;
+      const open = openContext.has(view.id);
+      if (around) {
+        const toggle = element('button', `talk-context${open ? ' open' : ''}`, open ? 'свернуть контекст' : `контекст · ${around}`);
+        toggle.type = 'button';
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.onclick = () => { if (open) openContext.delete(view.id); else openContext.add(view.id); onMode(); };
+        list.append(toggle);
+      }
+      if (open) for (const near of before) list.append(contextItem(message(near)));
+      list.append(message(view));
+      if (open) for (const near of after) list.append(contextItem(message(near)));
+    }
+    if (!thread.length) list.append(element('p', 'drawer-empty', 'В задаче пока нет сообщений из переписки'));
+  } else {
+    for (const view of views) list.append(message(view));
+    if (!views.length) list.append(element('p', 'drawer-empty', 'Сообщений с этим участником пока нет'));
+  }
   box.append(list);
   return box;
 }

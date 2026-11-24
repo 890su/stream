@@ -16,7 +16,8 @@ import { STATUSES, taskOfMessage } from './taskfold.js';
 import { accountTitle } from './tgbubble.js';
 import { versionCard } from './versioncard.js';
 import { taskDetails } from './taskdetails.js';
-import { bindTalkSwipe, writeOrder, frontOrder, commentViews } from './cardtalk.js';
+import { bindTalkSwipe, writeOrder, frontOrder, commentViews, conversationParty } from './cardtalk.js';
+import { recipientOptions } from './tasktalk.js';
 import { slideIn } from './swipezones.js';
 import { isWide, onWideChange } from './layout.js';
 import { holdRender } from './holdrender.js';
@@ -133,6 +134,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       notify, projects: feed.projects(), doneCards, fields: config.tasks?.report_fields ?? {}, cardSettings: config.tasks?.card,
       directory: directory(), bar: showBar && quick ? barContext(task, { feed, quick, openConversation }) : null,
       conversations: feed.conversations(), tasksById: tasksById(), talk, redraw: redrawTask, onConversation: steer, onTalk: openTalk,
+      onScope: (scope) => { if (talk) { talk.scope = scope; showTalk(); } }, onReply: replyIn,
       fold, onFold: (key) => { fold = fold === key ? null : key; drawTask(); }, onShowTalk: showTalk,
       onAdd: (anchor) => addParticipant(task, anchor),
       recheck: recheckContext(task),
@@ -142,7 +144,8 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       talk.order = drawn.order;
       talk.party = drawn.selected;
     }
-    composer.hint(drawn.selected ? 'Сообщение' : 'Комментарий к задаче');
+    composer.hint(drawn.hint);
+    lastDrawn = drawn; // the long press on «Отправить» lists its people (recipientsOfCard)
     screenBody.replaceChildren(drawn.node);
     screenBody.scrollTop = atEnd ? screenBody.scrollHeight : scroll;
     const input = screenBody.querySelector('.checklist-add input');
@@ -185,6 +188,27 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
     writeOrder(taskId, order);
     drawTask();
   });
+
+  // «Ответить» under someone's message in the card: that person becomes the chosen tile (their chat gets the reply)
+  // and the message is quoted (CONCEPT.md §5, 2026-11-24).
+  function replyIn(view) {
+    if (!taskId || !talk) return;
+    const conversation = feed.conversations().find((item) => item.views.some((each) => each.id === view.id));
+    const party = conversation ? conversationParty(conversation) : null;
+    if (party && party !== talk.party) { talk.party = party; drawTask(); }
+    composer.reply(view);
+  }
+
+  // The long press on «Отправить» while a task card is open: its people with each of their chats, and the comment.
+  let lastDrawn = null;
+  function recipientsOfCard() {
+    if (!taskId || !talk || !lastDrawn) return null;
+    return recipientOptions(lastDrawn.parties, feed.conversations(), lastDrawn.name).map((option) => ({ label: option.label, choose: () => {
+      talk.party = option.party;
+      drawTask();
+      if (option.chat) composer.choose(option.chat);
+    } }));
+  }
 
   // A tap on a tile: that interlocutor's conversation; on the chosen one — off, the task's comments. The cuts fold
   // and the newest messages show, as in a conversation.
@@ -415,5 +439,5 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
 
   return { render, openTask, openMessage, openPerson, openCounterparty, openPlanner, openFor, createFrom, close, closeTask, leaveTask, reopen,
     current: () => (taskId ? { kind: 'task', id: taskId } : current), taskOpen: () => Boolean(taskId), screen,
-    panel, isOpen: () => !isWide() && panel.classList.contains('open') };
+    panel, isOpen: () => !isWide() && panel.classList.contains('open'), recipientsOfCard, replyIn };
 }

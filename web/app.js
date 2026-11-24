@@ -168,7 +168,7 @@ function setupMessageActions(feed, composer, config) {
     list: document.body, // the centre and the details panel share the same message actions
     getView: (id) => feed.view(id),
     onAction: async (op, view) => {
-      if (op === 'reply') composer.reply(view);
+      if (op === 'reply') { if (details?.taskOpen()) details.replyIn(view); else composer.reply(view); } // in a task card the tile follows
       else if (op === 'task') details.createFrom(view);
       else if (op === 'split') {
         const back = view.split ? 'split' : 'unsplit';
@@ -236,6 +236,7 @@ async function main() {
     taskCard: (task) => (details?.current()?.id === task.id ? null : doneCards?.card(task)), onRender: () => { details?.render(); bulk?.repaint(); drawer?.render(); chatView?.sync(); composerRef?.refreshTags(); viewSwitch?.update(); } });
   feedRef = feed;
   const composer = setupComposer(config, { notify, onSent: () => feed.render({ bottom: true }), getViews: () => feed.views(),
+    recipientList: () => (details?.taskOpen() ? details.recipientsOfCard() : null), // the long press on «Отправить»
     // The link window's sections: conversations and tasks as the feed sees them, and what is open now.
     linkContext: () => {
       const open = details?.current()?.kind === 'task' ? details.current().id : null;

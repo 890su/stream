@@ -7,6 +7,7 @@ import { enqueue, synchronize } from './outbox.js';
 import { createRecorder, formatDuration } from './voice.js';
 import { createTagRow, leadButtons } from './tagrow.js';
 import { outboundData, phoneAnswerable } from './outbound.js';
+import { openRecipientSheet } from './recipientsheet.js';
 import { createRecipients } from './recipients.js';
 import { createDraftFiles } from './draftfiles.js';
 import { createLinkState } from './linkstate.js';
@@ -15,10 +16,12 @@ import { backStack } from './backclose.js';
 import { conceal, toggleHidden } from './motion.js';
 
 const HOLD_MS = 350; // holding the mic longer than this and releasing sends the recording
+const SEND_HOLD_MS = 500; // holding «Отправить» this long opens the list of recipients (an open task card)
 
 const $ = (selector) => document.querySelector(selector);
 
-export function setupComposer(config, { notify, onSent, getViews, linkContext }) {
+// `recipientList()` — while a task card is open, the people to choose from by a long press on «Отправить» (details.js).
+export function setupComposer(config, { notify, onSent, getViews, linkContext, recipientList = () => null }) {
   const form = $('#composer');
   const text = $('#message');
   const action = $('#action-button');
@@ -247,6 +250,22 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
   }
 
   // Mic: press and hold to talk, release to send; a short tap keeps recording until the next tap.
+  // «Отправить» held: the list of recipients of the open task card; the choice sends there (CONCEPT.md §5, 2026-11-24).
+  let holdTimer = 0;
+  let listed = false; // the long press opened the list
+  action.addEventListener('pointerdown', (event) => {
+    if (action.dataset.mode !== 'send' || event.button > 0) return;
+    listed = false;
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(() => {
+      const options = recipientList();
+      if (!options?.length) return;
+      listed = true;
+      navigator.vibrate?.(10);
+      openRecipientSheet(options, (option) => { option.choose(); sendDraft(); });
+    }, SEND_HOLD_MS);
+  });
+  for (const type of ['pointerup', 'pointerleave', 'pointercancel']) action.addEventListener(type, () => clearTimeout(holdTimer));
   action.addEventListener('pointerdown', async (event) => {
     if (action.dataset.mode === 'send' || event.button > 0) return;
     pressedAt = Date.now();
@@ -260,6 +279,7 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     if (held >= HOLD_MS) finishRecording(true); else locked = true;
   });
   action.addEventListener('click', () => {
+    if (listed) { listed = false; return; } // the long press opened the list: no plain send
     if (pressedAt) return;
     if (recorder.active()) { if (locked) finishRecording(true); return; }
     if (pendingVoice) { queueVoice(pendingVoice); return; }
@@ -304,6 +324,7 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     pinned: () => recipients.items().filter((item) => item.pinned), // «Избранные» of the left panel
     knownRecipients: recipients.known,
     // A reply to a messenger message chooses its chat as the recipient; another can be chosen in the link window.
+    choose: (chat) => recipients.choose(chat), // a recipient chosen from outside (the long-press list)
     reply: (view) => { setMode({ type: 'reply', view }); const chat = chatOf(view.event); if (chat) recipients.choose(chat); },
     chat: (chat) => { chatDefault = chat; recipients.reset(chat); },
     recipient: () => recipients.selected(),
@@ -328,3 +349,4 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext })
     openAttach: () => togglePanel(attachMenu, attachButton, true),
   };
 }
+

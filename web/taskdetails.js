@@ -14,6 +14,7 @@ import { dueChips } from './taskactions.js';
 import { taskChips } from './taskchips.js';
 import { recheckList } from './recheck.js';
 import { draftCard } from './taskdraft.js';
+import { taskThread, recipientHint } from './tasktalk.js';
 import { partyConversation, cardOrder, pagerOrder, readOrder, talkPane, lastSpeaker, taskActivity, frontOrder, pickParty, messageParties } from './cardtalk.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -228,12 +229,17 @@ export function taskDetails(original, ctx) {
   }
   box.append(head);
 
-  // The conversation with the chosen one, or the task's comments.
+  // «По задаче» (the task's messages of every conversation, with folded context) or the chosen one's whole
+  // conversation; with nobody chosen — the task's comments (CONCEPT.md §5, 2026-11-24).
   const conversation = selected ? partyConversation(selected, conversations) : null;
-  box.append(talkPane({ task, party: selected, conversation, taskViews: views, tasksById: ctx.tasksById, bubble,
-    name: selected ? namer(directory, conversations, views)(selected) : 'Комментарии задачи',
+  const thread = taskThread(views, conversations);
+  const scope = talk?.scope ?? (thread.length ? 'task' : 'chat');
+  const name = selected ? namer(directory, conversations, views)(selected) : 'Комментарии задачи';
+  box.append(talkPane({ task, party: selected, conversation, taskViews: views, bubble, name, scope, thread,
+    onScope: ctx.onScope ?? (() => {}), onReply: ctx.onReply ?? (() => {}),
     log: taskActivity(task), unlink: (id) => save({ op: 'update', remove: [id] }), onMode: redraw }));
-  onConversation(!selected || muted.includes(selected) || selected.startsWith('name:') ? null : conversation);
+  const writesTo = !selected || muted.includes(selected) || selected.startsWith('name:') ? null : conversation;
+  onConversation(writesTo);
   box.append(peopleStrip(task, ctx, groups, recent, selected));
-  return { node: box, order, selected };
+  return { node: box, order, selected, hint: recipientHint(writesTo ? selected : null, writesTo, name), parties: groups.external.filter((party) => !muted.includes(party)), name: namer(directory, conversations, views) };
 }
