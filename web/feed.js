@@ -322,13 +322,15 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   function setTagFilter(tags) { tagFilter = new Set(tags); return render({ bottom: true, top: true }); }
   function setShowDone(value) { showDone = value; return render(); }
   function setSourceFilter(key) { sourceFilter = key || null; return render({ bottom: true, top: true }); }
-  function setMode(next) {
+  // `draw: false` — the caller draws right after (a conversation opening from a queue tile): one redraw, not two.
+  function setMode(next, { draw = true } = {}) {
     quick?.reset?.();
     const wanted = OLD_MODES[next] ?? next;
     if (atQueue()) queuePin = pinRow(); // the queue stays where it was read, and comes back there
     mode = MODES.includes(wanted) ? wanted : 'home';
     stick = !readsDown();
     const pin = atQueue() ? queuePin : null;
+    if (!draw) return Promise.resolve();
     return render({ bottom: !readsDown(), top: true, quiet: true, pin });
   }
   // Contact and tag filters match a task through any of its messages.

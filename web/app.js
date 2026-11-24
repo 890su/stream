@@ -76,8 +76,9 @@ function setupViews(feed) {
     if (details?.taskOpen()) await details.leaveTask();
     if (next === 'conversations') {
       if (!key) return;
-      if (feed.mode() !== 'conversations') await feed.setMode('conversations');
-      if (key !== chatView?.key()) await chatView.open(key);
+      const opening = key !== chatView?.key(); // opening draws the conversation itself: the mode switch need not draw
+      if (feed.mode() !== 'conversations') await feed.setMode('conversations', { draw: !opening });
+      if (opening) await chatView.open(key);
       after();
       return;
     }
