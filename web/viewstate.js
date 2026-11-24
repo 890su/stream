@@ -49,7 +49,8 @@ const dayEnd = (now) => new Date(now.getFullYear(), now.getMonth(), now.getDate(
 // `working` — ids of the task in work and the paused ones (focus.js inWork), for «Текущие».
 function whenMatch(task, when, now, working) {
   if (when === 'unconfirmed') return isOpen(task) && (task.unconfirmed === true || task.status === 'inbox');
-  if (task.unconfirmed === true && isOpen(task)) return false; // a closed one (done work written unconfirmed before 2026-11-24) is shown
+  // Done work written unconfirmed before 2026-11-24 is shown; an AI record a second look cancelled stays hidden.
+  if (task.unconfirmed === true && task.status !== 'done') return false;
   if (when === 'any') return true; // a project's own list: open and closed alike
   if (when === 'done') return task.status === 'done';
   if (when === 'cancelled') return task.status === 'cancelled';
