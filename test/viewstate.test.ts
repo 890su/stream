@@ -138,3 +138,12 @@ test('«Не учтено»: closed tasks whose report has gaps', () => {
   const list = [t('с пробелами', { status: 'done', report: { missing: ['duration_min'] } }), t('полный', { status: 'done', report: { note: 'ок' } })];
   assert.deepEqual(applyView(list, { ...DEFAULT_VIEW, when: 'unreported' }, { now }).map((task: any) => task.id), ['с пробелами']);
 });
+
+test('a closed record the AI wrote unconfirmed (done work before 2026-11-24) is in «Законченные», an open one only in «Неподтверждённые»', () => {
+  const list = [t('работа', { status: 'done', unconfirmed: true, report: { missing: ['cost'] } }), t('предложено', { unconfirmed: true })];
+  const found = (when: string) => applyView(list, { ...DEFAULT_VIEW, when }, { now, projects: [], people: [] }).map((task: any) => task.id);
+  assert.deepEqual(found('done'), ['работа']);
+  assert.deepEqual(found('unreported'), ['работа'], '«Не учтено»');
+  assert.deepEqual(found('unconfirmed'), ['предложено']);
+  assert.deepEqual(found('all'), []);
+});

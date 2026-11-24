@@ -1,7 +1,8 @@
 // The draft of an assignment (#поручить, docs/plans/2026-11-23-conversation-records-design.md «Метка — указание»):
 // the AI wrote the text to the executor into the task (`draft`); it waits in the input of the conversation with that
 // person until I answer in that conversation (any message of mine after the task) or clear it (✕: `draft: ''`). Nothing is
-// ever sent for me. Pure helpers plus the small line with ✕.
+// ever sent for me. The task card shows it too, with «Скопировать» (taskdetails.js): to send it where there is no
+// private conversation. Pure helpers plus the small line with ✕ and the card block.
 import { chatParties, replyChats } from './peoplerow.js';
 import { personOf } from './contacts.js';
 import { partyOfEvent } from './parties.js';
@@ -23,10 +24,12 @@ const same = (party, executor, people) => {
 };
 
 // The open task with a draft whose executor is the one person of this private conversation, not handled or cleared
-// yet: { task, text } or null. A group, or a conversation with anyone else too, never gets it.
+// yet: { task, text } or null. A group, a conversation with anyone else too, or one with no chat to answer in (calls
+// and SMS only) never gets it.
 export function pendingDraft(conversation, tasks, people = []) {
   if (!conversation || conversation.key === 'me' || conversation.key?.startsWith('task:')) return null;
-  if (replyChats(conversation).some((chat) => chat.group)) return null;
+  const chats = replyChats(conversation);
+  if (!chats.length || chats.some((chat) => chat.group)) return null;
   const others = chatParties(conversation).filter((party) => party !== 'me');
   if (!others.length) return null;
   const found = tasks.filter((task) => task.draft && OPEN.has(task.status)
@@ -46,4 +49,26 @@ export function draftLine(pending, { onDismiss }) {
   close.onclick = () => onDismiss(pending);
   line.append(label, close);
   return line;
+}
+
+// In the task card: «Черновик поручения» with its text and «Скопировать» while the task is open. → a node or null.
+// `notify` — the toast.
+export function draftCard(task, { notify = () => {} } = {}) {
+  if (!task?.draft || !OPEN.has(task.status)) return null;
+  const box = document.createElement('div');
+  box.className = 'card-draft';
+  const label = document.createElement('span');
+  label.className = 'card-draft-label';
+  label.textContent = 'Черновик поручения';
+  const text = document.createElement('p');
+  text.className = 'card-draft-text';
+  text.textContent = task.draft;
+  const copy = document.createElement('button');
+  copy.type = 'button'; copy.className = 'link-button card-draft-copy'; copy.textContent = 'Скопировать';
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(task.draft); notify('Черновик скопирован'); }
+    catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }
+  };
+  box.append(label, text, copy);
+  return box;
 }

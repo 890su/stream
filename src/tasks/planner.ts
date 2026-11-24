@@ -21,7 +21,10 @@ export interface PlanTemplate { name: string; tag: string | null; title: string;
 // to assign; earlier_available — the AI may answer need_earlier and get the session before it.
 // An active project: the triage may put tasks in it, in one of its sections.
 export interface PlanProject { id: string; title: string; kind: string; scope: string; sections: { id: string; title: string; role?: string }[] }
-export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; counterparties: PlanCounterparty[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; earlier_available: boolean; messages: PlanMessage[] }
+export interface PlanInput { now: string; job_days: number; projects: PlanProject[]; counterparties: PlanCounterparty[]; templates: PlanTemplate[]; open_tasks: PlanTask[]; closed_tasks: PlanTask[]; context: PlanMessage[]; earlier_available: boolean; messages: PlanMessage[];
+  owner_answers?: OwnerAnswer[] }
+// The owner answered the AI's question in his own words («Своими словами», web/askline.js): his order for those messages.
+export interface OwnerAnswer { message_ids: string[]; text: string }
 
 export interface PlannedTask {
   task_id: string | null; // an open record this continues, or a closed one only as a link (repeats use repeat_of); null for a new one
@@ -55,7 +58,8 @@ export interface PlannedReport { note: string | null; duration_min: number | nul
 // The AI is unsure where messages belong (v21): the owner picks — an existing record, a new one or nothing.
 export interface PlannedQuestion {
   message_ids: string[]; text: string;
-  options: { label: string; task_id: string | null; title: string | null; template: string | null; nothing: boolean }[];
+  // executor, draft — only in the questions the rules ask about #поручить (triageapply.ts), never in the AI's answer
+  options: { label: string; task_id: string | null; title: string | null; template: string | null; nothing: boolean; executor?: string; draft?: string }[];
 }
 export interface PlanOutput {
   tasks: PlannedTask[];
@@ -217,6 +221,8 @@ export const PLAN_INSTRUCTIONS = `Ты разбираешь беседу вла�
   шаблона. #доход — запись template money о приходе; #поручить — задача, executors — тот, кому поручают (party или
   name:Имя), responsible: me; не назван — вопрос в questions. Назван известный человек — draft: короткий текст поручения ему
   на языке его беседы, от лица владельца; в остальных задачах draft: "".
+- owner_answers — ответы владельца своими словами на твои прошлые вопросы об этих сообщениях (message_ids, text): это его
+  указание, оно весит больше твоего прочтения. Разбери эти сообщения так, как он сказал, и тот же вопрос не задавай.
 - Ничего — обсуждение работы и клиентов без просьбы, новости, мнения, рассказ о своих делах, передача сведений,
   приветствия, служебное. Итог у каждого сообщения не обязателен: просто разговор не попадает ни в tasks, ни в
   questions.

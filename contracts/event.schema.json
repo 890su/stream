@@ -177,7 +177,9 @@
                             "task_id": { "type": ["string", "null"], "description": "An existing record; null — a new one (title, template) or nothing." },
                             "title": { "type": ["string", "null"], "maxLength": 200 },
                             "template": { "type": ["string", "null"] },
-                            "nothing": { "type": "boolean" }
+                            "nothing": { "type": "boolean" },
+                            "executor": { "type": "string", "maxLength": 120, "description": "#поручить (2026-11-24): who the record goes to when the owner picks this option — a party, `me` for «Сделаю сам»." },
+                            "draft": { "type": "string", "maxLength": 1000, "description": "#поручить: the AI's assignment text that goes into the record with this option; never sent by the server." }
                           }
                         }
                       }

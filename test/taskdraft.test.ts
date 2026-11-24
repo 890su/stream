@@ -5,7 +5,8 @@ import { pendingDraft, draftSent } from '../web/taskdraft.js';
 
 // The draft of a #поручить task waits in the input of the conversation with the executor until sent or cleared.
 // Data is made up.
-const view = (author: string, text: string, ts: string) => ({ deleted: false, text, event: { author, ts, kind: 'text', payload: { text } } });
+const view = (author: string, text: string, ts: string, data: Record<string, unknown> = { telegram: { account: 'by', chat_id: '7410', chat_type: 'private', chat_title: 'Алекс' } }) =>
+  ({ deleted: false, text, event: { author, ts, kind: 'text', payload: { text, data } } });
 const conversation = (extra: unknown[] = []) => ({ key: 'by|7410', views: [view('contact:tg:by:7410', 'привет', '2026-11-24T09:00:00Z'), ...extra] });
 const task = (over: Record<string, unknown> = {}) => ({ id: 't1', title: 'Привезти роутер', status: 'todo', draft: 'Алекс, привези роутер завтра', roles: { executors: ['tg:7410'] },
   createdAt: '2026-11-24T10:00:00Z', updatedAt: '2026-11-24T10:00:00Z', ...over });
@@ -39,8 +40,38 @@ test('a group never gets the draft, nor a conversation with someone else too', (
 
 test('the executor is found through the points of the same person', () => {
   const people = [{ id: 'p1', status: 'active', createdAt: '2026-11-01T00:00:00Z', points: ['tel:+48500100200', 'tg:7410'] }];
-  const phone = { key: 'tel:+48500100200', views: [view('contact:viber:+48500100200', 'привет', '2026-11-24T09:00:00Z')] };
+  const phone = { key: 'tel:+48500100200', views: [view('contact:viber:+48500100200', 'привет', '2026-11-24T09:00:00Z', { viber: { phone: '+48500100200', chat: 'Алекс' } })] };
   assert.equal(pendingDraft(phone, [task()]), null, 'no directory: another string');
   assert.notEqual(pendingDraft(phone, [task()], people), null);
   assert.equal(pendingDraft(phone, [task()], [{ ...people[0]!, points: ['tel:+48500100200'] }]), null, 'tg: is not the same person');
+});
+
+test('a conversation with no chat to answer in (calls and SMS only) never gets the draft', () => {
+  const people = [{ id: 'p1', status: 'active', createdAt: '2026-11-01T00:00:00Z', points: ['tel:+48500100200', 'tg:7410'] }];
+  const call = { deleted: false, text: '', event: { author: 'contact:tel:+48500100200', ts: '2026-11-24T09:00:00Z', kind: 'call',
+    payload: { data: { call: { direction: 'in', number: '+48500100200' } } } } };
+  assert.equal(pendingDraft({ key: 'tel:+48500100200', views: [call] }, [task()], people), null);
+});
+
+test('the task card shows an open task\'s draft with «Скопировать»; none when closed or cleared', async () => {
+  const { draftCard } = await import('../web/taskdraft.js' as string);
+  const made: { className: string; textContent: string; children: unknown[]; append: (...nodes: unknown[]) => void; onclick?: () => Promise<void> }[] = [];
+  const globals = globalThis as unknown as { document?: unknown; navigator?: unknown };
+  const saved = { document: globals.document, navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator') };
+  globals.document = { createElement: () => { const node = { className: '', textContent: '', children: [] as unknown[], append(...nodes: unknown[]) { node.children.push(...nodes); } }; made.push(node); return node; } };
+  try {
+    const copied: string[] = [];
+    Object.defineProperty(globalThis, 'navigator', { value: { clipboard: { writeText: async (text: string) => { copied.push(text); } } }, configurable: true });
+    const toasts: string[] = [];
+    const card = draftCard(task(), { notify: (text: string) => toasts.push(text) });
+    assert.equal(card.className, 'card-draft');
+    assert.deepEqual(made.map((node) => node.textContent).filter(Boolean), ['Черновик поручения', 'Алекс, привези роутер завтра', 'Скопировать']);
+    await made.find((node) => node.textContent === 'Скопировать')!.onclick!();
+    assert.deepEqual([copied, toasts], [['Алекс, привези роутер завтра'], ['Черновик скопирован']]);
+    assert.equal(draftCard(task({ status: 'done' })), null);
+    assert.equal(draftCard(task({ draft: '' })), null);
+  } finally {
+    globals.document = saved.document;
+    if (saved.navigator) Object.defineProperty(globalThis, 'navigator', saved.navigator); else delete globals.navigator;
+  }
 });

@@ -305,6 +305,11 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 /* «✨ Сверить с перепиской» (recheck.js): the button and the AI's proposals with ✓ ✕ */
 .card-recheck { margin-top: 4px; }
 .card-recheck-run { font-size: 14px; }
+/* #поручить: the draft to the executor in the card, with «Скопировать» (taskdraft.js draftCard) */
+.card-draft { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; margin-top: 4px; padding: 4px 4px 4px 10px; border: 1px dashed var(--accent); border-radius: 10px; }
+.card-draft-label { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+.card-draft-text { margin: 0; min-width: 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.card-draft-copy { font-size: 13.5px; }
 .recheck-list { display: grid; gap: 6px; margin: 4px 0 2px; padding: 6px 0 0 8px; border-left: 2px solid var(--accent); }
 .recheck-head { margin: 0; font-size: 13px; color: var(--muted); }
 .recheck-row { display: flex; align-items: flex-start; gap: 6px; }

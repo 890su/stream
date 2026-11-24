@@ -36,8 +36,8 @@ export function ownerLinked(tasks) {
 // { waiting, moment, since (the first waiting message), pending (waiting messages), snoozedUntil, open (why it waits
 // with no message waiting) }. `conversation` needs key, views (with taskIds), tasks and group; `owner` — ownerLinked
 // of all tasks; `questions` / `proposals` — the AI's waiting questions and proposals by message (questions.js,
-// proposals.js).
-export function queueOf(conversation, { now = new Date(), config, owner = new Set(), questions = new Map(), proposals = new Map() }) {
+// proposals.js); `tasksById` — all tasks: a proposal on a record closed or cancelled since holds nothing.
+export function queueOf(conversation, { now = new Date(), config, owner = new Set(), questions = new Map(), proposals = new Map(), tasksById = new Map() }) {
   if (conversation.key.startsWith('task:')) return NONE;
   const own = conversation.key === 'me'; // my notes: nobody to answer, only the AI may wait for me
   const views = conversation.views.filter((view) => !view.deleted).sort((a, b) => time(a.event.ts) - time(b.event.ts));
@@ -72,7 +72,7 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   const requeue = views.flatMap((view) => view.requeues ?? []).filter((ts) => time(ts) > handled).sort((a, b) => time(a) - time(b)).at(-1);
   // Back from the archive: a requeue later than every way it was dealt with (a reply, the archive mark, a task of mine).
   const back = requeue && time(requeue) > clearedAt(conversation, views) ? requeue : null;
-  const ai = { questions, proposals };
+  const ai = { questions, proposals, tasksById };
   const open = pending.length ? null : own ? aiWaitOf(conversation, views, ai, undefined, true)
     : unfinishedOf(conversation, views, start, handled, now, ai) ?? (back ? { reason: 'из архива', moment: back } : null);
   if (!pending.length && !open) return NONE;
@@ -111,10 +111,11 @@ function unfinishedOf(conversation, views, start, handled, now, ai) {
 // proposals hold only when made by v21 or later (`fromV21`): an old unanswered v15–v20 proposal keeps the old rule —
 // my reply takes the conversation out. An unconfirmed record held it before v21 too (v18), so in a chat any does; in
 // «Я» only a v21 one (older notes are in their task's conversation). → { reason, moment }.
-function aiWaitOf(conversation, views, { questions, proposals }, cleared = clearedAt(conversation, views), own = false) {
+function aiWaitOf(conversation, views, { questions, proposals, tasksById = new Map() }, cleared = clearedAt(conversation, views), own = false) {
   const lastIn = views.filter((view) => directionOf(view.event) === 'in').at(-1);
   const at = (ts) => (lastIn ? lastIn.event.ts : ts);
-  const fresh = (map) => views.map((view) => map.get(view.id)).find((item) => item && fromV21(item.processor) && time(item.ts) > cleared);
+  const live = (item) => !item.task || !tasksById.has(item.task) || isOpen(tasksById.get(item.task)); // a question has no task
+  const fresh = (map) => views.map((view) => map.get(view.id)).find((item) => item && fromV21(item.processor) && time(item.ts) > cleared && live(item));
   const question = fresh(questions);
   if (question) return { reason: 'ИИ спрашивает', moment: at(question.ts) };
   const proposal = fresh(proposals);

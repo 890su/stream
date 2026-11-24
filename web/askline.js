@@ -3,21 +3,24 @@
 // the AI's offer «ИИ: «…»» stands (cardhead.js); the queue tile shows it short (convlist.js). An answer writes the
 // owner's `answer_question` correction (the AI log settles the question by it) and the chosen change: a link to the
 // record — my `task_change` adding the messages, so it is my action in the queue —, a new record of mine, or nothing.
+// An option of a #поручить question names the executor (and the AI's draft): the record goes to that person, on me
+// for «Сделаю сам». An answer in words goes to the AI with the session again (src/tasks/directive.ts ownerAnswerOf).
 // askChoices, answerEvents, conversationQuestions and shortAsk are pure; askLine builds the DOM.
 import { makeCorrection, makeTaskChange, nameUuid } from './shared.js';
 
 const ASK_SHORT = 56; // characters of the question on a queue tile
 
 // The options as choices: { index (of the option, for the correction), label, kind: 'link' | 'create' | 'nothing',
-// taskId?, title?, template? }. An option naming a record this device does not know is left out.
+// taskId?, title?, template?, executor?, draft? }. An option naming a record this device does not know is left out.
 export function askChoices(question, tasksById) {
   const choices = [];
   (question?.options ?? []).forEach((option, index) => {
     const label = String(option.label ?? '').trim();
     if (!label) return;
-    if (option.task_id) { if (tasksById.has(option.task_id)) choices.push({ index, label, kind: 'link', taskId: option.task_id }); return; }
+    const assign = { ...(option.executor ? { executor: option.executor } : {}), ...(option.draft ? { draft: option.draft } : {}) };
+    if (option.task_id) { if (tasksById.has(option.task_id)) choices.push({ index, label, kind: 'link', taskId: option.task_id, ...assign }); return; }
     if (option.nothing) { choices.push({ index, label, kind: 'nothing' }); return; }
-    if (option.title) choices.push({ index, label, kind: 'create', title: option.title, ...(option.template ? { template: option.template } : {}) });
+    if (option.title) choices.push({ index, label, kind: 'create', title: option.title, ...(option.template ? { template: option.template } : {}), ...assign });
   });
   return choices;
 }
@@ -34,10 +37,14 @@ export function answerEvents(question, choice, { now = new Date() } = {}) {
   const anchor = ids.at(-1);
   const stamp = { id: nameUuid(`answer-change|${question.id}`), ts: now.toISOString() };
   const entries = [];
-  if (choice.kind === 'link') entries.push(makeTaskChange(choice.taskId, { op: 'update', add: ids }, stamp));
+  // Who does it: the option's executor (under my control when it is someone else), else me.
+  const executor = choice.executor ?? 'me';
+  const roles = { responsible: 'me', executors: [executor], ...(executor !== 'me' ? { controller: 'me' } : {}) };
+  const draft = choice.draft ? { draft: choice.draft } : {};
+  if (choice.kind === 'link') entries.push(makeTaskChange(choice.taskId, { op: 'update', add: ids, ...(choice.executor ? { roles, ...draft } : {}) }, stamp));
   if (choice.kind === 'create') {
-    entries.push(makeTaskChange(answerTaskId(question, choice.index), { op: 'create', title: choice.title.slice(0, 200), roles: { author: 'me', responsible: 'me', executors: ['me'] },
-      status: 'todo', add: ids, ...(choice.template ? { template: choice.template } : {}) }, stamp));
+    entries.push(makeTaskChange(answerTaskId(question, choice.index), { op: 'create', title: choice.title.slice(0, 200), roles: { author: 'me', ...roles },
+      status: 'todo', add: ids, ...(choice.template ? { template: choice.template } : {}), ...draft }, stamp));
   }
   const words = choice.text?.trim();
   entries.push(makeCorrection(anchor, 'answer_question', { question: question.id, ...(words ? { answer: words.slice(0, 500) } : { option: choice.index }),

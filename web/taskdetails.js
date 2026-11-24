@@ -13,6 +13,7 @@ import { STATUSES } from './taskfold.js';
 import { dueChips } from './taskactions.js';
 import { taskChips } from './taskchips.js';
 import { recheckList } from './recheck.js';
+import { draftCard } from './taskdraft.js';
 import { partyConversation, cardOrder, pagerOrder, readOrder, talkPane, lastSpeaker, taskActivity, frontOrder, pickParty, messageParties } from './cardtalk.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -169,6 +170,8 @@ export function taskDetails(original, ctx) {
   head.append(taskChips(task, { save, now, dueChips, settings: cardSettings, project: projectLine(task, { projects, save }), counterparty: counterpartyChip }));
   const card = doneCards.card(task);
   if (card) head.append(card);
+  const draft = draftCard(task, { notify }); // #поручить: the text to the executor, to copy when there is no chat with them
+  if (draft) head.append(draft);
   // «✨ Сверить с перепиской» (recheck.js): the record against its conversations — only proposals, ✓ ✕ under the button.
   if (ctx.recheck && task.messages?.length) {
     const recheck = element('div', 'card-recheck');

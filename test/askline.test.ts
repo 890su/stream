@@ -103,3 +103,16 @@ test('the server accepts what an answer and «↩» write', async () => {
     assert.equal((await post(unlinkEvent(second.id, record).event)).status, 201, '↩');
   } finally { await f.stop(); }
 });
+
+test('#поручить options: a record goes to the person chosen with the AI\'s draft, «Сделаю сам» on me', () => {
+  const assign = { ...question, options: [
+    { label: 'Поручить: Саша Белый', task_id: null, title: 'Роутер', template: null, nothing: false, executor: 'tg:1', draft: 'Саша, привези роутер' },
+    { label: 'Сделаю сам: Роутер', task_id: null, title: 'Роутер', template: null, nothing: false, executor: 'me' },
+    { label: 'Поручить: Саша Чёрный', task_id: 't1', title: null, template: null, nothing: false, executor: 'tg:2' },
+  ] };
+  const [person, self, onRecord] = askChoices(assign, tasksById);
+  const made = answerEvents(assign, person)[0].event.payload.data.task;
+  assert.deepEqual([made.roles, made.draft], [{ author: 'me', responsible: 'me', executors: ['tg:1'], controller: 'me' }, 'Саша, привези роутер']);
+  assert.deepEqual(answerEvents(assign, self)[0].event.payload.data.task.roles, { author: 'me', responsible: 'me', executors: ['me'] });
+  assert.deepEqual(answerEvents(assign, onRecord)[0].event.payload.data.task, { op: 'update', add: ['m1', 'm2'], roles: { responsible: 'me', executors: ['tg:2'], controller: 'me' } });
+});

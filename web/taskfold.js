@@ -122,6 +122,8 @@ export function describeChange(change) {
   if (change.proposed === 'done') parts.push('похоже, готово');
   if (change.proposed === null) parts.push('вопрос снят');
   if (change.report) parts.push('отчёт');
+  if (change.roles?.executors) parts.push('исполнитель изменён');
+  if (change.draft) parts.push('черновик поручения');
   return parts.join(' · ') || 'изменена';
 }
 

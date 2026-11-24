@@ -882,3 +882,90 @@ test('#поручить: a known person gets a task with a draft; an unknown one
     assert.equal(s.store.actions.get(nameIdOf(`action|${known.id}`)), undefined);
   } finally { s.cleanup(); }
 });
+
+test('done work is not unconfirmed in «ИИ предлагает» mode, and a second look does not record it again', async () => {
+  const s = setup((input) => ({ tasks: [planned({ title: 'Клиент: почта', template: 'lead', done: true, message_ids: input.messages.map((message) => message.id),
+    report: { note: 'Настроил почту', duration_min: null, cost: null, expenses: null, currency: null } })] }), { newTasks: 'unconfirmed' });
+  try {
+    const ask = s.add(telegram('7601', 'почта не приходит, подключитесь?'));
+    s.add(telegram('7601', 'готово, проверьте', 'me'));
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    assert.deepEqual(s.tasks().map((task) => [task.status, task.unconfirmed]), [['done', undefined]]);
+    await s.triage.rerun(ask.id, 'again-1');
+    assert.equal(s.calls.length, 2, 'the AI was asked again');
+    assert.equal(s.tasks().length, 1, 'the same work is not recorded twice');
+  } finally { s.cleanup(); }
+});
+
+test('tags the composer switched on by itself are no directive; the same tag kept in my edit is', async () => {
+  const s = setup(() => ({ tasks: [] }));
+  try {
+    const auto = s.add(event({ payload: { text: 'отправить посылку маме', tags: ['#задача'],
+      data: { tagging: { engine: 'hints-v1', suggested: [], auto: ['#задача'], owner_on: [], owner_off: [] } } } }));
+    assert.deepEqual(s.triage.ready(Date.now()), [], 'waits for its quiet window like any message');
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    assert.equal(s.calls[0]!.messages[0]!.directive, undefined);
+    assert.deepEqual(s.calls[0]!.messages[0]!.tags, ['#задача'], 'still a tag the AI sees');
+    s.add(event({ kind: 'correction', ts: new Date().toISOString(), payload: { ref: { type: 'event', id: auto.id }, text: 'отправить посылку маме', tags: ['#задача'], data: { op: 'edit' } } }));
+    await s.triage.rerun(auto.id, 'kept');
+    assert.deepEqual(s.calls.at(-1)!.messages[0]!.directive, ['#задача']);
+  } finally { s.cleanup(); }
+});
+
+test('#поручить by name: one person of the directory with that name gets the task and the draft; two are asked about', async () => {
+  let executors = ['Алекс'];
+  const s = setup((input) => ({ tasks: [planned({ title: 'Привезти роутер', executors, draft: 'Привези роутер завтра', message_ids: [input.messages.at(-1)!.id] })] }));
+  const person = (name: string, telegram: string) => s.add({ ...event({ kind: 'contact_change', payload: { ref: { type: 'person', id: randomUUID() }, data: { contact: { op: 'create', name, telegram: [telegram] } } } }), source: 'app', author: 'me' } as JournalEvent);
+  const mine = (text: string) => s.add(event({ payload: { text, tags: ['#поручить'] } }));
+  try {
+    person('Алекс Белый', '7610');
+    mine('пусть Алекс привезёт роутер');
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    assert.deepEqual(s.tasks().map((task) => [task.roles.executors, task.draft]), [[['tg:7610'], 'Привези роутер завтра']]);
+    person('Саша Белый', '7611');
+    person('Саша Чёрный', '7612');
+    executors = ['name:Саша'];
+    mine('пусть Саша заберёт коробку');
+    for (const batch of s.triage.ready(Date.now() + QUIET + 1000)) await s.triage.run(batch);
+    assert.equal(s.tasks().length, 1, 'no task while it is unclear who');
+    const { questions } = s.store.triage.results().at(-1)!.payload.data!.triage as { questions: { options: { label: string; executor?: string; draft?: string }[] }[] };
+    assert.deepEqual(questions[0]!.options.map((option) => [option.label, option.executor ?? null]),
+      [['Поручить: Саша Белый', 'tg:7611'], ['Поручить: Саша Чёрный', 'tg:7612'], ['Не поручать', null]]);
+    assert.equal(questions[0]!.options[0]!.draft, 'Привези роутер завтра');
+  } finally { s.cleanup(); }
+});
+
+test('an answer in words to the AI question sends its session again once, with the answer as my order', async () => {
+  const storage = temporaryStore();
+  const calls: PlanInput[] = [];
+  const server = createApp({ store: storage.store, ownerToken: token, triage: { planner: async (input) => { calls.push(input); return { tasks: [], conversation_only: [] }; }, everyMs: 3_600_000 } });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const post = (body: unknown) => fetch(`${base}/api/events`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const settle = async (count: number) => { for (let i = 0; i < 100 && calls.length < count; i++) await new Promise((resolve) => setTimeout(resolve, 20)); };
+  try {
+    const first = storage.store.appendEvent(telegram('7620', 'посылку надо бы')).event;
+    const second = storage.store.appendEvent(telegram('7620', 'и коробку')).event;
+    storage.store.triage.mark([first.id, second.id], 0, new Date().toISOString());
+    const question = randomUUID();
+    storage.store.appendEvent({ id: randomUUID(), schema_version: 1, source: 'system', author: 'system', ts: new Date().toISOString(), kind: 'triage_result',
+      payload: { data: { triage: { processor: 'triage-ai-v21', conversation_only: [], messages: [first.id, second.id], last_message: second.id, questions: [{ id: question, message_ids: [first.id, second.id], text: 'Это задача?',
+        options: [{ label: 'Задача', task_id: null, title: 'Посылка', template: null, nothing: false }, { label: 'Ничего', task_id: null, title: null, template: null, nothing: true }] }] } } } });
+    const answer = event({ kind: 'correction', payload: { ref: { type: 'event', id: second.id }, data: { op: 'answer_question', question, text: 'это задача для Алекса, срок пятница' } } });
+    assert.equal((await post(answer)).status, 201);
+    await settle(1);
+    assert.equal(calls.length, 1, 'the session went to the AI again');
+    assert.deepEqual(calls[0]!.owner_answers, [{ message_ids: [first.id, second.id], text: 'это задача для Алекса, срок пятница' }]);
+    assert.deepEqual(calls[0]!.messages.map((item) => item.id), [first.id, second.id]);
+    assert.equal((await post(answer)).status, 200, 'the same answer again');
+    assert.equal((await post(event({ kind: 'correction', payload: { ref: { type: 'event', id: second.id }, data: { op: 'answer_question', question, option: 1 } } }))).status, 201, 'an option, not words');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(calls.length, 1, 'once per answer in words');
+  } finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); storage.cleanup(); }
+});
+
+test('the instructions: the owner answers override the AI own reading', async () => {
+  const { PLAN_INSTRUCTIONS } = await import('../src/tasks/planner.ts');
+  assert.match(PLAN_INSTRUCTIONS, /owner_answers[^\n]*\n[^\n]*весит больше твоего прочтения/);
+});

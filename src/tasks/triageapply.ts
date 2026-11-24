@@ -2,7 +2,8 @@
 // messages that continue an open record are linked to it at once by the system; what would change its content (items,
 // title, due, «done» with a report, project, counterparty) is only proposed. A closed record is never reopened: a
 // thank-you is only linked, a new request (the AI's `repeat_of`) is a new record that points to it. Work requested and done inside the
-// conversation is a done record with its report draft. Pure — the caller writes the events.
+// conversation is a done record with its report draft, never waiting for a ✓ (there is nothing to confirm), and a second
+// look does not record it again. Pure — the caller writes the events.
 import type { TriageNewTasks } from '../ownersettings.ts';
 import type { Counterparty } from '../contacts/fold.ts';
 import type { JournalEvent } from '../contracts/validate.ts';
@@ -30,6 +31,8 @@ export interface ApplyContext {
   roles: (planned: PlannedTask, add: string[]) => Record<string, unknown>;
   directed?: Set<string>; // batch messages carrying the owner's #поручить: the task is on a person and may carry a draft
   knownPerson?: (party: string) => boolean; // a party the directory knows (it has a conversation to put the draft in)
+  candidates?: (party: string) => { party: string; name: string }[]; // known people an unclear executor may mean (assignee.ts)
+  doneWork?: Set<string>; // messages already in a done record: a second look does not record that work again
 }
 
 export interface TriageQuestion { id: string; message_ids: string[]; text: string; options: PlannedQuestion['options'] }
@@ -93,13 +96,16 @@ export function ownerRemoved(events: JournalEvent[]): Map<string, Set<string>> {
 
 // Roles of a new record (P14) from the planner's parties: the owner, AI, the system and everyone who wrote in the
 // batch or its context; a `name:` party is a person without an account and passes. Anything else is made up and dropped.
-export function rolesFor(messages: Pick<PlanMessage, 'id' | 'party'>[]): (planned: PlannedTask, add: string[]) => Record<string, unknown> {
+// `resolve` — an executor given by name → the directory's person (assignee.ts resolveExecutor): that party passes too.
+export function rolesFor(messages: Pick<PlanMessage, 'id' | 'party'>[], resolve?: (party: string) => string): (planned: PlannedTask, add: string[]) => Record<string, unknown> {
   const allowed = new Set(['me', 'ai', 'system', ...messages.map((message) => message.party)]);
   const valid = (party: unknown): party is string => isParty(party) && (allowed.has(party) || party.startsWith('name:'));
   const partyOfMessage = new Map(messages.map((message) => [message.id, message.party]));
   return (planned, add) => {
     const template = tasksConfig.templates.find((item) => item.name === planned.template);
-    const executors = template?.filed ? [template.assignee] : [...new Set(planned.executors.filter(valid))];
+    const resolved = planned.executors.map((party) => [party, resolve ? resolve(String(party)) : party] as const);
+    const found = new Set(resolved.filter(([given, party]) => party !== given && isParty(party) && !party.startsWith('name:')).map(([, party]) => party));
+    const executors = template?.filed ? [template.assignee] : [...new Set(resolved.map(([, party]) => party).filter((party) => valid(party) || found.has(party)))];
     const responsible = template?.filed ? 'me' : valid(planned.responsible) ? planned.responsible : 'me';
     const author = valid(planned.author) ? planned.author : partyOfMessage.get(add[0]!);
     // Work I hand to others, or ask someone else to answer for, is under my control («На контроле»).
@@ -144,66 +150,86 @@ function linkOnly(task: Task, ids: string[], ctx: ApplyContext): Applied[] {
   return add.length ? [{ kind: 'link', task_id: task.id, add }] : [];
 }
 
+// The open record continued: new messages linked, content changes proposed. A #поручить on them is not lost: one known
+// person is proposed as the executor with the draft, an unclear one is a question about this record.
 function continueOpen(task: Task, planned: PlannedTask, ids: string[], ctx: ApplyContext): Applied[] {
   const { mine, add } = linkable(task, ids, ctx);
   if (!mine.length) return [];
+  const assigned = assignment(planned, mine, ctx.roles(planned, mine), ctx, task);
+  const handed = assigned && !('options' in assigned) && (!task.roles.executors.includes(assigned.executor) || assigned.draft)
+    ? { roles: { responsible: 'me', executors: [assigned.executor], controller: defaultController({ responsible: 'me', executors: [assigned.executor] }) },
+      ...(assigned.draft ? { draft: assigned.draft } : {}) } : {};
   const done = planned.done && !planned.filed && task.proposed !== 'done' ? { proposed: 'done', ...reportDraft(planned, task) } : {};
   const change = { ...checklistChange(task.id, planned, task), ...(planned.due && planned.due !== task.due ? { due: planned.due } : {}), ...done,
-    ...projectChange(planned, task, ctx.projects), ...counterpartyChange(planned, task, ctx.counterparties) };
+    ...projectChange(planned, task, ctx.projects), ...counterpartyChange(planned, task, ctx.counterparties), ...handed };
   return [
     ...(add.length ? [{ kind: 'link' as const, task_id: task.id, add }] : []),
     ...(Object.keys(change).length ? [{ kind: 'proposal' as const, task_id: task.id, message_ids: mine, change }] : []),
+    ...(assigned && 'options' in assigned ? [{ kind: 'question' as const, question: assigned }] : []),
   ];
 }
 
 // #поручить (design 2026-11-23, «Метка — указание»): needs exactly one known person as the executor, else the owner is
-// asked. The draft text is the AI's, written to the task only — the server never sends it (class B: the owner does).
-function assignment(planned: PlannedTask, add: string[], roles: Record<string, unknown>, ctx: ApplyContext): { draft?: string } | PlannedQuestion {
-  if (planned.filed || !add.some((id) => ctx.directed?.has(id))) return {};
+// asked — up to two known people the AI's name fits (with the AI's draft), «Сделаю сам» (on me, as it says) while
+// there is room, «Не поручать». The draft text is the AI's, written to the task only — the server never sends it
+// (class B: the owner does). `task` — an open record the messages continue: the answers act on it, nothing new is made.
+// → null (no directive), the executor with the draft, or the question.
+function assignment(planned: PlannedTask, add: string[], roles: Record<string, unknown>, ctx: ApplyContext, task?: Task): { executor: string; draft?: string } | PlannedQuestion | null {
+  if (planned.filed || !add.some((id) => ctx.directed?.has(id))) return null;
   const executors = ((roles.executors as string[] | undefined) ?? []).filter((party) => !['me', 'ai', 'system'].includes(party));
   const known = executors.filter((party) => ctx.knownPerson?.(party));
-  if (known.length === 1 && executors.length === 1) {
-    const draft = String(planned.draft ?? '').trim().slice(0, 1000);
-    return draft ? { draft } : {};
-  }
-  const title = planned.title.trim().slice(0, 200) || 'Без названия';
-  return { message_ids: add, text: `Кому поручить «${title}»?`,
-    options: [{ label: `Задача без исполнителя: ${title}`.slice(0, 120), task_id: null, title, template: null, nothing: false }, { label: 'Не поручать', task_id: null, title: null, template: null, nothing: true }] };
+  const draft = String(planned.draft ?? '').trim().slice(0, 1000);
+  if (known.length === 1 && executors.length === 1) return { executor: known[0]!, ...(draft ? { draft } : {}) };
+  const title = (task?.title ?? planned.title).trim().slice(0, 200) || 'Без названия';
+  const [target, named, template] = [task?.id ?? null, task ? null : title, task ? null : planned.template];
+  const people = [...new Map(executors.flatMap((party) => ctx.candidates?.(party) ?? []).map((item) => [item.party, item])).values()].slice(0, 2);
+  const options: PlannedQuestion['options'] = people.map(({ party, name }) => ({ label: `Поручить: ${name}`.slice(0, 120), task_id: target, title: named, template,
+    nothing: false, executor: party, ...(draft ? { draft } : {}) }));
+  if (options.length < 2) options.push({ label: (task ? 'Сделаю сам' : `Сделаю сам: ${title}`).slice(0, 120), task_id: target, title: named, template, nothing: false, executor: 'me' });
+  options.push({ label: 'Не поручать', task_id: null, title: null, template: null, nothing: true });
+  return { message_ids: add, text: `Кому поручить «${title}»?`, options };
 }
 
-function create(planned: PlannedTask, add: string[], repeatOf: string | null, ctx: ApplyContext): Applied[] {
+function create(planned: PlannedTask, given: string[], repeatOf: string | null, ctx: ApplyContext): Applied[] {
+  const done = planned.done && !planned.filed; // work asked and done inside the conversation
+  // A second look at done work already recorded (closed, so not withdrawn): the work is not recorded twice.
+  const add = done ? given.filter((id) => !ctx.doneWork?.has(id)) : given;
+  if (!add.length) return [];
   const roles = ctx.roles(planned, add);
   const assigned = assignment(planned, add, roles, ctx);
-  if ('options' in assigned) return [{ kind: 'question', question: assigned }];
+  if (assigned && 'options' in assigned) return [{ kind: 'question', question: assigned }];
   const taskId = nameId(`task|${ctx.batchKey}|${ctx.index}`);
   const confidence = Math.max(0, Math.min(1, planned.confidence));
-  const done = planned.done && !planned.filed; // work asked and done inside the conversation
   const status = confidence < tasksConfig.low_confidence ? 'inbox' : planned.filed || done ? 'done' : 'todo';
   const reason = planned.reason?.trim().slice(0, 500);
   const change: Record<string, unknown> = {
-    op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles, status, add, confidence, ...assigned,
+    op: 'create', title: planned.title.trim().slice(0, 200) || 'Без названия', roles, status, add, confidence, ...(assigned?.draft ? { draft: assigned.draft } : {}),
     processor: tasksConfig.ai.processor,
     ...(done ? { ...(status === 'done' ? {} : { proposed: 'done' }), ...reportDraft(planned) } : {}),
     ...checklistChange(taskId, planned), ...projectChange(planned, undefined, ctx.projects), ...counterpartyChange(planned, undefined, ctx.counterparties),
-    // v16: a new task waits for the owner unless he chose «ИИ создаёт сразу»; filed notes never wait.
-    ...(ctx.newTasks === 'unconfirmed' && !planned.filed ? { unconfirmed: true } : {}),
+    // v16: a new task waits for the owner unless he chose «ИИ создаёт сразу»; filed notes and done work never wait (done
+    // work is applied at once — design «Сделанная работа»; unconfirmed, no list would show it).
+    ...(ctx.newTasks === 'unconfirmed' && !planned.filed && !done ? { unconfirmed: true } : {}),
     ...(planned.template ? { template: planned.template } : {}), ...(planned.due ? { due: planned.due } : {}),
     ...(planned.note ? { note: planned.note } : {}), ...(reason ? { reason } : {}), ...(repeatOf ? { repeat_of: repeatOf } : {}),
   };
   return [{ kind: 'create', task_id: taskId, change }];
 }
 
-// The AI's questions (v21 `ask`): only about messages of the batch, options that name a known record, a new one or
-// nothing — up to three; a question left with fewer than two options is dropped.
+// The AI's questions (v21 `ask`): only about messages of the batch, in the batch's order (the answer is anchored on the
+// latest — web/askline.js), options that name a known record, a new one or nothing — up to three; a question left with
+// fewer than two options is dropped. An option of a #поручить question also names its executor and the AI's draft.
 export function questionsOf(questions: PlannedQuestion[] | undefined, { batchKey, batchIds, known }: { batchKey: string; batchIds: Set<string>; known: Set<string> }): TriageQuestion[] {
   const templates = new Set(tasksConfig.templates.map((template) => template.name));
+  const order = [...batchIds];
   const result: TriageQuestion[] = [];
   (questions ?? []).forEach((question, index) => {
-    const message_ids = [...new Set(question.message_ids ?? [])].filter((id) => batchIds.has(id));
+    const message_ids = [...new Set(question.message_ids ?? [])].filter((id) => batchIds.has(id)).sort((a, b) => order.indexOf(a) - order.indexOf(b));
     const text = String(question.text ?? '').trim().slice(0, 300);
     const options = (question.options ?? []).map((option) => ({
       label: String(option.label ?? '').trim().slice(0, 120), task_id: option.task_id || null, title: option.title?.trim().slice(0, 200) || null,
       template: option.template && templates.has(option.template) ? option.template : null, nothing: Boolean(option.nothing),
+      ...(isParty(option.executor) ? { executor: option.executor } : {}), ...(option.draft?.trim() ? { draft: option.draft.trim().slice(0, 1000) } : {}),
     })).filter((option) => option.label && (option.task_id ? known.has(option.task_id) : option.nothing || option.title)).slice(0, 3);
     if (message_ids.length && text && options.length >= 2) result.push({ id: nameId(`question|${batchKey}|${index}`), message_ids, text, options });
   });

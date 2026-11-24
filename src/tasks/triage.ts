@@ -14,11 +14,12 @@ import { foldPeople, foldCounterparties, personOf, peopleOf } from '../contacts/
 import { foldProjects, defaultProject } from './projects.ts';
 import { partyOfEvent } from './parties.ts';
 import type { AiDecision } from '../store/ailog.ts';
-import type { PlanInput, PlanMessage, PlanOutput, PlannedQuestion, Planner } from './planner.ts';
+import type { OwnerAnswer, PlanInput, PlanMessage, PlanOutput, PlannedQuestion, Planner } from './planner.ts';
 import { interlocutorRecords } from './triagecontext.ts';
 import { conversationOf, contextSessions, before, sessionsOf } from './sessions.ts';
 import { applyPlanned, ownerRemoved, questionsOf, rolesFor } from './triageapply.ts';
-import { directiveOf } from './directive.ts';
+import { directivesOf } from './directive.ts';
+import { candidatesFor, resolveExecutor } from './assignee.ts';
 import { secondLookOf, type SecondLook } from './retriage.ts';
 import { streamOf, quietOf } from './streams.ts';
 
@@ -75,14 +76,15 @@ export class Triage {
     return [...conversations.values()]
       // A message the owner tagged with a directive tag (directive.ts) does not wait for the quiet window (v21).
       .filter((events) => now - Date.parse(events.at(-1)!.received_at!) >= quietOf(streamOf(events.at(-1)!)) * 1000
-        || events.some((event) => directiveOf(describe(event, this.#store).tags).length))
+        || events.some((event) => directivesOf(event, this.#store).length))
       .map((events) => events.slice(0, tasksConfig.max_batch));
   }
 
   // `again` — a second look (`secondLook`): a fresh key for the same messages, run once per key; `withdrawn` — the
   // proposals and questions it replaces, listed in the new result (web/proposals.js); `unlink` — the system links it
-  // takes back, unless the new look links them again; `cancel` — the AI's unconfirmed records it replaces (not shown).
-  async run(batch: JournalEvent[], { again, withdrawn = [], unlink = [], cancel = [] }: SecondLook & { again?: string } = {}): Promise<number> {
+  // takes back, unless the new look links them again; `cancel` — the AI's unconfirmed records it replaces (not shown);
+  // `answers` — the owner's answers in words to the AI's questions about these messages (planner `owner_answers`).
+  async run(batch: JournalEvent[], { again, withdrawn = [], unlink = [], cancel = [], answers = [] }: SecondLook & { again?: string; answers?: OwnerAnswer[] } = {}): Promise<number> {
     const tasks = foldTasks(this.#store.triage.taskEvents(), { filedTemplates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name) });
     const projects = foldProjects(this.#store.triage.projectEvents()).filter((project) => project.status === 'active');
     const directory = this.#store.triage.contactEvents();
@@ -114,7 +116,7 @@ export class Triage {
     for (const event of batch) {
       const view = describe(event, this.#store);
       if (view.deleted || !view.text.trim()) { skipped.push(event.id); continue; }
-      messages.push(toMessage(event, view.text.slice(0, 2000), view.tags, directiveOf(view.tags)));
+      messages.push(toMessage(event, view.text.slice(0, 2000), view.tags, directivesOf(event, this.#store)));
     }
     // Context (v19, sessions.ts): the conversation's messages before this batch, from the last session back as many
     // sessions as the AI asks for; a batch alone may not say what it is about.
@@ -154,7 +156,7 @@ export class Triage {
         people: peopleOf(id, people).map(({ person, title: job }) => (job ? `${person.name} (${job})` : person.name)) })),
       open_tasks: open.map(asContext),
       closed_tasks: closed.map(asContext),
-      messages,
+      messages, ...(answers.length ? { owner_answers: answers } : {}),
     };
     const batchIds = new Set(messages.map((message) => message.id));
     const batchKey = createHash('sha256').update([...batchIds].sort().join(',') + (again ? `|again|${again}` : '')).digest('hex').slice(0, 16);
@@ -189,7 +191,7 @@ export class Triage {
     const decide = (key: string, kind: AiDecision['kind'], taskId: string | null, ids: string[], confidence: number | null, reason: string | null, status: AiDecision['status'] = 'auto', id = nameId(`ai-decision|${batchKey}|${key}`)) =>
       decisions.push({ id, run_id: runId, at, kind, task_id: taskId, message_ids: ids, confidence, reason: reason?.slice(0, 500) ?? null, status });
     if (conversationOnly.size) decide('conversation_only', 'conversation_only', null, [...conversationOnly], null, null);
-    const rolesOf = rolesFor([...messages, ...context]);
+    const rolesOf = rolesFor([...messages, ...context], (party) => resolveExecutor(party, people));
     let written = 0;
     const write = (id: string, taskId: string, change: Record<string, unknown>) => {
       try {
@@ -202,7 +204,8 @@ export class Triage {
     const proposals: Record<string, unknown>[] = [];
     const ctx = { batchKey, batchIds, conversationOnly, open: new Map(open.map((task) => [task.id, task])), closed: new Map(closed.map((task) => [task.id, task])),
       removed: ownerRemoved(this.#store.triage.taskEvents()), unlinked, projects, counterparties, filedTemplates, newTasks: this.#newTasks(), roles: rolesOf,
-      directed: new Set(messages.filter((message) => message.directive?.includes('#поручить')).map((message) => message.id)), knownPerson: (party: string) => Boolean(personOf(party, people)) };
+      directed: new Set(messages.filter((message) => message.directive?.includes('#поручить')).map((message) => message.id)), knownPerson: (party: string) => Boolean(personOf(party, people)),
+      candidates: (party: string) => candidatesFor(party, people), doneWork: new Set(tasks.filter((task) => task.status === 'done' && !task.filed).flatMap((task) => task.messages)) };
     const asked: PlannedQuestion[] = []; // questions the rules make themselves (#поручить without one known person)
     output.tasks.forEach((planned, index) => {
       const confidence = Math.max(0, Math.min(1, planned.confidence));
@@ -269,21 +272,22 @@ export class Triage {
   }
 
   // A directive tag added to a message already triaged (directive.ts): its session goes to the AI again at once, once
-  // per `cause` (the tag correction). → task changes, proposals and questions written.
-  async rerun(messageId: string, cause = messageId): Promise<number> {
+  // per `cause` (the tag correction, or the owner's answer in words — `answers` go to the planner). → task changes,
+  // proposals and questions written.
+  async rerun(messageId: string, cause = messageId, answers: OwnerAnswer[] = []): Promise<number> {
     const message = this.#store.getEvent(messageId);
     if (!message || !this.#planner || this.#store.triage.spent(new Date().toISOString().slice(0, 7)) >= tasksConfig.ai.monthly_budget_usd) return 0;
     const key = conversationOf(message);
     const conversation = this.#store.triage.messages(new Date(Date.now() - tasksConfig.history_days * 86_400_000).toISOString()).filter((event) => conversationOf(event) === key);
     const session = sessionsOf(conversation, tasksConfig.session_gap_h * 3_600_000).find((events) => events.some((event) => event.id === messageId)) ?? [message];
     const start = Math.max(0, Math.min(session.findIndex((event) => event.id === messageId), session.length - tasksConfig.max_batch));
-    return this.secondLook(session.slice(start, start + tasksConfig.max_batch), `rerun|${cause}`);
+    return this.secondLook(session.slice(start, start + tasksConfig.max_batch), `rerun|${cause}`, answers);
   }
 
   // A second look at a batch (rerun, «✨ Разобрать заново»): what the AI decided about it and the owner has not answered
   // is replaced (retriage.ts `secondLookOf`). Under the lock, so a round cannot take the same messages meanwhile.
-  secondLook(batch: JournalEvent[], again: string): Promise<number> {
-    return this.locked(async () => this.run(batch, { again, ...secondLookOf(this.#store, batch) }));
+  secondLook(batch: JournalEvent[], again: string, answers: OwnerAnswer[] = []): Promise<number> {
+    return this.locked(async () => this.run(batch, { again, answers, ...secondLookOf(this.#store, batch) }));
   }
 
   // One look at a time — a round, a rerun, a second look: two at once could make records for the same messages twice.

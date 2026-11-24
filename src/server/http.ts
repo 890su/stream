@@ -24,7 +24,7 @@ import { OwnerSettings } from '../ownersettings.ts';
 import { createConnections, type TriageOptions } from './connectors.ts';
 import { retriage } from '../tasks/retriage.ts';
 import { recheck } from '../tasks/recheck.ts';
-import { directiveAdded } from '../tasks/directive.ts';
+import { directiveAdded, ownerAnswerOf } from '../tasks/directive.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
 
@@ -139,9 +139,12 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
         }
         if (url.pathname === '/api/recipients' && request.method === 'GET') { json(response, 200, { recipients: store.recipients.list() }); return; }
         if (url.pathname === '/api/events') return await events(request, response, url, store, live, (event) => {
-          // A directive tag on a message already triaged: its session goes to the AI again, without the quiet window.
-          const message = connections.triage?.canRun && connections.isOn('ai_triage') ? directiveAdded(store, event) : null;
-          if (message) connections.triage!.rerun(message, event.id).catch((error) => console.error('Triage rerun failed', error instanceof Error ? error.message : error));
+          // A directive tag on a message already triaged, or my answer in words to the AI's question: the session goes to
+          // the AI again at once, once per that event (with the answer as my order).
+          const on = connections.triage?.canRun && connections.isOn('ai_triage');
+          const answered = on ? ownerAnswerOf(store, event) : null;
+          const message = answered?.message ?? (on ? directiveAdded(store, event) : null);
+          if (message) connections.triage!.rerun(message, event.id, answered ? [answered.answer] : []).catch((error) => console.error('Triage rerun failed', error instanceof Error ? error.message : error));
         });
         // Long-lived records whole — people, counterparties, projects, task changes and triage results: a new device needs all of them,
         // not just the latest feed page (messages stay paged).

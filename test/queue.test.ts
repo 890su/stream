@@ -385,3 +385,16 @@ test('handled today: conversations out of the queue that I acted on today', () =
   assert.equal(handledToday(list, now), 4, 'my reply, my answer, my snooze, my task; not another person message today, not what waits, not «Я»');
   assert.equal(handledToday(list, new Date('2026-11-19T12:00:00')), 0, 'tomorrow nothing yet');
 });
+
+test('a waiting proposal on a record cancelled or closed since holds nothing', () => {
+  const linked = change('tp7', '2026-11-18T08:00:00', { op: 'create', title: 'Принтер', status: 'todo', add: [] }, 'me');
+  const ask = tg('987', '2026-11-18T09:00:00', 'и ещё картридж поменяйте');
+  const link = change('tp7', '2026-11-18T09:10:00', { op: 'update', add: [ask.id] });
+  const ok = mine('987', '2026-11-18T09:15:00', 'хорошо');
+  const proposal = result('2026-11-18T09:10:00', { proposals: [{ id: 'pp7', task_id: 'tp7', message_ids: [ask.id], reason: 'новый пункт', confidence: 0.8,
+    alternatives: [], change: { items_add: [{ id: 'i7', text: 'картридж' }] } }] });
+  assert.equal(queueOf([linked, ask, link, ok, proposal]).waiting, true, 'holds while the record is open');
+  for (const status of ['cancelled', 'done']) {
+    assert.equal(queueOf([linked, ask, link, ok, proposal, change('tp7', '2026-11-18T09:30:00', { op: 'update', status }, 'me')]).waiting, false, status);
+  }
+});

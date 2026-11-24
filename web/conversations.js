@@ -165,7 +165,7 @@ export function conversations(views, tasks, { now = new Date(), config, question
       views: sorted, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
       reply: incoming ? chatOf(incoming.event) : null,
     };
-    list.push({ ...conversation, queue: queueOf(conversation, { now, config, owner, questions, proposals }), archived: isArchived(conversation) });
+    list.push({ ...conversation, queue: queueOf(conversation, { now, config, owner, questions, proposals, tasksById: taskById }), archived: isArchived(conversation) });
   }
   return list.sort((a, b) => Date.parse(b.last) - Date.parse(a.last));
 }

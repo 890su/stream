@@ -132,3 +132,23 @@ test('«Разобрать заново» withdraws untouched system links and o
     assert.deepEqual([unlink.author, (unlink.payload.data!.task as { remove: string[] }).remove], ['system', [b.id]]);
   } finally { s.cleanup(); }
 });
+
+test('a link an older triage made (with its processor) survives a rerun: only v21 links are taken back', async () => {
+  const s = setup();
+  try {
+    const mine = randomUUID();
+    s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: '2026-11-19T10:00:00.000Z', kind: 'task_change',
+      payload: { ref: { type: 'task', id: mine }, data: { task: { op: 'create', title: 'Клиент: роутер', status: 'todo', add: [] } } } });
+    const a = s.add(chat('роутер опять мигает', '2026-11-20T10:00:00.000Z'));
+    const b = s.add(chat('и интернет пропал', '2026-11-20T10:01:00.000Z'));
+    s.add({ id: randomUUID(), schema_version: 1, source: 'system', author: 'system', ts: '2026-11-20T10:05:00.000Z', kind: 'task_change',
+      payload: { ref: { type: 'task', id: mine }, data: { task: { op: 'update', add: [a.id], confidence: 0.9, processor: 'triage-ai-v19' } } } });
+    s.add({ id: randomUUID(), schema_version: 1, source: 'system', author: 'system', ts: '2026-11-20T10:06:00.000Z', kind: 'task_change',
+      payload: { ref: { type: 'task', id: mine }, data: { task: { op: 'update', add: [b.id] } } } });
+    s.store.triage.mark([a.id, b.id], 0, new Date().toISOString());
+    s.set(() => ({ tasks: [], conversation_only: [] }));
+    await s.triage.rerun(b.id, 'tag-v19');
+    assert.deepEqual(s.tasks().find((task) => task.id === mine)!.messages, [a.id], 'the v19 link stays; the untouched v21 link is taken back');
+    assert.equal(s.store.triage.taskEvents().some((item) => (item.payload.data!.task as { remove?: string[] }).remove?.includes(a.id)), false);
+  } finally { s.cleanup(); }
+});

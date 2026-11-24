@@ -140,3 +140,51 @@ test('#поручить with an unknown, missing or ambiguous person: a question
     assert.ok(question.options.some((option) => option.nothing));
   }
 });
+
+test('done work never waits for a ✓, even when new records do; a second look does not record it again', () => {
+  const work = planned({ title: 'Клиент: удалёнка', done: true, report: { note: 'Настроил почту', duration_min: 40, cost: null, expenses: null, currency: null } });
+  const [created] = applyPlanned(work, context([], { newTasks: 'unconfirmed' }));
+  const change = (created as { change: Record<string, unknown> }).change;
+  assert.deepEqual([change.status, 'unconfirmed' in change], ['done', false]);
+  const [request] = applyPlanned(planned({ title: 'Клиент: роутер' }), context([], { newTasks: 'unconfirmed' }));
+  assert.equal((request as { change: Record<string, unknown> }).change.unconfirmed, true, 'a new request still waits');
+  assert.deepEqual(applyPlanned(work, context([], { doneWork: new Set([M1]) })), [], 'its messages are in a done record already');
+  const [rest] = applyPlanned({ ...work, message_ids: [M1, M2] }, context([], { doneWork: new Set([M1]) }));
+  assert.deepEqual((rest as { change: Record<string, unknown> }).change.add, [M2]);
+  assert.equal(applyPlanned(planned({ title: 'Клиент: роутер' }), context([], { doneWork: new Set([M1]) })).length, 1, 'only done work is checked');
+});
+
+test('#поручить on an open record: the executor and the draft are proposed on it, an unclear person is asked about it', () => {
+  const job = task('job', { title: 'Клиент: роутер' });
+  const ctx = directed({ open: new Map([['job', job]]) });
+  const applied = applyPlanned(planned({ task_id: 'job', executors: [ALEX], draft: 'Алекс, привези роутер' }), ctx);
+  assert.deepEqual(applied.map((item) => item.kind), ['link', 'proposal']);
+  assert.deepEqual((applied[1] as { change: Record<string, unknown> }).change, { roles: { responsible: 'me', executors: [ALEX], controller: 'me' }, draft: 'Алекс, привези роутер' });
+  const unclear = applyPlanned(planned({ task_id: 'job', executors: ['name:Саша'], draft: 'Привези роутер' }), { ...ctx,
+    candidates: (party) => (party === 'name:Саша' ? [{ party: 'tg:1', name: 'Саша Белый' }, { party: 'tg:2', name: 'Саша Чёрный' }] : []) });
+  assert.deepEqual(unclear.map((item) => item.kind), ['link', 'question']);
+  const { question } = unclear[1] as Extract<(typeof unclear)[number], { kind: 'question' }>;
+  assert.deepEqual(question.options.map((option) => [option.label, option.task_id, option.executor ?? null]),
+    [['Поручить: Саша Белый', 'job', 'tg:1'], ['Поручить: Саша Чёрный', 'job', 'tg:2'], ['Не поручать', null, null]]);
+  assert.equal(question.options[0]!.draft, 'Привези роутер');
+});
+
+test('#поручить question: known people that fit first; «Сделаю сам» is on me, as it says', () => {
+  const ask = (candidates: ApplyContext['candidates']) => {
+    const [applied] = applyPlanned(planned({ title: 'Роутер', executors: ['name:Саша'], draft: 'Привези роутер' }), directed({ candidates }));
+    return (applied as Extract<typeof applied, { kind: 'question' }>).question.options;
+  };
+  const none = ask(() => []);
+  assert.deepEqual(none.map((option) => [option.label, option.title, option.executor ?? null, option.nothing]), [['Сделаю сам: Роутер', 'Роутер', 'me', false], ['Не поручать', null, null, true]]);
+  const one = ask(() => [{ party: 'tg:1', name: 'Саша Белый' }]);
+  assert.deepEqual(one.map((option) => option.label), ['Поручить: Саша Белый', 'Сделаю сам: Роутер', 'Не поручать']);
+  const questions = questionsOf([{ message_ids: [M1], text: 'Кому поручить «Роутер»?', options: one }], { batchKey: 'b', batchIds: new Set([M1]), known: new Set() });
+  assert.deepEqual([questions[0]!.options[0]!.executor, questions[0]!.options[0]!.draft], ['tg:1', 'Привези роутер'], 'kept in the triage result');
+});
+
+test('a question names its messages in the batch\'s order, whatever order the AI gave', () => {
+  const option = { label: 'Ничего', task_id: null, title: null, template: null, nothing: true };
+  const [question] = questionsOf([{ message_ids: [M2, M1], text: 'Что это?', options: [{ ...option, label: 'Новое', title: 'Дело', nothing: false }, option] }],
+    { batchKey: 'b', batchIds: new Set([M1, M2]), known: new Set() });
+  assert.deepEqual(question!.message_ids, [M1, M2]);
+});

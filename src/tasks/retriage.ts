@@ -42,7 +42,8 @@ export function waitingProposals(events: JournalEvent[]): Map<string, string[]> 
 }
 
 // The system's links (v21) of `ids` still in their task and not touched by the owner (he put the message in or took
-// it out of that task himself): task id -> message ids.
+// it out of that task himself): task id -> message ids. A v21 link carries no `processor` (web/linkmark.js); older
+// triages added messages with their processor and confidence — those are not links a second look may take back.
 export function systemLinks(events: JournalEvent[], ids: Set<string>): { task_id: string; message_ids: string[] }[] {
   const touched = new Set<string>();
   const links = new Map<string, Set<string>>();
@@ -51,7 +52,7 @@ export function systemLinks(events: JournalEvent[], ids: Set<string>): { task_id
     if (event.kind !== 'task_change' || !change) continue;
     const task = event.payload.ref!.id;
     if (event.author === 'me') for (const id of [...(change.add ?? []), ...(change.remove ?? [])]) touched.add(`${task}|${id}`);
-    else if (event.author === 'system' && change.op === 'update') for (const id of change.add ?? []) if (ids.has(id)) links.set(task, new Set([...(links.get(task) ?? []), id]));
+    else if (event.author === 'system' && change.op === 'update' && !('processor' in change)) for (const id of change.add ?? []) if (ids.has(id)) links.set(task, new Set([...(links.get(task) ?? []), id]));
   }
   const inTask = new Map(foldTasks(events).map((task) => [task.id, new Set(task.messages)]));
   return [...links].map(([task, found]) => ({ task_id: task, message_ids: [...found].filter((id) => !touched.has(`${task}|${id}`) && inTask.get(task)?.has(id)) }))
