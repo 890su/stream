@@ -151,6 +151,7 @@
                 "conversation_only": { "type": "array", "items": { "type": "string", "format": "uuid" } },
                 "messages": { "type": "array", "items": { "type": "string", "format": "uuid" }, "description": "All messages of the batch: the newest result about a message decides (2026-11-23)." },
                 "again": { "type": "boolean", "description": "«✨ Разобрать заново»: the owner asked for a second look (src/tasks/retriage.ts)." },
+                "recheck": { "type": "string", "format": "uuid", "description": "«✨ Сверить с перепиской» (src/tasks/recheck.ts): the record whose conversations were checked; its proposals show in that record's card only." },
                 "withdrawn": { "type": "array", "items": { "type": "string", "format": "uuid" }, "description": "Proposals of earlier results this one replaces." },
                 "last_message": { "type": "string", "format": "uuid", "description": "The batch's last message: the verdict below is about the conversation after it (triage-ai-v18)." },
                 "unfinished": { "type": ["string", "null"], "maxLength": 200, "description": "What the other side still waits for from the owner when no task covers it; null — the conversation is over (web/queue.js keeps it waiting)." },
@@ -193,11 +194,20 @@
                     "properties": {
                       "id": { "type": "string", "format": "uuid" },
                       "task_id": { "type": "string", "format": "uuid" },
-                      "message_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "format": "uuid" } },
+                      "message_ids": { "type": "array", "items": { "type": "string", "format": "uuid" }, "description": "The messages it rests on; a recheck's rename or merge may cite none." },
                       "reason": { "type": "string", "maxLength": 500 },
                       "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
                       "alternatives": { "type": "array", "items": { "type": "string", "format": "uuid" } },
-                      "change": { "type": "object", "description": "The task_change data applied when the owner accepts." }
+                      "change": { "type": "object", "description": "The task_change data applied when the owner accepts." },
+                      "kind": { "enum": ["add", "remove", "rename", "due", "items", "status", "merge"], "description": "A recheck's proposal: what it does to the record (web/recheck.js labels it)." },
+                      "also": {
+                        "type": "array",
+                        "description": "Changes of other records accepted with this one (a recheck's merge closes the duplicate; a remove adds to where the messages go).",
+                        "items": {
+                          "type": "object", "required": ["task_id", "change"], "additionalProperties": false,
+                          "properties": { "task_id": { "type": "string", "format": "uuid" }, "change": { "type": "object" } }
+                        }
+                      }
                     }
                   }
                 }

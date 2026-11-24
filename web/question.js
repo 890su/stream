@@ -6,6 +6,7 @@
 import { makeTaskChange, makeCorrection, ownTask } from './shared.js';
 import { snippet } from './projection.js';
 import { isOpen } from './taskfold.js';
+import { acceptEvents } from './proposals.js';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -53,7 +54,7 @@ export function setupQuestions({ getView, getTask, queue, notify }) {
     const { proposal, chosen, change, messageIds } = view.question;
     try {
       if (target === 'none') { await queue(makeCorrection(view.id, 'reject_proposal', { proposal })); notify('Предложение отклонено: сообщение остаётся в беседе'); return; }
-      if (target === chosen) { await save(chosen, { ...change, proposal }); notify('Добавлено в задачу'); return; }
+      if (target === chosen) { for (const entry of acceptEvents({ id: proposal, task: chosen, change })) await queue(entry); notify('Добавлено в задачу'); return; }
       if (target === 'new') { await save(crypto.randomUUID(), { ...ownTask(snippet(view).slice(0, 120), view.id), add: messageIds, proposal }); notify('Сообщение — новое дело'); return; }
       const task = getTask(target);
       await save(target, { op: 'update', add: messageIds, proposal, ...(task && !isOpen(task) ? { status: 'todo' } : {}) });

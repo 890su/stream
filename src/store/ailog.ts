@@ -11,7 +11,8 @@ import type { JournalEvent } from '../contracts/validate.ts';
 // The owner's answers are read from the journal as they are appended (`observe`), buttons or not.
 // Derived state: the journal holds the proposals and answers; this log adds what the journal does not keep.
 
-export type DecisionKind = 'link' | 'update' | 'question' | 'create' | 'filed' | 'conversation_only' | 'unsorted'; // unsorted: before v21
+// recheck: a proposal of «✨ Сверить с перепиской» on a record (src/tasks/recheck.ts), settled like an `update`
+export type DecisionKind = 'link' | 'update' | 'question' | 'create' | 'filed' | 'conversation_only' | 'unsorted' | 'recheck'; // unsorted: before v21
 export interface AiRun { id: string; at: string; processor: string; model: string; stream: string; messages: number;
   input_tokens: number; output_tokens: number; cost_usd: number; input: unknown; output: unknown }
 export interface AiDecision { id: string; run_id: string; at: string; kind: DecisionKind; task_id: string | null; message_ids: string[];

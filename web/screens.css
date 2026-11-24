@@ -302,6 +302,14 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 /* The task card as a conversation (taskdetails.js, 2026-11-22): cuts in the head, one open at a time; the
    interlocutors stuck to the bottom over the input. */
 .card-cuts { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+/* «✨ Сверить с перепиской» (recheck.js): the button and the AI's proposals with ✓ ✕ */
+.card-recheck { margin-top: 4px; }
+.card-recheck-run { font-size: 14px; }
+.recheck-list { display: grid; gap: 6px; margin: 4px 0 2px; padding: 6px 0 0 8px; border-left: 2px solid var(--accent); }
+.recheck-head { margin: 0; font-size: 13px; color: var(--muted); }
+.recheck-row { display: flex; align-items: flex-start; gap: 6px; }
+.recheck-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.recheck-row .chip { min-height: 34px; min-width: 40px; padding: 0 10px; font-size: 14px; }
 .card-cut { flex: 1 1 0; min-width: 0; min-height: 36px; padding: 4px 6px; border: 0; border-radius: 10px; background: none; color: var(--muted);
   font: inherit; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 0 -1px 0 var(--line); }
 .card-cut:hover, .card-cut:active { background: var(--press); }

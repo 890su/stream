@@ -24,6 +24,8 @@ import { dayPlan } from './dayplan.js';
 import { getSetting } from './db.js';
 import { participants } from './participants.js';
 import { participantOptions, setupParticipantPicker } from './participantpicker.js';
+import { acceptEvents } from './proposals.js';
+import { rejectEvent, runRecheck } from './recheck.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const SOURCES = { me: 'мои заметки', phone: 'телефон', system: 'система' };
@@ -133,6 +135,7 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       conversations: feed.conversations(), tasksById: tasksById(), talk, redraw: redrawTask, onConversation: steer, onTalk: openTalk,
       fold, onFold: (key) => { fold = fold === key ? null : key; drawTask(); }, onShowTalk: showTalk,
       onAdd: (anchor) => addParticipant(task, anchor),
+      recheck: recheckContext(task),
       onDone: () => { if (['done', 'cancelled'].includes(task.status)) quick?.act(task, { status: 'todo' }, `Снова в работе: «${task.title}»`); else quick?.done(task); },
     });
     if (talk) {
@@ -149,6 +152,27 @@ export function setupDetails({ feed, composer, notify, doneCards, config, quick,
       input.focus({ preventScroll: true });
     }
     requestAnimationFrame(place); // the input row changes height (its participants line hides under the card)
+  }
+
+  // «✨ Сверить с перепиской» (recheck.js): the request with its toast, the waiting proposals with ✓ ✕.
+  let rechecking = null; // the task being rechecked: the button waits
+  function recheckContext(task) {
+    return {
+      proposals: feed.rechecks(task.id), tasksById: tasksById(), busy: rechecking === task.id,
+      run: async () => {
+        if (rechecking) return;
+        rechecking = task.id;
+        notify('Сверяю с перепиской…');
+        drawTask();
+        try { notify(await runRecheck(task.id, { token: await getSetting('ownerToken') })); } finally { rechecking = null; }
+        await feed.render().catch((error) => notify(error.message));
+        drawTask();
+      },
+      accept: async (item) => {
+        try { for (const entry of acceptEvents(item)) await composer.queue(entry); notify('Принято'); } catch (error) { notify(error.message); }
+      },
+      reject: (item) => composer.queue(rejectEvent(item, task.messages[0])).then(() => notify('Отклонено'), (error) => notify(error.message)),
+    };
   }
 
   // A swipe moves to the next interlocutor without reordering the tiles; the first keystroke then puts him leftmost.

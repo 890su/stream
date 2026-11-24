@@ -33,7 +33,8 @@ export function waitingProposals(events: JournalEvent[]): Map<string, string[]> 
   }
   const waiting = new Map<string, string[]>();
   for (const event of events.filter((item) => item.kind === 'triage_result')) {
-    const triage = (event.payload.data?.triage ?? {}) as { proposals?: { id: string; message_ids: string[] }[]; questions?: { id: string; message_ids: string[] }[] };
+    const triage = (event.payload.data?.triage ?? {}) as { recheck?: string; proposals?: { id: string; message_ids: string[] }[]; questions?: { id: string; message_ids: string[] }[] };
+    if (triage.recheck) continue; // «✨ Сверить с перепиской» proposals belong to their record's card (recheck.ts), not to a conversation
     for (const proposal of triage.proposals ?? []) if (!answered.has(proposal.id) && !proposal.message_ids.some((id) => linked.has(id))) waiting.set(proposal.id, proposal.message_ids);
     for (const question of triage.questions ?? []) if (!answered.has(question.id)) waiting.set(question.id, question.message_ids);
   }

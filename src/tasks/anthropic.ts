@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { tasksConfig } from '../config.ts';
 import { PLAN_INSTRUCTIONS, PLAN_SCHEMA, restoreNulls, type PlanInput, type PlanOutput, type Planner } from './planner.ts';
 import { TITLE_RULE, type NameInput, type NameOutput, type Namer } from './namer.ts';
+import { RECHECK_INSTRUCTIONS, RECHECK_SCHEMA, restoreRecheck, type RecheckInput, type Rechecker } from './recheckplan.ts';
 
 // The AI planner for the task triage (CONCEPT.md §2.8, §6): one structured-output call per batch.
 // Model, effort and limits — registry/tasks.json; the key — ANTHROPIC_API_KEY in /srv/stream/.env.
@@ -32,6 +33,25 @@ export function anthropicPlanner(apiKey: string, baseURL?: string): Planner {
     const parsed = JSON.parse(text.text) as Pick<PlanOutput, 'tasks' | 'conversation_only' | 'questions'>;
     if (!Array.isArray(parsed.tasks) || !Array.isArray(parsed.conversation_only)) throw new Error('модель вернула неполный разбор');
     return { ...restoreNulls(parsed), usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
+  };
+}
+
+// «✨ Сверить с перепиской» (recheck.ts): one structured-output call per pass; the instruction is cached.
+export function anthropicRechecker(apiKey: string, baseURL?: string): Rechecker {
+  const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) });
+  const { model, effort, max_tokens } = tasksConfig.ai;
+  return async (input: RecheckInput) => {
+    const response = await client.messages.create({
+      model, max_tokens,
+      system: [{ type: 'text', text: RECHECK_INSTRUCTIONS, cache_control: { type: 'ephemeral' } }],
+      output_config: { effort: effort as 'low' | 'medium' | 'high', format: { type: 'json_schema', schema: RECHECK_SCHEMA as unknown as Record<string, unknown> } },
+      messages: [{ role: 'user', content: `Запись, другие записи и переписка (JSON):\n${JSON.stringify(input)}` }],
+    });
+    if (response.stop_reason === 'refusal') throw new Error('модель отказалась сверять запись');
+    if (response.stop_reason === 'max_tokens') throw new Error('ответ модели не уместился в max_tokens');
+    const text = response.content.find((block) => block.type === 'text');
+    if (!text || text.type !== 'text') throw new Error('модель не вернула сверку');
+    return { ...restoreRecheck(JSON.parse(text.text) as { proposals?: unknown }), usage: { input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens } };
   };
 }
 

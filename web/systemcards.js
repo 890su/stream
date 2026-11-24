@@ -52,6 +52,8 @@ export function aiStatsLines(decisions) {
   if (linked + unlinked + relinked) lines.push(`Связал с записями: ${linked + unlinked + relinked}, из них снято мной ${unlinked}`);
   const update = decisions.update ?? {};
   if (sum(update)) lines.push(`Предложил правку записи: ${sum(update)} — принято ${update.accepted ?? 0}, отклонено ${update.rejected ?? 0}, ждут ответа ${update.pending ?? 0}`);
+  const recheck = decisions.recheck ?? {}; // «✨ Сверить с перепиской» (src/tasks/recheck.ts)
+  if (sum(recheck)) lines.push(`Сверка с перепиской — предложений: ${sum(recheck)} — принято ${recheck.accepted ?? 0}, отклонено ${recheck.rejected ?? 0}, ждут ответа ${recheck.pending ?? 0}`);
   const question = decisions.question ?? {};
   if (sum(question)) lines.push(`Спросил: ${sum(question)}, ждут ответа ${question.pending ?? 0}`);
   const made = { auto: (decisions.create?.auto ?? 0) + (decisions.unsorted?.auto ?? 0), undone: (decisions.create?.undone ?? 0) + (decisions.unsorted?.undone ?? 0) };

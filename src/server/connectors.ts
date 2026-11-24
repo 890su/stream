@@ -8,6 +8,7 @@ import type { SocketFactory } from '../whatsapp/types.ts';
 import { Triage } from '../tasks/triage.ts';
 import type { Planner } from '../tasks/planner.ts';
 import type { Namer } from '../tasks/namer.ts';
+import type { Rechecker } from '../tasks/recheckplan.ts';
 import { createGoogle, type GoogleOptions } from './google.ts';
 import type { SecretStore } from '../secrets.ts';
 import type { ConnectorSwitches } from '../switches.ts';
@@ -20,7 +21,9 @@ import { nameId } from '../ids.ts';
 // or a switch flipped on the System screen applies at once — a bot or a client restarts or stops, the triage pauses,
 // Google stops reading. Switching is written to the feed.
 
-export type TriageOptions = { planner: Planner | null; namer?: Namer | null; reason?: string; everyMs?: number; factory?: (key: string) => { planner: Planner; namer: Namer };
+// rechecker — «✨ Сверить с перепиской» on a record (src/tasks/recheck.ts), with the same key.
+export type TriageOptions = { planner: Planner | null; namer?: Namer | null; rechecker?: Rechecker | null; reason?: string; everyMs?: number;
+  factory?: (key: string) => { planner: Planner; namer: Namer; rechecker?: Rechecker };
   newTasks?: () => TriageNewTasks }; // how the AI makes new tasks (src/ownersettings.ts)
 
 export function createConnections({ store, live, ownerToken, telegram, whatsapp, triage, google, secrets, switches }: {
@@ -61,6 +64,7 @@ export function createConnections({ store, live, ownerToken, telegram, whatsapp,
   const aiKey = () => secrets?.get('ANTHROPIC_API_KEY');
   const made = aiKey() && triage?.factory ? triage.factory(aiKey()!) : null;
   const triageWorker = triage ? new Triage({ store, live, planner: made?.planner ?? triage.planner, namer: made?.namer ?? triage.namer ?? null, reason: triage.reason, ...(triage.newTasks ? { newTasks: triage.newTasks } : {}) }) : null;
+  let rechecker = made?.rechecker ?? triage?.rechecker ?? null;
   let triaging = false;
   function syncTriage(): void {
     if (!triageWorker) return;
@@ -77,8 +81,9 @@ export function createConnections({ store, live, ownerToken, telegram, whatsapp,
     if (name.startsWith('STREAM_GOOGLE_')) { googleConnector?.reconfigure(); return; }
     if (name === 'ANTHROPIC_API_KEY') {
       const key = aiKey();
-      const next = key && triage?.factory ? triage.factory(key) : { planner: triage?.planner ?? null, namer: triage?.namer ?? null };
+      const next = key && triage?.factory ? triage.factory(key) : { planner: triage?.planner ?? null, namer: triage?.namer ?? null, rechecker: triage?.rechecker ?? null };
       triageWorker?.use(next.planner, next.namer ?? null);
+      rechecker = next.rechecker ?? null;
       console.log('Triage: AI key changed on the System screen');
       return;
     }
@@ -104,6 +109,7 @@ export function createConnections({ store, live, ownerToken, telegram, whatsapp,
   return {
     bots, whatsappClients, google: googleConnector, isOn,
     triage: triageWorker, // «✨ Разобрать заново» (src/tasks/retriage.ts) runs it at once
+    rechecker: () => rechecker, // «✨ Сверить с перепиской» (src/tasks/recheck.ts); null — no AI key
     start(): void {
       listening = true;
       for (const bot of bots) void bot.start();

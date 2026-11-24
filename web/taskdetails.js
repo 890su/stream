@@ -12,6 +12,7 @@ import { partyName, PARTY_LABELS } from './parties.js';
 import { STATUSES } from './taskfold.js';
 import { dueChips } from './taskactions.js';
 import { taskChips } from './taskchips.js';
+import { recheckList } from './recheck.js';
 import { partyConversation, cardOrder, pagerOrder, readOrder, talkPane, lastSpeaker, taskActivity, frontOrder, pickParty, messageParties } from './cardtalk.js';
 
 const clock = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -168,6 +169,16 @@ export function taskDetails(original, ctx) {
   head.append(taskChips(task, { save, now, dueChips, settings: cardSettings, project: projectLine(task, { projects, save }), counterparty: counterpartyChip }));
   const card = doneCards.card(task);
   if (card) head.append(card);
+  // «✨ Сверить с перепиской» (recheck.js): the record against its conversations — only proposals, ✓ ✕ under the button.
+  if (ctx.recheck && task.messages?.length) {
+    const recheck = element('div', 'card-recheck');
+    const run = button('link-button card-recheck-run', ctx.recheck.busy ? '✨ Сверяю…' : '✨ Сверить с перепиской', ctx.recheck.run);
+    run.disabled = Boolean(ctx.recheck.busy);
+    recheck.append(run);
+    const list = recheckList(ctx.recheck);
+    if (list) recheck.append(list);
+    head.append(recheck);
+  }
 
   // The cuts.
   const description = () => {

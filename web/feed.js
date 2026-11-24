@@ -11,6 +11,7 @@ import { foldTasks, tasksByMessage, questionsByMessage, isOpen, taskMembers } fr
 import { questionOptions } from './question.js';
 import { aiQuestionsByMessage } from './questions.js';
 import { proposalsByMessage, proposalOptions } from './proposals.js';
+import { recheckProposals } from './recheck.js';
 import { GROUPINGS } from './tasklist.js';
 import { taskViewNodes } from './taskview.js';
 import { pulseBlocks, pulseCount, PULSE_DEFAULTS } from './pulse.js';
@@ -53,6 +54,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let allCuts = false; // «≡»: every cut unfolded
   let convList = []; // all conversations, each with its place in the queue (queue.js)
   let asked = new Map(); // the AI's waiting questions (v21 `ask`) by message (questions.js)
+  let rechecks = new Map(); // «✨ Сверить с перепиской» proposals waiting, by record (recheck.js)
   let convKeys = new Map(); // message id -> conversation key (conversations.js)
   let taskList = []; // all tasks (CONCEPT.md §2.8), for the right panel
   let projectList = []; // all projects (CONCEPT.md §2.11)
@@ -108,6 +110,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const questions = questionsByMessage([...events.values()]);
     const proposals = proposalsByMessage([...events.values()]); // the AI's proposals wait for the owner (proposals.js)
     asked = aiQuestionsByMessage([...events.values()]); // the AI's questions (v21 `ask`) hold their conversations in the queue
+    rechecks = recheckProposals([...events.values()]);
     for (const view of projected) {
       view.taskIds = byMessage.get(view.id) ?? [];
       view.links = linkMarks(view, tasksById); // «→ «…» ↩»: the triage's system links (linkmark.js)
@@ -352,7 +355,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   return { pulseCount: pulseTotal, refresh, loadOlder, hasOlder, render: draw, receive, jump, setShowArchive, setTagFilter, tagFilter: () => [...tagFilter], setMode, mode: () => mode, taskViews, setTaskFilter, taskFilter, taskFilters: () => taskFilters, taskMatches,
     task: (id) => taskList.find((task) => task.id === id),
     openConversation, conversation: () => current, queueConfig, conversationKey: () => conversationKey, conversations: () => convList,
-    questions: () => asked, waitingCount: () => queueList(convList).length,
+    questions: () => asked, rechecks: (taskId) => rechecks.get(taskId) ?? [], waitingCount: () => queueList(convList).length,
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,
     projects: () => projectList, project: currentProject, setProject, people: () => peopleList, counterparties: () => counterpartyList,
     setShowDone, showDone: () => showDone,

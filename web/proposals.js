@@ -2,17 +2,20 @@
 // it proposes, in a `triage_result`, to put messages into it (with its checklist items, «Готово?», project). Under each
 // message of a waiting proposal the owner sees the task, the reason and the choices (question.js). A proposal is
 // settled by the owner's `task_change` answering it (`proposal`), a `reject_proposal` correction, a message put into
-// a task by hand, or a later result that withdraws it («Разобрать заново»). Pure — no DOM.
+// a task by hand, or a later result that withdraws it («Разобрать заново»). The proposals of «✨ Сверить с
+// перепиской» (`recheck`) show only in their record's card (recheck.js). Pure — no DOM.
 import { isOpen } from './taskfold.js';
+import { makeTaskChange, nameUuid } from './shared.js';
 
 const order = (a, b) => String(a.ts).localeCompare(String(b.ts));
 
-// message id -> { id, task, alternatives, reason, messageIds, change, ts, processor } of the latest waiting proposal for it.
-export function proposalsByMessage(events) {
+// Proposals the owner answered (✓ — his change naming it, ✕ — `reject_proposal`) or a later result withdrew; `linked` —
+// messages he put into a task himself.
+export function settledProposals(events) {
   const answered = new Set();
-  const linked = new Set(); // messages the owner put into a task himself
+  const linked = new Set();
   for (const event of events) {
-    // «✨ Разобрать заново» withdraws the proposals it replaces (src/tasks/retriage.ts).
+    // «✨ Разобрать заново» withdraws the proposals it replaces (src/tasks/retriage.ts), a new recheck its own.
     if (event.kind === 'triage_result') for (const id of event.payload?.data?.triage?.withdrawn ?? []) answered.add(id);
     if (event.author !== 'me') continue;
     const data = event.payload?.data ?? {};
@@ -22,8 +25,15 @@ export function proposalsByMessage(events) {
       for (const message of data.task?.add ?? []) linked.add(message);
     }
   }
+  return { answered, linked };
+}
+
+// message id -> { id, task, alternatives, reason, messageIds, change, ts, processor } of the latest waiting proposal for it.
+export function proposalsByMessage(events) {
+  const { answered, linked } = settledProposals(events);
   const waiting = new Map();
   for (const event of events.filter((item) => item.kind === 'triage_result').sort(order)) {
+    if (event.payload?.data?.triage?.recheck) continue; // in the record's card (recheck.js)
     for (const proposal of event.payload?.data?.triage?.proposals ?? []) {
       if (answered.has(proposal.id) || proposal.message_ids.some((message) => linked.has(message))) continue;
       const item = { id: proposal.id, task: proposal.task_id, alternatives: proposal.alternatives ?? [], reason: proposal.reason ?? '',
@@ -33,6 +43,14 @@ export function proposalsByMessage(events) {
     }
   }
   return waiting;
+}
+
+// ✓ on a proposal: its change on its task and every `also` change on another record (a recheck's merge closes the
+// duplicate), each naming the proposal (the AI log counts it). Ids from the proposal and the record, so a double tap
+// or a retry is the same event (rule 8). `proposal` — { id, task, change, also }.
+export function acceptEvents(proposal, { ts = new Date().toISOString() } = {}) {
+  return [{ task_id: proposal.task, change: proposal.change }, ...(proposal.also ?? [])].map(({ task_id, change }) =>
+    makeTaskChange(task_id, { ...change, proposal: proposal.id }, { id: nameUuid(`accept|${proposal.id}|${task_id}`), ts }));
 }
 
 // What to ask under a message, or null: { proposal, reason, chosen, options: [{ id, title, open, current }], messageIds,

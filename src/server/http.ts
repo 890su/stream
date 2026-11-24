@@ -23,6 +23,7 @@ import { ConnectorSwitches } from '../switches.ts';
 import { OwnerSettings } from '../ownersettings.ts';
 import { createConnections, type TriageOptions } from './connectors.ts';
 import { retriage } from '../tasks/retriage.ts';
+import { recheck } from '../tasks/recheck.ts';
 import { directiveAdded } from '../tasks/directive.ts';
 
 const bearer = (value: string) => createHash('sha256').update(`Bearer ${value}`).digest();
@@ -115,6 +116,15 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === 'string').slice(0, 2000) : [];
           if (!ids.length) throw new HttpError(400, 'Нужны ids — сообщения беседы');
           json(response, 200, await retriage({ store, live, triage: connections.triage, ids }));
+          return;
+        }
+        // «✨ Сверить с перепиской» (src/tasks/recheck.ts): the record's conversations to the AI; only proposals come back.
+        const recheckOf = /^\/api\/tasks\/([0-9a-f-]{36})\/recheck$/i.exec(url.pathname);
+        if (recheckOf && request.method === 'POST') {
+          if (!connections.triage || !connections.isOn('ai_triage')) throw new HttpError(409, 'Разбор задач выключен на «Системе»');
+          const rechecker = connections.rechecker();
+          if (!rechecker) throw new HttpError(409, 'Нет ключа ИИ — введите его на «Системе» (Разбор задач)');
+          json(response, 200, await recheck({ store, live, rechecker, taskId: recheckOf[1]!.toLowerCase() }));
           return;
         }
         if (url.pathname === '/api/live' && request.method === 'GET') return live.subscribe(request, response);
