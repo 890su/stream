@@ -610,3 +610,22 @@ test('v19 instructions and schema: need_earlier only when the session does not s
   assert.ok((PLAN_SCHEMA.required as readonly string[]).includes('need_earlier'));
   assert.equal(tasksConfig.ai.processor, 'triage-ai-v19');
 });
+
+test('an open record of the interlocutor whose messages are older than history_days is still in context', async () => {
+  const s = setup(leave);
+  const saved = tasksConfig.history_days;
+  try {
+    const old = s.add({ ...telegram('7001', 'давно: нужна настройка'), ts: '2026-01-10T10:00:00.000Z' });
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch); // the old message is triaged: not in the next batch
+    const change = (id: string, ts: string, task: Record<string, unknown>) => s.add({ id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts, kind: 'task_change',
+      payload: { ref: { type: 'task', id }, data: { task } } } as JournalEvent);
+    change(randomUUID(), '2026-01-10T10:01:00.000Z', { op: 'create', title: 'Старое дело клиента', add: [old.id] });
+    for (let i = 0; i < 12; i++) change(randomUUID(), `2026-11-2${i % 5}T10:00:00.000Z`, { op: 'create', title: `Чужое ${i}` });
+    tasksConfig.history_days = -1; // every stored message is outside the history window, as a 30-day-old one would be
+    s.add({ ...telegram('7001', 'как там?'), ts: '2026-11-24T09:00:00.000Z' });
+    for (const batch of s.triage.ready(Date.now() + CHAT_QUIET + 1000)) await s.triage.run(batch);
+    const call = s.calls.at(-1)!;
+    assert.ok(call.open_tasks.some((task) => task.title === 'Старое дело клиента'));
+    assert.ok(call.open_tasks.length <= 11, 'others stay capped');
+  } finally { tasksConfig.history_days = saved; s.cleanup(); }
+});

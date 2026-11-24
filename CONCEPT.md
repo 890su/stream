@@ -416,8 +416,8 @@ so it stays in the conversation; a task starts only when work grows out of it (a
 order, an invoice, an offer) or the owner promises to do something later (owner, 2026-11-21, `triage-ai-v17`). A visit, meeting or call agreed for
 a day or a time is work: a task due that day, even when the rest is picking the time (`triage-ai-v18`).
 
-**Which task a message belongs to** (2026-11-18). Triage sees all open tasks (latest changed,
-`open_tasks_in_context`) with their last messages, chats and last activity, plus tasks closed or cancelled within
+**Which task a message belongs to** (2026-11-18). Triage sees all open tasks of the interlocutor (by conversation, role party, counterparty) and the latest changed
+of others (`others_in_context`) with their last messages, chats and last activity, plus tasks closed or cancelled within
 `reopen_days` (now 30).
 - A message that clearly continues a closed task reopens it (`todo`) and joins it; filed tasks (diary, note,
   «без дела») are not reopened, the message just joins.

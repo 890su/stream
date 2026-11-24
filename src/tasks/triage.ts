@@ -183,7 +183,12 @@ export class Triage {
     const start = [...batch].sort((a, b) => (before(a, b) ? -1 : 1))[0]!;
     const recent = this.#store.triage.messages(new Date(Date.now() - tasksConfig.history_days * 86_400_000).toISOString());
     const history = recent.filter((event) => !inBatch.has(event.id) && conversationOf(event) === key && before(event, start));
-    const keyOf = new Map([...recent, ...batch].map((event) => [event.id, conversationOf(event)] as const)); // once per run
+    // A record's conversation keys come from its own messages (any age), looked up once and only when needed.
+    const keyCache = new Map<string, string | null>();
+    const keyOf = (id: string) => {
+      if (!keyCache.has(id)) { const found = this.#store.getEvent(id); keyCache.set(id, found ? conversationOf(found) : null); }
+      return keyCache.get(id)!;
+    };
     const contextAt = (steps: number) => {
       const { events, more } = contextSessions(history, { gapMs: tasksConfig.session_gap_h * 3_600_000, steps, limit: tasksConfig.session_messages });
       const context = events.map((event) => ({ event, view: describe(event, this.#store) }))
@@ -199,7 +204,7 @@ export class Triage {
     const parties = new Set([...messages, ...context].map((message) => message.party).filter((party) => party !== 'me'));
     const theirCounterparties = new Set([...parties].flatMap((party) => personOf(party, people)?.roles.map((role) => role.counterparty) ?? []));
     const { open, closed } = interlocutorRecords(tasks, { key, parties, counterparties: theirCounterparties },
-      (task) => new Set(task.messages.map((id) => keyOf.get(id)).filter((item): item is string => Boolean(item))),
+      (task) => new Set(task.messages.map(keyOf).filter((item): item is string => Boolean(item))),
       { now: Date.now(), reopenDays: tasksConfig.reopen_days, others: tasksConfig.others_in_context });
     const base: Omit<PlanInput, 'context' | 'earlier_available'> = {
       now: at, job_days: tasksConfig.job_days, projects: projects.map(({ id, title, kind, sections, scope }) => ({ id, title, kind, scope, sections })),
