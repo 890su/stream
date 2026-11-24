@@ -26,7 +26,6 @@ import { conversations, conversationKeys } from './conversations.js';
 import { queueList } from './queue.js';
 import { linkMarks } from './linkmark.js';
 import { rowOnScreen, putBack } from './scrollpin.js';
-import { cutSegments } from './topic.js';
 import { grow, shrink, reduced, play } from './motion.js';
 
 const NEAR_BOTTOM = 120;
@@ -50,8 +49,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
   let sourceFilter = null; // 'me' | 'telegram:by' | 'phone' | 'system'… (drawer.js)
   let conversationKey = null; // the open conversation (Беседы) or the contact filter (Задачи, Лента) — chatview.js
   let current = null; // that conversation as of the last render
-  let openCuts = new Set(); // cuts of the open conversation the owner unfolded (topic.js keys)
-  let allCuts = false; // «≡»: every cut unfolded
   let convList = []; // all conversations, each with its place in the queue (queue.js)
   let asked = new Map(); // the AI's waiting questions (v21 `ask`) by message (questions.js)
   let rechecks = new Map(); // «✨ Сверить с перепиской» proposals waiting, by record (recheck.js)
@@ -87,7 +84,7 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
 
   const pinRow = (node) => rowOnScreen(scroller, list, node);
   const home = createQueueHome({ scroller, list, render: (options) => draw(options), active: atQueue, hasOlder, loadOlder, convQuick, limits,
-    open: (key) => onOpenConversation(key), openTask: (id) => onOpenTask(id) });
+    open: (key) => onOpenConversation(key) });
 
   // `keep` — { key, top }: the header that was tapped stays where it was; `quiet` — no animation of new rows;
   // `top` — a list goes to the top (true) or to a remembered position (a number); `pin` — rowOnScreen(): that row stays
@@ -183,7 +180,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         item.append(...group.map((view, index) => node(view, index === 0)));
       }
       item.classList.toggle('close', close && children.at(-1)?.className !== 'date-pill');
-      item.classList.remove('in-cut'); // bubbles are cached: a tint from an unfolded cut must not stay
       children.push(item);
     }
     const empty = (text) => { const box = document.createElement('div'); box.className = 'empty'; box.textContent = text; children.push(box); };
@@ -206,16 +202,8 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
         view: viewStore.get(), people: peopleList, counterparties: counterpartyList, onResetView: () => viewStore.reset(),
         pulseConfig: limits.pulse, onOpenProject: (id) => setProject(id) }));
     } else {
-      // One conversation — its messages in segments: open ones and cuts by task (topic.js); the Лента — in a row.
-      if (inside && current) {
-        for (const segment of cutSegments(visible, { tasksById, open: openCuts, all: allCuts, keep: new Set((current.queue?.pending ?? []).map((view) => view.id)) })) {
-          if (segment.kind === 'cut') children.push(cutLine(segment));
-          if (segment.kind === 'cut' && !segment.open) continue;
-          const from = children.length;
-          for (const group of bursts(segment.views)) renderGroup(group);
-          if (segment.kind === 'cut') for (const item of children.slice(from)) item.classList.add('in-cut');
-        }
-      } else for (const group of bursts(visible)) renderGroup(group);
+      // One conversation and the Лента: the messages in a row, nothing folded by task (owner, 2026-11-24).
+      for (const group of bursts(visible)) renderGroup(group);
       // «Задача выполнена?» — after the conversation's messages (CONCEPT.md §2.9).
       if (inside && current) for (const task of current.tasks) { const card = taskCard(task); if (card) children.push(card); }
       if (!visible.length) empty(inside ? 'В этой беседе нет сообщений.' : filtered ? 'Под фильтр ничего не подходит.'
@@ -245,26 +233,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     rendered = true;
     onRender();
   }
-
-  // A cut (design 2026-11-21): a centred line «Задача · 3» between thin rules; a tap folds or unfolds it in place.
-  function cutLine(segment) {
-    const line = document.createElement('button');
-    line.type = 'button';
-    line.className = `cut${segment.open ? ' open' : ''}`;
-    line.dataset.row = `cut:${segment.key}`;
-    line.setAttribute('aria-expanded', String(segment.open));
-    const label = document.createElement('span');
-    label.textContent = `${segment.title} · ${segment.views.length}`;
-    line.append(label);
-    line.onclick = () => {
-      if (!segment.open) openCuts.add(segment.key);
-      else if (allCuts) { allCuts = false; for (const key of keysOnScreen()) if (key !== segment.key) openCuts.add(key); }
-      else openCuts.delete(segment.key);
-      void render({ quiet: true, pin: rowOnScreen(scroller, list, line) });
-    };
-    return line;
-  }
-  const keysOnScreen = () => [...list.querySelectorAll('.cut')].map((node) => node.dataset.row.slice(4));
 
   // Shows or hides the rows under a header smoothly; the header stays in place.
   function toggleGroup(key, hiding, change) {
@@ -311,7 +279,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     if (leaving) mode = 'home';
     if (entering && atQueue()) queuePin = pinRow();
     conversationKey = next;
-    openCuts = new Set(); allCuts = false; // each conversation opens folded
     stick = Boolean(next) && mode !== 'tasks';
     const pin = leaving ? queuePin : null;
     await render({ bottom: true, top: true, quiet: true, pin });
@@ -361,7 +328,6 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     setSourceFilter, sourceFilter: () => sourceFilter, tasks: () => taskList,
     projects: () => projectList, project: currentProject, setProject, people: () => peopleList, counterparties: () => counterpartyList,
     setShowDone, showDone: () => showDone,
-    allCuts: () => allCuts, setAllCuts: (value) => { allCuts = value; if (!value) openCuts = new Set(); return render({ quiet: true, pin: pinRow() }); },
     showArchive: () => showArchive, nextLinked: (id) => visibleList.find((view) => view.continues === id),
     view: (id) => views.get(id), views: () => viewList,
     chain: (id) => chains(visibleList).get(id),

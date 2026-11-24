@@ -28,17 +28,6 @@ test('tile order: the chosen one leftmost, recent next; at first whoever wrote l
   assert.deepEqual(cardOrder(parties, { stored: ['tel:+48600100200', 'tg:999', 'me'], lastAuthor: 'tg:501' }), ['tel:+48600100200', 'me', 'tg:501'], 'a party no longer in the task is skipped');
 });
 
-test('a task\'s conversation: its own messages open, the rest under cuts by task; its continuations count as its own', async () => {
-  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
-  const { cutSegments } = await import('../web/topic.js');
-  const v = (id: string, tasks: string[]) => ({ id, taskIds: tasks });
-  const tasksById = new Map([['t1', { id: 't1', title: 'Роутер', status: 'todo' }], ['t2', { id: 't2', title: 'Счёт', status: 'todo' }]]);
-  const views = [v('a', ['t1']), v('b', ['t2']), v('c', []), v('d', ['t1', 't2']), v('e', ['t2'])];
-  const shape = (keep: Set<string>) => cutSegments(views, { focus: 't1', tasksById, keep }).map((item: any) => (item.kind === 'open' ? item.views.map((x: any) => x.id).join('') : `[${item.title}:${item.views.map((x: any) => x.id).join('')}]`));
-  assert.deepEqual(shape(new Set()), ['a', '[Счёт:b]', '[Без задачи:c]', 'd', '[Счёт:e]']);
-  assert.deepEqual(shape(new Set(['c'])), ['a', '[Счёт:b]', 'cd', '[Счёт:e]'], 'a continuation in the task is open');
-});
-
 test('the swiped-to tile moves leftmost only once typing starts', () => {
   const order = ['tg:1', 'tg:2', 'tel:+48600100200'];
   assert.deepEqual(frontOrder(order, 'tg:2', false), order, 'a swipe alone keeps the row');

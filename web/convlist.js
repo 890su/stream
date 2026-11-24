@@ -1,6 +1,6 @@
 // A tile of the «Беседы» queue (CONCEPT.md §5, docs/plans/2026-11-20-queue-and-task-screen-design.md): line 1 —
 // the kind of chat, the channel and the contact, the time; line 2 — the conversation's task (with «?» when the AI
-// chose it) or «+ задача…» to type one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↧ В конец
+// chose it), only when it has one; lines 3–4 — the last message; on the right «⏱ Отложить» and «↧ В конец
 // очереди»; a small line — how long it waits (or «❓ …» — the AI's newest waiting question, v21), how many messages,
 // the counterparty, a tag or two. A tile of the archive
 // under the queue (`archived`) has no «⏱»/«↧» and says when it was handled or until when it is snoozed. tileTask,
@@ -108,7 +108,7 @@ function element(tag, className, text) {
   return node;
 }
 
-// The tile. `on` — { open(key), task(id), newTask(title) }; `decorate` adds the swipes;
+// The tile: a tap anywhere opens the conversation. `on` — { open(key) }; `decorate` adds the swipes;
 // `archived` — a tile of the archive above the queue.
 export function convRow(conversation, { now = new Date(), hotHours, counterparties, questions, on, decorate, archived = false }) {
   const facts = tileFacts(conversation, { now, hotHours, counterparties, questions });
@@ -123,31 +123,12 @@ export function convRow(conversation, { now = new Date(), hotHours, counterparti
   // The time at the end of the title line (owner, 2026-11-22): the lines under it run from edge to edge.
   head.append(element('span', 'conv-kind', KIND_ICONS[facts.kind]), element('span', 'conv-channel', facts.channel), element('span', 'conv-title', facts.title),
     element('span', 'conv-time', facts.when));
-  // Line 2: the task (a tap opens it) or a field to make one from what waits.
-  let taskLine;
-  if (facts.task) {
-    taskLine = element('button', `conv-task${facts.task.guessed ? ' guessed' : ''}`, `▸ ${facts.task.title}${facts.task.guessed ? ' ?' : ''}`);
-    taskLine.type = 'button';
-    taskLine.setAttribute('aria-label', `Задача: ${facts.task.title}${facts.task.guessed ? ', выбрана разбором' : ''}`);
-    taskLine.onclick = (event) => { event.stopPropagation(); on.task(facts.task.id); };
-  } else {
-    taskLine = element('input', 'conv-newtask');
-    taskLine.type = 'text';
-    taskLine.placeholder = '+ задача…';
-    taskLine.enterKeyHint = 'done';
-    taskLine.setAttribute('aria-label', 'Новая задача из беседы');
-    taskLine.onclick = (event) => event.stopPropagation();
-    taskLine.onkeydown = (event) => {
-      if (event.key !== 'Enter' || !taskLine.value.trim()) return;
-      event.preventDefault();
-      on.newTask(taskLine.value.trim().slice(0, 120));
-      taskLine.value = '';
-      taskLine.blur();
-    };
-  }
+  // Line 2: the conversation's task, only when it has one (owner, 2026-11-24) — text, not a button: the whole tile
+  // opens the conversation card; the task opens from its head or by a swipe.
+  const taskLine = facts.task ? element('div', `conv-task${facts.task.guessed ? ' guessed' : ''}`, `▸ ${facts.task.title}${facts.task.guessed ? ' ?' : ''}`) : null;
   const text = element('div', 'conv-snippet', `${facts.mine ? 'Вы: ' : ''}${facts.snippet}`);
   const meta = element('div', `conv-meta${facts.ask && !archived ? ' asks' : ''}`, [state, !archived && facts.count > 1 ? `${facts.count} новых` : '', facts.counterparty ?? '', ...facts.tags].filter(Boolean).join(' · '));
-  body.append(head, taskLine, text, meta);
+  body.append(...[head, taskLine, text, meta].filter(Boolean));
   body.onclick = () => on.open(conversation.key);
   body.onkeydown = (event) => { if (event.key === 'Enter' && event.target === body) on.open(conversation.key); };
   // No buttons (owner, 2026-11-22): a swipe — or the mouse at an edge — puts it off, to the end of the queue or to the

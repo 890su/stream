@@ -18,8 +18,8 @@ function element(tag, className, text) {
 }
 
 // `scroller`, `list` — the centre; `render(options)` — the centre's redraw (pin, reveal); `active()` — the queue is on
-// screen; `open(key)` / `openTask(id)` — what a tap opens.
-export function createQueueHome({ scroller, list, render, active, hasOlder, loadOlder, convQuick, limits, open, openTask }) {
+// screen; `open(key)` — a tap on a tile opens that conversation.
+export function createQueueHome({ scroller, list, render, active, hasOlder, loadOlder, convQuick, limits, open }) {
   const archive = createArchive({ scroller, list, active, hasOlder, loadOlder,
     render: ({ pin = null, reveal = false } = {}) => render({ quiet: true, pin, reveal }) });
 
@@ -32,8 +32,6 @@ export function createQueueHome({ scroller, list, render, active, hasOlder, load
     const hotHours = (limits.pulse ?? PULSE_DEFAULTS).hot_wait_hours;
     const tile = (item, inArchive) => convRow(item, { now, hotHours, counterparties, questions, archived: inArchive, decorate: inArchive ? convQuick?.decorateArchived : convQuick?.decorate, on: {
       open: (key) => open(key),
-      task: (id) => openTask(id),
-      newTask: (title) => convQuick?.newTask(item, title),
     } });
     const children = waiting.map((item) => tile(item, false));
     if (!waiting.length && tags.length) children.push(element('div', 'empty', 'Под фильтр ничего не подходит.'));

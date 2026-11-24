@@ -633,11 +633,15 @@ notifications and calls (§8). Telegram is not an input channel; it is a source 
 reads like a conversation. On top — the title, the line of dates and the counterparty (when, due, project, repeat)
 and the cuts «Описание», «Чеклист», «Подробности» (roles of Я / ИИ / Система, how it was made, the report): one open
 at a time, all folded when the conversation is shown (💬). Under them — the conversation with the chosen interlocutor
-(the most recent one at first), with cuts by task as in a conversation; at the bottom over the input — the
+(the most recent one at first), all of it in a row — the task's own messages marked, nothing folded (2026-11-24); at the bottom over the input — the
 interlocutors' tiles: the people with roles and the people of the conversations its messages come from. A tap on a
 tile chooses whose conversation shows and gets the reply; a tap on the chosen one switches it off — then the card
 shows the task's comments (notes of mine, the AI's, the system's and the task's changes) and the input writes a
 comment there, later other executors too. A comment never joins someone's chat.
+
+**Queue tile 2026-11-24** (owner): the line under the name shows the conversation's task only when it has one — no
+«+ задача…» field on the tile, no empty line; a tap anywhere on the tile opens the conversation card, never the task
+card (a task opens from the conversation's head or by a swipe).
 
 **Queue tile swipe 2026-11-22** (owner): a left swipe puts one row in the tile's place, no taller than the tile:
 dials like a bike code lock — ⏱ minutes (5 / 15 / 25 / 55), 🌗 the part of the day and 📅 the date, which are one
@@ -672,10 +676,9 @@ the next ones in the order of «До конца дня» under them. There is no
 root of the system back, a conversation opened over a list goes back to it, one opened from the queue on a phone goes
 back to the panel on the same tile. Deploy 2 (shipped the same day): a conversation and a task are one card. A conversation's head:
 who and the channel, the record line («+ задача…», the AI's offer or question with ✓ ✕), «ждёт …»
-with ⏱ ↥ 🗄 and «≡», folded details; its messages run in open stretches and cuts — a centred line with a task's title
-and count; in a conversation task runs fold and loose ones stay open, in a task its own stay open (messages waiting for
-an answer never fold); «≡» unfolds all. A task opens with its fields open; a tile folds them and shows that person's
-conversation with the same cuts; a swipe moves to the next person, whose tile goes leftmost once typing starts. ✨ at
+with ⏱ ↥ 🗄, folded details; its messages run in one row (owner, 2026-11-24: the cuts by task — a centred line with a
+task's title folding its run, and «≡» — are gone with the topics). A task opens with its fields open; a tile folds
+them and shows that person's conversation; a swipe moves to the next person, whose tile goes leftmost once typing starts. ✨ at
 the right of the tags row: «Создать задачу», «Завершить задачу»; AI help and translation later.
 
 **Redesign 2026-11-20** (`docs/plans/2026-11-20-queue-and-task-screen-design.md`, stage by stage; what it replaces

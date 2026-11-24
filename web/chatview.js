@@ -139,7 +139,6 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
     const unfolded = detailsOpen.has(key);
     $('#chat-details').hidden = !unfolded;
     $('#chat-more').setAttribute('aria-expanded', String(unfolded));
-    $('#chat-cuts').setAttribute('aria-pressed', String(feed.allCuts()));
     // A personal chat opens in the Telegram app by the user id; a group has no such link.
     const app = $('#chat-app');
     app.hidden = !chat || chat.group;
@@ -202,7 +201,6 @@ export function setupChatView({ feed, composer, correct, notify, openTask = () =
   // «Контакт»: the person of this conversation from the directory, or a new one from the chat or the number.
   let creatingPerson = false; // a double tap must not make two people: the directory updates on the next render
   $('#chat-more').onclick = () => { if (detailsOpen.has(key)) detailsOpen.delete(key); else detailsOpen.add(key); sync(); };
-  $('#chat-cuts').onclick = async () => { await feed.setAllCuts(!feed.allCuts()); sync(); };
   $('#chat-title').onclick = () => $('#chat-person').onclick();
   $('#chat-person').onclick = async () => {
     if (creatingPerson) return;

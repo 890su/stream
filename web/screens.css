@@ -330,7 +330,6 @@ button.task-section[aria-expanded="true"]::after { transform: rotate(90deg); }
 .card-talk { margin: 4px 0 0; }
 .card-talk-head { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; padding: 2px; }
 .card-talk-title { flex: 1; min-width: 0; font-size: 13.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.details-message.other-task { opacity: .78; }
 .details-message.task-linked > .bubble { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow); }
 /* While a task card is open its own participants line is shown; the open conversation's one under it is not. */
 body:has(#task-screen:not([hidden])) #people-row { display: none; }
@@ -413,6 +412,3 @@ body:has(#task-screen:not([hidden])) #people-row { display: none; }
 /* The dashboard's group labels (dashboard.js): small, above the paused and the next tasks. */
 .dash-label { margin: 10px 12px 2px; font-size: 12px; color: var(--muted); }
 /* «≡» in the head of a task's conversation (cardtalk.js): unfolds every cut. */
-.card-talk-all { flex: none; margin-left: auto; font-size: 18px; }
-.card-talk-all[aria-pressed="true"] { color: var(--accent-strong); }
-.card-talk .cut { width: 100%; margin: 6px 0; }
