@@ -1,5 +1,5 @@
 // Top-bar status line (network and outbox), the settings dialog (owner token and copying it to another device,
-// archive toggle, filter reset,
+// quiet days before a read conversation is archived, archive toggle, filter reset,
 // System screen button) and the service worker registration with update handling.
 import { getSetting, setSetting } from './db.js';
 import { synchronize } from './outbox.js';
@@ -53,6 +53,24 @@ export async function setupSettings(config, feed, onToken, { notify, drawer, sys
   copy.onclick = async () => {
     try { await navigator.clipboard.writeText(await getSetting('ownerToken')); notify('Токен скопирован. На другом устройстве: ⋮ → Доступ → вставьте → «Сохранить»'); }
     catch { notify('Не удалось скопировать: браузер не дал доступ к буферу обмена'); }
+  };
+  // Quiet days before a read conversation leaves the queue (CONCEPT.md §2.5). Saved on the server, then redrawn.
+  const days = $('#archive-read-days');
+  const savedDays = () => (Number.isInteger(config.conversations?.queue?.archive_read_days) ? config.conversations.queue.archive_read_days : 3);
+  days.value = String(savedDays());
+  days.onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); days.blur(); } };
+  days.onchange = async () => {
+    const raw = days.value.trim();
+    const value = Number(raw);
+    if (raw === '' || !Number.isInteger(value) || value < 0 || value > 30) { notify('Нужно число дней от 0 до 30'); days.value = String(savedDays()); return; }
+    try {
+      const response = await fetch('/api/settings/archive-read-days', { method: 'POST', body: JSON.stringify({ value }),
+        headers: { Authorization: `Bearer ${await getSetting('ownerToken')}`, 'Content-Type': 'application/json' } });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error ?? 'Не удалось сохранить');
+      config.conversations = { ...config.conversations, queue: { ...config.conversations?.queue, archive_read_days: value } };
+      await feed.render();
+    } catch (error) { notify(error.message); days.value = String(savedDays()); }
   };
   $('#menu-button').onclick = () => dialog.showModal();
   $('#settings-close').onclick = () => dialog.close();

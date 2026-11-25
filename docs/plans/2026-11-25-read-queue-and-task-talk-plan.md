@@ -129,11 +129,11 @@ Rules (the spec's, as code decisions):
   throws); `POST /api/settings/archive-read-days` `{ value: n }` → 200 / 400 «Нужно число дней от 0 до 30»;
   `/capture-config.json` → `conversations.queue.archive_read_days`.
 
-- [ ] **Step 1: Failing tests:** default 3; saving 5 survives a new `OwnerSettings` on the same file; 31 and 1.5 → 400;
+- [x] **Step 1: Failing tests:** default 3; saving 5 survives a new `OwnerSettings` on the same file; 31 and 1.5 → 400;
   capture-config carries the saved value.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement. In the ⋮ dialog: a number field «Прочитанные беседы — в архив через [3]
+- [x] **Step 2:** FAIL. **Step 3:** Implement. In the ⋮ dialog: a number field «Прочитанные беседы — в архив через [3]
   дн. (0 — никогда)»; on change POST, then set `config.conversations.queue.archive_read_days` in memory and redraw.
-- [ ] **Step 4:** Tests pass. Commit `Owner setting: read conversations go to the archive after N days`.
+- [x] **Step 4:** Tests pass. Commit `Owner setting: read conversations go to the archive after N days`.
 
 ### Task 5: The queue screen and the read mark on opening
 

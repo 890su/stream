@@ -31,3 +31,17 @@ test('the System screen sets the mode; a bad value or no owner token is refused'
     assert.equal((await set({ value: 'unconfirmed' }, false)).status, 401);
   } finally { await f.stop(); }
 });
+
+test('read conversations go to the archive after 3 quiet days unless the owner saved another term', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'settings-'));
+  try {
+    const settings = new OwnerSettings(join(dir, 'settings.json'));
+    assert.equal(settings.archiveReadDays(), 3);
+    settings.setArchiveReadDays(5);
+    assert.equal(new OwnerSettings(join(dir, 'settings.json')).archiveReadDays(), 5);
+    assert.equal(settings.triageNewTasks(), 'unconfirmed', 'saving the term keeps the other settings');
+    assert.throws(() => settings.setArchiveReadDays(31), /от 0 до 30/);
+    assert.throws(() => settings.setArchiveReadDays(1.5), /от 0 до 30/);
+    assert.equal(new OwnerSettings(join(dir, 'settings.json')).archiveReadDays(), 5, 'a refused value is not saved');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

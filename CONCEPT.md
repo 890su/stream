@@ -183,8 +183,9 @@ request and the job given to a partner).
   section the longest waiting is on top; a conversation's place is its queue moment: the first unread incoming, or a
   later `requeue` («↧ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back
   at once). In «Прочитанные» the moment is the last activity (the latest message, the time of the `read` correction
-  itself, or an act of mine), so the freshest sits at the bottom. A new message in a queued conversation and opening
-  it do not move it by themselves. No urgency order for now (owner, 2026-11-20).
+  itself, or an act of mine), so the freshest sits at the bottom; opening one writes a read mark and moves that row.
+  In «Новые» and «Ждут решения» a new message and opening do not move the conversation: a later incoming does not
+  change their moment. No urgency order for now (owner, 2026-11-20).
   **Read** (owner, 2026-11-25): opening a conversation (its card, or a task card with that person in full-chat mode)
   reads everything incoming up to the last message shown; a message arriving while it is open is read too; the text on
   a queue tile does not count. It is stored in the journal as a `correction` with `op: read` on the last shown incoming
