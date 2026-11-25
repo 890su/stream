@@ -175,25 +175,42 @@ request and the job given to a partner).
   a group chat. A task's people are not merged into one conversation: several people are several conversations of
   one task. From stage 3 of that design the key is the person (a contact of the directory) across all their channels,
   with a main channel (`primary` of the contact); an address without a contact stays its own conversation.
-- **The queue** (2026-11-20, replaces states urgent / mine / theirs / quiet / done and their order). The «Беседы»
-  list holds only conversations with incoming that waits for me after my last action there; my actions: a reply (any
-  channel, also typed on the phone), a task made or chosen by me for its messages (AI linking is not my action),
-  the archive (`answered`), «⏱ Отложить» (`snooze` with `until`). An action closes the waiting messages up to the
-  last one it touches. A conversation's place is its queue moment: the first waiting incoming, or a later `requeue`
-  («↧ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back at once). The
-  longest waiting is on top, new ones arrive at the end (owner, 2026-11-21: the most important on top; before that the
-  queue read bottom-up from the input); a new message in a queued conversation and opening
-  it without an action do not move it. No urgency order for now (owner, 2026-11-20). **Unfinished** (owner, 2026-11-21, `triage-ai-v18`): a task appeared —
-  the conversation may leave; no task and the conversation is not over — it stays even after my reply. Every triage batch
-  says on its last message whether the other side still waits for something from me that no task covers («ждёт выезд в
-  субботу в 14:00» — the tile and the card head show it instead of «ждёт»); an AI task waiting for ✓ or ✕ keeps the
-  conversation too. My reply does not end it; the archive mark, a task of mine for its messages, a later verdict
-  «finished», ✓ or ✕ do; a snooze hides it until its time. Incoming from before the queue started (`queue.since`, `registry/conversations.json`) waits for nobody — the history
-  imported with the channels; after it nothing drops out of the queue by age. Calls: a missed or rejected call waits, an
-  answered one does not; my outgoing call or SMS is a reply.
+- **The queue** (2026-11-20, replaces states urgent / mine / theirs / quiet / done and their order; reworked
+  2026-11-25, `docs/plans/2026-11-25-read-queue-and-task-talk-design.md` Part 1). The «Беседы» list has three sections,
+  top-down: **«Новые»** (incoming I have not read), **«Ждут решения»** (the AI waits for my decision: a question, a
+  proposed change, an unconfirmed task; the triage verdict «still waits for me»; the day of my task in the
+  conversation) and **«Прочитанные»** (all read, nothing to decide, not archived), then the folded archive. Inside a
+  section the longest waiting is on top; a conversation's place is its queue moment: the first unread incoming, or a
+  later `requeue` («↧ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back
+  at once). A new message in a queued conversation and opening it do not move it by themselves. No urgency order for
+  now (owner, 2026-11-20).
+  **Read** (owner, 2026-11-25): opening a conversation (its card, or a task card with that person in full-chat mode)
+  reads everything incoming up to the last message shown; a message arriving while it is open is read too; the text on
+  a queue tile does not count. It is stored in the journal as a `correction` with `op: read` on the last shown incoming
+  message (one per opening, and only when something unread appeared), so the phone and the computer agree. Unread =
+  incoming after the later of my read mark and my last handling there (a reply in any channel, also typed on the
+  phone; 🗄; a task of mine for its messages), so nothing is migrated on deploy: what was handled is read at once, what
+  waits now is new. My reply without a task moves the conversation to «Прочитанные» (the end of the queue), not to the
+  archive. «ждёт меня» keeps its rules: in a group only a reply to me or a message of my task; an answered incoming call
+  is not new, a missed or rejected one is; messages of closed records only are not new; «Я · мои записи» sits only in
+  «Ждут решения». My outgoing call or SMS is a reply.
+  **The archive** only by my action — 🗄 (card head and swipe), a task of mine for the conversation — or by itself after
+  N quiet days (default 3, set in the ⋮ settings dialog, 1–30, 0 = never; stored on the server like the triage mode):
+  a read conversation with nothing new, nothing for me to decide, and no incoming, no message of mine and no mark of
+  mine for N days. The AI verdict «finished» no longer archives: it only moves a conversation from «Ждут решения» to
+  «Прочитанные». A new incoming brings it back from the archive into «Новые»; a snooze (`snooze`) hides it until its
+  time. **🗄 with an open AI decision asks first** («Перед архивом — решить»: for each pending item ✓ Оставить /
+  ✕ Отказаться / Потом, and В архив / Отмена); «Потом» archives the conversation and leaves the item in «Задачи →
+  Неподтверждённые» (a question or a proposed change — in a new section «Ждут решения ИИ»); deciding there does not
+  return the conversation to the queue. Unfinished (owner, 2026-11-21, `triage-ai-v18`): every triage batch says on its
+  last message whether the other side still waits for something from me that no task covers («ждёт выезд в субботу в
+  14:00» — the tile and the card head show it instead of «ждёт»); this keeps the conversation in «Ждут решения» even
+  after my reply (a work request answered «yes, we can come» without a task must not drop out), until a task of mine,
+  🗄, a later verdict «finished», ✓ or ✕. Incoming from before the queue started (`queue.since`,
+  `registry/conversations.json`) waits for nobody — the history imported with the channels.
 - **The archive above the queue** (owner, 2026-11-21): over the newest waiting conversation a folded «🗄 Архив»
-  divider. Opened, it shows above itself the five conversations handled last (they wait for nothing: answered,
-  archived, made a task, read before the queue started, snoozed — with «⏱ до …»); the latest handled stands nearest
+  divider. Opened, it shows above itself the five conversations handled last (archived by me, by a task of mine, or by the quiet-days rule; read before the queue
+  started; snoozed — with «⏱ до …»); the latest handled stands nearest
   the divider, earlier ones higher. «Загрузить ещё» on top, or scrolling on up, adds the next five (from older history
   when the loaded part runs out). A tile there says «разобрана <когда>» and has no ⏱ / ↥.
 - «ждёт меня» uses the triage outcome, not just the last message: an incoming "ok, thanks" filed as «без дела»
@@ -213,11 +230,11 @@ request and the job given to a partner).
   an interlocutor** are the open ones and those closed within `reopen_days`, that have a message of this conversation,
   or a party of this conversation as a role, or the interlocutor's counterparty — plus the 10 latest changed open
   records of the owner from other conversations. The triage reads the conversation together with them (§2.8).
-- **«Всё распределено»** (owner, 2026-11-24). The archive means «read and sorted». A conversation stays in the queue
-  while any holds: an incoming message after my last action; the AI waits for my answer (an unconfirmed record, a
-  proposed update, a question, §2.8); the triage said «ждут от меня: …» and no record covers it. My reply removes only
-  the first; ⏱ hides until the due time; 🗄 removes all (waiting proposals and questions stay in the records and the AI
-  log but do not hold the conversation). A done-work record never holds it. An empty queue shows «Всё распределено ✓»
+- **«Всё распределено»** (owner, 2026-11-24). A conversation is «Ждут решения» while the AI waits for my
+  answer (an unconfirmed record, a proposed update, a question, §2.8) or the triage said «ждут от меня: …» and no record
+  covers it; an unread incoming makes it «Новые». My reply removes only the unread (it goes to «Прочитанные»); ⏱ hides
+  until the due time; 🗄 removes all after the «Перед архивом — решить» sheet (what stays undecided waits in the records
+  and the AI log, in «Ждут решения ИИ», and does not hold the conversation). A done-work record never holds it. An empty queue shows «Всё распределено ✓»
   with the count sorted today; otherwise the head says «Ждут решения: N». My free input without an addressee is the
   conversation «Я»: a tile «Я · мои записи» in the queue while it has a message with an unconfirmed record, and
   always the first row of «Контакты».
