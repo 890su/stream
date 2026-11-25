@@ -182,24 +182,26 @@ request and the job given to a partner).
   conversation) and **«Прочитанные»** (all read, nothing to decide, not archived), then the folded archive. Inside a
   section the longest waiting is on top; a conversation's place is its queue moment: the first unread incoming, or a
   later `requeue` («↧ В конец очереди»), or `until` when a snooze ends (a new incoming during a snooze brings it back
-  at once). A new message in a queued conversation and opening it do not move it by themselves. No urgency order for
-  now (owner, 2026-11-20).
+  at once). In «Прочитанные» the moment is the last activity (the latest message, the time of the `read` correction
+  itself, or an act of mine), so the freshest sits at the bottom. A new message in a queued conversation and opening
+  it do not move it by themselves. No urgency order for now (owner, 2026-11-20).
   **Read** (owner, 2026-11-25): opening a conversation (its card, or a task card with that person in full-chat mode)
   reads everything incoming up to the last message shown; a message arriving while it is open is read too; the text on
   a queue tile does not count. It is stored in the journal as a `correction` with `op: read` on the last shown incoming
   message (one per opening, and only when something unread appeared), so the phone and the computer agree. Unread =
-  incoming after the later of my read mark and my last handling there (a reply in any channel, also typed on the
-  phone; 🗄; a task of mine for its messages), so nothing is migrated on deploy: what was handled is read at once, what
-  waits now is new. My reply without a task moves the conversation to «Прочитанные» (the end of the queue), not to the
-  archive. «ждёт меня» keeps its rules: in a group only a reply to me or a message of my task; an answered incoming call
-  is not new, a missed or rejected one is; messages of closed records only are not new; «Я · мои записи» sits only in
-  «Ждут решения». My outgoing call or SMS is a reply.
+  incoming after the later of that marked message's own time (the latest `read` mark; the correction's time does not
+  count) and my last handling there (a reply in any channel, also typed on the phone; 🗄; a task of mine for its
+  messages). The correction's own time is only activity for the quiet-days clock. Nothing is migrated on deploy: what
+  was handled is read at once, what waits now is new. My reply without a task moves the conversation to «Прочитанные»
+  (the end of the queue), not to the archive. «ждёт меня» keeps its rules: in a group only a reply to me or a message
+  of my task; an answered incoming call is not new, a missed or rejected one is; messages of closed records only are
+  not new; «Я · мои записи» sits only in «Ждут решения». My outgoing call or SMS is a reply.
   **The archive** only by my action — 🗄 (card head and swipe), a task of mine for the conversation — or by itself after
   N quiet days (default 3, set in the ⋮ settings dialog, 1–30, 0 = never; stored on the server like the triage mode):
   a read conversation with nothing new, nothing for me to decide, and no incoming, no message of mine and no mark of
   mine for N days. The AI verdict «finished» no longer archives: it only moves a conversation from «Ждут решения» to
-  «Прочитанные». A new incoming brings it back from the archive into «Новые»; a snooze (`snooze`) hides it until its
-  time. **🗄 with an open AI decision asks first** («Перед архивом — решить»: for each pending item ✓ Оставить /
+  «Прочитанные». A new incoming brings it back from the archive into «Новые»; a message of mine brings it back into
+  «Прочитанные», not into «Новые». A snooze (`snooze`) hides it until its time. **🗄 with an open AI decision asks first** («Перед архивом — решить»: for each pending item ✓ Оставить /
   ✕ Отказаться / Потом, and В архив / Отмена); «Потом» archives the conversation and leaves the item in «Задачи →
   Неподтверждённые» (a question or a proposed change — in a new section «Ждут решения ИИ»); deciding there does not
   return the conversation to the queue. Unfinished (owner, 2026-11-21, `triage-ai-v18`): every triage batch says on its
@@ -219,8 +221,8 @@ request and the job given to a partner).
 - **Archive of a conversation** (2026-11-19): a swipe left moves a conversation to the archive even when the last
   message is not mine — a `correction` with `op: answered` on its latest message (`unanswered` takes it back; the op
   names stay from the first version). Messages up to that one, and tasks of the conversation with no message after
-  it, no longer make it «ждёт меня» or «жду ответа». Since 2026-11-25 (the queue above) only a new incoming message after the
-  mark brings the conversation back from the archive, into «Новые»; a message of mine does not. Its tasks stay in «Задачи» as they are.
+  it, no longer make it «ждёт меня» or «жду ответа». Since 2026-11-25 (the queue above) a new incoming message after the
+  mark brings the conversation back from the archive into «Новые», and a message of mine brings it back into «Прочитанные». Its tasks stay in «Задачи» as they are.
 - Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
   reply goes through the chosen channel (the input row, §2.9); each message shows to whom, where and when.
 - **Records of the interlocutor** (owner, 2026-11-23/24, `docs/plans/2026-11-23-conversation-records-design.md`;

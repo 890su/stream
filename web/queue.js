@@ -1,14 +1,9 @@
-// The queue of conversations (CONCEPT.md §2.5, docs/plans/2026-11-20-queue-and-task-screen-design.md): which
-// conversations wait for the owner and since when. Only the owner's actions take a conversation out: a reply, a task
-// made or chosen by the owner for its messages (an AI link is not one), the archive mark (`answered`), «⏱ Отложить»
-// (`snooze`). A conversation with a day task of mine comes back on that day (owner, 2026-11-22: the archive hides
-// it until the task day or a new incoming). «↧» after it was dealt with — a swipe on an archive tile — brings it back
-// to the end of the queue and cancels a snooze (owner, 2026-11-22). Its place is its queue moment — the first waiting message, lifted by «↧» (`requeue`) or by the end of a
-// snooze; a new message in a queued conversation does not move it. The archive means «read and sorted out»
-// (design 2026-11-23, «Очередь — всё распределено»): while the AI waits for me — a question or an update proposal made
-// by v21 or later (older ones keep the old rule), an unconfirmed record — my reply does not take the conversation out;
-// 🗄 does, and my answer to the question handles the messages it asks about. My own notes («Я») wait only for the AI.
-// Pure — no DOM.
+// The queue of conversations (CONCEPT.md §2.5, design 2026-11-25): «Новые» (unread), «Ждут решения» (the AI, an
+// unfinished verdict, a task day) and «Прочитанные». `waiting` means any of those sections. The archive is only 🗄,
+// a task of mine, or N quiet days (`queue.archive_read_days`, default 3, 0 = never). A reply without a task goes to
+// «Прочитанные». A new incoming brings an archived conversation back to «Новые»; a message of mine brings it back to
+// «Прочитанные». Unread is incoming after the later of my handling and the message time of the latest `read` mark
+// (the correction's own time is activity for the quiet-days clock only). «Я» waits only for the AI. Pure — no DOM.
 import { conversationOf, directionOf } from './conversations.js';
 import { involvesMe, isOpen } from './taskfold.js';
 import { whenOf } from './dayplan.js';
@@ -16,7 +11,28 @@ import { fromV21 } from './questions.js';
 
 const time = (ts) => Date.parse(ts);
 const later = (a, b) => (time(b) > time(a) ? b : a);
-const NONE = { waiting: false, moment: null, since: null, pending: [], snoozedUntil: null };
+const DAY = 24 * 60 * 60 * 1000;
+export const SECTION_TITLES = { new: 'Новые', decide: 'Ждут решения', read: 'Прочитанные' };
+const SECTION_ORDER = { new: 0, decide: 1, read: 2 };
+const NONE = { waiting: false, moment: null, since: null, pending: [], snoozedUntil: null, open: null, section: null, unread: 0 };
+
+// The latest `read` mark, as the time of the message it points at. Deleted anchors count: call this before dropping them.
+function readWatermark(views) {
+  let at = -Infinity;
+  let mark = -Infinity;
+  for (const view of views) {
+    if (!view.read || !view.readAt) continue;
+    const readAt = time(view.readAt);
+    if (readAt >= at) { at = readAt; mark = time(view.event.ts); }
+  }
+  return mark;
+}
+
+function latestReadAt(views) {
+  let at = null;
+  for (const view of views) if (view.read && view.readAt && (!at || time(view.readAt) > time(at))) at = view.readAt;
+  return at;
+}
 
 // Message ids the owner put into a task (a change authored `me` that adds them) and that are still there: those
 // messages are handled. A later `remove` (as «Вернуть» on a task made from a tile does) undoes it.
@@ -33,14 +49,16 @@ export function ownerLinked(tasks) {
   return ids;
 }
 
-// { waiting, moment, since (the first waiting message), pending (waiting messages), snoozedUntil, open (why it waits
-// with no message waiting) }. `conversation` needs key, views (with taskIds), tasks and group; `owner` — ownerLinked
+// { waiting, section, unread, moment, since, pending, snoozedUntil, open }. `waiting` is any section.
+// `conversation` needs key, views (with taskIds), tasks and group; `owner` — ownerLinked
 // of all tasks; `questions` / `proposals` — the AI's waiting questions and proposals by message (questions.js,
 // proposals.js); `tasksById` — all tasks: a proposal on a record closed or cancelled since holds nothing.
 export function queueOf(conversation, { now = new Date(), config, owner = new Set(), questions = new Map(), proposals = new Map(), tasksById = new Map() }) {
   if (conversation.key.startsWith('task:')) return NONE;
   const own = conversation.key === 'me'; // my notes: nobody to answer, only the AI may wait for me
-  const views = conversation.views.filter((view) => !view.deleted).sort((a, b) => time(a.event.ts) - time(b.event.ts));
+  const all = conversation.views;
+  const seenUpTo = readWatermark(all);
+  const views = all.filter((view) => !view.deleted).sort((a, b) => time(a.event.ts) - time(b.event.ts));
   const byId = new Map(views.map((view) => [view.id, view]));
   const taskOf = new Map(conversation.tasks.map((task) => [task.id, task]));
   // An own note pulled into a chat or a number (a call description, a reply not sent) is neither an answer nor waiting.
@@ -67,27 +85,60 @@ export function queueOf(conversation, { now = new Date(), config, owner = new Se
   }
   // Messages from before the queue started (`queue.since`) wait for nobody: the history imported with the channels.
   const start = time(config.queue.since);
-  const pending = own ? [] : views.filter((view) => time(view.event.ts) > handled && time(view.event.ts) >= start && directionOf(view.event) === 'in'
+  const seen = Math.max(handled, seenUpTo);
+  const pending = own ? [] : views.filter((view) => time(view.event.ts) > seen && time(view.event.ts) >= start && directionOf(view.event) === 'in'
     && !answeredCall(view) && !note(view) && meaningful(view) && matters(view));
+  const unread = pending.length;
   const requeue = views.flatMap((view) => view.requeues ?? []).filter((ts) => time(ts) > handled).sort((a, b) => time(a) - time(b)).at(-1);
-  // Back from the archive: a requeue later than every way it was dealt with (a reply, the archive mark, a task of mine).
-  const back = requeue && time(requeue) > clearedAt(conversation, views) ? requeue : null;
+  const cleared = clearedAt(conversation, views);
+  const back = requeue && time(requeue) > cleared ? requeue : null;
   const ai = { questions, proposals, tasksById };
-  const open = pending.length ? null : own ? aiWaitOf(conversation, views, ai, undefined, true)
-    : unfinishedOf(conversation, views, start, handled, now, ai) ?? (back ? { reason: 'из архива', moment: back } : null);
-  if (!pending.length && !open) return NONE;
+  const reason = unread ? null : own ? aiWaitOf(conversation, views, ai, undefined, true) : unfinishedOf(conversation, views, start, handled, now, ai);
 
-  let moment = pending[0]?.event.ts ?? open.moment;
-  if (requeue) moment = later(moment, requeue);
+  let section = null;
+  let moment = null;
+  let since = null;
+  if (unread > 0) {
+    section = 'new';
+    moment = pending[0].event.ts;
+    since = moment;
+  } else if (reason) {
+    section = 'decide';
+    moment = reason.moment;
+    since = moment;
+  } else if (!own) {
+    const last = views.at(-1)?.event.ts ?? null;
+    const activity = lastActivity(conversation, all);
+    const days = config.queue.archive_read_days ?? 3;
+    const quiet = days !== 0 && activity && now.getTime() - time(activity) >= days * DAY;
+    const notCleared = (last && time(last) > cleared) || Boolean(back);
+    if (notCleared && activity && time(activity) >= start && !quiet) {
+      section = 'read';
+      moment = activity;
+      since = activity;
+    }
+  }
+  if (section && requeue) moment = later(moment, requeue);
   const snooze = views.flatMap((view) => view.snoozes ?? []).filter((item) => time(item.at) > handled && !(back && time(back) > time(item.at)))
     .sort((a, b) => time(a.at) - time(b.at)).at(-1);
   if (snooze) {
     const after = pending.find((view) => time(view.event.ts) > time(snooze.at));
-    if (after) moment = later(moment, after.event.ts);
-    else if (now.getTime() < time(snooze.until)) return { ...NONE, pending, snoozedUntil: snooze.until };
-    else moment = later(moment, snooze.until);
+    if (after && section) moment = later(moment, after.event.ts);
+    else if (!after && now.getTime() < time(snooze.until)) return { ...NONE, pending, unread, snoozedUntil: snooze.until };
+    else if (section) moment = later(moment, snooze.until);
   }
-  return { waiting: true, moment, since: pending[0]?.event.ts ?? open.moment, pending, snoozedUntil: null, open: open?.reason ?? null };
+  if (!section) return { ...NONE, pending, unread };
+  return { waiting: true, moment, since, pending, snoozedUntil: null, open: reason?.reason ?? null, section, unread };
+}
+
+// Last activity of a read conversation: the latest message, the read correction's own time, and my acts.
+function lastActivity(conversation, views) {
+  const live = views.filter((view) => !view.deleted).sort((a, b) => time(a.event.ts) - time(b.event.ts));
+  let at = live.at(-1)?.event.ts ?? null;
+  const readAt = latestReadAt(views);
+  if (readAt) at = at ? later(at, readAt) : readAt;
+  for (const act of myActs({ ...conversation, views })) if (act) at = at ? later(at, act) : act;
+  return at;
 }
 
 // No message waits, yet the conversation is not over (owner, 2026-11-21): the AI waits for me (aiWaitOf), or the
@@ -155,10 +206,12 @@ function taskDayOf(conversation, since, now) {
 }
 const dayStart = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
-// The waiting conversations as the screen shows them top to bottom: the longest waiting first, the newest moment
-// last (owner, 2026-11-21: the most important on top).
+// The queue screen, top to bottom: «Новые», then «Ждут решения», then «Прочитанные». Inside a section the smallest
+// moment is first — longest waiting on top; in «Прочитанные» that puts the freshest at the bottom.
 export function queueList(list) {
-  return list.filter((item) => item.queue?.waiting).sort((a, b) => time(a.queue.moment) - time(b.queue.moment) || a.key.localeCompare(b.key));
+  return list.filter((item) => item.queue?.waiting).sort((a, b) =>
+    (SECTION_ORDER[a.queue.section] ?? 9) - (SECTION_ORDER[b.queue.section] ?? 9)
+    || time(a.queue.moment) - time(b.queue.moment) || a.key.localeCompare(b.key));
 }
 
 // When the owner last dealt with a conversation: its latest message (a reply is one), the archive mark, a snooze, an

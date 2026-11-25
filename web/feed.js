@@ -122,11 +122,13 @@ export function setupFeed({ notify, onQueue, limits, onRender = () => {}, onOpen
     const kept = live.filter((view) => showArchive || (!view.archived && !inArchivedTopic(view)));
     const tagged = (view) => [...tagFilter].every((tag) => view.tags.includes(tag));
     const inSource = (view) => !sourceFilter || sourceKey(view.event) === sourceFilter;
-    convKeys = conversationKeys(live, { tasksById });
+    // Deleted messages stay in the queue's input: a read mark on one still covers what came before it (queue.js).
+    const forQueue = projected.filter((view) => showArchive || (!view.archived && !inArchivedTopic(view)));
+    convKeys = conversationKeys(forQueue, { tasksById });
     const inConversation = (view) => !conversationKey || convKeys.get(view.id) === conversationKey;
     // Лента: context-only messages and all-finished tasks show with «Завершённые».
     const finished = (view) => view.taskIds.length ? view.taskIds.every((id) => !isOpen(tasksById.get(id) ?? { status: 'todo' })) : view.conversationOnly;
-    convList = conversations(kept, taskList, { now, config: queueConfig(), keys: convKeys, questions: asked, proposals });
+    convList = conversations(forQueue, taskList, { now, config: queueConfig(), keys: convKeys, questions: asked, proposals });
     current = conversationKey ? convList.find((item) => item.key === conversationKey) ?? null : null;
     const inside = mode === 'conversations' && Boolean(conversationKey);
     const visible = inside ? kept.filter(inConversation)

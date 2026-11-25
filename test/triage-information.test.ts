@@ -108,7 +108,10 @@ test('a new device receives context results and keeps an informational SMS out o
     assert.ok(events.some((item) => item.id === annotation.id));
     const key = 'tel:+48500000006';
     const options = { now: new Date('2026-11-20T11:00:00Z'), config: conversationsConfig };
-    assert.equal(queueOf({ key, views: project([message]), tasks: [] }, options).waiting, true);
-    assert.equal(queueOf({ key, views: project([...events, message]), tasks: [] }, options).waiting, false);
+    assert.equal(queueOf({ key, views: project([message]), tasks: [] }, options).section, 'new');
+    // Conversation-only is not «Новые»; it sits in «Прочитанные» until the quiet days (decision 2026-11-25).
+    const noted = queueOf({ key, views: project([...events, message]), tasks: [] }, options);
+    assert.equal(noted.section, 'read');
+    assert.equal(noted.unread, 0);
   } finally { await f.stop(); }
 });

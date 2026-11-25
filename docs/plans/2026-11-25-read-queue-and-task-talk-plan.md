@@ -102,7 +102,7 @@ Rules (the spec's, as code decisions):
   lifted by `requeue`. A live snooze hides it (`snoozedUntil`, as today).
 - Otherwise `NONE` (archive).
 
-- [ ] **Step 1: Failing tests** (made-up conversations, fixed `now`):
+- [x] **Step 1: Failing tests** (made-up conversations, fixed `now`):
   - `unread incoming → section new, unread = 2`
   - `opened (read mark on the last incoming) → section read, unread = 0`
   - `my reply without a task → section read, not archive` (the spec's main rule)
@@ -113,10 +113,10 @@ Rules (the spec's, as code decisions):
   - `a snoozed read conversation is hidden until the snooze ends, then read with moment = snooze end`
   - `group chatter that is not a reply to me → not new` (Review Focus 1)
   - `queueList orders new, decide, read; read freshest last`
-- [ ] **Step 2:** `node --test test/queue.test.ts` → the new tests FAIL.
-- [ ] **Step 3:** Implement in `queueOf`; keep `queue.js` under ~300 lines — if it grows past, move `taskDayOf`,
+- [x] **Step 2:** `node --test test/queue.test.ts` → the new tests FAIL.
+- [x] **Step 3:** Implement in `queueOf`; keep `queue.js` under ~300 lines — if it grows past, move `taskDayOf`,
   `handledAt`, `myActs` to a new `web/queueacts.js` (add to `VERSIONED`).
-- [ ] **Step 4:** All queue and conversations tests pass (adjust old expectations that encoded «reply →
+- [x] **Step 4:** All queue and conversations tests pass (adjust old expectations that encoded «reply →
   archive», each with a comment pointing to the decision 2026-11-25). Commit `Queue sections: new, awaiting decision, read; auto-archive after quiet days`.
 
 ### Task 4: The auto-archive term as an owner setting

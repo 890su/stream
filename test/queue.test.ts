@@ -34,13 +34,13 @@ const mark = (target: string, ts: string, op: string, extra: Record<string, unkn
 const phone = (kind: 'sms' | 'call', direction: string, ts: string) => ({
   id: `q${++n}`, schema_version: 1, source: 'android_phone', author: 'me', ts, kind, payload: { text: kind === 'sms' ? 'текст' : undefined, data: { [kind]: { number: '+48 600 100 200', direction } } },
 });
-const run = (events: any[], at = now) => {
+const run = (events: any[], at = now, queue: Record<string, unknown> = {}) => {
   const tasks = foldTasks(events, { filedTemplates: ['chatter'] });
   const byMessage = tasksByMessage(tasks);
   const views = project(events).map((view: any) => ({ ...view, taskIds: byMessage.get(view.id) ?? [] }));
-  return conversations(views, tasks, { now: at, config, questions: aiQuestionsByMessage(events), proposals: proposalsByMessage(events) });
+  return conversations(views, tasks, { now: at, config: { queue: { ...config.queue, ...queue } }, questions: aiQuestionsByMessage(events), proposals: proposalsByMessage(events) });
 };
-const queueOf = (events: any[], at = now) => run(events, at)[0].queue;
+const queueOf = (events: any[], at = now, queue: Record<string, unknown> = {}) => run(events, at, queue)[0].queue;
 
 test('a new message in a queued conversation keeps its moment', () => {
   const first = tg('501', '2026-11-18T09:00:00', 'нужен счёт');
@@ -58,16 +58,19 @@ test('order: the longest waiting first (top), the newest last; a new message mov
 
 test('my reply, the archive mark or an owner task link close what came before; a later incoming waits again', () => {
   const ask = tg('501', '2026-11-18T09:00:00', 'можно сегодня?');
-  assert.equal(queueOf([ask, mine('501', '2026-11-18T09:10:00', 'да')]).waiting, false);
+  // A reply without a task is «Прочитанные», not the archive (decision 2026-11-25).
+  assert.equal(queueOf([ask, mine('501', '2026-11-18T09:10:00', 'да')]).section, 'read');
   const later = tg('501', '2026-11-18T10:00:00', 'во сколько?');
   const again = queueOf([ask, mine('501', '2026-11-18T09:10:00', 'да'), later]);
-  assert.deepEqual([again.waiting, again.moment], [true, later.ts]);
-  assert.equal(queueOf([ask, mark(ask.id, '2026-11-18T09:30:00', 'answered')]).waiting, false);
+  assert.deepEqual([again.section, again.waiting, again.moment], ['new', true, later.ts]);
+  assert.equal(queueOf([ask, mark(ask.id, '2026-11-18T09:30:00', 'answered')]).section, null);
   const owned = change('t1', '2026-11-18T09:20:00', { op: 'create', title: 'Анна: приезд', status: 'todo', add: [ask.id] }, 'me');
-  assert.equal(queueOf([ask, owned]).waiting, false);
+  assert.equal(queueOf([ask, owned]).section, null);
   const thanks = tg('501', '2026-11-18T10:30:00', 'спасибо');
   const filed = change('t2', '2026-11-18T10:31:00', { op: 'create', title: 'без дела', template: 'chatter', status: 'done', add: [thanks.id] });
-  assert.equal(queueOf([ask, owned, thanks, filed]).waiting, false, '«спасибо» filed as chatter waits for nothing');
+  const chatter = queueOf([ask, owned, thanks, filed]);
+  assert.equal(chatter.section, 'read', '«спасибо» filed as chatter is not «Новые» (decision 2026-11-25)');
+  assert.equal(chatter.unread, 0);
 });
 
 test('an AI link does not take a conversation out of the queue; owner links are found in task history', () => {
@@ -80,12 +83,12 @@ test('an AI link does not take a conversation out of the queue; owner links are 
 });
 
 test('calls: missed waits, answered does not, my outgoing call or SMS answers', () => {
-  assert.equal(queueOf([phone('call', 'missed', '2026-11-18T09:00:00')]).waiting, true);
-  assert.equal(queueOf([phone('call', 'rejected', '2026-11-18T09:00:00')]).waiting, true);
-  assert.equal(queueOf([phone('call', 'in', '2026-11-18T09:00:00')]).waiting, false);
-  assert.equal(queueOf([phone('sms', 'in', '2026-11-18T09:00:00')]).waiting, true);
-  assert.equal(queueOf([phone('sms', 'in', '2026-11-18T09:00:00'), phone('call', 'out', '2026-11-18T09:30:00')]).waiting, false);
-  assert.equal(queueOf([phone('call', 'missed', '2026-11-18T09:00:00'), phone('sms', 'out', '2026-11-18T09:30:00')]).waiting, false);
+  assert.equal(queueOf([phone('call', 'missed', '2026-11-18T09:00:00')]).section, 'new');
+  assert.equal(queueOf([phone('call', 'rejected', '2026-11-18T09:00:00')]).section, 'new');
+  assert.equal(queueOf([phone('call', 'in', '2026-11-18T09:00:00')]).section, 'read', 'an answered call is not new (decision 2026-11-25)');
+  assert.equal(queueOf([phone('sms', 'in', '2026-11-18T09:00:00')]).section, 'new');
+  assert.equal(queueOf([phone('sms', 'in', '2026-11-18T09:00:00'), phone('call', 'out', '2026-11-18T09:30:00')]).section, 'read');
+  assert.equal(queueOf([phone('call', 'missed', '2026-11-18T09:00:00'), phone('sms', 'out', '2026-11-18T09:30:00')]).section, 'read');
 });
 
 test('requeue lifts the moment to its time; unrequeue restores the first incoming', () => {
@@ -135,7 +138,7 @@ test('«Вернуть» after a task made from the tile brings the conversation
 test('a group waits only for a message answering me or in my task', () => {
   const my = mine('-900', '2026-11-18T08:00:00', 'кто свободен?');
   const chatter = tg('-900', '2026-11-18T09:00:00', 'всем привет', {}, 'contact:tg:by:7', 'group');
-  assert.equal(queueOf([my, chatter]).waiting, false);
+  assert.equal(queueOf([my, chatter]).section, 'read', 'group chatter is not «Новые» (decision 2026-11-25)');
   const answer = tg('-900', '2026-11-18T09:30:00', 'я свободен', { reply_to: my.id }, 'contact:tg:by:8', 'group');
   assert.equal(queueOf([my, chatter, answer]).waiting, true);
   const task = change('g1', '2026-11-18T09:05:00', { op: 'create', title: 'Моё', status: 'todo', add: [chatter.id], roles: { responsible: 'me', executors: ['me'] } });
@@ -147,8 +150,8 @@ test('own notes never wait', () => {
   assert.equal(queueOf([note]).waiting, false);
 });
 
-// The archive above the queue (owner, 2026-11-21): conversations that wait for nothing, the last handled first —
-// a fresh archive mark, reply, own task or snooze puts it nearest the divider.
+// The archive above the queue (owner, 2026-11-21): conversations in no section, the last handled first.
+// A reply is «Прочитанные», not the archive (decision 2026-11-25).
 test('the archive: what waits for nothing, the last handled first; own notes stay out; a snoozed one is there until it ends', () => {
   const a = tg('701', '2026-11-18T08:00:00', 'a');
   const b = tg('702', '2026-11-18T09:00:00', 'b');
@@ -157,10 +160,11 @@ test('the archive: what waits for nothing, the last handled first; own notes sta
   const note = { id: `q${++n}`, schema_version: 1, source: 'app', author: 'me', ts: '2026-11-18T11:30:00', kind: 'text', payload: { text: 'идея', data: {} } };
   const events = [a, b, c, d, note,
     mark(a.id, '2026-11-18T11:50:00', 'answered'),                    // archived last: nearest the divider
-    mine('702', '2026-11-18T09:30:00', 'ок'),                          // answered by me at 9:30
+    mine('702', '2026-11-18T09:30:00', 'ок'),                          // a reply: «Прочитанные», not the archive
     change('t9', '2026-11-18T11:40:00', { op: 'create', title: 'Дело', status: 'todo', add: [c.id] }, 'me'),
   ];
-  assert.deepEqual(archiveList(run(events)).map((item: any) => item.key), ['tg:701', 'tg:703', 'tg:702']);
+  assert.deepEqual(archiveList(run(events)).map((item: any) => item.key), ['tg:701', 'tg:703']);
+  assert.equal(run(events).find((item: any) => item.key === 'tg:702').queue.section, 'read');
   assert.equal(archiveList(run(events))[0].handledAt, '2026-11-18T11:50:00');
   const snoozed = [d, mark(d.id, '2026-11-18T11:55:00', 'snooze', { until: '2026-11-18T18:00:00' })];
   assert.deepEqual(archiveList(run(snoozed)).map((item: any) => item.key), ['tg:704'], 'snoozed: in the archive until it ends');
@@ -187,9 +191,9 @@ test('unfinished: the other side waits for me and no task covers it — my reply
   assert.equal(run([...base, mark(ok.id, '2026-11-18T10:20:00', 'answered')]).find((c: any) => c.key === 'tg:950').queue.waiting, false);
   // A task made by me for its messages takes it out.
   assert.equal(run([...base, change('tv', '2026-11-18T10:20:00', { op: 'create', title: 'Выезд', status: 'todo', add: [ask.id] }, 'me')]).find((c: any) => c.key === 'tg:950').queue.waiting, false);
-  // A later verdict «finished» takes it out.
+  // A later verdict «finished» moves it to «Прочитанные», not the archive (decision 2026-11-25).
   const thanks = mine('950', '2026-11-18T10:30:00', 'до субботы');
-  assert.equal(run([...base, thanks, verdict([thanks.id], thanks.id, '2026-11-18T10:33:00', null)]).find((c: any) => c.key === 'tg:950').queue.waiting, false);
+  assert.equal(run([...base, thanks, verdict([thanks.id], thanks.id, '2026-11-18T10:33:00', null)]).find((c: any) => c.key === 'tg:950').queue.section, 'read');
   // A snooze hides it until the time.
   const snoozed = run([...base, mark(ok.id, '2026-11-18T10:20:00', 'snooze', { until: '2026-11-18T15:00:00' })]).find((c: any) => c.key === 'tg:950').queue;
   assert.equal(snoozed.waiting, false);
@@ -203,8 +207,9 @@ test('an unconfirmed AI task keeps its conversation in the queue until ✓ or �
   const queue = run([ask, ok, made]).find((c: any) => c.key === 'tg:951').queue;
   assert.equal(queue.waiting, true);
   assert.equal(queue.open, 'ИИ предлагает задачу');
-  assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { unconfirmed: false }, 'me')]).find((c: any) => c.key === 'tg:951').queue.waiting, false, '✓');
-  assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { status: 'cancelled' }, 'me')]).find((c: any) => c.key === 'tg:951').queue.waiting, false, '✕');
+  // ✓ / ✕ end the AI wait; the reply keeps the conversation in «Прочитанные» (decision 2026-11-25).
+  assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { unconfirmed: false }, 'me')]).find((c: any) => c.key === 'tg:951').queue.section, 'read', '✓');
+  assert.equal(run([ask, ok, made, change('tu', '2026-11-18T10:20:00', { status: 'cancelled' }, 'me')]).find((c: any) => c.key === 'tg:951').queue.section, 'read', '✕');
 });
 
 test('the archive or my task hides a conversation until its task day: on that day it waits again', () => {
@@ -236,14 +241,17 @@ test('a planned start or a reminder is the task day too; without a day the archi
 test('a requeue after the conversation was handled brings it back to the end of the queue', () => {
   const ask = tg('970', '2026-11-18T09:00:00', 'спасибо');
   const reply = mine('970', '2026-11-18T09:10:00', 'пожалуйста');
-  assert.equal(queueOf([ask, reply]).waiting, false);
+  // A reply is already «Прочитанные» (decision 2026-11-25); «↧» only lifts its moment.
+  assert.equal(queueOf([ask, reply]).section, 'read');
   const back = mark(reply.id, '2026-11-18T11:00:00', 'requeue');
   const queue = queueOf([ask, reply, back]);
-  assert.deepEqual([queue.waiting, queue.moment], [true, '2026-11-18T11:00:00']);
-  // «Вернуть» takes it back to the archive.
-  assert.equal(queueOf([ask, reply, back, mark(reply.id, '2026-11-18T11:01:00', 'unrequeue')]).waiting, false);
-  // Archived again or answered again: out.
-  assert.equal(queueOf([ask, reply, back, mark(reply.id, '2026-11-18T11:30:00', 'answered')]).waiting, false);
+  assert.deepEqual([queue.waiting, queue.section, queue.moment], [true, 'read', '2026-11-18T11:00:00']);
+  // «Вернуть» drops the lift; the reply still keeps it in «Прочитанные».
+  const undone = queueOf([ask, reply, back, mark(reply.id, '2026-11-18T11:01:00', 'unrequeue')]);
+  assert.equal(undone.section, 'read');
+  assert.equal(undone.moment, reply.ts);
+  // 🗄 after the lift archives it.
+  assert.equal(queueOf([ask, reply, back, mark(reply.id, '2026-11-18T11:30:00', 'answered')]).section, null);
 });
 
 test('back from the archive: the archive mark is lifted and a snooze is cancelled', () => {
@@ -273,12 +281,12 @@ const queueIn = (events: any[], key: string, at = now) => run(events, at).find((
 test('my reply does not take a conversation out while a question waits', () => {
   const ask = tg('980', '2026-11-18T09:00:00', 'отправь посылку маме');
   const ok = mine('980', '2026-11-18T09:05:00', 'ок');
-  assert.equal(queueOf([ask, ok]).waiting, false, 'no question: my reply takes it out');
+  assert.equal(queueOf([ask, ok]).section, 'read', 'no question: my reply is «Прочитанные» (decision 2026-11-25)');
   const question = asking('qq1', [ask.id], '2026-11-18T09:10:00');
   const queue = queueOf([ask, ok, question]);
-  assert.deepEqual([queue.waiting, queue.open, queue.moment], [true, 'ИИ спрашивает', ask.ts]);
-  assert.equal(queueOf([ask, ok, question, mark(ask.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq1', option: 0 })]).waiting, false, 'answered');
-  assert.equal(queueOf([ask, ok, question, result('2026-11-18T09:20:00', { again: true, withdrawn: ['qq1'] })]).waiting, false, 'withdrawn');
+  assert.deepEqual([queue.section, queue.waiting, queue.open, queue.moment], ['decide', true, 'ИИ спрашивает', ask.ts]);
+  assert.equal(queueOf([ask, ok, question, mark(ask.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq1', option: 0 })]).section, 'read', 'answered');
+  assert.equal(queueOf([ask, ok, question, result('2026-11-18T09:20:00', { again: true, withdrawn: ['qq1'] })]).section, 'read', 'withdrawn');
 });
 
 test('a waiting update proposal holds the conversation', () => {
@@ -288,11 +296,11 @@ test('a waiting update proposal holds the conversation', () => {
   const ok = mine('981', '2026-11-18T09:15:00', 'хорошо');
   const proposal = result('2026-11-18T09:10:00', { proposals: [{ id: 'pp1', task_id: 'tp1', message_ids: [ask.id], reason: 'новый пункт', confidence: 0.8,
     alternatives: [], change: { items_add: [{ id: 'i1', text: 'картридж' }] } }] });
-  assert.equal(queueOf([linked, ask, link, ok]).waiting, false, 'linked to an open record and answered');
+  assert.equal(queueOf([linked, ask, link, ok]).section, 'read', 'linked to an open record and answered (decision 2026-11-25)');
   const queue = queueOf([linked, ask, link, ok, proposal]);
-  assert.deepEqual([queue.waiting, queue.open], [true, 'ИИ предлагает правку']);
-  assert.equal(queueOf([linked, ask, link, ok, proposal, mark(ask.id, '2026-11-18T09:20:00', 'reject_proposal', { proposal: 'pp1' })]).waiting, false, '✕');
-  assert.equal(queueOf([linked, ask, link, ok, proposal, change('tp1', '2026-11-18T09:20:00', { op: 'update', proposal: 'pp1', items_add: [{ id: 'i1', text: 'картридж' }] }, 'me')]).waiting, false, '✓');
+  assert.deepEqual([queue.section, queue.waiting, queue.open], ['decide', true, 'ИИ предлагает правку']);
+  assert.equal(queueOf([linked, ask, link, ok, proposal, mark(ask.id, '2026-11-18T09:20:00', 'reject_proposal', { proposal: 'pp1' })]).section, 'read', '✕');
+  assert.equal(queueOf([linked, ask, link, ok, proposal, change('tp1', '2026-11-18T09:20:00', { op: 'update', proposal: 'pp1', items_add: [{ id: 'i1', text: 'картридж' }] }, 'me')]).section, 'read', '✓');
 });
 
 test('an old (v20) unanswered proposal does not hold after my reply; a v21 one does', () => {
@@ -300,7 +308,7 @@ test('an old (v20) unanswered proposal does not hold after my reply; a v21 one d
   const ok = mine('985', '2026-11-18T09:15:00', 'да');
   const proposal = (id: string, processor: string) => result('2026-11-18T09:10:00', { processor, proposals: [{ id, task_id: 'tp9', message_ids: [ask.id],
     reason: 'тот же сайт', confidence: 0.7, alternatives: [], change: { op: 'update', add: [ask.id] } }] });
-  assert.equal(queueOf([ask, ok, proposal('pp8', 'triage-ai-v20')]).waiting, false, 'v20: my reply takes it out, as before');
+  assert.equal(queueOf([ask, ok, proposal('pp8', 'triage-ai-v20')]).section, 'read', 'v20: my reply moves it to «Прочитанные» (decision 2026-11-25)');
   assert.equal(queueOf([ask, proposal('pp8', 'triage-ai-v20')]).waiting, true, 'v20: the incoming itself still waits');
   assert.equal(queueOf([ask, ok, proposal('pp9', 'triage-ai-v21')]).open, 'ИИ предлагает правку', 'v21: holds after my reply');
 });
@@ -311,7 +319,7 @@ test('a done-work record does not hold the conversation', () => {
   const thanks = tg('982', '2026-11-18T09:35:00', 'спасибо, работает');
   const done = change('td1', '2026-11-18T09:40:00', { op: 'create', title: 'Анна: настройка печати', status: 'done', unconfirmed: true,
     report: { text: 'настроил печать' }, add: [ask.id, ok.id, thanks.id] });
-  assert.equal(queueOf([ask, ok, thanks, done]).waiting, false);
+  assert.equal(queueOf([ask, ok, thanks, done]).section, 'read', 'done work is not «Новые» (decision 2026-11-25)');
 });
 
 test('a message linked to a closed record does not wait; linked to an open one it does', () => {
@@ -319,7 +327,7 @@ test('a message linked to a closed record does not wait; linked to an open one i
   const closed = change('tc1', '2026-11-17T18:00:00', { op: 'update', status: 'done' }, 'me');
   const thanks = tg('983', '2026-11-18T09:00:00', 'спасибо, работает');
   const link = change('tc1', '2026-11-18T09:05:00', { op: 'update', add: [thanks.id] });
-  assert.equal(queueOf([made, closed, thanks, link]).waiting, false, 'closed record');
+  assert.equal(queueOf([made, closed, thanks, link]).section, 'read', 'a closed record is not «Новые» (decision 2026-11-25)');
   assert.equal(queueOf([made, thanks, link]).waiting, true, 'open record');
 });
 
@@ -357,9 +365,9 @@ test('answering a question handles its incoming messages: no reply needed after 
   const question = asking('qq5', [ask.id], '2026-11-18T09:10:00');
   assert.deepEqual([queueOf([ask, question]).waiting, queueOf([ask, question]).pending.length], [true, 1], 'the incoming waits too');
   const nothing = mark(ask.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq5', option: 1 });
-  assert.equal(queueOf([ask, question, nothing]).waiting, false);
+  assert.equal(queueOf([ask, question, nothing]).section, 'read', 'answered: «Прочитанные», not the archive (decision 2026-11-25)');
   const words = mark(ask.id, '2026-11-18T09:20:00', 'answer_question', { question: 'qq5', text: 'это подарок' });
-  assert.equal(queueOf([ask, question, words]).waiting, false);
+  assert.equal(queueOf([ask, question, words]).section, 'read');
   const later = tg('986', '2026-11-18T10:00:00', 'и ещё одно');
   assert.equal(queueOf([ask, question, nothing, later]).waiting, true, 'a later incoming waits again');
 });
@@ -381,8 +389,8 @@ test('handled today: conversations out of the queue that I acted on today', () =
   const note = { id: `q${++n}`, schema_version: 1, source: 'app', author: 'me', ts: '2026-11-18T07:00:00', kind: 'text', payload: { text: 'идея', data: {} } };
   const events = [...replied, ...quietToday, chatter, filed, decided, answer, snoozed, later, waiting, tasked, myTask, note];
   const list = run(events);
-  assert.equal(list.find((c: any) => c.key === 'tg:992').queue.waiting, false, 'the chatter today waits for nothing');
-  assert.equal(handledToday(list, now), 4, 'my reply, my answer, my snooze, my task; not another person message today, not what waits, not «Я»');
+  assert.equal(list.find((c: any) => c.key === 'tg:992').queue.section, 'read', 'chatter on a closed record is not «Новые» (decision 2026-11-25)');
+  assert.equal(handledToday(list, now), 2, 'a reply and an answered question sit in «Прочитанные», not the archive (decision 2026-11-25); counted: my snooze and my task');
   assert.equal(handledToday(list, new Date('2026-11-19T12:00:00')), 0, 'tomorrow nothing yet');
 });
 
@@ -395,6 +403,108 @@ test('a waiting proposal on a record cancelled or closed since holds nothing', (
     alternatives: [], change: { items_add: [{ id: 'i7', text: 'картридж' }] } }] });
   assert.equal(queueOf([linked, ask, link, ok, proposal]).waiting, true, 'holds while the record is open');
   for (const status of ['cancelled', 'done']) {
-    assert.equal(queueOf([linked, ask, link, ok, proposal, change('tp7', '2026-11-18T09:30:00', { op: 'update', status }, 'me')]).waiting, false, status);
+    assert.equal(queueOf([linked, ask, link, ok, proposal, change('tp7', '2026-11-18T09:30:00', { op: 'update', status }, 'me')]).section, 'read', status);
   }
+});
+
+// Sections (decision 2026-11-25): «Новые» · «Ждут решения» · «Прочитанные». A reply no longer archives.
+test('unread incoming is new; a read mark on the last one is read', () => {
+  const first = tg('530', '2026-11-18T09:00:00', 'раз');
+  const second = tg('530', '2026-11-18T10:00:00', 'два');
+  const fresh = queueOf([first, second]);
+  assert.deepEqual([fresh.section, fresh.unread, fresh.waiting], ['new', 2, true]);
+  const opened = queueOf([first, second, mark(second.id, '2026-11-18T10:05:00', 'read')]);
+  assert.deepEqual([opened.section, opened.unread, opened.waiting], ['read', 0, true]);
+});
+
+test('a read mark covers messages up to its target, not up to the time of the mark', () => {
+  const early = tg('531', '2026-11-18T09:00:00', 'рано');
+  const late = tg('531', '2026-11-18T10:00:00', 'позже');
+  const queue = queueOf([early, late, mark(early.id, '2026-11-18T11:00:00', 'read')]);
+  assert.equal(queue.section, 'new');
+  assert.equal(queue.unread, 1);
+  assert.equal(queue.pending[0].id, late.id);
+});
+
+test('deleting the read anchor does not make the conversation new', () => {
+  const first = tg('532', '2026-11-18T09:00:00', 'первое');
+  const last = tg('532', '2026-11-18T10:00:00', 'второе');
+  const queue = queueOf([first, last, mark(last.id, '2026-11-18T10:05:00', 'read'), mark(last.id, '2026-11-18T10:06:00', 'delete')]);
+  assert.equal(queue.section, 'read');
+  assert.equal(queue.unread, 0);
+});
+
+test('my reply without a task is read, not the archive; with an unconfirmed task it is decide', () => {
+  const ask = tg('533', '2026-11-18T09:00:00', 'можно сегодня?');
+  const reply = queueOf([ask, mine('533', '2026-11-18T09:10:00', 'да')]);
+  assert.equal(reply.section, 'read');
+  assert.equal(reply.waiting, true);
+  const made = change('tu2', '2026-11-18T09:20:00', { op: 'create', title: 'Приезд', status: 'todo', unconfirmed: true, add: [ask.id] });
+  const waiting = queueOf([ask, mine('533', '2026-11-18T09:10:00', 'да'), made]);
+  assert.equal(waiting.section, 'decide');
+  assert.equal(waiting.open, 'ИИ предлагает задачу');
+});
+
+test('a finished verdict is read, not the archive; 🗄 archives, and a new incoming is new again', () => {
+  const ask = tg('534', '2026-11-18T09:00:00', 'приедете?');
+  const ok = mine('534', '2026-11-18T09:10:00', 'да');
+  const finished = queueOf([ask, ok, verdict([ask.id, ok.id], ok.id, '2026-11-18T09:20:00', null)]);
+  assert.equal(finished.section, 'read');
+  const archived = queueOf([ask, mark(ask.id, '2026-11-18T09:30:00', 'answered')]);
+  assert.equal(archived.section, null);
+  assert.equal(archived.waiting, false);
+  const again = queueOf([ask, mark(ask.id, '2026-11-18T09:30:00', 'answered'), tg('534', '2026-11-18T10:00:00', 'алло?')]);
+  assert.equal(again.section, 'new');
+  const mineBack = queueOf([ask, mark(ask.id, '2026-11-18T09:30:00', 'answered'), mine('534', '2026-11-18T10:00:00', 'я на связи')]);
+  assert.equal(mineBack.section, 'read', 'my own message returns it to read, not new');
+  assert.equal(mineBack.unread, 0);
+});
+
+test('read and quiet for the term archives; just short of it stays; zero days never archives', () => {
+  const ask = tg('535', '2026-11-15T12:00:00', 'давно');
+  const read = (ts: string) => mark(ask.id, ts, 'read');
+  assert.equal(queueOf([ask, read('2026-11-15T12:00:00')]).section, null, 'exactly 3 quiet days');
+  assert.equal(queueOf([ask, read('2026-11-15T13:00:00')]).section, 'read', '2 days 23 h');
+  const month = new Date('2026-12-18T12:00:00');
+  assert.equal(queueOf([ask, read('2026-11-18T12:00:00')], month, { archive_read_days: 0 }).section, 'read', '0 never archives');
+  assert.equal(queueOf([ask, read('2026-11-18T12:00:00')], month).section, null, 'the default still archives a month of quiet');
+});
+
+test('a snoozed read conversation stays hidden until the snooze ends, then read at that time', () => {
+  const ask = tg('536', '2026-11-18T09:00:00', 'вопрос');
+  const until = '2026-11-18T15:00:00';
+  const events = [ask, mark(ask.id, '2026-11-18T09:05:00', 'read'), mark(ask.id, '2026-11-18T09:10:00', 'snooze', { until })];
+  const hidden = queueOf(events);
+  assert.equal(hidden.waiting, false);
+  assert.equal(hidden.snoozedUntil, until);
+  const back = queueOf(events, new Date('2026-11-18T16:00:00'));
+  assert.equal(back.section, 'read');
+  assert.equal(back.moment, until);
+});
+
+test('group chatter that is not a reply to me is not new', () => {
+  const my = mine('-910', '2026-11-18T08:00:00', 'кто свободен?');
+  const chatter = tg('-910', '2026-11-18T09:00:00', 'всем привет', {}, 'contact:tg:by:7', 'group');
+  assert.notEqual(queueOf([my, chatter]).section, 'new');
+  const answer = tg('-910', '2026-11-18T09:30:00', 'я свободен', { reply_to: my.id }, 'contact:tg:by:8', 'group');
+  assert.equal(queueOf([my, chatter, answer]).section, 'new');
+});
+
+test('queueList orders new, then decide, then read; inside read the freshest is last', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { SECTION_TITLES } = await import('../web/queue.js');
+  assert.deepEqual(SECTION_TITLES, { new: 'Новые', decide: 'Ждут решения', read: 'Прочитанные' });
+  const ask = tg('3', '2026-11-18T09:00:00', 'decide');
+  const reply = mine('3', '2026-11-18T09:10:00', 'ок');
+  const events = [
+    tg('2', '2026-11-18T08:00:00', 'new early'),
+    tg('1', '2026-11-18T11:00:00', 'new late'),
+    ask, reply,
+    verdict([ask.id, reply.id], reply.id, '2026-11-18T09:12:00', 'ждёт ответ'),
+    tg('4', '2026-11-18T07:00:00', 'read old'),
+    mine('4', '2026-11-18T07:30:00', 'да'),
+    tg('5', '2026-11-18T10:30:00', 'read new'),
+    mine('5', '2026-11-18T10:40:00', 'да'),
+  ];
+  assert.deepEqual(queueList(run(events)).map((item: any) => item.key), ['tg:2', 'tg:1', 'tg:3', 'tg:4', 'tg:5']);
 });
