@@ -27,7 +27,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `backup.ts` | nightly copy of DB and media | — |
 | **contracts/** | | |
 | `validate.ts` | Event type + JSON Schema interpreter | `JournalEvent`, `validateEvent` |
-| `correction.ts` | owner corrections: ops (incl. the queue's `snooze` with `until`, `requeue` and their undo), link targets | `CORRECTION_OPS`, `checkCorrection*` |
+| `correction.ts` | owner corrections: ops (incl. the queue's `snooze` with `until`, `requeue` and their undo, and `read`), link targets | `CORRECTION_OPS`, `checkCorrection*` |
 | `tagging.ts` / `phone.ts` / `telegram.ts` / `viber.ts` / `whatsapp.ts` / `task.ts` | kind-specific payload rules (task: closing report by the registry; Viber and WhatsApp: replies by phone only) | `check*`, `whatsappAccountOf` |
 | **server/** | | |
 | `http.ts` | auth, routing (incl. «✨» — `/api/triage/again`, `/api/tasks/:id/recheck`), starts bots, WhatsApp clients and triage | `createApp` |
@@ -151,7 +151,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `motion.js` | smooth show / hide / fold (grow, shrink, reveal, conceal, play) with a timer fallback |
 | `snooze.js` / `snoozetiles.js` | «⏱ Отложить»: choices by the time of day (`snoozeOptions`), the popover (`snoozeMenu`), a date from the system picker; the row in place of a left-swiped queue tile: dials ⏱ minutes and 🌗 / 📅 — one time wheel through the parts of the days ahead (`swipeChoices`, `timeSlots`, `turnIndex`, `turnDay`; `snoozeTiles`: the row of dials holds the finger, a dialled wheel spreads over the three places; «🗄», «↧», «✕») |
 | `convlist.js` / `convtasks.js` | a tile of the queue: four lines (kind · channel — contact; the task or «+ задача…»; two lines of the last message, edge to edge), the time at the end of the title line (no buttons: swipes), a small line «ждёт · новых · контрагент · метки» — or «❓ …», the AI's newest waiting question, read from the questions directly (`tileFacts`, `tileTask`, `pickTask`, `convRow`); task plaques on top of a conversation (the «Готово» mark and swipes, status, executor, due) |
-| `projection.js` | pure: events → message views (corrections — `answer_question` marks its message `decided`, delivery, context-only results), sources, chats, topics |
+| `projection.js` | pure: events → message views (corrections — `read` marks its message `read`/`readAt`, `answer_question` marks its message `decided`, delivery, context-only results), sources, chats, topics |
 | `bubble.js` | one message bubble (text, media, meta, task mark, the triage's link marks — linkmark.js) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
 | `composer.js` / `draftfiles.js` | input: text, voice, tags, recipient, modes (reply, edit, continue); attachments of the draft (checks, previews) |

@@ -166,3 +166,13 @@ test('queue marks: snoozes and requeues are stacks, their undo takes the last on
   const [plain] = project([message('без отметок')]);
   assert.deepEqual([plain.snoozes, plain.requeues], [[], []]);
 });
+
+test('a read mark marks its message read', () => {
+  const incoming = message('когда приедете?');
+  const mark = fix(incoming.id, 'read');
+  const [view] = project([incoming, mark]);
+  assert.equal(view.read, true);
+  assert.equal(view.readAt, mark.ts);
+  const [plain] = project([message('без отметки')]);
+  assert.equal(plain.read, false);
+});

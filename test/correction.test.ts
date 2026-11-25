@@ -85,3 +85,16 @@ test('answer_question validates option index or text', async () => {
     await f.stop();
   }
 });
+
+test('a read mark needs only the message it points at', async () => {
+  const f = await fixture();
+  const post = (body: unknown) => f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const original = event({ payload: { text: 'когда приедете?' } });
+    assert.equal((await post(original)).status, 201);
+    assert.equal((await post(correction(original.id, { op: 'read' }))).status, 201);
+    assert.equal((await post(correction(original.id, { op: 'erase' }))).status, 400, 'unknown operation');
+  } finally {
+    await f.stop();
+  }
+});

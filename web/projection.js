@@ -91,7 +91,7 @@ export function project(events, pendingIds = new Set()) {
     }
     views.set(event.id, {
       id: event.id, event, text: event.payload?.text ?? '', tags: event.payload?.tags ?? [],
-      edited: false, archived: false, deleted: false, history: [], snoozes: [], requeues: [], pending: pendingIds.has(event.id), replyTo: null, replies: 0,
+      edited: false, archived: false, deleted: false, read: false, history: [], snoozes: [], requeues: [], pending: pendingIds.has(event.id), replyTo: null, replies: 0,
       // The message this one continues (CONCEPT.md §2.5): the owner's choice at capture, changed later by link/unlink.
       continues: event.payload?.data?.continuation?.on ? event.payload.data.continuation.target : null,
     });
@@ -130,6 +130,8 @@ export function project(events, pendingIds = new Set()) {
       case 'unsnooze': view.snoozes.pop(); break;
       case 'requeue': view.requeues.push(correction.ts); break;
       case 'unrequeue': view.requeues.pop(); break;
+      // «Прочитано» (CONCEPT.md §2.5): the owner has seen incoming up to this message.
+      case 'read': view.read = true; view.readAt = correction.ts; break;
       // My answer to the AI's question (askline.js) names its latest message: it and what came before are dealt with.
       case 'answer_question': view.decided = true; view.decidedAt = correction.ts; break;
       default: break;
