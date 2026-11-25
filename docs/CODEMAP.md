@@ -19,7 +19,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | File | Job | Key exports |
 |---|---|---|
 | `switches.ts` | connections switched off and on from the System screen (`switches.json` in the data volume); off keeps every setting | `ConnectorSwitches`, `CONNECTORS` |
-| `ownersettings.ts` | the owner's settings from the System screen (`settings.json` in the data volume): how the AI makes new tasks — `unconfirmed` (default) or `confirmed`; `POST /api/settings/triage-new-tasks` | `OwnerSettings`, `TriageNewTasks` |
+| `ownersettings.ts` | the owner's settings (`settings.json` in the data volume): how the AI makes new tasks — `unconfirmed` (default) or `confirmed` (`POST /api/settings/triage-new-tasks`); quiet days before a read conversation is archived, 0–30, default 3, 0 = never (`POST /api/settings/archive-read-days`, sent as `conversations.queue.archive_read_days`) | `OwnerSettings`, `TriageNewTasks` |
 | `secrets.ts` | keys entered on the System screen (Google client, bot tokens): `secrets.json` in the data volume (600), over .env, never sent back, applied at once | `SecretStore`, `SECRETS` |
 | `main.ts` | entry: `.env`, store, HTTP, bots, WhatsApp (`STREAM_WA_<ACCOUNT>_ENABLED`), triage | — |
 | `config.ts` | registry files loaded at start | `captureConfig`, `tagConfig`, `telegramConfig`, `whatsappConfig`, `tasksConfig`, `conversationsConfig`, `filtersConfig` |
@@ -98,7 +98,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `layout.js` | the wide-screen breakpoint the panels follow (docked or sliding); none in node tests |
 | `app.js` | entry: wires everything, message action dispatch, view changes (old saved views map to new), the link window's context |
 | `viewswitch.js` | the views of the centre and the system back: the conversation queue is the root (`backTarget` — the view under a conversation, else home; `toHome`); the view title in the top bar (`viewTitle`: the queue — «Ждут решения: N»; `setupViewTitle`). No switch by the input since 2026-11-21 |
-| `settings.js` | status line, settings dialog (token, copying it to another device), service worker registration |
+| `settings.js` | status line, settings dialog (token, copying it to another device, quiet days before a read conversation is archived), service worker registration |
 | `feed.js` | the centre: home (the conversation queue, queuehome.js; back from a conversation on the same tile), «Сейчас» (the dashboard), one conversation (task plaques + messages in a row), Задачи (task rows by the panel's filter), Лента (bursts, chain lines); the open conversation doubles as the contact filter in Задачи and Лента |
 | `dashboard.js` | the dashboard («▶ Сейчас» in the panel's «Задачи»), top-down like the queue: in work on top («Готово», «Пауза») or «Вернуться к…», paused under it, next in the order of «До конца дня» under them (`dashboardOrder`, `dashboardNodes`) |
 | `feedpage.js` | where the centre's messages come from: media files (object URLs) and journal pages (refresh, older history; `fill` back to `queue.since` at once, `hasOlder`) |

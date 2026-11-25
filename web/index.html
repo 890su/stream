@@ -274,6 +274,11 @@
       <p class="hint">Другое устройство: здесь «Скопировать токен», там ⋮ → Доступ → вставить → «Сохранить». Исходный токен — <code>STREAM_OWNER_TOKEN</code> в <code>/srv/stream/.env</code> на сервере.</p>
       <button id="token-copy" type="button" class="link-button" hidden>Скопировать токен для другого устройства</button>
       <p id="queue-count" class="hint" role="status"></p>
+      <p class="days-field">
+        <label for="archive-read-days">Прочитанные беседы — в архив через</label>
+        <input id="archive-read-days" type="number" min="0" max="30" step="1" inputmode="numeric" value="3">
+        <span>дн. (0 — никогда)</span>
+      </p>
       <button id="system-button" type="button" class="link-button">Система: источники и отправки</button>
       <button id="feed-button" type="button" class="link-button">Лента сообщений: все записи подряд, для анализа</button>
       <div class="dialog-actions">

@@ -107,6 +107,16 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
           json(response, 200, { ok: true });
           return;
         }
+        // How long a read conversation stays on the queue (design 2026-11-25): 0–30 days, 0 = never.
+        if (url.pathname === '/api/settings/archive-read-days' && request.method === 'POST') {
+          if (!settings) throw new HttpError(404, 'Настройки недоступны');
+          let body: { value?: unknown };
+          try { body = JSON.parse((await readBody(request, 1024)).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'Некорректный JSON'); }
+          if (!OwnerSettings.isArchiveDays(body.value)) throw new HttpError(400, 'Нужно число дней от 0 до 30');
+          settings.setArchiveReadDays(body.value);
+          json(response, 200, { ok: true });
+          return;
+        }
         // «✨ Разобрать заново» (src/tasks/retriage.ts): the open conversation's last session goes to the AI again.
         if (url.pathname === '/api/triage/again' && request.method === 'POST') {
           if (!connections.triage || !connections.isOn('ai_triage')) throw new HttpError(409, 'Разбор задач выключен на «Системе»');
@@ -161,7 +171,8 @@ export function createApp({ store, ownerToken, phoneToken, viberToken, telegram,
       if (url.pathname === '/healthz') { json(response, 200, { ok: true }); return; }
       if (url.pathname === '/capture-config.json') {
         const telegram = { accounts: Object.fromEntries(Object.entries(telegramConfig.accounts).map(([key, account]) => [key, { title: account.title, connector: account.connector }])), address_book: telegramConfig.address_book };
-        json(response, 200, { ...captureConfig, tagging: tagConfig, conversations: conversationsConfig, filters: filtersConfig.filters, pulse: pulseConfig, telegram, tasks: { filed_templates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name),
+        const conversations = { ...conversationsConfig, queue: { ...conversationsConfig.queue, archive_read_days: settings?.archiveReadDays() ?? 3 } };
+        json(response, 200, { ...captureConfig, tagging: tagConfig, conversations, filters: filtersConfig.filters, pulse: pulseConfig, telegram, tasks: { filed_templates: tasksConfig.templates.filter((template) => template.filed).map((template) => template.name),
           card: tasksConfig.card, report_fields: tasksConfig.report_fields, report_default: tasksConfig.report_default, currencies: tasksConfig.currencies,
           reports: Object.fromEntries(tasksConfig.templates.filter((template) => template.report).map((template) => [template.name, template.report])) } }); return;
       }

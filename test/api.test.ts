@@ -113,3 +113,20 @@ test('authenticated share fallback appends media and a share event then redirect
     assert.equal((await f.request('/share-target', { method: 'POST', body: 'malformed' })).status, 400);
   } finally { await f.stop(); }
 });
+
+test('the archive term is saved and capture-config carries it; 31 and 1.5 are refused', async () => {
+  const f = await fixture({ secrets: true });
+  try {
+    const post = (value: unknown) => f.request('/api/settings/archive-read-days', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+    const days = async () => ((await (await fetch(f.base + '/capture-config.json')).json()) as { conversations: { queue: { archive_read_days: number } } }).conversations.queue.archive_read_days;
+    assert.equal(await days(), 3);
+    assert.equal((await post(5)).status, 200);
+    assert.equal(await days(), 5);
+    for (const value of [31, 1.5]) {
+      const response = await post(value);
+      assert.equal(response.status, 400, String(value));
+      assert.match(((await response.json()) as { error: string }).error, /Нужно число дней от 0 до 30/);
+    }
+    assert.equal(await days(), 5, 'a refused value leaves the saved term');
+  } finally { await f.stop(); }
+});
