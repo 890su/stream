@@ -21,7 +21,7 @@ updated: 2026-11-24
   answer, tap «Готово» and correct the triage.
 - **Model.** An append-only event journal; recomputable layers over it: normalization → interpretation → tasks
   and actions. Every task leads back to its source message. Edits, archive, delete and status changes are events too.
-- **Screen.** «Беседы» — the queue of what waits for me, the longest waiting on top, handled top-down; a
+- **Screen.** «Беседы» — the queue in three sections (Новые · Ждут решения · Прочитанные, then the archive), the longest waiting on top, handled top-down; a
   conversation is always two: me and a person (or a group chat). «Задачи» — what to do (the pulse, saved lists); a
   task opens full-screen with its people and the conversation with each (2026-11-20). The message feed is a technical
   view from the menu. Input is one row at the bottom.
@@ -219,8 +219,8 @@ request and the job given to a partner).
 - **Archive of a conversation** (2026-11-19): a swipe left moves a conversation to the archive even when the last
   message is not mine — a `correction` with `op: answered` on its latest message (`unanswered` takes it back; the op
   names stay from the first version). Messages up to that one, and tasks of the conversation with no message after
-  it, no longer make it «ждёт меня» or «жду ответа». A new message after the mark (theirs or mine) brings the
-  conversation back from the archive by itself. Its tasks stay in «Задачи» as they are.
+  it, no longer make it «ждёт меня» or «жду ответа». Since 2026-11-25 (the queue above) only a new incoming message after the
+  mark brings the conversation back from the archive, into «Новые»; a message of mine does not. Its tasks stay in «Задачи» as they are.
 - Inside a conversation: messages of all its channels, plaques of its tasks on top (status, executor, due). A
   reply goes through the chosen channel (the input row, §2.9); each message shows to whom, where and when.
 - **Records of the interlocutor** (owner, 2026-11-23/24, `docs/plans/2026-11-23-conversation-records-design.md`;
