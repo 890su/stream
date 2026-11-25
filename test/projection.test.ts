@@ -168,11 +168,19 @@ test('queue marks: snoozes and requeues are stacks, their undo takes the last on
 });
 
 test('a read mark marks its message read', () => {
+  const earlier = message('первое');
   const incoming = message('когда приедете?');
   const mark = fix(incoming.id, 'read');
-  const [view] = project([incoming, mark]);
+  const again = fix(incoming.id, 'read');
+  const views = project([earlier, incoming, mark]);
+  const view = views.find((item: { id: string }) => item.id === incoming.id);
+  const sibling = views.find((item: { id: string }) => item.id === earlier.id);
   assert.equal(view.read, true);
   assert.equal(view.readAt, mark.ts);
+  assert.equal(sibling.read, false, 'an earlier sibling is not marked');
+  const reread = project([incoming, mark, again]).find((item: { id: string }) => item.id === incoming.id);
+  assert.equal(reread.read, true);
+  assert.equal(reread.readAt, again.ts, 'a second read keeps the later time');
   const [plain] = project([message('без отметки')]);
   assert.equal(plain.read, false);
 });

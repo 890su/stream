@@ -144,28 +144,29 @@ export function conversations(views, tasks, { now = new Date(), config, question
   keys = conversationKeys(views, { tasksById: new Map(tasks.map((task) => [task.id, task])) }) }) {
   const groups = new Map();
   for (const view of views) {
-    if (view.deleted) continue;
     const key = keys.get(view.id);
     if (!key) continue;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(view);
+    groups.get(key).push(view); // deleted views stay, so a read mark on one still covers the conversation (queue.js)
   }
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const owner = ownerLinked(tasks);
   const list = [];
   for (const [key, group] of groups) {
     const sorted = [...group].sort((a, b) => a.event.ts.localeCompare(b.event.ts));
-    const latest = sorted.at(-1);
-    const own = sorted.filter((view) => conversationOf(view.event) === key).at(-1) ?? latest; // carries the channel's data
-    const ids = new Set(sorted.flatMap((view) => view.taskIds ?? []));
-    const incoming = sorted.filter(incomingChat).at(-1);
+    const live = sorted.filter((view) => !view.deleted);
+    if (!live.length) continue;
+    const latest = live.at(-1);
+    const own = live.filter((view) => conversationOf(view.event) === key).at(-1) ?? latest; // carries the channel's data
+    const ids = new Set(live.flatMap((view) => view.taskIds ?? []));
+    const incoming = live.filter(incomingChat).at(-1);
     const conversation = {
-      key, title: titleOf(own, key, taskById, sorted), group: sorted.some((view) => chatOf(view.event)?.group),
-      channels: [...new Set(sorted.map((view) => channelOf(view.event, key)).filter(Boolean))],
-      views: sorted, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
+      key, title: titleOf(own, key, taskById, live), group: live.some((view) => chatOf(view.event)?.group),
+      channels: [...new Set(live.map((view) => channelOf(view.event, key)).filter(Boolean))],
+      views: live, last: latest.event.ts, tasks: [...ids].map((id) => taskById.get(id)).filter(Boolean),
       reply: incoming ? chatOf(incoming.event) : null,
     };
-    list.push({ ...conversation, queue: queueOf(conversation, { now, config, owner, questions, proposals, tasksById: taskById }), archived: isArchived(conversation) });
+    list.push({ ...conversation, queue: queueOf({ ...conversation, views: sorted }, { now, config, owner, questions, proposals, tasksById: taskById }), archived: isArchived(conversation) });
   }
   return list.sort((a, b) => Date.parse(b.last) - Date.parse(a.last));
 }
