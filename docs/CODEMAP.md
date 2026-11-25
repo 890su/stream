@@ -34,7 +34,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `events.ts` | `/api/events` POST/GET; tells `http.ts` of each new event (a directive tag added after triage reruns its session) | `events` |
 | `media.ts` | `/api/media/<sha256>` | `media` |
 | `share.ts` | Android share target | `share` |
-| `phone.ts` | `/api/phone/*` calls, SMS, notes (§8.1) | `phone`, `phoneEventId` |
+| `phone.ts` | `/api/phone/*` calls, SMS, notes (§8.1); SMS out — `actions/next` (held up to 50 s, the phone's pulse; a send not confirmed in 10 min fails) and `actions/<id>` (the phone's report) | `phone`, `phoneEventId` |
 | `viber.ts` | `/api/viber/*` for the Viber bridge on the agent desktop: messages, pulse, reply actions one by one, hello (deploy/DESKTOP.md) | `viber`, `viberMessage` |
 | `secrets.ts` | `/api/secrets`: the keys of the System screen — list what is set (never a value), set one, remove one | `secretsRoute` |
 | `connectors.ts` | the connections running in the server — Telegram bots, WhatsApp clients, the triage, Google — started, stopped and restarted by keys and switches; switching is written to the feed | `createConnections` |
@@ -155,7 +155,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | `bubble.js` | one message bubble (text, media, meta, task mark, the triage's link marks — linkmark.js) |
 | `phonebubble.js` / `tgbubble.js` | call/SMS and Telegram blocks inside a bubble |
 | `composer.js` / `draftfiles.js` | input: text, voice, tags, recipient, modes (reply, edit, continue); attachments of the draft (checks, previews) |
-| `outbound.js` | pure: reply data for Telegram (24 h window) and Viber (by phone only, `viberAnswerable`) |
+| `outbound.js` | pure: reply data for Telegram (24 h window), Viber, WhatsApp and SMS (by phone only, `phoneAnswerable`; an SMS is sent by the phone companion) |
 | `tagrow.js` / `suggest.js` | tags in the row above the input (`ordered()` for the link window); tag suggestions |
 | `linkwindow.js` | the link window of the «связь» button: Метки · Контакты · Беседы · Задачи, likely first (`likelyConversations`, `likelyTasks`), strips and pages, a section on the whole window |
 | `linkstate.js` | the conversation or task the next message goes into: its chip, continuation, recipient, adding to the task once sent |
@@ -199,7 +199,7 @@ the device (`web/projection.js`, `web/taskfold.js`, `web/conversations.js`) — 
 | Path | What |
 |---|---|
 | `docs/BUSINESS-PROCESS-ARCHITECT.md` | Business process analysis, modeling and local BPMN tool setup |
-| `android/` | «Stream · телефон» (Kotlin): call log and SMS sync, after-call note (§8.1, `deploy/PHONE.md`) |
+| `android/` | «Stream · телефон» (Kotlin): call log and SMS sync, after-call note, SMS out (`SmsSender` — the SIM of the number's last SMS; `SmsEcho` keeps its own sent SMS out of the sync; `ReportWorker`), always on the line (`LinkService` — a foreground service holding the waiting request and watching the SMS store and call log; `BootReceiver`) (§8.1, `deploy/PHONE.md`) |
 | `deploy/` | Dockerfile, compose, `install.sh` (agent deploys with `sudo -n`), guides `DEPLOY.md`, `PHONE.md`, `TELEGRAM.md`, `DESKTOP.md`, `WHATSAPP.md` |
 | `deploy/desktop/` | agent desktop on srv-150 (Openbox, noVNC, Viber): image, compose, `viber-send` / `viber-whois` (search by phone or name, the chat checked by its title menu), `viber-selftest`, `viber-health`, `viber-bridge` (Viber ⇄ Stream), `viber-read-out` + `viber_outgoing.py` (the owner's own outgoing messages, copied from the chat window), `notify-log` (desktop notifications → JSON lines) |
 | `test/` | `node --test`: one file per area (api, phone, telegram-bot, triage, taskfold, projection, …) |

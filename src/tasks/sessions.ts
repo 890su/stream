@@ -11,7 +11,7 @@ export function conversationOf(event: JournalEvent): string {
   if (data.viber) return data.viber.phone ? `tel:${data.viber.phone}` : `viber:${data.viber.chat}`;
   if (data.outbound?.connector === 'viber') return `tel:${data.outbound.chat_id}`;
   if (data.whatsapp) return data.whatsapp.phone ? `tel:${data.whatsapp.phone}` : `wa:${data.whatsapp.jid}`;
-  if (data.outbound?.connector?.startsWith('whatsapp_')) return `tel:${data.outbound.chat_id}`;
+  if (data.outbound?.connector?.startsWith('whatsapp_') || data.outbound?.connector === 'sms') return `tel:${data.outbound.chat_id}`;
   const chat = data.telegram?.chat_id ?? data.outbound?.chat_id;
   if (chat !== undefined && chat !== null) return `tg:${chat}`;
   if (event.kind === 'call' || event.kind === 'sms') {

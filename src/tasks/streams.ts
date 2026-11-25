@@ -15,6 +15,7 @@ export function streamOf(event: JournalEvent): string {
   const whatsapp = data.whatsapp as { jid: string; phone?: string } | undefined;
   if (whatsapp) return `whatsapp|${whatsapp.phone ?? whatsapp.jid}`;
   if (outbound?.connector.startsWith('whatsapp_')) return `whatsapp|${outbound.chat_id}`;
+  if (outbound?.connector === 'sms') return 'phone'; // with the SMS it answers
   if (outbound) return `tg|${outbound.connector.replace(/^telegram_/, '')}|${outbound.chat_id}`;
   if (event.source === 'android_phone') return 'phone';
   return 'me';

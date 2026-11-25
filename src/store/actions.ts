@@ -39,8 +39,11 @@ export class ActionStore {
 
   // Sending through the Bot API is not idempotent: an action left `running` by a restart may or may not have
   // gone out, so it is not sent again — it fails with a request to check in Telegram (CONCEPT.md §8.2).
-  failRunning(connector: string, error: string): Action[] {
-    const rows = this.#db.prepare("SELECT id FROM actions WHERE connector = ? AND status = 'running'").all(connector) as { id: string }[];
+  // `before` — only those taken before that moment (the phone: a send it never confirmed).
+  failRunning(connector: string, error: string, before?: string): Action[] {
+    const rows = (before
+      ? this.#db.prepare("SELECT id FROM actions WHERE connector = ? AND status = 'running' AND updated_at < ?").all(connector, before)
+      : this.#db.prepare("SELECT id FROM actions WHERE connector = ? AND status = 'running'").all(connector)) as { id: string }[];
     const now = new Date().toISOString();
     for (const row of rows) this.#db.prepare("UPDATE actions SET status = 'failed', error = ?, updated_at = ? WHERE id = ?").run(error, now, row.id);
     return rows.map((row) => this.get(row.id)!);

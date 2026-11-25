@@ -900,6 +900,23 @@ re-checks every 15 minutes (so sent SMS and anything missed still arrive). Almos
 address, phone token, permissions, SMS exceptions. Built to move into a shared Stream shell (TWA) if one icon is
 needed; notification reading goes there later (§8).
 
+**SMS out and staying awake (2026-11-25, owner: «нельзя переделать приложение чтобы она могла отправлять
+эсэмэски»; «если я его принудительно не открываю какое-то время то оно перестаёт быть активным»).**
+- A conversation with SMS from a number has an «SMS» tile over the input, like Viber and WhatsApp; a reply to it
+  is an owner text with `outbound` to the connector `sms` (by phone only) and becomes a class C `send_message`
+  action, as any reply. The server never sends SMS itself: the companion takes the next action, sends it from the
+  SIM the last SMS of that number came through (else the phone's default SMS SIM) and reports «отправлено» or the
+  error; the bubble shows it as for other channels. A send the phone took and did not confirm within 10 minutes
+  fails «Телефон не подтвердил отправку — проверьте в SMS»: an SMS is not sent twice.
+- The sent SMS also appears in the phone's SMS store; the companion skips it there (the same number and text it
+  sent itself), so the conversation does not show it twice.
+- **Staying awake.** The companion keeps a foreground service with a quiet notification «Stream · на связи»: it
+  holds one request to the server (`/api/phone/actions/next`, up to 50 s) — an SMS written anywhere goes out within
+  seconds — and watches the SMS store and the call log, so a sent SMS or a call is uploaded at once, without the
+  15-minute tick. It starts again after a reboot, an update and a kill (the tick restarts it). Each request is the
+  phone's pulse: the System screen shows the phone «молчит» when it stops. Battery saving must be off for the app
+  (its screen asks); some makers also need «Автозапуск» (`deploy/PHONE.md`).
+
 ### 8.2 Telegram: two accounts' chats in the feed (2026-11-17)
 
 The owner has two Telegram accounts: BY (work in Belarus) and PL (work in Poland). They hold clients and requests,

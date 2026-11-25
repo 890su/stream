@@ -43,6 +43,9 @@
             android:inputType="phone|textMultiLine"
             android:importantForAutofill="no" />
 
+        <Switch android:id="@+id/send_sms" style="@style/Toggle" android:text="@string/send_sms" />
+        <TextView style="@style/Hint" android:text="@string/send_sms_hint" />
+
         <TextView style="@style/Heading" android:text="@string/permissions" />
         <TextView android:id="@+id/permissions_state" style="@style/Hint" />
         <Button android:id="@+id/permissions" style="@style/Action" android:text="@string/grant_permissions" />
@@ -50,8 +53,10 @@
         <Button android:id="@+id/app_info" style="@style/Action" android:text="@string/open_app_info" />
         <TextView android:id="@+id/battery_state" style="@style/Hint" />
         <Button android:id="@+id/battery" style="@style/Action" android:text="@string/battery_button" />
+        <TextView style="@style/Hint" android:text="@string/autostart_hint" />
 
         <TextView style="@style/Heading" android:text="@string/state" />
+        <TextView android:id="@+id/link_state" style="@style/Hint" />
         <TextView android:id="@+id/status" style="@style/Hint" />
     </LinearLayout>
 </ScrollView>

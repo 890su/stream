@@ -2,6 +2,9 @@ import { phoneLabel } from './phonebubble.js';
 
 // Folds journal events into what the feed shows (CONCEPT.md §2.4). Pure: no DOM, no storage.
 // Messages keep their original event; corrections change only the view, latest correction wins.
+import { phoneNumber } from './parties.js';
+
+const SMS_NUMBER = /^\+?\d{6,15}$/; // the phone sends to a national number too
 
 const order = (a, b) => (Date.parse(a.ts) - Date.parse(b.ts)) || (a.received_at ?? '￿').localeCompare(b.received_at ?? '￿');
 
@@ -13,6 +16,7 @@ export function sourceKey(event) {
   if (data.telegram) return `telegram:${data.telegram.account}`;
   if (data.viber || data.outbound?.connector === 'viber') return 'viber';
   if (data.whatsapp || data.outbound?.connector?.startsWith('whatsapp_')) return 'whatsapp';
+  if (data.outbound?.connector === 'sms') return 'phone';
   if (data.outbound) return `telegram:${data.outbound.connector.replace(/^telegram_/, '')}`;
   if (event?.source === 'android_phone') return 'phone';
   if (event?.kind === 'system' || event?.kind === 'action_result') return 'system';
@@ -40,6 +44,15 @@ export function chatOf(event) {
   if (data.outbound?.connector?.startsWith('whatsapp_')) {
     const o = data.outbound;
     return { key: `${o.connector}|${o.chat_id}`, account: o.connector, chat_id: o.chat_id, title: o.chat_title || o.chat_id, group: false };
+  }
+  // An SMS chat is its number (answered by the phone companion, CONCEPT.md §8.1); a sender without a number — none.
+  if (event.kind === 'sms' && data.sms) {
+    const number = phoneNumber(data.sms.number);
+    return SMS_NUMBER.test(number) ? { key: `sms|${number}`, account: 'sms', chat_id: number, title: (data.sms.name ?? '').trim() || number, group: false } : null;
+  }
+  if (data.outbound?.connector === 'sms') {
+    const o = data.outbound;
+    return { key: `sms|${o.chat_id}`, account: 'sms', chat_id: o.chat_id, title: o.chat_title || o.chat_id, group: false };
   }
   if (data.telegram) {
     const t = data.telegram;

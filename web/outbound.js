@@ -4,8 +4,9 @@ import { chatOf } from './projection.js';
 
 const REPLY_WINDOW_MS = 24 * 3600 * 1000; // a business bot answers only within 24 hours of an incoming message
 
-// Viber and WhatsApp write as the owner (the desktop bridge, a linked device): no 24-hour window, a phone only.
-const byPhone = (account) => account === 'viber' || String(account).startsWith('whatsapp_');
+// Viber, WhatsApp and SMS write as the owner (the desktop bridge, a linked device, the phone): no 24-hour window,
+// a phone only.
+const byPhone = (account) => account === 'viber' || account === 'sms' || String(account).startsWith('whatsapp_');
 
 // The newest incoming message of the chat is older than 24 hours (or there is none): the bot cannot answer.
 // Viber and WhatsApp have no such window; they answer only by phone (`phoneAnswerable`).
@@ -17,6 +18,7 @@ export function replyWindowClosed(chat, views, now = Date.now()) {
 
 // payload.data.outbound for a reply: the chat, and the message it answers when that message is in the chat.
 export function outboundData(chat, view, config) {
+  if (chat.account === 'sms') return { connector: 'sms', chat_id: chat.chat_id, chat_title: chat.title };
   if (chat.account === 'viber') return { connector: 'viber', chat_id: chat.chat_id, chat_title: chat.title };
   if (chat.account.startsWith('whatsapp_')) return { connector: chat.account, chat_id: chat.chat_id, chat_title: chat.title };
   const answered = view?.event.payload?.data?.telegram;
@@ -28,4 +30,4 @@ export function outboundData(chat, view, config) {
 
 // A Viber or WhatsApp chat can be answered from the feed only by its phone: Viber hides the number of people not in
 // contacts, a name may be shared by several chats («Неизвестно»), and WhatsApp may give only an anonymous address.
-export const phoneAnswerable = (chat) => !byPhone(chat.account) || /^\+\d{6,15}$/.test(chat.chat_id ?? '');
+export const phoneAnswerable = (chat) => !byPhone(chat.account) || (chat.account === 'sms' ? /^\+?\d{6,15}$/ : /^\+\d{6,15}$/).test(chat.chat_id ?? '');

@@ -35,4 +35,12 @@
     <string name="describe">Описать</string>
     <string name="not_needed">Не нужно</string>
     <string name="saved">Записано в Stream</string>
+    <string name="send_sms">Отправлять SMS из Stream</string>
+    <string name="send_sms_hint">Ответ в беседе на плитку «SMS» уходит с этого телефона — с той SIM, через которую пришло последнее SMS этого номера.</string>
+    <string name="channel_link">На связи</string>
+    <string name="channel_link_description">Приложение держит связь с Stream: звонки и SMS уходят сразу, SMS из Stream отправляются</string>
+    <string name="link_title">Stream · на связи</string>
+    <string name="link_text">Звонки и SMS уходят сразу</string>
+    <string name="link_state">Связь с сервером: %1$s</string>
+    <string name="autostart_hint">Если приложение всё равно засыпает (Xiaomi, Huawei, Honor, Oppo, Vivo): «О приложении» → «Автозапуск» — включить, «Батарея» — «Без ограничений».</string>
 </resources>

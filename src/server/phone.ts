@@ -6,14 +6,22 @@ import { captureConfig } from '../config.ts';
 import { HttpError } from './errors.ts';
 import { json, readBody } from './body.ts';
 import type { LiveFeed } from './live.ts';
+import { actionChanged, stateChanged } from './system.ts';
+import { SMS_CONNECTOR } from '../contracts/phone.ts';
 
 // Calls and SMS from the Android companion (CONCEPT.md §8.1, archive/plans/2026-11-17-p10-calls.md).
 // Plain bodies in, ordinary journal events out. Ids come from the call or SMS itself, so a retry or a
 // reinstall of the companion never writes the same call twice; PhoneIds.kt derives them the same way.
+// SMS out (2026-11-25): replies to the `sms` connector wait here; the companion holds GET actions/next (up to
+// WAIT_MAX_S, its pulse), sends the SMS and reports POST actions/<id>. A send it took and never confirmed fails after
+// STALE_MS — an SMS is not sent twice.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CALL_DIRECTIONS = ['in', 'out', 'missed', 'rejected', 'unknown'];
 const SMS_DIRECTIONS = ['in', 'out'];
+const WAIT_MAX_S = 50; // under Cloudflare's 100 s idle limit
+const STALE_MS = 10 * 60_000;
+const STALE = 'Телефон не подтвердил отправку — проверьте в SMS, ушло ли сообщение';
 
 export const phoneEventId = nameId;
 
@@ -87,13 +95,52 @@ function note(body: Body, callId: string, store: JournalStore): JournalEvent {
   return phoneEvent(body.note_id.toLowerCase(), 'text', time(body.written_at, 'written_at'), { text: body.text.trim(), data: { continuation: { target: callId, on: true } } });
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The next SMS to send, waiting up to `wait` seconds for one; 204 — none. Every call is the phone's pulse.
+async function nextAction(request: IncomingMessage, response: ServerResponse, store: JournalStore, live: LiveFeed, wait: number): Promise<void> {
+  const previous = store.status.pulse('android_phone', 'ok', null, null, new Date().toISOString());
+  stateChanged(store, live, 'android_phone', 'ok', previous, null);
+  const stale = new Date(Date.now() - STALE_MS).toISOString();
+  for (const action of store.actions.failRunning(SMS_CONNECTOR, STALE, stale)) actionChanged(store, live, action);
+  let gone = false;
+  request.on('close', () => { gone = true; });
+  const deadline = Date.now() + wait * 1000;
+  for (;;) {
+    if (gone || response.destroyed) return;
+    const action = store.actions.take(SMS_CONNECTOR);
+    if (action) {
+      actionChanged(store, live, action);
+      json(response, 200, { id: action.id, number: action.params.chat_id, text: action.params.text });
+      return;
+    }
+    if (Date.now() >= deadline) { response.writeHead(204, { 'Cache-Control': 'no-store' }).end(); return; }
+    await sleep(Math.min(1000, deadline - Date.now()));
+  }
+}
+
+function finishAction(response: ServerResponse, store: JournalStore, live: LiveFeed, id: string, body: Body): void {
+  if (body.status !== 'done' && body.status !== 'failed') throw new HttpError(400, 'status — done или failed');
+  const error = body.status === 'failed' ? (text(body.error, 'error') || 'не отправлено').slice(0, 300) : null;
+  const { action, changed } = store.actions.finish(id, SMS_CONNECTOR, body.status, null, error);
+  if (changed) actionChanged(store, live, action);
+  response.writeHead(204, { 'Cache-Control': 'no-store' }).end();
+}
+
 export async function phone(request: IncomingMessage, response: ServerResponse, path: string, store: JournalStore, live: LiveFeed): Promise<void> {
   if (path === 'ping') {
     if (request.method !== 'GET') throw new HttpError(405, 'Метод не поддерживается');
     response.writeHead(204, { 'Cache-Control': 'no-store' }).end();
     return;
   }
+  if (path === 'actions/next') {
+    if (request.method !== 'GET') throw new HttpError(405, 'Метод не поддерживается');
+    const wait = Number(new URL(request.url ?? '/', 'http://localhost').searchParams.get('wait') ?? 0);
+    return nextAction(request, response, store, live, Number.isFinite(wait) ? Math.max(0, Math.min(WAIT_MAX_S, wait)) : 0);
+  }
   if (request.method !== 'POST') throw new HttpError(405, 'Метод не поддерживается');
+  const done = /^actions\/([0-9a-f-]{36})$/.exec(path);
+  if (done) return finishAction(response, store, live, done[1]!, await readJson(request));
   if (path === 'calls') return save(response, store, live, call(await readJson(request)));
   if (path === 'sms') return save(response, store, live, sms(await readJson(request)));
   const noteMatch = /^calls\/([^/]+)\/note$/.exec(path);

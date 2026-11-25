@@ -31,3 +31,32 @@ test('interlocutors: one tile per chat that can be answered, the latest first; d
   assert.deepEqual(rowOrder(chats, 'by|501').map((chat: any) => chat.key), ['by|501', 'viber|+48600100200', 'pl|501'], 'the chosen one leftmost');
   assert.deepEqual(rowOrder(chats, null).map((chat: any) => chat.key), ['viber|+48600100200', 'pl|501', 'by|501'], 'none chosen — the latest first');
 });
+
+// SMS out (CONCEPT.md §8.1, 2026-11-25): a number that sent SMS gets an «SMS» tile; the reply goes to the phone.
+test('an SMS conversation has an SMS tile by its number; a sender without a number has none', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { outboundData, phoneAnswerable, replyWindowClosed } = await import('../web/outbound.js');
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { deliveryText, accountTitle } = await import('../web/tgbubble.js');
+  const sms = (number: string, ts: string, name?: string) => ({ deleted: false, event: { author: 'me', source: 'android_phone', ts, kind: 'sms',
+    payload: { text: 'Буду в 10', data: { sms: { direction: 'in', number, sent_at: ts, ...(name ? { name } : {}) } } } } });
+  const chats = replyChats({ views: [sms('+48 600 100 200', '2026-11-25T09:00:00Z', 'Анна Тестова'), sms('InPost', '2026-11-25T10:00:00Z')] });
+  assert.deepEqual(chats.map((chat: any) => [chat.key, chat.account, chat.chat_id, chat.title]), [['sms|+48600100200', 'sms', '+48600100200', 'Анна Тестова']]);
+  assert.equal(accountTitle('sms'), 'SMS');
+  assert.equal(replyChats({ views: [sms('48500000002', '2026-11-25T09:00:00Z')] })[0]?.chat_id, '48500000002', 'a number without + is still a number');
+  assert.ok(phoneAnswerable(chats[0]));
+  assert.equal(replyWindowClosed(chats[0], [], Date.parse('2026-12-25T00:00:00Z')), false, 'no 24-hour window');
+  assert.deepEqual(outboundData(chats[0], null, {}), { connector: 'sms', chat_id: '+48600100200', chat_title: 'Анна Тестова' });
+  assert.equal(deliveryText({ connector: 'sms', status: 'approved' }), 'ждёт телефон');
+  assert.equal(deliveryText({ connector: 'sms', status: 'done' }), '✓ отправлено SMS');
+  assert.equal(deliveryText({ connector: 'sms', status: 'failed' }), 'не отправлено');
+});
+
+test('my SMS reply belongs to the number conversation, with its calls and SMS', async () => {
+  // @ts-expect-error Browser modules are deliberately buildless JavaScript.
+  const { conversationOf } = await import('../web/conversations.js');
+  const reply = { author: 'me', source: 'app', ts: '2026-11-25T09:00:00Z', kind: 'text', payload: { text: 'ок', data: { outbound: { connector: 'sms', chat_id: '+48600100200' } } } };
+  const incoming = { author: 'me', source: 'android_phone', ts: '2026-11-25T08:00:00Z', kind: 'sms', payload: { text: 'Буду', data: { sms: { direction: 'in', number: '+48600100200' } } } };
+  assert.equal(conversationOf(reply), 'tel:+48600100200');
+  assert.equal(conversationOf(incoming), 'tel:+48600100200');
+});

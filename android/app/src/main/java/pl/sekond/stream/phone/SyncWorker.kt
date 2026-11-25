@@ -88,6 +88,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : Worker(context, p
         if (settings.lastSmsRow < 0) { settings.lastSmsRow = latestRow(Telephony.Sms.CONTENT_URI); return }
         val columns = arrayOf(Telephony.Sms._ID, Telephony.Sms.TYPE, Telephony.Sms.ADDRESS, Telephony.Sms.DATE, Telephony.Sms.BODY, Telephony.Sms.SUBSCRIPTION_ID)
         val exclusions = settings.exclusions
+        val sentHere = settings.sentSms
         applicationContext.contentResolver.query(
             Telephony.Sms.CONTENT_URI, columns, "${Telephony.Sms._ID} > ?", arrayOf(settings.lastSmsRow.toString()), "${Telephony.Sms._ID} ASC",
         )?.use { cursor ->
@@ -103,7 +104,9 @@ class SyncWorker(context: Context, params: WorkerParameters) : Worker(context, p
                 }
                 val address = cursor.getString(2) ?: ""
                 val text = cursor.getString(4) ?: ""
-                if (direction != null && text.isNotBlank() && SmsFilter.accept(address, exclusions)) {
+                // An SMS this companion sent for Stream is in the journal already, as the reply (SmsEcho).
+                val echo = direction == "out" && SmsEcho.matches(sentHere, address, text, cursor.getLong(3))
+                if (direction != null && !echo && text.isNotBlank() && SmsFilter.accept(address, exclusions)) {
                     accept(api.postSms(Payloads.sms(direction, address, cursor.getLong(3), text, cursor.getString(5))))
                 }
                 settings.lastSmsRow = row

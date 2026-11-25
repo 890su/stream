@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * All sending goes through one unique work chain ("sync"), so two syncs never read the same rows at once.
- * Triggers: the end of a call, an incoming SMS, the 15-minute tick, the settings screen.
+ * Triggers: the end of a call, an incoming SMS, a change in the SMS store or call log (LinkService), the 15-minute
+ * tick, the settings screen.
  */
 object Sync {
     private val online = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
@@ -35,6 +36,16 @@ object Sync {
         WorkManager.getInstance(context).enqueueUniquePeriodicWork("tick", ExistingPeriodicWorkPolicy.KEEP, tick)
     }
 
+    /** The result of an SMS Stream asked for, one report per action (ReportWorker). */
+    fun report(context: Context, actionId: String, status: String, error: String?) {
+        val request = OneTimeWorkRequestBuilder<ReportWorker>()
+            .setInputData(ReportWorker.input(actionId, status, error))
+            .setConstraints(online)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork("report|$actionId", ExistingWorkPolicy.KEEP, request)
+    }
+
     fun note(context: Context, callId: String, noteId: String, text: String, writtenAt: Long) {
         val request = OneTimeWorkRequestBuilder<NoteWorker>()
             .setInputData(NoteWorker.input(callId, noteId, text, writtenAt))
@@ -45,8 +56,10 @@ object Sync {
     }
 }
 
+/** Every 15 minutes: send what was missed and bring the link back if Android stopped it. */
 class TickWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
+        LinkService.start(applicationContext)
         Sync.soon(applicationContext)
         return Result.success()
     }

@@ -32,6 +32,20 @@ class Settings(context: Context) {
         get() = prefs.getLong("last_sms_row", -1)
         set(value) = prefs.edit { putLong("last_sms_row", value) }
 
+    /** Send the SMS Stream asks for (replies written in Stream to an «SMS» tile). */
+    var sendSmsOn: Boolean
+        get() = prefs.getBoolean("send_sms_on", true)
+        set(value) = prefs.edit { putBoolean("send_sms_on", value) }
+
+    /** SMS sent for Stream, so the sync does not upload them a second time (SmsEcho). */
+    val sentSms: List<SmsEcho.Sent> get() = SmsEcho.parse(prefs.getString("sent_sms", "")!!)
+    @Synchronized fun rememberSent(item: SmsEcho.Sent) = prefs.edit(commit = true) { putString("sent_sms", SmsEcho.format(SmsEcho.add(sentSms, item))) }
+
+    /** The last answer from the server to the waiting request: the companion is on the line. */
+    var lastPollAt: Long
+        get() = prefs.getLong("last_poll_at", 0)
+        set(value) = prefs.edit { putLong("last_poll_at", value) }
+
     var lastSentAt: Long
         get() = prefs.getLong("last_sent_at", 0)
         set(value) = prefs.edit { putLong("last_sent_at", value) }

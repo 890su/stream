@@ -22,7 +22,7 @@ class SettingsActivity : Activity() {
     // Notifications need a runtime permission only from Android 13.
     private val permissions = listOfNotNull(
         Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_PHONE_STATE,
-        Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS,
+        Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS, Manifest.permission.SEND_SMS,
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.POST_NOTIFICATIONS else null,
     ).toTypedArray()
 
@@ -34,6 +34,7 @@ class SettingsActivity : Activity() {
         find<EditText>(R.id.token).setText(settings.token)
         find<Switch>(R.id.calls).isChecked = settings.callsOn
         find<Switch>(R.id.sms).isChecked = settings.smsOn
+        find<Switch>(R.id.send_sms).isChecked = settings.sendSmsOn
         find<EditText>(R.id.exclusions).setText(settings.exclusionsText)
         find<Button>(R.id.save).setOnClickListener { save(); check() }
         find<Button>(R.id.permissions).setOnClickListener { requestPermissions(permissions, 1) }
@@ -47,6 +48,7 @@ class SettingsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        LinkService.start(this) // the app is in front: Android always allows it here
         showState()
     }
 
@@ -59,6 +61,7 @@ class SettingsActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         showState()
         Sync.soon(this) // sets the starting point in the call log and SMS store
+        LinkService.start(this) // starts watching the SMS store and the call log
     }
 
     private fun <T : android.view.View> find(id: Int): T = findViewById(id)
@@ -68,6 +71,7 @@ class SettingsActivity : Activity() {
         settings.token = find<EditText>(R.id.token).text.toString()
         settings.callsOn = find<Switch>(R.id.calls).isChecked
         settings.smsOn = find<Switch>(R.id.sms).isChecked
+        settings.sendSmsOn = find<Switch>(R.id.send_sms).isChecked
         settings.exclusionsText = find<EditText>(R.id.exclusions).text.toString()
     }
 
@@ -86,7 +90,7 @@ class SettingsActivity : Activity() {
             } catch (error: IOException) {
                 getString(R.string.check_offline)
             }
-            runOnUiThread { result.text = text; if (text == getString(R.string.check_ok)) Sync.soon(this) }
+            runOnUiThread { result.text = text; if (text == getString(R.string.check_ok)) { Sync.soon(this); LinkService.start(this) } }
         }.start()
     }
 
@@ -98,6 +102,9 @@ class SettingsActivity : Activity() {
         find<TextView>(R.id.battery_state).text = getString(
             if (power.isIgnoringBatteryOptimizations(packageName)) R.string.battery_ok else R.string.battery_saving,
         )
+        val polled = settings.lastPollAt
+        find<TextView>(R.id.link_state).text = getString(R.string.link_state,
+            if (polled == 0L) getString(R.string.never) else DateUtils.getRelativeTimeSpanString(polled).toString())
         val last = settings.lastSentAt
         val sent = if (last == 0L) getString(R.string.never) else DateUtils.getRelativeTimeSpanString(last).toString()
         val error = settings.lastError

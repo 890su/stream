@@ -88,3 +88,64 @@ test('an SMS is written once with its text', async () => {
     assert.equal((await f.phoneRequest('/api/phone/sms', { ...body, text: '' })).status, 400);
   } finally { await f.stop(); }
 });
+
+const post = (f: Awaited<ReturnType<typeof fixture>>, event: unknown) =>
+  f.request('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(event) });
+
+test('a reply by SMS waits for the phone: it takes it, sends it and reports; never to a name', async () => {
+  const f = await fixture();
+  try {
+    const reply = { id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: '2026-11-25T09:00:00.000Z', kind: 'text',
+      payload: { text: 'Буду в 10', data: { outbound: { connector: 'sms', chat_id: '+48500000002', chat_title: 'Клиент Б' } } } };
+    assert.equal((await post(f, reply)).status, 201);
+    const byName = { ...reply, id: randomUUID(), payload: { ...reply.payload, data: { outbound: { connector: 'sms', chat_id: 'InPost' } } } };
+    assert.equal((await post(f, byName)).status, 400, 'only to a number');
+
+    const next = await f.phoneRequest('/api/phone/actions/next?wait=0');
+    assert.equal(next.status, 200);
+    const action = await next.json() as { id: string; number: string; text: string };
+    assert.deepEqual({ number: action.number, text: action.text }, { number: '+48500000002', text: 'Буду в 10' });
+    assert.equal(f.store.actions.get(action.id)?.status, 'running');
+    assert.equal(f.store.status.get('android_phone')?.state, 'ok', 'the request is the phone pulse');
+    assert.equal((await f.phoneRequest('/api/phone/actions/next?wait=0')).status, 204);
+    assert.equal((await f.phoneRequest(`/api/phone/actions/${action.id}`, { status: 'done' })).status, 204);
+    assert.equal(f.store.actions.get(action.id)?.status, 'done');
+    assert.equal((await f.phoneRequest(`/api/phone/actions/${action.id}`, { status: 'sent' })).status, 400);
+
+    const failed = { ...reply, id: randomUUID(), payload: { ...reply.payload, text: 'Ещё' } };
+    await post(f, failed);
+    const taken = await (await f.phoneRequest('/api/phone/actions/next?wait=0')).json() as { id: string };
+    assert.equal((await f.phoneRequest(`/api/phone/actions/${taken.id}`, { status: 'failed', error: 'Нет сети' })).status, 204);
+    assert.equal(f.store.actions.get(taken.id)?.error, 'Нет сети');
+  } finally { await f.stop(); }
+});
+
+test('the phone waits for an SMS to send: one written meanwhile comes at once', async () => {
+  const f = await fixture();
+  try {
+    const waiting = f.phoneRequest('/api/phone/actions/next?wait=5');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const reply = { id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: '2026-11-25T09:00:00.000Z', kind: 'text',
+      payload: { text: 'Перезвоню', data: { outbound: { connector: 'sms', chat_id: '+48500000003' } } } };
+    const at = Date.now();
+    await post(f, reply);
+    const response = await waiting;
+    assert.equal(response.status, 200);
+    assert.equal((await response.json() as { text: string }).text, 'Перезвоню');
+    assert.ok(Date.now() - at < 2500, 'within the poll step');
+  } finally { await f.stop(); }
+});
+
+test('a send the phone took long ago and never confirmed fails, and is not handed out again', async () => {
+  const f = await fixture();
+  try {
+    await post(f, { id: randomUUID(), schema_version: 1, source: 'app', author: 'me', ts: '2026-11-25T09:00:00.000Z', kind: 'text',
+      payload: { text: 'Тест', data: { outbound: { connector: 'sms', chat_id: '+48500000004' } } } });
+    const { id } = await (await f.phoneRequest('/api/phone/actions/next?wait=0')).json() as { id: string };
+    assert.deepEqual(f.store.actions.failRunning('sms', 'x', new Date(Date.now() - 60_000).toISOString()), [], 'a fresh one stays');
+    const [stale] = f.store.actions.failRunning('sms', 'Телефон не подтвердил', new Date(Date.now() + 60_000).toISOString());
+    assert.equal(stale?.id, id);
+    assert.equal(f.store.actions.get(id)?.status, 'failed');
+    assert.equal((await f.phoneRequest('/api/phone/actions/next?wait=0')).status, 204);
+  } finally { await f.stop(); }
+});

@@ -72,6 +72,16 @@ connectors:
       send_message — класс C, только после подтверждения; только ответы и только по номеру (params.chat_id = +номер),
       сомнительная отправка не повторяется. Сфера — работа PL.
 
+  sms:
+    status: planned
+    title: SMS (телефон «Stream · телефон»)
+    operations: [send_message]
+    irreversible: [send_message]
+    notes: >-
+      Отправляет приложение на телефоне владельца (CONCEPT.md §8.1, 2026-11-25): забирает действие
+      /api/phone/actions/next, шлёт с SIM последнего SMS этого номера и сообщает итог. send_message — класс C, только
+      ответы и только по номеру (params.chat_id); взятое и не подтверждённое за 10 минут не повторяется.
+
   google_calendar:
     status: planned
     title: Google Календарь (два аккаунта владельца)

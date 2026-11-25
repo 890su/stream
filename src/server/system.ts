@@ -71,7 +71,7 @@ export async function system(request: IncomingMessage, response: ServerResponse,
     // A connection never heard from is not set up yet ('unset'), not silent: nothing to worry about, just to do.
     for (const id of CONNECTORS) if (!known.has(id)) known.set(id, { source: id, state: 'unset' as never, detail: null, pulse_at: null, last_event_at: null, info: null });
     const sources = [...known.values()].map((item) => ({ ...item, state: isOn(item.source) ? item.state : 'off', on: isOn(item.source),
-      title: sourceTitle(item.source), failed_24h: store.actions.failedSince(item.source, dayAgo) }));
+      title: sourceTitle(item.source), failed_24h: store.actions.failedSince(item.source, dayAgo) + (item.source === 'android_phone' ? store.actions.failedSince('sms', dayAgo) : 0) }));
     const telegram = {
       bots: Object.fromEntries(bots.map((bot) => [bot.account, bot.username])),
       connections: store.connections.list(), groups: store.connections.groups(),

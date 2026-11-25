@@ -16,7 +16,7 @@ export function conversationOf(event) {
   if (data.viber) return data.viber.phone ? `tel:${data.viber.phone}` : `viber:${data.viber.chat}`;
   if (data.outbound?.connector === 'viber') return `tel:${data.outbound.chat_id}`;
   if (data.whatsapp) return data.whatsapp.phone ? `tel:${data.whatsapp.phone}` : `wa:${data.whatsapp.jid}`;
-  if (data.outbound?.connector?.startsWith('whatsapp_')) return `tel:${data.outbound.chat_id}`;
+  if (data.outbound?.connector?.startsWith('whatsapp_') || data.outbound?.connector === 'sms') return `tel:${data.outbound.chat_id}`;
   const chat = data.telegram?.chat_id ?? data.outbound?.chat_id;
   if (chat !== undefined && chat !== null) return `tg:${chat}`;
   if (event?.kind === 'call' || event?.kind === 'sms') {
@@ -48,7 +48,7 @@ const NUMBER_LIKE = /^\+?[\d\s()-]*$/;
 const phoneName = (event) => {
   const data = event.kind === 'call' ? event.payload?.data?.call : event.kind === 'sms' ? event.payload?.data?.sms : null;
   const outbound = event.payload?.data?.outbound;
-  const byPhone = outbound && (outbound.connector === 'viber' || outbound.connector.startsWith('whatsapp_'));
+  const byPhone = outbound && (outbound.connector === 'viber' || outbound.connector === 'sms' || outbound.connector.startsWith('whatsapp_'));
   const messenger = event.payload?.data?.viber?.chat ?? event.payload?.data?.whatsapp?.chat ?? (byPhone ? outbound.chat_title : null);
   return (data?.name ?? '').trim() || (messenger ?? '').trim();
 };
@@ -82,7 +82,7 @@ export function directionOf(event) {
   return event.author === 'me' ? 'out' : 'in';
 }
 const isIncoming = (view) => directionOf(view.event) === 'in';
-const incomingChat = (view) => isIncoming(view) && (view.event.payload?.data?.telegram || view.event.payload?.data?.viber || view.event.payload?.data?.whatsapp);
+const incomingChat = (view) => isIncoming(view) && (view.event.payload?.data?.telegram || view.event.payload?.data?.viber || view.event.payload?.data?.whatsapp || (view.event.payload?.data?.sms && chatOf(view.event)));
 
 // The latest message with the archive mark (`answered`, CONCEPT.md §2.5), or null.
 const archiveMark = (views) => views.filter((view) => view.answered).reduce((a, b) => (!a || b.event.ts >= a.event.ts ? b : a), null);

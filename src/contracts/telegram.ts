@@ -26,7 +26,7 @@ export function checkTelegram(event: JournalEvent): void {
     if (event.kind !== 'text' || event.author !== 'me') throw new HttpError(400, 'Ответ наружу — только текст владельца');
     if (!event.payload.text?.trim()) throw new HttpError(400, 'Пустой ответ');
     const connector = (data.outbound as { connector: string }).connector;
-    if (!connectorAccount(connector) && connector !== 'viber' && !whatsappAccountOf(connector)) throw new HttpError(400, 'Неизвестный коннектор ответа');
+    if (!connectorAccount(connector) && connector !== 'viber' && connector !== 'sms' && !whatsappAccountOf(connector)) throw new HttpError(400, 'Неизвестный коннектор ответа');
   }
   if ('action' in data && event.kind !== 'action_result') throw new HttpError(400, 'payload.data.action бывает только у action_result');
   if ('system' in data && event.kind !== 'system') throw new HttpError(400, 'payload.data.system бывает только у system');

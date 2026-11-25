@@ -519,7 +519,7 @@
             },
             "outbound": {
               "type": "object",
-              "description": "The owner's reply to be sent outside (CONCEPT.md 8.2): writing it creates a class C action for the connector. Only on kind: text by me. Telegram: chat_id is the chat's number; Viber (connector viber) and WhatsApp (connectors whatsapp_*): the phone.",
+              "description": "The owner's reply to be sent outside (CONCEPT.md 8.2): writing it creates a class C action for the connector. Only on kind: text by me. Telegram: chat_id is the chat's number; Viber (connector viber), WhatsApp (connectors whatsapp_*) and SMS (connector sms, sent by the phone companion): the phone.",
               "required": [
                 "connector",
                 "chat_id"

@@ -140,7 +140,7 @@ export function setupComposer(config, { notify, onSent, getViews, linkContext, r
   async function sendOutbound(chat) {
     const message = text.value.trim();
     const whatsapp = chat.account.startsWith('whatsapp_');
-    const where = chat.account === 'viber' ? 'Viber' : whatsapp ? 'WhatsApp' : 'Telegram';
+    const where = chat.account === 'viber' ? 'Viber' : chat.account === 'sms' ? 'SMS' : whatsapp ? 'WhatsApp' : 'Telegram';
     if (draftFiles.list().length) { notify(`В ${where} уходит только текст: уберите вложения или адресата`); return; }
     if (!message) { notify(`Напишите текст: в ${where} уходит только текст`); return; }
     if (!phoneAnswerable(chat)) {

@@ -34,7 +34,7 @@ export function replyChats(conversation) {
   for (const view of conversation?.views ?? []) {
     if (view.deleted) continue;
     const data = view.event?.payload?.data ?? {};
-    if (!data.telegram && !data.viber && !data.whatsapp && !data.outbound) continue;
+    if (!data.telegram && !data.viber && !data.whatsapp && !data.outbound && !data.sms) continue;
     const chat = chatOf(view.event);
     if (!chat || chat.chat_id === '' || chat.chat_id === undefined || chat.chat_id === null) continue;
     const last = view.event.ts;
@@ -52,7 +52,7 @@ export function rowOrder(chats, chosenKey) {
 
 const PERSON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>';
 const GROUP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.8a3 3 0 0 1 0 5.4M17.5 14.2A5.5 5.5 0 0 1 20.5 19"/></svg>';
-const channel = (account) => (account === 'viber' ? 'Viber' : account.startsWith('whatsapp_') ? 'WA' : accountTitle(account).replace(/^Telegram\s*/, ''));
+const channel = (account) => (account === 'viber' ? 'Viber' : account === 'sms' ? 'SMS' : account.startsWith('whatsapp_') ? 'WA' : accountTitle(account).replace(/^Telegram\s*/, ''));
 
 function element(tag, className, text) {
   const node = document.createElement(tag);

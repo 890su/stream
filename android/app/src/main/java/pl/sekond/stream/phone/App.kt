@@ -7,5 +7,6 @@ class App : Application() {
         super.onCreate()
         Notifier.createChannel(this)
         Sync.schedulePeriodic(this)
+        LinkService.start(this)
     }
 }
