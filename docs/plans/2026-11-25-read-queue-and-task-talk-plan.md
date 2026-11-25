@@ -72,13 +72,13 @@ Test `test/projection.test.ts`, `test/correction.test.ts`.
 - Produces: correction op `'read'` (target — a message id, no extra fields); view fields `read: boolean`,
   `readAt: string` (the correction's ts) on the target view.
 
-- [ ] **Step 1: Failing tests** — `test('a read mark marks its message read', …)`: project `[incoming, correction(read → incoming)]`
+- [x] **Step 1: Failing tests** — `test('a read mark marks its message read', …)`: project `[incoming, correction(read → incoming)]`
   → view `read === true`, `readAt === correction.ts`; the server accepts `{ op: 'read' }` with 201 and rejects an
   unknown op as before.
-- [ ] **Step 2:** Run `node --test test/projection.test.ts` → FAIL.
-- [ ] **Step 3:** Add `'read'` to `CORRECTION_OPS`; in `project()` `case 'read': view.read = true; view.readAt = correction.ts; break;`
+- [x] **Step 2:** Run `node --test test/projection.test.ts` → FAIL.
+- [x] **Step 3:** Add `'read'` to `CORRECTION_OPS`; in `project()` `case 'read': view.read = true; view.readAt = correction.ts; break;`
   and default `read: false` in the view literal.
-- [ ] **Step 4:** Tests pass. Commit `Correction op read: the owner has seen messages up to this one`.
+- [x] **Step 4:** Tests pass. Commit `Correction op read: the owner has seen messages up to this one`.
 
 ### Task 3: Queue sections in `queue.js`
 
